@@ -354,6 +354,7 @@ class ClientState:
         "chooser_return_to": Keep.SAVED,
         "chooser": Keep.SAVED,
         "choose_window_index": Keep.SAVED,
+        "choose_window_along": Keep.DROPPED,
         "choose_window_filter": Keep.SAVED,
         "choose_window_command": Keep.SAVED,
         # The application and what it is made of.
@@ -569,6 +570,10 @@ class ClientState:
         self.chooser: Chooser | None = None
         self.choose_window_index = 0
         self.choose_window_command = ""
+        #: The place along a line that j and k aim for. A shorter line
+        #: clamps the point but not the aim, so walking back over it
+        #: lands where the walk began. Any other move forgets it.
+        self.choose_window_along: int | None = None
 
         #: Where Escape puts this client back, as (session, window).
         #: The window chooser has no preview of its own: it switches

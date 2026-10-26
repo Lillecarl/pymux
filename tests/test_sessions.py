@@ -404,6 +404,34 @@ async def test_each_session_starts_a_line_of_the_chooser():
         assert all(len(names) == 1 for names in lines)
 
 
+async def test_k_and_j_over_a_shorter_line_come_back_to_the_same_place():
+    async with in_this_process(_server()) as session:
+        pymux = session.pymux
+        state, _ = await session.attach("only", SIZE)
+        await _command(pymux, state, "new-session -d -s many '%s'" % (WAITING,))
+        for _ in range(3):
+            await _command(pymux, state, "new-window -d -t many '%s'" % (WAITING,))
+        manager = state.layout_manager
+        with set_app(state.app):
+            manager.display_chooser()
+            lines = manager.chooser_lines(manager._bar_width())
+            short, long = sorted(lines, key=len)
+            assert len(short) == 1 and len(long) == 4
+            towards_short = 1 if lines[0] is long else -1
+
+            manager.point_at(long[2])
+            manager.step_line(towards_short)
+            assert state.choose_window_index == short[0]
+            manager.step_line(-towards_short)
+            assert state.choose_window_index == long[2]
+
+            # A move along the line is a new aim.
+            manager.point_at(long[1])
+            manager.step_line(towards_short)
+            manager.step_line(-towards_short)
+            assert state.choose_window_index == long[1]
+
+
 async def test_the_option_off_flows_the_sessions_together():
     async with in_this_process(_server()) as session:
         pymux = session.pymux

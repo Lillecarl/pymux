@@ -907,6 +907,7 @@ class LayoutManager:
         state.choose_window_command = template
         state.choose_window_filter.reset()
         state.choose_window_index = windows.index(active) if active in windows else 0
+        state.choose_window_along = None
         self._window_bar()
         assert self._bar_rows is not None
         get_app().layout.focus(self._bar_rows)
@@ -986,10 +987,12 @@ class LayoutManager:
 
         A line holds as many entries as fitted on it, so the place is
         what j and k keep: the third entry of this line lands on the
-        third of the next, or on its last when it is shorter.
+        third of the next, or on its last when it is shorter. The aim
+        stays the third, so the line after that lands on its third again.
         """
+        state = self.client_state
         lines = self.chooser_lines(self._bar_width())
-        here = self.client_state.choose_window_index
+        here = state.choose_window_index
 
         for number, line in enumerate(lines):  # noqa: B007 -- the index leaves the loop
             if here in line:
@@ -1001,11 +1004,11 @@ class LayoutManager:
         if not 0 <= target < len(lines):
             return
 
-        along = line.index(here)
+        along = line.index(here) if state.choose_window_along is None else state.choose_window_along
         landing = lines[target]
-        self.point_at(landing[min(along, len(landing) - 1)])
+        self.point_at(landing[min(along, len(landing) - 1)], along=along)
 
-    def point_at(self, index: int) -> None:
+    def point_at(self, index: int, along: int | None = None) -> None:
         """
         Put the point on one row, and switch this client to it.
 
@@ -1015,8 +1018,12 @@ class LayoutManager:
         everything a window has -- its panes, its size, its title
         bars -- is what a person sees while they choose.
         Lillecarl/pymux#327.
+
+        `along` is the aim `step_line` keeps; every other move passes
+        none and so forgets it.
         """
         state = self.client_state
+        state.choose_window_along = along
         matches = self.chooser_matches()
         if not matches:
             state.choose_window_index = 0
