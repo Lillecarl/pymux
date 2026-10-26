@@ -62,12 +62,12 @@ async def test_option_turns_shim_on_and_off():
     async with create_session() as (pymux, state):
         with set_app(state.app):
             pymux.handle_command("set-option notify-shim on")
-            assert pymux.notify_shim is True
+            assert pymux.current_session.options.notify_shim is True
             pymux.handle_command("show-options notify-shim")
             assert state.message == "on"
 
             pymux.handle_command("set-option notify-shim off")
-            assert pymux.notify_shim is False
+            assert pymux.current_session.options.notify_shim is False
 
 
 # ----------------------------------------------------------------------

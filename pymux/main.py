@@ -1657,7 +1657,7 @@ class Pymux:
         # What the panes were last told about the keyboards of the
         # clients: the flags and the switch above. (None: nothing was
         # told yet.)
-        self._keyboard_state_sent: tuple[int, bool, ExtendedKeys] | None = None
+        self._keyboard_state_sent: tuple[int, tuple[tuple[SessionId, bool], ...], ExtendedKeys] | None = None
 
         # The cell size the panes were last told. (None: nothing yet.)
         self._cell_size_sent: tuple[int, int] | None = None

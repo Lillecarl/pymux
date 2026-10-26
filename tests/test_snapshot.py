@@ -458,7 +458,7 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                 # A program that wraps a row on the first page, then
                 # stops on the alternate one, in colour and mid-sequence.
                 "split-window -h 'sh %s'" % alternate,
-                "set-option status-left left",
+                "set-option -g status-left left",
                 "set-environment -g WHERE here",
                 "set-environment ONLY session",
                 "set-window-option -g frame-rate 10",

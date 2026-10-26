@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, NamedTuple
 if TYPE_CHECKING:
     from pymux.arrangement import Pane, Window
     from pymux.main import ClientState, Pymux
+    from pymux.options import Holder
     from pymux.session import Session
 
 
@@ -317,7 +318,7 @@ def the_client(pymux: Pymux, target: str | None, command: str) -> ClientState:
     return max(clients, key=lambda client: client.last_used)
 
 
-def option_as_written(pymux: Pymux, option: Option, args: argparse.Namespace, target: ClientState | None = None) -> str:
+def option_as_written(pymux: Pymux, option: Option, args: argparse.Namespace, target: Holder | None = None) -> str:
     """
     What an option holds, as a person wrote it.
 

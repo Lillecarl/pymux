@@ -92,11 +92,13 @@ def option_value_of(pymux, name: str) -> str:
     loads.
     """
     from pymux.commands.common import option_as_written
+    from pymux.options import Scope
 
     for table in pymux.option_tables.values():
         option = table.get(name)
         if option is not None:
-            return option_as_written(pymux, option, argparse.Namespace(g=False))
+            target = pymux.current_session.options if option.scope is Scope.SESSION else None
+            return option_as_written(pymux, option, argparse.Namespace(g=False), target)
     return ""
 
 

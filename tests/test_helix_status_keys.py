@@ -77,7 +77,7 @@ async def test_enter_in_normal_mode_runs_the_line():
         _helix(pymux, state, "set-option status-left helixed")
         press(state, Keys.Escape)
         press(state, Keys.ControlM)
-        assert pymux.status_left == "helixed"
+        assert pymux.current_session.options.status_left == "helixed"
 
 
 async def test_the_line_says_which_helix_mode_it_is_in():

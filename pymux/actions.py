@@ -152,6 +152,11 @@ def started_by(origin: Origin, key_table: str | None = None, key: str | None = N
         _source.reset(token)
 
 
+def started_by_now() -> Origin:
+    "What started the command running now."
+    return _source.get().origin
+
+
 async def awaited_as[T](origin: Origin, answer: Awaitable[T]) -> T:
     """
     Await a command's rest under `origin`. A task takes the context it

@@ -34,8 +34,12 @@ from .utils import get_default_shell
 from .wayland_scale import parse_scale
 
 if TYPE_CHECKING:
-    from pymux.arrangement import Arrangement
     from pymux.main import ClientState, Pymux
+    from pymux.session import SessionOptions
+
+    #: What an option is written on and read from: a client, one
+    #: session's own values, or the server's, which hold the defaults.
+    type Holder = ClientState | SessionOptions | Pymux
 
 __all__ = [
     "ALL_CLIENT_OPTIONS",
@@ -93,9 +97,7 @@ class Option(ABC):
     #: not set. Lillecarl/pymux#298.
     attribute_name: str | None = None
 
-    def held_by(
-        self, pymux: Pymux, target: ClientState | None = None
-    ) -> Arrangement | ClientState | Pymux | Window | None:
+    def held_by(self, pymux: Pymux, target: Holder | None = None) -> Holder | Window | None:
         """
         The object this option is written on and read from.
 
@@ -149,7 +151,7 @@ class Option(ABC):
             raise SetOptionError("This option holds its value somewhere else.")
         return self.attribute_name
 
-    def as_written(self, value: object, holder: Arrangement | ClientState | Pymux | Window | None) -> str:
+    def as_written(self, value: object, holder: Holder | Window | None) -> str:
         """
         What `show-options` prints for a value this option holds.
 
@@ -169,7 +171,7 @@ class Option(ABC):
         """
 
     @abstractmethod
-    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
+    def set_value(self, pymux: Pymux, value: str, target: Holder | None = None) -> None:
         "Set option. This can raise SetOptionError."
 
     def set_default(self, pymux: Pymux, value: str) -> None:
@@ -213,7 +215,7 @@ class OnOffOption(Option):
         return value == "on"
 
     @override
-    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
+    def set_value(self, pymux: Pymux, value: str, target: Holder | None = None) -> None:
         setattr(self.held_by(pymux, target), self._attribute(), self._read(value))
 
     @override
@@ -229,7 +231,7 @@ class WaylandServerOption(OnOffOption):
     "`wayland-server`, which starts or stops the compositor as it is set."
 
     @override
-    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
+    def set_value(self, pymux: Pymux, value: str, target: Holder | None = None) -> None:
         super().set_value(pymux, value, target)
         pymux.wayland.option_changed()
 
@@ -255,7 +257,7 @@ class StringOption(Option):
         return sorted(set(self.possible_values) | {now})
 
     @override
-    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
+    def set_value(self, pymux: Pymux, value: str, target: Holder | None = None) -> None:
         setattr(self.held_by(pymux, target), self._attribute(), value)
 
 
@@ -290,7 +292,7 @@ class PositiveIntOption(Option):
         return number
 
     @override
-    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
+    def set_value(self, pymux: Pymux, value: str, target: Holder | None = None) -> None:
         setattr(self.held_by(pymux, target), self._attribute(), self._read(value))
 
     @override
@@ -317,7 +319,7 @@ class PositiveFloatOption(Option):
             return []
 
     @override
-    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
+    def set_value(self, pymux: Pymux, value: str, target: Holder | None = None) -> None:
         try:
             number = float(value)
         except ValueError:
@@ -360,7 +362,7 @@ class AudioBitrateOption(PositiveIntOption):
         return number
 
     @override
-    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
+    def set_value(self, pymux: Pymux, value: str, target: Holder | None = None) -> None:
         super().set_value(pymux, value, target)
         pymux.audio.client_options_changed()
 
@@ -372,7 +374,7 @@ class FrameRateOption(PositiveIntOption):
     """
 
     @override
-    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
+    def set_value(self, pymux: Pymux, value: str, target: Holder | None = None) -> None:
         super().set_value(pymux, value, target)
         window = self.held_by(pymux, target)
         if isinstance(window, Window):
@@ -396,7 +398,7 @@ class WaylandScaleOption(Option):
             raise SetOptionError(str(error)) from None
 
     @override
-    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
+    def set_value(self, pymux: Pymux, value: str, target: Holder | None = None) -> None:
         setattr(self.held_by(pymux, target), self._attribute(), self._read(value))
         pymux.wayland.rescale()
 
@@ -412,7 +414,7 @@ class KeyPrefixOption(Option):
         return PYMUX_TO_PROMPT_TOOLKIT_KEYS.keys()
 
     @override
-    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
+    def set_value(self, pymux: Pymux, value: str, target: Holder | None = None) -> None:
         # Translate prefix to prompt_toolkit
         try:
             keys = key_however_it_is_written(value)
@@ -435,19 +437,13 @@ class BaseIndexOption(Option):
         return ["0", "1"]
 
     @override
-    def held_by(
-        self, pymux: Pymux, target: ClientState | None = None
-    ) -> Arrangement | ClientState | Pymux | Window | None:
-        return pymux.arrangement
-
-    @override
-    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
+    def set_value(self, pymux: Pymux, value: str, target: Holder | None = None) -> None:
         try:
             number = int(value)
         except ValueError:
             raise SetOptionError("Expecting an integer.")
         else:
-            pymux.arrangement.base_index = number
+            setattr(self.held_by(pymux, target), self._attribute(), number)
 
 
 class RenumberOption(Option):
@@ -456,10 +452,7 @@ class RenumberOption(Option):
 
     Setting it on closes the gaps that are open already; setting it
     off changes nothing, because no setting opens one.
-
-    It lives on the arrangement and not on `Pymux`, the way
-    `base-index` does: both are about the order of the windows, and
-    that order is the arrangement's. Lillecarl/pymux#342.
+    Lillecarl/pymux#342.
     """
 
     attribute_name = "renumber_windows"
@@ -469,19 +462,16 @@ class RenumberOption(Option):
         return ["on", "off"]
 
     @override
-    def held_by(
-        self, pymux: Pymux, target: ClientState | None = None
-    ) -> Arrangement | ClientState | Pymux | Window | None:
-        return pymux.arrangement
-
-    @override
-    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
+    def set_value(self, pymux: Pymux, value: str, target: Holder | None = None) -> None:
         value = value.lower()
         if value not in ("on", "off"):
             raise SetOptionError('Expecting "on" or "off".')
-        pymux.arrangement.renumber_windows = value == "on"
-        if value == "on":
-            pymux.arrangement.renumber()
+        setattr(self.held_by(pymux, target), self._attribute(), value == "on")
+        # A default reaches every session without its own value, so
+        # each session that reads "on" now closes its gaps.
+        for session in pymux.sessions:
+            if session.arrangement.renumber_windows:
+                session.arrangement.renumber()
 
 
 class ExtendedKeys(StrEnum):
@@ -599,7 +589,7 @@ class EnumOption(Option):
         return [str(one) for one in self.choices]
 
     @override
-    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
+    def set_value(self, pymux: Pymux, value: str, target: Holder | None = None) -> None:
         try:
             chosen = self.choices(value)
         except ValueError:
@@ -711,7 +701,7 @@ class WindowSizeOption(Option):
             raise SetOptionError("Expecting one of: %s." % ", ".join('"%s"' % one for one in WindowSize)) from None
 
     @override
-    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
+    def set_value(self, pymux: Pymux, value: str, target: Holder | None = None) -> None:
         chosen = self._read(value)
 
         window = pymux.arrangement.get_active_window()
@@ -783,7 +773,7 @@ class ThemeOption(Option):
         )
 
     @override
-    def as_written(self, value: object, holder: Arrangement | ClientState | Pymux | Window | None) -> str:
+    def as_written(self, value: object, holder: Holder | Window | None) -> str:
         """
         `nearest` alone says nothing about what is on the screen, so it
         names the theme it found as well. Lillecarl/pymux#346.
@@ -794,7 +784,7 @@ class ThemeOption(Option):
         return NEAREST if matched is None else "%s (%s)" % (NEAREST, matched)
 
     @override
-    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
+    def set_value(self, pymux: Pymux, value: str, target: Holder | None = None) -> None:
         if value == NEAREST:
             # Not a theme, and not checked against the sources: it is
             # the name for letting the terminal decide.
@@ -842,7 +832,7 @@ class LogLevelOption(Option):
         return sorted(log.LEVELS)
 
     @override
-    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
+    def set_value(self, pymux: Pymux, value: str, target: Holder | None = None) -> None:
         if value not in log.LEVELS:
             raise SetOptionError("Expecting one of: %s." % ", ".join(sorted(log.LEVELS)))
         pymux.log_level = value
@@ -858,7 +848,7 @@ class JustifyOption(Option):
         return Justify._ALL
 
     @override
-    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
+    def set_value(self, pymux: Pymux, value: str, target: Holder | None = None) -> None:
         if value not in Justify._ALL:
             raise SetOptionError("Invalid justify option.")
         setattr(self.held_by(pymux, target), self._attribute(), value)
@@ -888,7 +878,7 @@ class ChoiceOption(Option):
         return sorted(set((*self.choices, now)))
 
     @override
-    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
+    def set_value(self, pymux: Pymux, value: str, target: Holder | None = None) -> None:
         if value not in self.choices:
             raise SetOptionError("Expecting one of: %s." % ", ".join(sorted(self.choices)))
         setattr(self.held_by(pymux, target), self._attribute(), value)

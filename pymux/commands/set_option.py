@@ -4,11 +4,14 @@ import argparse
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pymux.main import ClientState, Pymux
+    from pymux.main import Pymux
+    from pymux.options import Holder
+    from pymux.session import SessionOptions
 
 
+from pymux.actions import Origin, started_by_now
 from pymux.commands import CommandException, CommandParser, add_command
-from pymux.commands.common import answer, option_as_written
+from pymux.commands.common import answer, option_as_written, session_of_target
 from pymux.options import Option, Scope, SetOptionError
 
 #: Which command sets an option of each scope.
@@ -42,6 +45,24 @@ def find_option(pymux: Pymux, name: str, scope: Scope) -> Option | None:
     return None
 
 
+def session_holder(pymux: Pymux, args: argparse.Namespace) -> SessionOptions | Pymux:
+    """
+    What a session option is written on and read from: the defaults
+    on `Pymux` or one session's own values.
+
+    **A configuration file writes the defaults**, `-g` or not. pymux
+    makes its first session before the file is read, and a line meant
+    for every session must not become that one session's own value.
+    Lillecarl/pymux#756.
+    """
+    if getattr(args, "g", 0):
+        return pymux
+    wanted = getattr(args, "target_session", None)
+    if wanted is None and (pymux.sourcing is not None or started_by_now() is Origin.CONFIG):
+        return pymux
+    return session_of_target(pymux, wanted).options
+
+
 def _not_here(pymux: Pymux, name: str, scope: Scope) -> str:
     """
     What to say about a name this command does not hold.
@@ -63,17 +84,23 @@ def set_option(
     pymux: Pymux,
     args: argparse.Namespace,
     scope: Scope = Scope.SESSION,
-    target: ClientState | None = None,
+    target: Holder | None = None,
 ) -> None:
     """
-    Set an option, of the session, of a window or of a client.
+    Set an option of the server, a session, a window or a client.
 
-    -g: for a window option, say what every new window starts with.
-        For a session option it changes nothing: the server holds every
-        session option once, for all its sessions, so each one is
-        already global. `set -g`
-        is the most common line in a tmux configuration, and `pymux -V`
-        says pymux speaks tmux 3.4, so it has to be a line pymux takes.
+    -g: for a session option, the default every session reads unless
+        it set its own. For a window option, what every new window
+        starts with. `set -g` is the most common line in a tmux
+        configuration, and `pymux -V` says pymux speaks tmux 3.4.
+
+    -gg: the default, and every session's own value dropped, so the
+        default reaches every session. tmux counts no `-g`, so it reads
+        this as `-g` and a tmux configuration keeps working.
+        Lillecarl/pymux#756.
+
+    -t: the session whose own value this is. Without `-t` or `-g`, the
+        caller's session.
 
     -s: the option is the server's. A server option's name finds it
         without the flag too, as in tmux; Tab with it offers only
@@ -92,6 +119,9 @@ def set_option(
     if option is None:
         raise CommandException(_not_here(pymux, name, scope))
 
+    if option.scope is Scope.SESSION:
+        target = session_holder(pymux, args)
+
     if value is None:
         answer(pymux, "%s %s" % (name, option_as_written(pymux, option, args, target)))
         return
@@ -102,15 +132,13 @@ def set_option(
         # It is the only way a configuration file can set a window
         # option, because that file is read before there is a
         # window. Lillecarl/pymux#199.
-        #
-        # It means nothing for a session option: the server holds
-        # one value for all its sessions, so every session option is
-        # already global. That is why the flag is read here and not
-        # by the option.
         if scope is Scope.WINDOW and args.g:
             option.set_default(pymux, value)
         else:
             option.set_value(pymux, value, target)
+            if option.scope is Scope.SESSION and args.g > 1 and option.attribute_name is not None:
+                for session in pymux.sessions:
+                    session.options.forget(option.attribute_name)
             # The colour base of every pane is derived from two
             # things: which theme owns the screen, and whether it
             # does. A pane that exists heard the old answer, and
@@ -124,8 +152,15 @@ def set_option(
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, set_option)
     parser.add_argument(
-        "-g", dest="g", action="store_true", help="For a window option: what every new window starts with."
+        "-g",
+        dest="g",
+        action="count",
+        default=0,
+        help="The default every session reads; -gg also drops each session's own value.",
     )
     parser.add_argument("-s", dest="s", action="store_true", help="A server option.")
+    parser.add_argument(
+        "-t", dest="target_session", metavar="<target-session>", help="The session whose own value this is."
+    )
     parser.add_argument("option", metavar="<option>")
     parser.add_argument("value", metavar="<value>", nargs="?")
