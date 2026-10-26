@@ -9,6 +9,7 @@ with those ids as its targets.
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Awaitable, Callable, Sequence
 from typing import Annotated, Any, Final, Literal
 
 import anyio
@@ -222,14 +223,56 @@ async def capture(
     if format == "html":
         return await target.capture_html(start, end, compact=True)
     if format == "png":
-        fonts = bundled()
-        try:
-            return Png(await target.capture_png(start, end, fallbacks=fonts.fallbacks, cell=cell, fit=fit))
-        except CommandError as error:
-            if NO_FONT not in str(error) or not fonts.faces:
-                raise
-            return Png(await target.capture_png(start, end, fonts.faces, fonts.fallbacks, cell, fit))
+        return await _drawn(lambda faces, fallbacks: target.capture_png(start, end, faces, fallbacks, cell, fit))
     return await target.capture(start, end)
+
+
+async def _drawn(capture: Callable[[Sequence[str], Sequence[str]], Awaitable[bytes]]) -> Png:
+    """
+    A picture drawn with the system's font and the bundled fallbacks, or
+    with the bundled font when pymux finds none of its own.
+    """
+    fonts = bundled()
+    try:
+        return Png(await capture((), fonts.fallbacks))
+    except CommandError as error:
+        if NO_FONT not in str(error) or not fonts.faces:
+            raise
+        return Png(await capture(fonts.faces, fonts.fallbacks))
+
+
+@operation("client.capture")
+async def capture_client(
+    server: Server,
+    client: Annotated[
+        str | None,
+        Field(description="The client's name, as `list-clients` prints it; the one a person used last when left out."),
+    ] = None,
+    format: Annotated[
+        Literal["text", "png"],
+        Field(description="`png` is a picture of everything the client shows, in its own colours."),
+    ] = "text",
+    cell: Annotated[
+        tuple[int, int] | None,
+        Field(description="For `png`: one cell's width and height in pixels; the client terminal's when left out."),
+    ] = None,
+    fit: Annotated[
+        int | None,
+        Field(gt=0, description="For `png`: the longest edge in pixels; the cell shrinks to fit. null for none."),
+    ] = PNG_FIT,
+) -> str | Png:
+    """
+    Everything a person attached to pymux sees: the status line, the
+    borders, every pane, and the popups, menus and modes over them.
+
+    It is the frame pymux last sent that client, so a change shows once
+    pymux has drawn it; `pane.wait` on a pane that changes, or a short
+    pause, comes first. Use it to see pymux's own interface, and
+    `pane.capture` to read one program.
+    """
+    if format == "png":
+        return await _drawn(lambda faces, fallbacks: server.capture_client_png(client, faces, fallbacks, cell, fit))
+    return await server.capture_client(client)
 
 
 @operation("pane.send")

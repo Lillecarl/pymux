@@ -486,6 +486,30 @@ class Server:
         "True when a server answers on this socket."
         return await self.connection.is_alive()
 
+    async def capture_client(self, client: str | None = None) -> str:
+        """
+        What a client is shown, as text: the whole of pymux on its
+        terminal, a row to a line. `client` is its name as `list-clients`
+        prints it; the client a person used last without it.
+        """
+        return await self.run(operations.capture_client(client))
+
+    async def capture_client_png(
+        self,
+        client: str | None = None,
+        fonts: Sequence[str] = (),
+        fallbacks: Sequence[str] = (),
+        cell: tuple[int, int] | None = None,
+        fit: int | None = None,
+    ) -> bytes:
+        """
+        What a client is shown, as PNG bytes: the status line, the
+        borders, every pane and what is drawn over them, in the client's
+        colours. The fonts, `cell` and `fit` are `Pane.capture_png`'s;
+        the cell defaults to the client terminal's.
+        """
+        return await self.run(operations.capture_client_png(client, fonts, fallbacks, cell, fit))
+
     async def html_stylesheet(self, pane: Pane | None = None) -> str:
         """
         The stylesheet that `Pane.capture_html` is written against.

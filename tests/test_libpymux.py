@@ -378,6 +378,14 @@ async def test_a_picture_names_its_fonts_and_cell_and_answers_bytes(fake):
     assert server.asked == ["capture-pane -p --png --font /f/a.ttf --font /f/b.ttf --cell 9x18 -t %5"]
 
 
+async def test_a_client_is_captured_by_its_name_or_the_one_used_last(fake):
+    server = fake([("frame\n", "", 0), (base64.b64encode(b"\x89PNG").decode() + "\n", "", 0)])
+    connected = Server(server.path)
+    assert await connected.capture_client() == "frame\n"
+    assert await connected.capture_client_png("desk", cell=(9, 18), fit=800) == b"\x89PNG"
+    assert server.asked == ["capture-client -p", "capture-client -p --png --fit 800 --cell 9x18 -t desk"]
+
+
 async def test_compact_html_asks_for_the_spelling_a_reader_reads(fake):
     server = fake([("", "", 0)])
     await Pane(Server(server.path), {"pane_id": "%5"}).capture_html(compact=True)

@@ -276,7 +276,34 @@ def capture_png(
     cell: tuple[int, int] | None = None,
     fit: int | None = None,
 ) -> Operation[bytes]:
-    arguments = ["capture-pane", "-p", "--png"]
+    arguments = ["capture-pane", *_picture(fonts, fallbacks, cell, fit), "-t", pane_id, *_lines(start, end)]
+    return base64.b64decode((yield Ask(arguments)).stdout)
+
+
+def capture_client(client: str | None) -> Operation[str]:
+    "What a client is shown, as text: the client `-t` names, else the one a person used last."
+    arguments = ["capture-client", "-p", *(["-t", client] if client is not None else [])]
+    return (yield Ask(arguments)).stdout
+
+
+def capture_client_png(
+    client: str | None,
+    fonts: Sequence[str] = (),
+    fallbacks: Sequence[str] = (),
+    cell: tuple[int, int] | None = None,
+    fit: int | None = None,
+) -> Operation[bytes]:
+    arguments = ["capture-client", *_picture(fonts, fallbacks, cell, fit)]
+    if client is not None:
+        arguments += ["-t", client]
+    return base64.b64decode((yield Ask(arguments)).stdout)
+
+
+def _picture(
+    fonts: Sequence[str], fallbacks: Sequence[str], cell: tuple[int, int] | None, fit: int | None
+) -> list[str]:
+    "The flags of a picture, as `capture-pane` and `capture-client` share them."
+    arguments = ["-p", "--png"]
     if fit is not None:
         arguments += ["--fit", str(fit)]
     for font in fonts:
@@ -285,8 +312,7 @@ def capture_png(
         arguments += ["--fallback", font]
     if cell is not None:
         arguments += ["--cell", "%dx%d" % cell]
-    arguments += ["-t", pane_id, *_lines(start, end)]
-    return base64.b64decode((yield Ask(arguments)).stdout)
+    return arguments
 
 
 def wait_for_change(pane_id: str, since: int | None, timeout: float | None) -> Operation[int]:

@@ -2864,6 +2864,15 @@ def check_pymux_mcp(tmp):
             assert image.mimeType == "image/png" and png.startswith(b"\x89PNG"), image.mimeType
             assert struct.unpack(">II", png[16:24]) == (cat["width"] * 9, cat["height"] * 18), png[16:24]
 
+            # The whole of what the attached terminal is shown.
+            shown = await ask("client.capture")
+            assert len(shown.splitlines()) == 24 and "READY" in shown, shown
+            whole_args = {"format": "png", "cell": [9, 18]}
+            whole = await client.call_tool("pymux", {"op": "client.capture", "args": whole_args})
+            assert not whole.isError, whole.content[0]
+            png = base64.b64decode(whole.content[0].data)
+            assert struct.unpack(">II", png[16:24]) == (80 * 9, 24 * 18), png[16:24]
+
             split = json.loads(await ask("window.split", window=made["id"], command="cat"))
             assert split["window"] == made["id"], split
             await ask("pane.kill", pane=split["id"])
