@@ -1227,6 +1227,11 @@ class ServerConnection:
         server stops. Lillecarl/pymux#409.
         """
         await self._write_packet({Field.CMD: Packet.RESTARTING, Field.WAIT: wait, Field.MESSAGE: why})
+        if self._closed:
+            # `_write` lets a client go on a broken pipe or a full
+            # buffer, and that client leaves for good instead of
+            # waiting. Lillecarl/pymux#766.
+            logger.warning("Client %s went before the restart notice reached it.", self.client_id or "?")
 
     async def _refuse_the_attach(self) -> None:
         """

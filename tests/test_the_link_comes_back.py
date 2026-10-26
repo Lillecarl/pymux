@@ -462,14 +462,21 @@ class Attached:
         self.attach_error = attach_error
         self.client = client
 
-    async def until(self, what, says: str, seconds: float = 20.0) -> None:
+    async def until(self, what, says, seconds: float = 20.0) -> None:
         """
         Wait for this to become true.
 
         **An attach that ended raises what ended it.** Without that a
         client which cannot even connect shows as twenty seconds of
         waiting for something else, and the reason is nowhere.
+
+        `says` may be a function, read only on a failure, so what it
+        reports is the state at the failure and not at the call.
         """
+
+        def described() -> str:
+            return says() if callable(says) else says
+
         ends_at = time.monotonic() + seconds
         while time.monotonic() < ends_at:
             if what():
@@ -477,9 +484,9 @@ class Attached:
             if self.attach_finished.is_set():
                 if self.attach_error["error"] is not None:
                     raise self.attach_error["error"]
-                raise AssertionError("The attach ended, waiting for %s." % (says,))
+                raise AssertionError("The attach ended, waiting for %s." % (described(),))
             await anyio.sleep(0.05)
-        raise AssertionError("Waited %ss for %s." % (seconds, says))
+        raise AssertionError("Waited %ss for %s." % (seconds, described()))
 
     async def wait_for_attach(self, seconds: float = 10.0) -> None:
         "Wait for the attach to end, raising what ended it."
@@ -723,7 +730,15 @@ async def test_a_restarting_server_s_refusals_are_waited_out(monkeypatch):
             await connection.say_restarting(5.0, "pymux is being upgraded.")
             connection._close_connection()
 
-        await it.until(lambda: len(it.pymux.connections) == 1, "the attach after the refusals")
+        # What the client left with says which way the notice was lost:
+        # an EXIT from the server, or nothing. Lillecarl/pymux#766.
+        await it.until(
+            lambda: len(it.pymux.connections) == 1,
+            lambda: (
+                "the attach after the refusals (exit code %s, restart wait %s, %d refused)"
+                % (it.client.exit_code, it.client.restart_wait, len(refusals))
+            ),
+        )
         assert len(refusals) == 2
 
         for connection in list(it.pymux.connections):
