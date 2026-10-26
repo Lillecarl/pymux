@@ -3,29 +3,13 @@ from __future__ import annotations
 import argparse
 from typing import TYPE_CHECKING
 
-from pymux.commands import CommandException, CommandParser, add_command, this_client
-from pymux.commands.common import clients_named
+from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands.common import the_client
 from pymux.commands.record_pane import seconds
 from pymux.recording import Recording, a_name, recordings_directory
 
 if TYPE_CHECKING:
-    from pymux.main import ClientState, Pymux
-
-
-def the_client(pymux: Pymux, target: str | None) -> ClientState:
-    "The client `-t` names, else the one that ran this, else the one used last."
-    if target is not None:
-        found = clients_named(pymux, target)
-        if not found:
-            raise CommandException("record-client: no client %s" % target)
-        return found[0]
-    here = this_client(pymux)
-    if here is not None and here.connection is not None:
-        return here
-    clients = [one for one in pymux.clients if one.connection is not None]
-    if not clients:
-        raise CommandException("record-client: no client is attached")
-    return max(clients, key=lambda client: client.last_used)
+    from pymux.main import Pymux
 
 
 def record_client(pymux: Pymux, args: argparse.Namespace) -> None:
@@ -42,7 +26,7 @@ def record_client(pymux: Pymux, args: argparse.Namespace) -> None:
     not begin as changes to a screen it never held. It ends when the
     client detaches.
     """
-    client_state = the_client(pymux, args.target_client)
+    client_state = the_client(pymux, args.target_client, "record-client")
     connection = client_state.connection
     if connection.recording is not None:
         recording, connection.recording = connection.recording, None

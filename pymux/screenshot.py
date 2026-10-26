@@ -1,5 +1,7 @@
 """
-A pane as a PNG, drawn from its cells: `capture-pane --png`.
+A pane as a PNG, drawn from its cells: `capture-pane --png`; and the
+whole of what a client is shown, from its renderer's last frame:
+`capture-client --png`.
 
 The picture is for a reader with eyes and no terminal, an agent above
 all, so it is drawn straight from what the pane holds and no browser
@@ -37,11 +39,12 @@ import shutil
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from functools import cache
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any, Final, NamedTuple
 
 import anyio
 from fontTools.ttLib import TTFont
 from PIL import Image, ImageDraw, ImageFont
+from prompt_toolkit.output.vt100_colors import FG_ANSI_COLORS
 from pyte.cells import PLAIN_APPEARANCE
 from pyte.html import visible_char
 from pyte.painted import Paint
@@ -49,11 +52,14 @@ from pyte.painted import Paint
 from .graphics import PaneView, pane_placements, source_rgba
 
 if TYPE_CHECKING:
+    from prompt_toolkit.styles import Attrs
     from pyte.cells import Appearance
     from pyte.osc import ColorOverrides
     from pyte.screen import Screen
 
-__all__ = ["Faces", "Grid", "draw", "faces_of", "grid_of", "system_fonts"]
+    from .main import ClientState
+
+__all__ = ["Faces", "Grid", "Look", "client_grid_of", "draw", "faces_of", "grid_of", "system_fonts"]
 
 #: The faces a picture draws with, by the words of a font's own style
 #: name, with the spaces gone and in lower case.
@@ -146,17 +152,49 @@ class Shown:
     source: tuple[int, int, int, int] | None
 
 
+class Look(NamedTuple):
+    "How one cell is drawn, resolved: its two colours as `#rrggbb`, and what else it shows."
+
+    foreground: str
+    background: str
+    bold: bool = False
+    italic: bool = False
+    underline: bool = False
+    strike: bool = False
+    dim: bool = False
+    hidden: bool = False
+
+
 @dataclass(frozen=True, slots=True)
 class Grid:
-    "What a picture draws, copied out of a screen: each row as (character, appearance) per column."
+    """
+    What a picture draws, copied out of a screen: each row as (character,
+    look) per column. The second column of a wide character holds an
+    empty character. `foreground` and `background` are the screen's own.
+    """
 
-    rows: list[list[tuple[str, Appearance]]]
+    rows: list[list[tuple[str, Look]]]
     columns: int
-    paint: Paint
-    reverse_video: bool
+    foreground: str
+    background: str
     #: The cursor's column and row in `rows`, when it shows inside them.
     cursor: tuple[int, int] | None
     images: list[Shown] = field(default_factory=list)
+
+
+def _look_of(paint: Paint, appearance: Appearance, reverse_video: bool) -> Look:
+    foreground, background = paint.shown(appearance, reverse_video)
+    rendition = appearance.rendition
+    return Look(
+        foreground,
+        background,
+        bool(rendition.bold),
+        bool(rendition.italic),
+        bool(rendition.underline),
+        bool(rendition.strike),
+        bool(rendition.dim),
+        bool(rendition.hidden),
+    )
 
 
 def grid_of(screen: Screen, first: int, last: int, colors: ColorOverrides | None, cell: tuple[int, int]) -> Grid:
@@ -168,13 +206,23 @@ def grid_of(screen: Screen, first: int, last: int, colors: ColorOverrides | None
     page = screen.page
     assert page is not None
     columns = screen.columns
+    paint = Paint.of(colors)
+    reverse_video = screen.has_reverse_video
+    looks: dict[Appearance, Look] = {}
     rows = []
     for number in range(first, last + 1):
         row = page.data_buffer.get(number)
         if row is None:
             rows.append([])
-        else:
-            rows.append([(row[column].char, row[column].appearance) for column in range(columns)])
+            continue
+        cells = []
+        for column in range(columns):
+            held = row[column]
+            look = looks.get(held.appearance)
+            if look is None:
+                look = looks[held.appearance] = _look_of(paint, held.appearance, reverse_video)
+            cells.append((held.char, look))
+        rows.append(cells)
     position = screen.pt_cursor_position
     cursor = None
     if page.show_cursor and first <= position.y <= last and position.x < columns:
@@ -184,7 +232,102 @@ def grid_of(screen: Screen, first: int, last: int, colors: ColorOverrides | None
         Shown(x, y, width, height, placement.z, image, source)
         for placement, image, width, height, x, y, source in pane_placements(view, *cell)
     ]
-    return Grid(rows, columns, Paint.of(colors), screen.has_reverse_video, cursor, images)
+    foreground, background = paint.shown(PLAIN_APPEARANCE, reverse_video)
+    return Grid(rows, columns, foreground, background, cursor, images)
+
+
+def _ansi_index(name: str) -> int | None:
+    "The palette index of a prompt_toolkit ANSI colour name: SGR 30-37 are 0-7, 90-97 are 8-15."
+    code = FG_ANSI_COLORS.get(name)
+    if code is None or code == FG_ANSI_COLORS["ansidefault"]:
+        return None
+    return code - 30 if code < 90 else code - 82
+
+
+def _client_color(paint: Paint, value: str | None, default: str) -> str:
+    "A colour of prompt_toolkit's `Attrs`: empty or default, an ANSI name, or hex without the `#`."
+    if not value or value in ("default", "ansidefault"):
+        return default
+    index = _ansi_index(value)
+    if index is not None:
+        return paint.themed[index]
+    if len(value) == 6:
+        return "#" + value.lower()
+    return default
+
+
+def _look_of_style(paint: Paint, attrs: Attrs) -> Look:
+    foreground = _client_color(paint, attrs.color, paint.foreground)
+    background = _client_color(paint, attrs.bgcolor, paint.background)
+    if attrs.reverse:
+        foreground, background = background, foreground
+    return Look(
+        foreground,
+        background,
+        bool(attrs.bold),
+        bool(attrs.italic),
+        bool(attrs.underline),
+        bool(attrs.strike),
+        bool(attrs.dim),
+        bool(attrs.hidden),
+    )
+
+
+def client_grid_of(client_state: ClientState, colors: ColorOverrides, cell: tuple[int, int]) -> Grid:
+    """
+    What one client is shown, as its renderer last drew it: the status
+    line, the borders, every pane and whatever is drawn over them, in
+    the client's own style. `colors` are the client's terminal's or its
+    theme's. `cell` is the picture's cell, which a placeholder image's
+    crop is counted in.
+
+    The images are the client's own `graphics_views`: none under a
+    popup, and a Wayland window pane's picture is not among them.
+
+    Raises `LookupError` before the client's first frame.
+    """
+    app = client_state.app
+    renderer = app.renderer
+    screen = renderer.last_rendered_screen
+    if screen is None:
+        raise LookupError("the client has drawn no frame yet")
+    size = app.output.get_size()
+    paint = Paint.of(colors)
+    looks: dict[str, Look] = {}
+    blank = (" ", Look(paint.foreground, paint.background))
+    rows = []
+    for y in range(size.rows):
+        row = screen.data_buffer.get(y)
+        cells = [blank] * size.columns
+        if row is not None:
+            x = 0
+            while x < size.columns:
+                char = row.get(x)
+                if char is None:
+                    x += 1
+                    continue
+                look = looks.get(char.style)
+                if look is None:
+                    look = looks[char.style] = _look_of_style(paint, renderer.style.get_attrs_for_style_str(char.style))
+                cells[x] = (char.char, look)
+                # The renderer steps over a wide character's second
+                # column, and so does the picture.
+                for following in range(x + 1, min(x + (char.width or 1), size.columns)):
+                    cells[following] = ("", look)
+                x += char.width or 1
+        rows.append(cells)
+    cursor = None
+    window = app.layout.current_window
+    if screen.show_cursor and window in screen.cursor_positions:
+        point = screen.get_cursor_position(window)
+        if 0 <= point.x < size.columns and 0 <= point.y < size.rows:
+            cursor = (point.x, point.y)
+    images = [
+        Shown(x, y, width, height, placement.z, image, source)
+        for view in client_state.graphics_views()
+        for placement, image, width, height, x, y, source in pane_placements(view, *cell)
+    ]
+    return Grid(rows, size.columns, paint.foreground, paint.background, cursor, images)
 
 
 def _mixed(color: str, toward: str) -> str:
@@ -248,45 +391,39 @@ def _paste(picture: Image.Image, images: list[Shown], width: int, height: int) -
 
 def draw(grid: Grid, faces: Faces, width: int, height: int) -> bytes:
     "The grid as a PNG, `width` by `height` pixels to a cell."
-    paint = grid.paint
-    screen_foreground, screen_background = paint.shown(PLAIN_APPEARANCE, grid.reverse_video)
-    image = Image.new("RGB", (grid.columns * width, max(1, len(grid.rows)) * height), screen_background)
+    image = Image.new("RGB", (grid.columns * width, max(1, len(grid.rows)) * height), grid.background)
     pen = ImageDraw.Draw(image)
     pens = _Pens(faces, width, height)
     # As kitty layers them: backgrounds, the images under the text, the
     # text, and the images over it.
     for y, row in enumerate(grid.rows):
-        for x, (char, appearance) in enumerate(row):
-            _, background = paint.shown(appearance, grid.reverse_video)
-            if char and background != screen_background:
+        for x, (char, look) in enumerate(row):
+            if char and look.background != grid.background:
                 span = 2 if x + 1 < len(row) and not row[x + 1][0] else 1
                 left, upper = x * width, y * height
-                pen.rectangle((left, upper, left + span * width - 1, upper + height - 1), fill=background)
+                pen.rectangle((left, upper, left + span * width - 1, upper + height - 1), fill=look.background)
     _paste(image, [shown for shown in grid.images if shown.z < 0], width, height)
     for y, row in enumerate(grid.rows):
-        for x, (char, appearance) in enumerate(row):
+        for x, (char, look) in enumerate(row):
             if not char:
                 continue
             span = 2 if x + 1 < len(row) and not row[x + 1][0] else 1
             left, upper = x * width, y * height
             right, lower = left + span * width - 1, upper + height - 1
-            foreground, background = paint.shown(appearance, grid.reverse_video)
-            rendition = appearance.rendition
-            if rendition.dim:
-                foreground = _mixed(foreground, background)
+            foreground = _mixed(look.foreground, look.background) if look.dim else look.foreground
             glyph = visible_char(char)
-            if glyph.strip() and not rendition.hidden:
-                face = ("bold" if rendition.bold else "") + ("italic" if rendition.italic else "")
+            if glyph.strip() and not look.hidden:
+                face = ("bold" if look.bold else "") + ("italic" if look.italic else "")
                 font, top = pens.font_for(glyph, face or "regular")
                 pen.text((left, upper + top), glyph, font=font, fill=foreground)
-            if rendition.underline:
+            if look.underline:
                 pen.line((left, lower - 1, right, lower - 1), fill=foreground)
-            if rendition.strike:
+            if look.strike:
                 pen.line((left, upper + height // 2, right, upper + height // 2), fill=foreground)
     _paste(image, [shown for shown in grid.images if shown.z >= 0], width, height)
     if grid.cursor is not None:
         x, y = grid.cursor
-        pen.rectangle((x * width, y * height, (x + 1) * width - 1, (y + 1) * height - 1), outline=screen_foreground)
+        pen.rectangle((x * width, y * height, (x + 1) * width - 1, (y + 1) * height - 1), outline=grid.foreground)
     written = io.BytesIO()
     image.save(written, "PNG", optimize=True)
     return written.getvalue()

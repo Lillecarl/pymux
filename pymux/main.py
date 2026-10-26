@@ -669,7 +669,7 @@ class ClientState:
             if not graphics.supported:
                 return
             try:
-                graphics.render(self._graphics_views())
+                graphics.render(self.graphics_views())
             except Exception:
                 logger.exception("Drawing the pane images failed.")
             if self.connection.pipe_connection.outstanding:
@@ -757,7 +757,7 @@ class ClientState:
             return DefaultColors()
         return self.connection.default_colors
 
-    def _graphics_views(self):
+    def graphics_views(self):
         """
         One `PaneView` per pane whose images the outer terminal should
         show.

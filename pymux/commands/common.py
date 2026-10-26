@@ -18,7 +18,7 @@ from prompt_toolkit.key_binding.vi_state import InputMode
 from ptterm import Terminal
 from pyte.keys import KeyEvent, Unhearable
 
-from pymux.commands import CommandException
+from pymux.commands import CommandException, this_client
 from pymux.format import Language, format_pymux_string
 from pymux.ids import PaneId, PaneIndex, WindowId, WindowIndex
 from pymux.key_spelling import why_pane_cannot_read
@@ -302,6 +302,19 @@ def clients_named(pymux: Pymux, wanted: str) -> list[ClientState]:
     if not found:
         raise CommandException("can't find client: %s" % (wanted,))
     return found
+
+
+def the_client(pymux: Pymux, target: str | None, command: str) -> ClientState:
+    "The client `-t` names, else the one that ran this, else the one a person used last."
+    if target is not None:
+        return clients_named(pymux, target)[0]
+    here = this_client(pymux)
+    if here is not None and here.connection is not None:
+        return here
+    clients = [one for one in pymux.clients if one.connection is not None]
+    if not clients:
+        raise CommandException("%s: no client is attached" % (command,))
+    return max(clients, key=lambda client: client.last_used)
 
 
 def option_as_written(pymux: Pymux, option: Option, args: argparse.Namespace, target: ClientState | None = None) -> str:

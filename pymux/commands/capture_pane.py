@@ -1,10 +1,7 @@
 from __future__ import annotations
 
 import argparse
-import base64
 from typing import TYPE_CHECKING, cast
-
-import anyio
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable
@@ -20,6 +17,7 @@ from pyte.screen import Page, Screen
 from pymux import screenshot
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import show_listing, terminal_of, the_pane
+from pymux.commands.pictures import add_picture_arguments, cell_from, drawn, fitted_cell, refuse_picture_flags
 
 
 def _row_of(given: str | None, name: str, here: int, far_end: int, line_offset: int) -> int:
@@ -90,31 +88,7 @@ def _drawn_rows(screen: Screen, page: Page, args: argparse.Namespace) -> tuple[i
     return first, last
 
 
-def _cell_of(pymux: Pymux, given: str | None) -> tuple[int, int]:
-    "The cell a PNG draws, in pixels: as given, or the attached terminal's."
-    if given is None:
-        return pymux.cell_size()
-    width, x, height = given.partition("x")
-    if not (x and width.isdigit() and height.isdigit() and int(width) > 0 and int(height) > 0):
-        raise CommandException("capture-pane: --cell takes <width>x<height> in pixels, as 9x18: %s" % (given,))
-    return int(width), int(height)
-
-
-def _fitted_cell(cell: tuple[int, int], columns: int, rows: int, fit: int | None) -> tuple[int, int]:
-    """
-    The cell, made smaller until the longest edge of the picture is at
-    most `fit` pixels. The font is sized to the cell, so the glyphs stay
-    sharp where scaling the picture down would blur them.
-    """
-    width, height = cell
-    longest = max(columns * width, rows * height)
-    if fit is None or longest <= fit:
-        return width, height
-    scale = fit / longest
-    return max(1, int(width * scale)), max(1, int(height * scale))
-
-
-async def _png(pymux: Pymux, screen: Screen, page: Page, args: argparse.Namespace) -> str:
+async def _print_png(pymux: Pymux, screen: Screen, page: Page, args: argparse.Namespace) -> None:
     """
     The rows of a pane as a PNG, in base64: `pymux.screenshot` draws it.
 
@@ -122,25 +96,10 @@ async def _png(pymux: Pymux, screen: Screen, page: Page, args: argparse.Namespac
     pane at the moment the command arrived.
     """
     first, last = _drawn_rows(screen, page, args)
-    cell = _fitted_cell(_cell_of(pymux, args.cell), screen.columns, max(1, last - first + 1), args.fit)
+    cell = cell_from(args.cell, pymux.cell_size(), "capture-pane")
+    cell = fitted_cell(cell, screen.columns, max(1, last - first + 1), args.fit)
     grid = screenshot.grid_of(screen, first, last, cast(ColorOverrides, screen.colors), cell)
-    width, height = cell
-    paths = args.fonts or await screenshot.system_fonts()
-    if not paths:
-        raise CommandException("capture-pane: no font to draw with: pass --font, or put fontconfig's fc-match on PATH")
-    try:
-        drawn = await anyio.to_thread.run_sync(_drawn, grid, paths, args.fallbacks, width, height)
-    except ValueError as error:
-        raise CommandException("capture-pane: %s" % (error,))
-    return base64.b64encode(drawn).decode("ascii")
-
-
-async def _print_png(pymux: Pymux, screen: Screen, page: Page, args: argparse.Namespace) -> None:
-    pymux.print_command_line(await _png(pymux, screen, page, args))
-
-
-def _drawn(grid: screenshot.Grid, paths: list[str], fallbacks: list[str], width: int, height: int) -> bytes:
-    return screenshot.draw(grid, screenshot.faces_of(paths, fallbacks), width, height)
+    pymux.print_command_line(await drawn(grid, args, cell, "capture-pane"))
 
 
 def _html(screen: Screen, page: Page, args: argparse.Namespace) -> str:
@@ -200,8 +159,7 @@ def capture_pane(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None] | No
         if not args.p:
             raise CommandException("capture-pane: --png prints base64, so it needs -p")
         return _print_png(pymux, screen, page, args)
-    if args.fonts or args.fallbacks or args.cell or args.fit is not None:
-        raise CommandException("capture-pane: --font, --fallback, --cell and --fit draw the picture of --png")
+    refuse_picture_flags(args, "capture-pane")
 
     if args.H and args.J:
         raise CommandException("capture-pane: -J joins rows into one line, which -H cannot draw")
@@ -291,38 +249,7 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
         action="store_true",
         help="With -H: HTML for a reader, not a browser. Colours as they look, no stylesheet.",
     )
-    parser.add_argument(
-        "--png",
-        action="store_true",
-        help="With -p: a picture of the pane, as base64 PNG. The default range is the visible pane.",
-    )
-    parser.add_argument(
-        "--font",
-        dest="fonts",
-        action="append",
-        default=[],
-        metavar="<file>",
-        help="A font file --png draws with, once per face. fontconfig's monospace without it.",
-    )
-    parser.add_argument(
-        "--fallback",
-        dest="fallbacks",
-        action="append",
-        default=[],
-        metavar="<file>",
-        help="A font file --png draws a glyph from when the font lacks it, tried in order.",
-    )
-    parser.add_argument(
-        "--cell",
-        metavar="<width>x<height>",
-        help="The pixels of one cell for --png. The attached terminal's cell without it.",
-    )
-    parser.add_argument(
-        "--fit",
-        type=int,
-        metavar="<pixels>",
-        help="Shrink the cell of --png until the picture's longest edge is at most this.",
-    )
+    add_picture_arguments(parser, "pane; the default range is the visible pane")
     parser.add_argument("-t", dest="target_pane", metavar="<target-pane>", help="The pane to capture.")
     parser.add_argument(
         "-S", dest="start", metavar="<start>", help="The first line. 0 is the top of the pane, negative is history."
