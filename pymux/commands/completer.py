@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import argparse
 from functools import partial
-from typing import TYPE_CHECKING, Any, override
+from typing import TYPE_CHECKING, Any, Final, override
 
 import argcomplete
 from argcomplete.completers import SuppressCompleter
@@ -31,6 +31,7 @@ from prompt_toolkit.document import Document
 from pymux.arrangement import LayoutTypes
 from pymux.commands import CommandException, CommandParser, build_parser_tree, parser_tree
 from pymux.commands.aliases import ALIASES
+from pymux.format import Language, format_pymux_string, tmux_pane_id_prefix
 from pymux.forwarding import Direction
 from pymux.key_spelling import KeyCompleter
 
@@ -161,6 +162,101 @@ def _forward_listenings(pymux: Pymux, parsed_args: argparse.Namespace, direction
     }
 
 
+#: What each kind of target says about itself beside its spelling, as
+#: tmux formats. A person finds a thing by these words as well as by
+#: its spelling: `vim` reaches the pane that runs it.
+SESSION_SAYS: Final = "#{session_windows} windows#{?session_attached, (attached),}"
+WINDOW_SAYS: Final = "#{window_name}, #{window_panes} panes"
+PANE_SAYS: Final = "#{session_name}:#{window_index}.#{pane_index} #{pane_current_command} #{pane_title}"
+
+
+def _offer(found: dict[str, str]) -> dict[str, str]:
+    "Answer with these, and let the words beside each match as well."
+    if _finder is not None:
+        _finder.descriptions.update(found)
+    return found
+
+
+def _says(pymux: Pymux, template: str, **things) -> str:
+    try:
+        return format_pymux_string(pymux, template, language=Language.TMUX, **things).strip()
+    except CommandException:
+        # A session with no window yet has nothing to format over.
+        return ""
+
+
+def _sessions(pymux: Pymux, **_) -> dict[str, str]:
+    return _offer({session.name: _says(pymux, SESSION_SAYS, session=session) for session in pymux.sessions})
+
+
+def _session_ends(pymux: Pymux, **_) -> dict[str, str]:
+    "A session alone, which puts a window after the last one there."
+    return _offer({"%s:" % session.name: "after the last window" for session in pymux.sessions})
+
+
+def _windows(pymux: Pymux, **_) -> dict[str, str]:
+    return _offer(
+        {
+            "%s:%s" % (session.name, window.index): _says(pymux, WINDOW_SAYS, session=session, window=window)
+            for session in pymux.sessions
+            for window in session.arrangement.windows
+        }
+    )
+
+
+def _panes(pymux: Pymux, **_) -> dict[str, str]:
+    return _offer(
+        {
+            "%s%s" % (tmux_pane_id_prefix(), pane.pane_id): _says(
+                pymux, PANE_SAYS, session=session, window=window, pane=pane
+            )
+            for session in pymux.sessions
+            for window in session.arrangement.windows
+            for pane in window.panes
+        }
+    )
+
+
+def _clients(pymux: Pymux, **_) -> dict[str, str]:
+    return _offer(
+        {
+            getattr(client_state, "name", "") or client_state.connection.name: client_state.session.name
+            for client_state in pymux.clients
+        }
+    )
+
+
+def _jobs(pymux: Pymux, **_) -> dict[str, str]:
+    return _offer({str(job.job_id): job.command for job in pymux.jobs.listing()})
+
+
+def _tagged(pymux: Pymux, parsed_args: argparse.Namespace, **_) -> dict[str, str]:
+    "`set-tag -t` names the kind its flag says, and a pane without one."
+    if parsed_args.j:
+        return _jobs(pymux)
+    if parsed_args.s:
+        return _sessions(pymux)
+    if parsed_args.w:
+        return _windows(pymux)
+    return _panes(pymux)
+
+
+#: What completes a target, by the metavar that spells its kind. The
+#: metavars are tmux's own, and `test_every_target_completes` holds
+#: that each one a command spells is here.
+TARGET_COMPLETERS: Final = {
+    "<target-session>": _sessions,
+    "<target-window>": _windows,
+    "<src-window>": _windows,
+    "<dst-window>": _windows,
+    "<target-pane>": _panes,
+    "<src-pane>": _panes,
+    "<target-client>": _clients,
+    "<job>": _jobs,
+    "[<dst-session>:]<dst-index>": _session_ends,
+}
+
+
 #: What completes a value, by the command and the dest of the argument.
 _VALUE_COMPLETERS = {
     ("set-option", "option"): _session_option_names,
@@ -176,6 +272,8 @@ _VALUE_COMPLETERS = {
     ("send-keys", "keys"): _send_keys_names,
     ("unforward-port", "local"): partial(_forward_listenings, direction=Direction.LOCAL),
     ("unforward-port", "remote"): partial(_forward_listenings, direction=Direction.REMOTE),
+    ("set-tag", "target"): _tagged,
+    ("show-tags", "target"): _tagged,
 }
 
 
@@ -201,6 +299,7 @@ class CommandCompleter(Completer):
         if finder is None:
             return
         finder._display_completions = {}
+        finder.descriptions = {}
         matches = finder._get_completions(["pymux", *words], prefix, prequote, wordbreak)
         meta = finder.get_display_completions()
 
@@ -254,7 +353,21 @@ class FuzzyFinder(argcomplete.CompletionFinder):
     start with a dash: the ask of Lillecarl/pymux#148 was that a
     flag lists without the dash at all, and "-d" says nothing about
     itself, while "Leave the new window unfocused" says plenty.
+
+    A target matches what it says about itself for the same reason:
+    `%12` says nothing, and `vim` is how a person remembers the pane.
+    argcomplete hands the validator only the candidate, so a target
+    completer leaves its words in `descriptions` for it.
     """
+
+    def __init__(self, parser: argparse.ArgumentParser, **kwargs: Any):
+        super().__init__(parser, validator=self._valid, **kwargs)
+        self.descriptions: dict[str, str] = {}
+
+    def _valid(self, completion: str, prefix: str) -> bool:
+        # argcomplete hands (completion, prefix); the matcher reads
+        # (word, candidate), and the word is the prefix the person typed.
+        return matches_loosely(prefix, completion) or matches_loosely(prefix, self.descriptions.get(completion, ""))
 
     def _matches(self, word: str, candidate: str) -> bool:
         return matches_loosely(word, candidate)
@@ -335,14 +448,10 @@ def create_command_completer(pymux: Pymux):
             parser,
             append_space=False,
             default_completer=SuppressCompleter(),
-            # argcomplete hands the validator (completion, prefix); the
-            # matcher reads (word, candidate), and the word is the
-            # prefix the person typed.
-            validator=lambda completion, prefix: matches_loosely(prefix, completion),
         )
     for name, command_parser in subparsers.choices.items():
         for action in command_parser._actions:
-            fn = _VALUE_COMPLETERS.get((name, action.dest))
+            fn = _VALUE_COMPLETERS.get((name, action.dest)) or TARGET_COMPLETERS.get(str(action.metavar))
             if fn is not None:
                 # A custom completer, which is argcomplete's own
                 # extension point: it reads `action.completer` when one

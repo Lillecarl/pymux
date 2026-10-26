@@ -55,4 +55,4 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     group.add_argument("-U", dest="U", action="store_true", help="Focus the pane above.")
     group.add_argument("-D", dest="D", action="store_true", help="Focus the pane below.")
     group.add_argument("-l", dest="l", action="store_true", help="Rotate the panes of the window once.")
-    group.add_argument("-t", dest="pane_id", metavar="<pane-id>", help="The pane to focus.")
+    group.add_argument("-t", dest="pane_id", metavar="<target-pane>", help="The pane to focus.")
