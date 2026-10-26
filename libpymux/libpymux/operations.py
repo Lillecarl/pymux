@@ -32,6 +32,7 @@ __all__ = [
     "Operation",
     "Row",
     "SqlRow",
+    "Tags",
     "Tail",
     "drive",
     "format_string",
@@ -87,6 +88,10 @@ PANE_FIELDS = (
 #: One row of a `-F` listing, by field name. The keys are the names of
 #: format variables, which is data here and not a fixed shape.
 type Row = dict[str, str]
+
+#: A thing's tags: a key to its value, or to `None` for a bare key, so
+#: `key` and `key=` stay two tags.
+type Tags = dict[str, str | None]
 
 
 class Ask(NamedTuple):
@@ -185,6 +190,26 @@ def windows() -> Operation[list[Row]]:
 def panes() -> Operation[list[Row]]:
     "Every pane of every window."
     return (yield from query(["list-panes", "-a"], PANE_FIELDS))
+
+
+def tag_words(tags: Mapping[str, str | None]) -> list[str]:
+    "`--tag` for each tag: on a listing, keep what carries every one; on a command that makes something, tag it."
+    return [word for key, value in tags.items() for word in ("--tag", _tag_word(key, value))]
+
+
+def tagged_sessions(tags: Mapping[str, str | None]) -> Operation[list[Row]]:
+    "The sessions carrying every tag. A bare key takes any value."
+    return (yield from query(["list-sessions", *tag_words(tags)], SESSION_FIELDS))
+
+
+def tagged_windows(tags: Mapping[str, str | None]) -> Operation[list[Row]]:
+    "The windows of every session carrying every tag."
+    return (yield from query(["list-windows", *tag_words(tags)], WINDOW_FIELDS))
+
+
+def tagged_panes(tags: Mapping[str, str | None]) -> Operation[list[Row]]:
+    "The panes of every session carrying every tag."
+    return (yield from query(["list-panes", *tag_words(tags)], PANE_FIELDS))
 
 
 def window_panes(window_id: str) -> Operation[list[Row]]:
@@ -349,12 +374,14 @@ def split_window(
     vertical: bool,
     start_directory: str | None,
     select: bool,
+    tags: Mapping[str, str | None],
 ) -> Operation[Row | None]:
     arguments = ["split-window", "-t", window_id, "-v" if vertical else "-h"]
     if start_directory is not None:
         arguments += ["-c", start_directory]
     if not select:
         arguments.append("-d")
+    arguments += tag_words(tags)
     arguments += ["-P", "-F", format_string(PANE_FIELDS)]
     if command is not None:
         arguments.append(command)
@@ -382,6 +409,7 @@ def new_window(
     name: str | None,
     start_directory: str | None,
     select: bool,
+    tags: Mapping[str, str | None],
 ) -> Operation[Row | None]:
     arguments = ["new-window", "-t", "%s:" % (session_name,)]
     if name is not None:
@@ -390,6 +418,7 @@ def new_window(
         arguments += ["-c", start_directory]
     if not select:
         arguments.append("-d")
+    arguments += tag_words(tags)
     arguments += ["-P", "-F", format_string(WINDOW_FIELDS)]
     if command is not None:
         arguments.append(command)
@@ -407,10 +436,11 @@ def kill_session(session_id: str) -> Operation[None]:
 # -- the server --------------------------------------------------------
 
 
-def new_session(name: str, attach: bool) -> Operation[Row | None]:
+def new_session(name: str, attach: bool, tags: Mapping[str, str | None]) -> Operation[Row | None]:
     arguments = ["new-session", "-s", name]
     if not attach:
         arguments.append("-d")
+    arguments += tag_words(tags)
     arguments += ["-P", "-F", format_string(SESSION_FIELDS)]
     return first(rows((yield Ask(arguments)), SESSION_FIELDS))
 
@@ -519,6 +549,56 @@ def job(job_id: int) -> Operation[JobRecord | None]:
 
 def _tag_word(key: str, value: str | None) -> str:
     return key if value is None else "%s=%s" % (key, value)
+
+
+# -- tags --------------------------------------------------------------
+
+#: What `set-tag` reads to know a target's kind, by the first character
+#: of its id: `$0` a session, `@1` a window, `%5` a pane.
+_TAG_SCOPES = {"$": "-s", "@": "-w", "%": "-p"}
+
+#: The `live` table holding each kind's tags, and its id column.
+_TAG_TABLES = {"$": ("session_tags", "session_id"), "@": ("window_tags", "window_id"), "%": ("pane_tags", "pane_id")}
+
+
+def _tag_target(target: str | int) -> list[str]:
+    "`-s`, `-w`, `-p` or `-j`, and `-t`: a job by its number, the rest by their ids."
+    if isinstance(target, int):
+        return ["-j", "-t", str(target)]
+    scope = _TAG_SCOPES.get(target[:1])
+    if scope is None:
+        raise ValueError("a tag target is a session, window or pane id, or a job number: %r" % (target,))
+    return [scope, "-t", target]
+
+
+def set_tags(target: str | int, tags: Mapping[str, str | None]) -> Operation[None]:
+    "Tag a session, window or pane by its id, or a job by its number. A key already there takes the new value."
+    if tags:
+        yield Ask(["set-tag", *_tag_target(target), *(_tag_word(key, value) for key, value in tags.items())])
+
+
+def unset_tags(target: str | int, keys: Sequence[str]) -> Operation[None]:
+    "Take these keys off. A key that is not there is no error."
+    if keys:
+        yield Ask(["set-tag", "-u", *_tag_target(target), *keys])
+
+
+def all_tags() -> Operation[dict[str, Tags]]:
+    'The tags of every session, window and pane, by id: `{"%5": {"agent": "a1"}}`.'
+    found: dict[str, Tags] = {}
+    for prefix, (table, column) in _TAG_TABLES.items():
+        for row in (yield from sql("SELECT %s, key, value FROM live.%s" % (column, table))):
+            found.setdefault("%s%d" % (prefix, row[column]), {})[row["key"]] = row["value"]
+    return found
+
+
+def tags_of(target: str) -> Operation[Tags]:
+    "The tags of one session, window or pane, by its id."
+    if target[:1] not in _TAG_TABLES or not target[1:].isdigit():
+        raise ValueError("not a session, window or pane id: %r" % (target,))
+    table, column = _TAG_TABLES[target[:1]]
+    found = yield from sql("SELECT key, value FROM live.%s WHERE %s = :id" % (table, column), {"id": int(target[1:])})
+    return {row["key"]: row["value"] for row in found}
 
 
 def run_job(

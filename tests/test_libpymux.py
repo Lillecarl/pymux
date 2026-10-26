@@ -23,6 +23,7 @@ from libpymux import (
     Pane,
     Server,
     ServerNotRunning,
+    Session,
     Window,
     operations,
     quote,
@@ -470,6 +471,57 @@ async def test_killing_the_server_does_not_raise_on_its_exit_code(fake):
     server = fake([("", "", 1)])
     await Server(server.path).kill()
     assert server.asked == ["kill-server"]
+
+
+# ----------------------------------------------------------------------
+# Tags.
+
+
+def sql_rows(*rows):
+    "What `sql --json` answers: these rows, as dictionaries."
+    return (json.dumps({"columns": [], "rows": list(rows), "truncated": False}), "", 0)
+
+
+async def test_a_tag_is_set_on_what_its_id_names(fake):
+    server = fake()
+    pymux_server = Server(server.path)
+    await Pane(pymux_server, {"pane_id": "%5"}).set_tags({"agent": "a1", "bare": None})
+    await Window(pymux_server, {"window_id": "@2"}).unset_tags("role")
+    await Session(pymux_server, {"session_id": "$0"}).set_tags({})
+    assert server.asked == ["set-tag -p -t %5 agent=a1 bare", "set-tag -u -w -t @2 role"]
+
+
+async def test_a_pane_reads_its_own_tags(fake):
+    server = fake([sql_rows({"key": "agent", "value": "a1"}, {"key": "bare", "value": None})])
+    tags = await Pane(Server(server.path), {"pane_id": "%5"}).tags()
+    assert tags == {"agent": "a1", "bare": None}
+    assert "live.pane_tags WHERE pane_id = :id" in server.asked[0]
+    assert "--param id=5" in server.asked[0]
+
+
+async def test_every_tag_of_the_server_is_read_by_id(fake):
+    server = fake(
+        [
+            sql_rows({"session_id": 0, "key": "owner", "value": "agent"}),
+            sql_rows(),
+            sql_rows({"pane_id": 5, "key": "agent", "value": "a1"}, {"pane_id": 5, "key": "bare", "value": None}),
+        ]
+    )
+    assert await Server(server.path).tags() == {"$0": {"owner": "agent"}, "%5": {"agent": "a1", "bare": None}}
+
+
+async def test_a_listing_with_tags_asks_the_server_to_filter(fake):
+    server = fake([(pane_row(pane_id="%5") + "\n", "", 0)])
+    panes = await Server(server.path).panes({"agent": "a1", "bare": None})
+    assert [pane.id for pane in panes] == ["%5"]
+    assert server.asked[0].startswith("list-panes --tag agent=a1 --tag bare -F ")
+
+
+async def test_what_is_made_is_tagged_as_it_is_made(fake):
+    server = fake([(pane_row(pane_id="%9") + "\n", "", 0)])
+    window = Window(Server(server.path), {"window_id": "@0", "window_index": "0"})
+    await window.split(tags={"agent": "a1"})
+    assert " --tag agent=a1 -P -F " in server.asked[0]
 
 
 # ----------------------------------------------------------------------

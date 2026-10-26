@@ -29,7 +29,7 @@ import anyio
 
 from . import operations
 from .connection import CommandResult, Connection, ServerNotRunning
-from .operations import Ask, JobRecord, Operation, Row, SqlRow, drive
+from .operations import Ask, JobRecord, Operation, Row, SqlRow, Tags, drive
 from .records import PaneFields, SessionFields, WindowFields
 from .sockets import socket_paths
 from .streams import PaneStream
@@ -193,6 +193,16 @@ class Pane(PaneFields):
     async def rename(self, name: str) -> None:
         await self.server.run(operations.rename_pane(self.id, name))
 
+    async def tags(self) -> Tags:
+        "This pane's tags, asked of the server. A bare key holds `None`."
+        return await self.server.run(operations.tags_of(self.id))
+
+    async def set_tags(self, tags: Mapping[str, str | None]) -> None:
+        await self.server.run(operations.set_tags(self.id, tags))
+
+    async def unset_tags(self, *keys: str) -> None:
+        await self.server.run(operations.unset_tags(self.id, keys))
+
     async def refresh(self) -> Pane:
         "Read the fields of this pane again."
         row = await self.server.run(operations.pane(self.id))
@@ -225,14 +235,17 @@ class Window(WindowFields):
         vertical: bool = True,
         start_directory: str | None = None,
         select: bool = True,
+        tags: Mapping[str, str | None] | None = None,
     ) -> Pane | None:
         """
         Split this window and return the pane that appears.
 
         `vertical` puts the new pane below the old one, which is what
-        tmux calls a vertical split.
+        tmux calls a vertical split. `tags` tags the new pane.
         """
-        row = await self.server.run(operations.split_window(self.id, command, vertical, start_directory, select))
+        row = await self.server.run(
+            operations.split_window(self.id, command, vertical, start_directory, select, tags or {})
+        )
         return None if row is None else Pane(self.server, row)
 
     async def select(self) -> None:
@@ -241,6 +254,16 @@ class Window(WindowFields):
 
     async def rename(self, name: str) -> None:
         await self.server.run(operations.rename_window(self.index, name))
+
+    async def tags(self) -> Tags:
+        "This window's tags, asked of the server. A bare key holds `None`."
+        return await self.server.run(operations.tags_of(self.id))
+
+    async def set_tags(self, tags: Mapping[str, str | None]) -> None:
+        await self.server.run(operations.set_tags(self.id, tags))
+
+    async def unset_tags(self, *keys: str) -> None:
+        await self.server.run(operations.unset_tags(self.id, keys))
 
     async def kill(self) -> None:
         "End every pane of this window and take the window away."
@@ -286,14 +309,25 @@ class Session(SessionFields):
         name: str | None = None,
         start_directory: str | None = None,
         select: bool = True,
+        tags: Mapping[str, str | None] | None = None,
     ) -> Window | None:
-        "Make a window in this session and return it."
+        "Make a window in this session and return it. `tags` tags the window."
         return self.server._window(
-            await self.server.run(operations.new_window(self.name, command, name, start_directory, select))
+            await self.server.run(operations.new_window(self.name, command, name, start_directory, select, tags or {}))
         )
 
     async def rename(self, name: str) -> None:
         await self.server.run(operations.rename_session(self.id, name))
+
+    async def tags(self) -> Tags:
+        "This session's tags, asked of the server. A bare key holds `None`."
+        return await self.server.run(operations.tags_of(self.id))
+
+    async def set_tags(self, tags: Mapping[str, str | None]) -> None:
+        await self.server.run(operations.set_tags(self.id, tags))
+
+    async def unset_tags(self, *keys: str) -> None:
+        await self.server.run(operations.unset_tags(self.id, keys))
 
     async def kill(self) -> None:
         "End this session. The last one to go ends the server."
@@ -346,6 +380,15 @@ class Job:
     @property
     def tags(self) -> dict[str, str | None]:
         return self.record.tags
+
+    async def set_tags(self, tags: Mapping[str, str | None]) -> None:
+        "Tag the job, and read it again so `tags` holds them."
+        await self.server.run(operations.set_tags(self.id, tags))
+        await self.refresh()
+
+    async def unset_tags(self, *keys: str) -> None:
+        await self.server.run(operations.unset_tags(self.id, keys))
+        await self.refresh()
 
     async def tail(self, timeout: float, lines: int = 10) -> str:
         """
@@ -532,9 +575,10 @@ class Server:
         "What the server says about itself."
         return await self.run(operations.server_info())
 
-    async def sessions(self) -> builtins.list[Session]:
-        "Every session of this server, oldest first."
-        return [Session(self, row) for row in await self.run(operations.sessions())]
+    async def sessions(self, tags: Mapping[str, str | None] | None = None) -> builtins.list[Session]:
+        "Every session of this server, oldest first, or those carrying every tag. A bare key takes any value."
+        found = operations.tagged_sessions(tags) if tags else operations.sessions()
+        return [Session(self, row) for row in await self.run(found)]
 
     async def session(self) -> Session:
         "The oldest session of this server."
@@ -548,18 +592,36 @@ class Server:
         row = await self.run(operations.session_named(name))
         return None if row is None else Session(self, row)
 
-    async def new_session(self, name: str, attach: bool = False) -> Session | None:
-        "Make a session and return it."
-        row = await self.run(operations.new_session(name, attach))
+    async def new_session(
+        self, name: str, attach: bool = False, tags: Mapping[str, str | None] | None = None
+    ) -> Session | None:
+        "Make a session and return it. `tags` tags the session."
+        row = await self.run(operations.new_session(name, attach, tags or {}))
         return None if row is None else Session(self, row)
 
-    async def windows(self) -> builtins.list[Window]:
-        "Every window of the session a client last looked at."
-        return [Window(self, row) for row in await self.run(operations.windows())]
+    async def windows(self, tags: Mapping[str, str | None] | None = None) -> builtins.list[Window]:
+        """
+        Every window of the session a client last looked at. With `tags`,
+        the windows of every session carrying every tag.
+        """
+        found = operations.tagged_windows(tags) if tags else operations.windows()
+        return [Window(self, row) for row in await self.run(found)]
 
-    async def panes(self) -> builtins.list[Pane]:
-        "Every pane of every window."
-        return self._panes(await self.run(operations.panes()))
+    async def panes(self, tags: Mapping[str, str | None] | None = None) -> builtins.list[Pane]:
+        "Every pane of every window, or those carrying every tag."
+        return self._panes(await self.run(operations.tagged_panes(tags) if tags else operations.panes()))
+
+    async def tags(self) -> dict[str, Tags]:
+        'The tags of every session, window and pane, by id: `{"%5": {"agent": "a1"}}`.'
+        return await self.run(operations.all_tags())
+
+    async def set_tags(self, target: str | int, tags: Mapping[str, str | None]) -> None:
+        "Tag a session, window or pane by its id (`$0`, `@1`, `%5`), or a job by its number."
+        await self.run(operations.set_tags(target, tags))
+
+    async def unset_tags(self, target: str | int, *keys: str) -> None:
+        "Take keys off what `target` names, as `set_tags` reads it."
+        await self.run(operations.unset_tags(target, keys))
 
     async def window(self, index: int) -> Window | None:
         "The window at this index, or None."
