@@ -2,38 +2,48 @@
 SQL over the server's own objects, for the `sql` command.
 
 **Nothing is stored.** A question opens a private in-memory connection,
-and every table in it is a virtual one (apsw's `make_virtual_module`)
-over rows built from the objects as the question starts: the jobs, the
-tags and the kept questions in `main`, and sessions, windows, panes,
-clients and the server's records in `live`, by the snapshot's names
-(`tables.LIVE_ROWS`). The connection closes with the answer. So typing,
-a frame or a pane's output never touches SQLite, and two questions
-never lock each other. Lillecarl/pymux#722.
+and every table in it is a virtual one over rows built from the
+objects when the question reads that table: the jobs, the tags and the
+kept questions in `main`, and sessions, windows, panes, clients and the
+server's records in `live`, by the snapshot's names
+(`tables.LIVE_ROWS`), with the columns a person sees beside them
+(`tables.shown`). The connection closes with the answer. So typing, a
+frame or a pane's output never touches SQLite, and two questions never
+lock each other. Lillecarl/pymux#722.
 
 **The rows are built on the loop, and SQLite runs on a worker.** An
 async apsw connection runs SQLite in a thread of its own, which is
 what keeps a slow question off the loop. The rows are frozen
-dataclasses made before the question runs, so that thread only reads
-values that cannot change, and every table describes the same instant.
+dataclasses, so that thread only reads values that cannot change.
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import nullcontext
 from dataclasses import dataclass, fields
+from functools import partial
 from typing import TYPE_CHECKING, Any, NamedTuple, cast, get_args, get_type_hints
 
 import anyio
 import apsw
 import apsw.ext
 
-from .tables import LIVE_ROWS, JobTagRow, Row, SavedQueryRow
+from .tables import LIVE_ROWS, JobTagRow, SavedQueryRow
 
 if TYPE_CHECKING:
     from .main import Pymux
 
-__all__ = ["SCHEMA_VERSION", "SEEDS", "Answer", "QueryError", "ask", "is_read_only_query"]
+__all__ = [
+    "SCHEMA_VERSION",
+    "SEEDS",
+    "Answer",
+    "QueryError",
+    "ask",
+    "is_read_only_query",
+    "register",
+    "tables_of",
+]
 
 # **The SQLite inside apsw is the one of its own release.** apsw builds
 # its own SQLite in, with every symbol `static`, so a second SQLite in
@@ -51,9 +61,9 @@ if not apsw.using_amalgamation or not apsw.apsw_version().startswith(apsw.sqlite
 
 #: What this server answers with. Agents read it with `PRAGMA
 #: user_version` and re-read the tables when it differs from what they
-#: were told. 8: `live` has `session_tags`, `window_tags` and
-#: `pane_tags`.
-SCHEMA_VERSION = 8
+#: were told. 9: `windows` has `shown_name`, and `panes` has
+#: `shown_name`, `title` and `current_command`.
+SCHEMA_VERSION = 9
 
 #: The questions every boot starts with. A name an agent saves later
 #: replaces one of these for the rest of the boot; the next boot seeds
@@ -118,46 +128,52 @@ class QueryError(Exception):
     "A question SQLite refused or could not finish, in its words."
 
 
-def _tables_now(pymux: Pymux) -> dict[tuple[str, str], tuple[type, list]]:
-    "Every table a question sees, by schema and name, with its rows as of now."
+#: What gives a table its rows, called when a question first reads it.
+type Source = Callable[[], Iterable[Any]]
+
+
+def _jobs(pymux: Pymux) -> Iterator[JobView]:
+    for job in pymux.jobs.listing():
+        yield JobView(
+            job.job_id,
+            job.command,
+            job.directory,
+            job.status,
+            job.returncode,
+            job.error,
+            job.started,
+            job.finished,
+            1 if job.pty else 0,
+        )
+
+
+def _job_tags(pymux: Pymux) -> Iterator[JobTagRow]:
+    for job in pymux.jobs.listing():
+        for key, value in job.tags.items():
+            yield JobTagRow(job.job_id, key, value)
+
+
+def _saved_queries(pymux: Pymux) -> Iterator[SavedQueryRow]:
+    for name, (sql, description) in sorted(pymux.jobs.saved_queries.items()):
+        yield SavedQueryRow(name, sql, description)
+
+
+def _live(pymux: Pymux, table: str) -> Iterator[Any]:
     # Here and not at the top: the snapshot reaches `pymux.main`.
     from .snapshot import rows_of
 
-    jobs = pymux.jobs.listing()
-    tables: dict[tuple[str, str], tuple[type, list]] = {
-        ("main", "jobs"): (
-            JobView,
-            [
-                JobView(
-                    job.job_id,
-                    job.command,
-                    job.directory,
-                    job.status,
-                    job.returncode,
-                    job.error,
-                    job.started,
-                    job.finished,
-                    1 if job.pty else 0,
-                )
-                for job in jobs
-            ],
-        ),
-        ("main", "job_tags"): (
-            JobTagRow,
-            [JobTagRow(job.job_id, key, value) for job in jobs for key, value in job.tags.items()],
-        ),
-        ("main", "saved_queries"): (
-            SavedQueryRow,
-            [
-                SavedQueryRow(name, sql, description)
-                for name, (sql, description) in sorted(pymux.jobs.saved_queries.items())
-            ],
-        ),
+    return (row for row in rows_of(pymux) if row.TABLE == table)
+
+
+def tables_of(pymux: Pymux) -> dict[tuple[str, str], tuple[type, Source]]:
+    "Every table a question sees, by schema and name, with what gives its rows."
+    tables: dict[tuple[str, str], tuple[type, Source]] = {
+        ("main", "jobs"): (JobView, partial(_jobs, pymux)),
+        ("main", "job_tags"): (JobTagRow, partial(_job_tags, pymux)),
+        ("main", "saved_queries"): (SavedQueryRow, partial(_saved_queries, pymux)),
     }
     for kind in LIVE_ROWS:
-        tables["live", kind.TABLE] = (kind, [])
-    for row in rows_of(pymux):
-        tables["live", row.TABLE][1].append(row)
+        tables["live", kind.TABLE] = (kind, partial(_live, pymux, kind.TABLE))
     return tables
 
 
@@ -178,13 +194,31 @@ def _declared(kind: type) -> str:
     return "CREATE TABLE x(%s)" % ", ".join(columns)
 
 
-class _Rows:
-    "A read-only virtual table over a list of rows: apsw's module, table and cursor in one."
+async def _on_loop(source: Source) -> list[Any]:
+    return list(source())
 
-    def __init__(self, kind: type, rows: list[Row]) -> None:
+
+class _Rows:
+    """
+    A read-only virtual table: apsw's module, table and cursor in one.
+
+    **The rows are built when a question reads the table, and only
+    then.** On an async connection SQLite runs on a worker, and the
+    objects belong to the loop, so the worker hands the build to the
+    loop (`apsw.async_run_coro`) and waits. Two tables of one answer can
+    each show a slightly different moment; nothing here needs more.
+    """
+
+    def __init__(self, kind: type, source: Source, on_loop: bool) -> None:
         self.schema = _declared(kind)
         self.names = [field.name for field in fields(kind)]
-        self.rows = rows
+        self.source = source
+        self.on_loop = on_loop
+
+    def build(self) -> list[Any]:
+        if self.on_loop:
+            return apsw.async_run_coro(_on_loop(self.source))
+        return list(self.source())
 
     def Create(
         self, connection: apsw.Connection, modulename: str, databasename: str, tablename: str, *args: apsw.SQLiteValue
@@ -208,18 +242,20 @@ class _Rows:
 class _Cursor:
     def __init__(self, table: _Rows) -> None:
         self._table = table
+        self._rows: list[Any] = []
         self._at = 0
 
     def Filter(self, indexnum: int, indexname: str, constraintargs: tuple | None) -> None:
+        self._rows = self._table.build()
         self._at = 0
 
     def Eof(self) -> bool:
-        return self._at >= len(self._table.rows)
+        return self._at >= len(self._rows)
 
     def Column(self, number: int) -> apsw.SQLiteValue:
         if number == -1:
             return self._at
-        return getattr(self._table.rows[self._at], self._table.names[number])
+        return getattr(self._rows[self._at], self._table.names[number])
 
     def Next(self) -> None:
         self._at += 1
@@ -231,14 +267,15 @@ class _Cursor:
         pass
 
 
-def _register(db: apsw.Connection, tables: dict[tuple[str, str], tuple[type, list]]) -> None:
+def register(db: apsw.Connection, tables: dict[tuple[str, str], tuple[type, Source]], on_loop: bool) -> None:
+    "The tables, on a connection that runs on the loop or, with `on_loop`, on a worker that hands back to it."
     db.execute("ATTACH ':memory:' AS live")
-    for (schema, name), (kind, rows) in tables.items():
+    for (schema, name), (kind, source) in tables.items():
         module = "%s_%s" % (schema, name)
         # A cast, because apsw's stubs make every optional method of a
         # virtual table -- `ShadowName`, `UpdateInsertRow`, `Savepoint`
         # -- a member of the protocol, which no read-only table has.
-        db.create_module(module, cast("apsw.VTModule", _Rows(kind, rows)))
+        db.create_module(module, cast("apsw.VTModule", _Rows(kind, source, on_loop)))
         db.execute("CREATE VIRTUAL TABLE %s.%s USING %s()" % (schema, name, module))
     db.execute("PRAGMA user_version = %d" % SCHEMA_VERSION)
     db.execute("PRAGMA query_only = ON")
@@ -270,10 +307,9 @@ async def ask(pymux: Pymux, query: str, params: dict[str, str], limit: int, time
     Answer one question. A question that outlives `timeout` seconds
     (0: no bound) is interrupted and raises `TimeoutError`.
     """
-    tables = _tables_now(pymux)
     db = await apsw.Connection.as_async(":memory:")
     try:
-        await db.async_run(_register, db, tables)
+        await db.async_run(register, db, tables_of(pymux), True)
         bound = anyio.fail_after(timeout) if timeout else nullcontext()
         with bound:
             try:

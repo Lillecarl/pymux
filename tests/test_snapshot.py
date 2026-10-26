@@ -73,7 +73,15 @@ def test_a_row_names_the_columns_of_its_table(row):
 
     columns = [column[1] for column in db.execute("PRAGMA table_info(%s)" % (row.TABLE,))]
 
-    assert [field.name for field in dataclasses.fields(row)] == columns
+    assert [field.name for field in tables.stored_fields(row)] == columns
+
+
+def test_a_shown_column_comes_after_every_stored_one():
+    "The snapshot reads a row back by position, and leaves the shown columns to their defaults."
+    for row in tables.ROWS:
+        names = [field.name for field in dataclasses.fields(row)]
+        stored = [field.name for field in tables.stored_fields(row)]
+        assert names[: len(stored)] == stored, row.TABLE
 
 
 @pytest.mark.parametrize("row", tables.ROWS, ids=lambda row: row.TABLE)

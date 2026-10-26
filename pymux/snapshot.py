@@ -673,6 +673,7 @@ def _window_rows(session: Session, window: Window, linked: bool, place: int) -> 
         window_codec=_value(window.window_codec),
         monitor_bell=window.monitor_bell,
         bell=window.bell,
+        shown_name=window.name,
     )
     for key, value in sorted(window.tags.items()):
         yield WindowTagRow(window.window_id, key, value)
@@ -711,11 +712,20 @@ def _pane_rows(pane: Pane, window: Window | None, parent: _Split | None, place: 
         command_zone=pane.command_zone,
         last_exit_status=pane.last_exit_status,
         bell=pane.bell,
+        shown_name=pane.name,
+        title=_title_of(pane),
+        current_command=os.path.basename(pane.process.get_name() or "") or None,
     )
     for name, value in sorted(pane.user_vars.items()):
         yield PaneUserVarRow(pane.pane_id, name, value)
     for key, value in sorted(pane.tags.items()):
         yield PaneTagRow(pane.pane_id, key, value)
+
+
+def _title_of(pane: Pane) -> str | None:
+    "The title the program set, where it has a screen to set one on: a Wayland pane has none."
+    screen = getattr(pane.terminal, "screen", None)
+    return screen.titles.window if screen is not None else None
 
 
 def _clients(pymux: Pymux) -> dict[str, dict]:

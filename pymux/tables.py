@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import functools
 from collections.abc import Iterable
-from dataclasses import Field, dataclass, fields
-from typing import Any, ClassVar, Protocol
+from dataclasses import Field, dataclass, field, fields
+from typing import Any, ClassVar, Final, Protocol
 
 import apsw
 
@@ -359,6 +359,22 @@ CLIENT_MODE_TABLES = ("client_modes",)
 LIVE_TABLES = tuple(table for table in TABLES if table not in JOB_TABLES + SCREEN_TABLES + CLIENT_MODE_TABLES)
 
 
+#: Marks a column worked out from the live objects -- what a person
+#: sees, such as a pane's title -- which `sql` reads and the snapshot
+#: neither writes nor compares: a new build works it out again.
+SHOWN: Final = {"shown": True}
+
+
+def shown(default: Any = None) -> Any:
+    "A column `sql` reads and the snapshot leaves out. It goes after every stored one."
+    return field(default=default, compare=False, metadata=SHOWN)
+
+
+def stored_fields(kind: type) -> tuple[Field[Any], ...]:
+    "The columns of `kind` the snapshot holds."
+    return tuple(each for each in fields(kind) if not each.metadata.get("shown"))
+
+
 @dataclass(frozen=True, slots=True)
 class ServerRow:
     TABLE: ClassVar[str] = "server"
@@ -464,6 +480,7 @@ class WindowRow:
     window_codec: str
     monitor_bell: int
     bell: int
+    shown_name: str | None = shown()
 
 
 @dataclass(frozen=True, slots=True)
@@ -501,6 +518,9 @@ class PaneRow:
     command_zone: str | None
     last_exit_status: int | None
     bell: int
+    shown_name: str | None = shown()
+    title: str | None = shown()
+    current_command: str | None = shown()
 
 
 @dataclass(frozen=True, slots=True)
@@ -815,7 +835,7 @@ def _insert_of(kind: type[Row], replace: bool) -> tuple[str, tuple[str, ...]]:
     server, and building it per row was a third of a write.
     Lillecarl/pymux#557.
     """
-    names = tuple(field.name for field in fields(kind))
+    names = tuple(each.name for each in stored_fields(kind))
     statement = "INSERT %sINTO %s (%s) VALUES (%s)" % (
         "OR REPLACE " if replace else "",
         kind.TABLE,
@@ -901,6 +921,6 @@ def select[R: Row](db: apsw.Connection, kind: type[R], where: str = "", *params)
     a question that answers no rows has finished before its cursor
     could name them.
     """
-    names = [field.name for field in fields(kind)]
+    names = [each.name for each in stored_fields(kind)]
     query = "SELECT %s FROM %s %s" % (", ".join(names), kind.TABLE, where)
     return [kind(*values) for values in db.execute(query, params)]

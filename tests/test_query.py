@@ -1,6 +1,6 @@
 """
 What a question sees: virtual tables over the server's objects, built
-as the question starts, and nothing stored. Lillecarl/pymux#722.
+as the question reads them, and nothing stored. Lillecarl/pymux#722.
 """
 
 from __future__ import annotations
@@ -35,15 +35,33 @@ async def test_a_question_sees_the_jobs_and_the_live_tables():
 
 
 async def test_the_live_tables_answer_what_the_objects_hold():
-    "One question counts every table. `ask` builds its rows before it first awaits, so this is one instant."
+    """
+    One question counts every table. A table is read when the question
+    reaches it, so the server must hold still: no window here ends.
+    """
     counts = ", ".join("(SELECT count(*) FROM live.%s)" % table for table in tables.LIVE_TABLES)
-    async with create_session() as (pymux, _state):
+    async with create_session(window=None) as (pymux, _state):
         held = dict.fromkeys(tables.LIVE_TABLES, 0)
         for row in snapshot.rows_of(pymux):
             held[row.TABLE] += 1
         (answered,) = await _rows(pymux, "SELECT %s" % counts)
 
     assert dict(zip(tables.LIVE_TABLES, answered, strict=True)) == held
+
+
+async def test_a_question_reads_what_a_person_sees():
+    "The name the status line shows, and what the program set and runs, beside the stored columns."
+    async with create_session(window=None) as (pymux, _state):
+        window = pymux.sessions[0].arrangement.windows[0]
+        pane = window.panes[0]
+        pane.screen.titles.window = "a title"
+        windows = await _rows(
+            pymux, "SELECT shown_name FROM live.windows WHERE window_id = :id", id=str(window.window_id)
+        )
+        panes = await _rows(pymux, "SELECT shown_name, title FROM live.panes WHERE pane_id = :id", id=str(pane.pane_id))
+
+        assert windows == [(window.name,)]
+        assert panes == [(pane.name, "a title")]
 
 
 async def test_an_empty_table_still_names_its_columns():
