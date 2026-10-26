@@ -89,7 +89,12 @@ def _keys(questions: Questions, prefix: str, **_) -> dict[str, str]:
     command that sends the prefix on. Neither takes it as part of a key.
     """
     words = [(str(row[0]), str(row[1] or ""), str(row[2])) for row in questions.rows("complete-key") if len(row) > 2]
-    return {c.text: c.display_meta_text for c in key_completions(prefix, words, offer_prefix=False)}
+    # The grammar completes the last segment; argcomplete replaces the
+    # whole word, so each answer carries the segments before it.
+    return {
+        prefix[: len(prefix) + c.start_position] + c.text: c.display_meta_text
+        for c in key_completions(prefix, words, offer_prefix=False)
+    }
 
 
 def _option_names(scope: str, questions: Questions, **_) -> dict[str, str]:
@@ -274,6 +279,14 @@ class CommandCompleter(Completer):
                         )
                 return
 
+        # What starts with the word before what only holds it, so `sta`
+        # puts `status` in front of `pane-border-status`. A word with no
+        # dash is a value first: a flag it matches through its help comes
+        # after, or `-g` ("what a session starts with") stands in front.
+        matches = sorted(
+            matches,
+            key=lambda m: (not prefix.startswith("-") and m.startswith("-"), not m.startswith(prefix)),
+        )
         for m in matches:
             # The match carries the prefix; it replaces the word being
             # typed whole.
@@ -292,10 +305,13 @@ def matches_loosely(word: str, candidate: str) -> bool:
     return word.lower() in candidate.lower()
 
 
-class FuzzyFinder(argcomplete.CompletionFinder):
+class FuzzyFinder(argcomplete.ExclusiveCompletionFinder):
     """
     A finder that keeps what the word matches loosely, not only what
     it starts.
+
+    Exclusive: a flag already on the line is not offered again, unless
+    it is one that repeats (`--tag`).
 
     argcomplete filters three of its four candidates by a prefix --
     the subcommands, the flags and the words a completer answered;
