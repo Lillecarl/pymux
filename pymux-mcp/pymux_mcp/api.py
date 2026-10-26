@@ -98,17 +98,24 @@ async def tree(server: Server) -> list[Json]:
 
     Start here: the ids in the answer are what every other operation
     names its targets by. `here` marks the pane the agent itself runs
-    in, when it runs in one of this server's.
+    in, when it runs in one of this server's. `tags` are what `tag.set`
+    put on each.
     """
     enclosing = Server.enclosing()
     here = enclosing[1].id if enclosing is not None and enclosing[0].socket_path == server.socket_path else None
+    tags = await server.tags()
     by_window: dict[str, list[Json]] = {}
     for pane in await server.panes():
-        by_window.setdefault(pane.window_id, []).append({**pane_json(pane), "here": pane.id == here})
+        by_window.setdefault(pane.window_id, []).append(
+            {**pane_json(pane), "here": pane.id == here, "tags": tags.get(pane.id, {})}
+        )
     found = []
     for session in await server.sessions():
-        windows = [{**window_json(window), "panes": by_window.get(window.id, [])} for window in await session.windows()]
-        found.append({**session_json(session), "windows": windows})
+        windows = [
+            {**window_json(window), "tags": tags.get(window.id, {}), "panes": by_window.get(window.id, [])}
+            for window in await session.windows()
+        ]
+        found.append({**session_json(session), "tags": tags.get(session.id, {}), "windows": windows})
     return found
 
 
@@ -118,7 +125,8 @@ async def sql(server: Server, query: str, params: dict[str, str | int | float] |
     Every row of one read-only SQL question about the server.
 
     Jobs are the tables `jobs` and `job_tags`; sessions, windows, panes
-    and clients are under `live`, as `live.windows`. `:name` in the
+    and clients are under `live`, as `live.windows`, with their tags in
+    `live.session_tags`, `live.window_tags` and `live.pane_tags`. `:name` in the
     query reads `params`. A question that writes is refused. Ids there
     are bare numbers: `window_id = 1` is the window other operations
     call `@1`, and `pane_id = 5` the pane `%5`.
@@ -142,13 +150,17 @@ async def command(server: Server, command: str) -> Json:
 # -- sessions, windows, panes ----------------------------------------------
 
 
+#: What a `.new` operation's `tags` says.
+NewTags = Annotated[Tags | None, Field(description="Tags to find it by later; null makes a bare key.")]
+
+
 @operation("session.new")
-async def new_session(server: Server, name: str) -> Json:
+async def new_session(server: Server, name: str, tags: NewTags = None) -> Json:
     "Make a session that nobody is attached to, and answer it."
-    session = await server.new_session(name)
+    session = await server.new_session(name, tags=tags)
     if session is None:
         raise LookupError("new-session answered nothing")
-    return session_json(session)
+    return {**session_json(session), "tags": tags or {}}
 
 
 @operation("window.new")
@@ -159,15 +171,16 @@ async def new_window(
     command: Annotated[str | None, Field(description="What to run in it; the default shell when left out.")] = None,
     directory: str | None = None,
     select: Annotated[bool, Field(description="Show it to whoever looks at the session.")] = False,
+    tags: NewTags = None,
 ) -> Json:
     "Make a window in a session, and answer it with its one pane."
     found = await (server.session() if session is None else server.session_named(session))
     if found is None:
         raise LookupError("no session named %r" % (session,))
-    window = await found.new_window(command=command, name=name, start_directory=directory, select=select)
+    window = await found.new_window(command=command, name=name, start_directory=directory, select=select, tags=tags)
     if window is None:
         raise LookupError("new-window answered nothing")
-    return {**window_json(window), "panes": [pane_json(pane) for pane in await window.panes()]}
+    return {**window_json(window), "tags": tags or {}, "panes": [pane_json(pane) for pane in await window.panes()]}
 
 
 @operation("window.split")
@@ -178,14 +191,15 @@ async def split_window(
     below: Annotated[bool, Field(description="Put the new pane below; false puts it to the right.")] = True,
     directory: str | None = None,
     select: Annotated[bool, Field(description="Give the new pane the keyboard.")] = False,
+    tags: NewTags = None,
 ) -> Json:
     "Split a window, and answer the pane that appears."
     pane = await Window(server, {"window_id": window}).split(
-        command=command, vertical=below, start_directory=directory, select=select
+        command=command, vertical=below, start_directory=directory, select=select, tags=tags
     )
     if pane is None:
         raise LookupError("split-window answered nothing")
-    return pane_json(pane)
+    return {**pane_json(pane), "tags": tags or {}}
 
 
 @operation("pane.capture")
@@ -338,6 +352,58 @@ async def wait(
 async def kill_pane(server: Server, pane: Annotated[str, Field(description="The pane's id: `%5`.")]) -> None:
     "End the program in a pane, and take the pane away."
     await Pane(server, {"pane_id": pane}).kill()
+
+
+# -- tags ------------------------------------------------------------------
+
+TagTarget = Annotated[
+    str | int, Field(description="A session `$0`, window `@1` or pane `%5` by its id, or a job by its number.")
+]
+
+
+@operation("tag.set")
+async def set_tags(
+    server: Server,
+    target: TagTarget,
+    tags: Annotated[
+        Tags, Field(description="Tags to set; null makes a bare key, and a key there takes the new value.")
+    ],
+) -> None:
+    """
+    Tag a session, window, pane or job, to find it by later.
+
+    Tag what you make, and `tag.find` answers it again without an id to
+    remember. Tags survive a server upgrade.
+    """
+    await server.set_tags(target, tags)
+
+
+@operation("tag.unset")
+async def unset_tags(server: Server, target: TagTarget, keys: list[str]) -> None:
+    "Take tags off a session, window, pane or job. A key that is not there is no error."
+    await server.unset_tags(target, *keys)
+
+
+@operation("tag.find")
+async def find_tagged(
+    server: Server,
+    tags: Annotated[Tags, Field(description="What to find; a null value takes any value.")],
+) -> Json:
+    """
+    Every session, window, pane and job carrying every tag.
+
+    A tag with a value matches that value alone, and one with null any
+    value the key holds.
+    """
+    if not tags:
+        raise ValueError("name a tag to find by; tree shows everything")
+    found = await server.tags()
+    return {
+        "sessions": [{**session_json(one), "tags": found.get(one.id, {})} for one in await server.sessions(tags)],
+        "windows": [{**window_json(one), "tags": found.get(one.id, {})} for one in await server.windows(tags)],
+        "panes": [{**pane_json(one), "tags": found.get(one.id, {})} for one in await server.panes(tags)],
+        "jobs": [job_json(job) for job in await server.jobs(tags)],
+    }
 
 
 # -- jobs ------------------------------------------------------------------

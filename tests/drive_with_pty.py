@@ -2786,6 +2786,21 @@ def check_libpymux(tmp):
         assert [one.id for one in await caller.jobs({"check": "libpymux"})] == [job.id]
         assert (await caller.job(job.id)).returncode == 3
 
+        # Tags, on each kind of thing, read back and found by.
+        await session.set_tags({"owner": "libpymux"})
+        await window.set_tags({"role": "check", "bare": None})
+        await pane.set_tags({"agent": "a1"})
+        await job.set_tags({"more": "yes"})
+        assert job.tags["more"] == "yes", job.tags
+        assert await window.tags() == {"role": "check", "bare": None}
+        assert (await server.tags())[pane.id] == {"agent": "a1"}
+        assert [one.id for one in await server.panes({"agent": "a1"})] == [pane.id]
+        assert [one.id for one in await server.windows({"bare": None})] == [window.id]
+        assert [one.id for one in await server.sessions({"owner": "libpymux"})] == [session.id]
+        assert await server.panes({"agent": "nobody"}) == []
+        await window.unset_tags("bare")
+        assert await window.tags() == {"role": "check"}
+
     terminal = Terminal(tmp, "kitty")
     try:
         terminal.wait_for_queries()
@@ -2873,8 +2888,17 @@ def check_pymux_mcp(tmp):
             png = base64.b64decode(whole.content[0].data)
             assert struct.unpack(">II", png[16:24]) == (80 * 9, 24 * 18), png[16:24]
 
-            split = json.loads(await ask("window.split", window=made["id"], command="cat"))
+            split = json.loads(await ask("window.split", window=made["id"], command="cat", tags={"agent": "mcp"}))
             assert split["window"] == made["id"], split
+            await ask("tag.set", target=made["id"], tags={"role": "mcp", "bare": None})
+            found = json.loads(await ask("tag.find", tags={"agent": "mcp"}))
+            assert [one["id"] for one in found["panes"]] == [split["id"]], found
+            assert found["panes"][0]["tags"] == {"agent": "mcp"}, found
+            tree = json.loads(await ask("tree"))
+            tagged = [one for one in tree[0]["windows"] if one["id"] == made["id"]]
+            assert tagged[0]["tags"] == {"role": "mcp", "bare": None}, tagged
+            await ask("tag.unset", target=made["id"], keys=["bare"])
+            assert json.loads(await ask("tag.find", tags={"bare": None}))["windows"] == []
             await ask("pane.kill", pane=split["id"])
 
             ran = json.loads(await ask("job.run", command="echo from-a-job; exit 2", tags={"via": "mcp"}, timeout=30))
