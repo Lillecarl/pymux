@@ -22,9 +22,11 @@ __all__ = ["SURVEY", "Answer", "TerminalAnswers", "readable"]
 #: Asked once, when a client's terminal has been detected, for nothing
 #: but to know the answer. Secondary device attributes, and DECRQM for
 #: the mouse modes, focus events, alternate scroll, bracketed paste,
-#: grapheme clustering, theme reports and in-band resize. pymux asks
-#: the version, the colours, the keyboard and the graphics already.
-SURVEY = "\x1b[>c" + "".join(
+#: grapheme clustering, theme reports and in-band resize. The text area
+#: and the window in pixels, against the cell size: a terminal whose
+#: mouse pixels are not its cell's pixels shows here. pymux asks the
+#: version, the colours, the keyboard and the graphics already.
+SURVEY = "\x1b[>c\x1b[14t\x1b[14;2t" + "".join(
     "\x1b[?%d$p" % mode for mode in (1000, 1002, 1003, 1004, 1006, 1007, 2004, 2027, 2031, 2048)
 )
 

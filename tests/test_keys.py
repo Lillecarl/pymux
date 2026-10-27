@@ -353,16 +353,18 @@ def test_dcs_reply_split_over_chunks():
     assert replies == ["\x1bP0$rm\x1b\\"]
 
 
-def test_cell_size_reply_is_reported():
+@pytest.mark.parametrize("reply", ["\x1b[6;20;10t", "\x1b[4;1520;3420t"])
+def test_cell_size_reply_is_reported(reply):
+    "The cell, and the text area or window the survey asks for."
     replies = []
     pressed = []
     parser = KittyVt100Parser(
         lambda key_press: pressed.append(key_press),
         reply_callback=replies.append,
     )
-    parser.feed_and_flush("\x1b[6;20;10t")
+    parser.feed_and_flush(reply)
     assert pressed == []
-    assert replies == ["\x1b[6;20;10t"]
+    assert replies == [reply]
 
 
 def test_keys_after_dcs_reply_still_arrive():
