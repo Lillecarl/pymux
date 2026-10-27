@@ -38,7 +38,7 @@ from .audio import AudioLink
 from .colors import ColorDetection, DefaultColors
 from .commands import handle_command
 from .enums import ExtendedKeys, Woke
-from .graphics import ClientGraphics, draws_placeholders
+from .graphics import CELL_SIZE_QUERY, ClientGraphics, draws_placeholders
 from .ids import PaneId
 from .keys import KittyVt100Parser
 from .log import logger
@@ -735,6 +735,16 @@ class ServerConnection:
                     self.pymux.sync_color_bases()
             return
 
+        # The cell size, whenever it comes: asked again at each resize.
+        # The client that attached before its terminal answered can
+        # first speak for the panes now, and one whose cell changed
+        # speaks again. Lillecarl/pymux#369, Lillecarl/pymux#774.
+        new_cell = self.graphics.take_cell_size(data)
+        if new_cell is not None:
+            if new_cell:
+                self.pymux.sync_cell_size()
+            return
+
         if not self._kitty_detection_pending:
             return
 
@@ -761,18 +771,11 @@ class ServerConnection:
                 self.client_state.output.synchronized_output = synchronized.group(1) != "0"
             return
 
-        # The graphics query reply, the cell size report and the device
-        # attributes all say something about the images. The reply of
-        # the colour probe says how many colours the terminal takes.
-        knew_the_cell = self.graphics.cell_size_known
+        # The graphics query reply and the device attributes say
+        # something about the images. The reply of the colour probe says
+        # how many colours the terminal takes.
         self.graphics.handle_reply(data)
         self.colors.handle_reply(data)
-
-        # The cell size report is the moment a client can first speak
-        # for the panes: it attached before its terminal answered.
-        # Lillecarl/pymux#369.
-        if self.graphics.cell_size_known and not knew_the_cell:
-            self.pymux.sync_cell_size()
 
         # The secondary attributes end in `c` too, and are the survey's,
         # never the fence. Lillecarl/pymux#725.
@@ -939,6 +942,11 @@ class ServerConnection:
                 self.recording.hear("size", "%dx%d" % (columns, rows))
             self.size = Size(rows=rows, columns=columns)
             self.pymux.invalidate(Woke.CLIENT_RESIZED)
+            # A SIGWINCH comes for pixels alone too: the terminal moved
+            # to a display of another density. Lillecarl/pymux#774.
+            if self.graphics.cell_size_known:
+                self._write_output_raw(CELL_SIZE_QUERY)
+                self._flush_output()
 
         # Start GUI. (Create CommandLineInterface front-end for pymux.)
         elif packet[Field.CMD] == Packet.START_GUI:

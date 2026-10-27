@@ -551,6 +551,31 @@ class ClientGraphics:
         outer_id = int(match.group(1))
         return any(window.outer_id == outer_id for window in self._windows.values())
 
+    def take_cell_size(self, data: str) -> bool | None:
+        """
+        Read a cell size report: None when `data` is none, else whether
+        the cell is new.
+
+        **It is read whenever it comes, not in the detection alone.** A
+        terminal moved to a display of another density keeps its columns
+        and changes its cell, so the server asks again at each resize.
+        kitty on a Mac answered 19x35 at attach, 10x18 later with the same
+        342 columns, and reported the mouse in the second all along: each
+        click landed at half its column. Lillecarl/pymux#774.
+        """
+        match = _CELL_SIZE_REPLY_RE.match(data)
+        if match is None:
+            return None
+        height = int(match.group(1))
+        width = int(match.group(2))
+        if not (0 < width <= MAX_CELL_SIZE and 0 < height <= MAX_CELL_SIZE):
+            return False
+        new = not self.cell_size_known or (width, height) != (self.cell_width, self.cell_height)
+        self.cell_width = width
+        self.cell_height = height
+        self.cell_size_known = True
+        return new
+
     def handle_reply(self, data: str) -> None:
         "Read what a terminal reply says about the outer terminal."
         if is_query_reply(data):
@@ -567,14 +592,7 @@ class ClientGraphics:
             self.terminal_version = match.group(1)
             return
 
-        match = _CELL_SIZE_REPLY_RE.match(data)
-        if match is not None:
-            height = int(match.group(1))
-            width = int(match.group(2))
-            if 0 < width <= MAX_CELL_SIZE and 0 < height <= MAX_CELL_SIZE:
-                self.cell_width = width
-                self.cell_height = height
-                self.cell_size_known = True
+        if self.take_cell_size(data) is not None:
             return
 
         match = _DEVICE_ATTRIBUTES_RE.match(data)
