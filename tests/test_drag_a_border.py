@@ -7,10 +7,11 @@ and the handlers a real frame registered. Lillecarl/pymux#772.
 from __future__ import annotations
 
 import apsw
+import pytest
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.key_binding.key_processor import KeyPress
 from prompt_toolkit.keys import Keys
-from session import create_session
+from session import create_session, once
 from test_click_selects_pane import run
 
 from pymux import layout
@@ -128,6 +129,40 @@ async def test_a_move_with_no_drag_does_nothing():
         _mouse(state, DRAG, x - 4, y)
         assert state.border_drag is None
         assert _drawn(state)[left].width == drawn[left].width
+
+
+@pytest.mark.parametrize("small", [False, True])
+@pytest.mark.parametrize("strip", [False, True])
+@pytest.mark.parametrize("go_left", [False, True])
+async def test_a_click_in_the_other_pane_still_selects_it(strip, go_left, small):
+    "The right pane's program asks for the mouse, as jjui and Claude Code do."
+    async with create_session() as (pymux, state):
+        if strip:
+            await run(pymux, state, "set-window-option strip on")
+        if small:
+            await run(pymux, state, "resize-window -x 60 -y 15")
+        window, left, right, drawn = await _beside(
+            pymux, state, 'split-window -h "sh -c \'printf \\"\\\\033[?1003h\\\\033[?1006h\\"; sleep 30\'"'
+        )
+        await once(lambda: right.terminal.terminal_control.screen.sgr_mouse_support_enabled, 10.0, "no mouse mode")
+        await run(pymux, state, "select-pane -R" if go_left else "select-pane -L")
+        with set_app(state.app):
+            state.sync_focus()
+        target = left if go_left else right
+        await run(pymux, state, "split-window -v -t %%%d \"sh -c 'seq 1 500; sleep 30'\"" % left.pane_id)
+        (history,) = [pane for pane in window.panes if pane not in (left, right)]
+        await once(lambda: history.terminal.terminal_control.screen.max_y > 400, 10.0, "no history")
+        await run(pymux, state, "select-pane -t %%%d" % (right if go_left else left).pane_id)
+        with set_app(state.app):
+            state.sync_focus()
+        target = history
+        drawn = _drawn(state)
+        x, y = drawn[target].xpos + 3, drawn[target].ypos + 2
+
+        _mouse(state, PRESS, x, y)
+        _mouse(state, PRESS, x, y, "m")
+
+        assert window.active_pane is target
 
 
 async def test_a_window_pane_hears_its_size_at_the_release(monkeypatch):
