@@ -202,6 +202,22 @@ def no_application_left_current():
 
 
 @pytest.fixture
+async def pymux():
+    "A server with one window, whose program ends at once. A file that needs another server defines its own."
+    mux = Pymux()
+    async with mux.running():
+        await mux.create_window("%s -c pass" % (sys.executable,))
+        try:
+            yield mux
+        finally:
+            for window in list(mux.arrangement.windows):
+                for pane in list(window.panes):
+                    process = getattr(pane, "process", None)
+                    if process is not None and not process.is_terminated:
+                        process.kill()
+
+
+@pytest.fixture
 def anyio_backend():
     """
     asyncio, and nothing else.

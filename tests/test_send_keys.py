@@ -11,34 +11,15 @@ Lillecarl/pymux#118.
 
 from __future__ import annotations
 
-import sys
-
 import pytest
 from pyte import escape
 from pyte.modes import PrivateMode
 from pyte.sequences import Csi, csi, set_mode
 
 from pymux.commands import call_command_handler
-from pymux.main import Pymux
 
 COLUMNS = 20
 LINES = 5
-
-
-@pytest.fixture
-async def pymux():
-    "A server with one window, whose program ends at once."
-    mux = Pymux()
-    async with mux.running():
-        await mux.create_window("%s -c pass" % (sys.executable,))
-        try:
-            yield mux
-        finally:
-            for window in list(mux.arrangement.windows):
-                for pane in list(window.panes):
-                    process = getattr(pane, "process", None)
-                    if process is not None and not process.is_terminated:
-                        process.kill()
 
 
 def create_pane(mux, data: str = ""):

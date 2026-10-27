@@ -15,8 +15,6 @@ is `#{session_name}`.
 
 from __future__ import annotations
 
-import sys
-
 import pytest
 
 from pymux.format import (
@@ -27,23 +25,6 @@ from pymux.format import (
     tmux_variables,
 )
 from pymux.jinja import BROKEN
-from pymux.main import Pymux
-
-
-@pytest.fixture
-async def pymux():
-    "A server with one window, whose program ends at once."
-    mux = Pymux()
-    async with mux.running():
-        await mux.create_window("%s -c pass" % (sys.executable,))
-        try:
-            yield mux
-        finally:
-            for window in list(mux.arrangement.windows):
-                for pane in list(window.panes):
-                    process = getattr(pane, "process", None)
-                    if process is not None and not process.is_terminated:
-                        process.kill()
 
 
 @pytest.mark.parametrize(

@@ -12,28 +12,7 @@ change reaches a pane that is already running. tmux works the same way.
 
 from __future__ import annotations
 
-import sys
-
-import pytest
-
-from pymux.main import Pymux
 from pymux.options import ALL_OPTIONS
-
-
-@pytest.fixture
-async def pymux():
-    "A server with one window, whose program ends at once."
-    mux = Pymux()
-    async with mux.running():
-        await mux.create_window("%s -c pass" % (sys.executable,))
-        try:
-            yield mux
-        finally:
-            for window in list(mux.arrangement.windows):
-                for pane in list(window.panes):
-                    process = getattr(pane, "process", None)
-                    if process is not None and not process.is_terminated:
-                        process.kill()
 
 
 def pane_of(mux):
