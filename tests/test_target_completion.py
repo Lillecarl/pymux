@@ -11,8 +11,9 @@ import sys
 
 import pytest
 from prompt_toolkit.document import Document
+from run_commands import over_socket
 
-from pymux.commands import call_command_handler, parser_tree
+from pymux.commands import parser_tree
 from pymux.commands.completer import TARGET_COMPLETERS, create_command_completer
 from pymux.main import Pymux
 
@@ -26,27 +27,12 @@ async def pymux():
         yield mux
 
 
-async def run(mux, command, *arguments):
-    "Run a command the way the socket does, and give back its errors."
-    errors = []
-    mux.add_command_error = errors.append
-    mux.show_message = lambda message: None
-    mux.command_output = []
-    try:
-        answer = call_command_handler(command, mux, list(arguments))
-        if answer is not None:
-            await answer
-    finally:
-        mux.command_output = None
-    return errors
-
-
 async def two_sessions(mux):
     "`home` with two windows, the second called `editor`, and `work` with one."
-    await run(mux, "new-session", "-d", "-s", "home", ENDS_AT_ONCE)
+    await over_socket(mux, "new-session", "-d", "-s", "home", ENDS_AT_ONCE)
     home = mux.get_session("home")
     await mux.create_window(ENDS_AT_ONCE, name="editor", session=home)
-    await run(mux, "new-session", "-d", "-s", "work", ENDS_AT_ONCE)
+    await over_socket(mux, "new-session", "-d", "-s", "work", ENDS_AT_ONCE)
 
 
 def offered(pymux, line) -> dict[str, str]:

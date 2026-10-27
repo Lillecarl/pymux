@@ -13,19 +13,12 @@ from __future__ import annotations
 
 import anyio
 from prompt_toolkit.application.current import set_app
+from run_commands import run_as
 from session import create_session
 
 from pymux.commands import handle_command
 from pymux.jobs import JobTable
 from pymux.query import ask
-
-
-async def _run(pymux, state, command) -> None:
-    "Run a command and wait for it, the way the socket route does."
-    with set_app(state.app):
-        answer = handle_command(pymux, command)
-        if answer is not None:
-            await answer
 
 
 async def _run_answering(pymux, state, command) -> list:
@@ -92,7 +85,7 @@ async def test_output_counts_as_activity():
 
 async def test_a_running_job_idle_past_its_time_is_ended():
     async with create_session() as (pymux, state):
-        await _run(pymux, state, "run sleep 30")
+        await run_as(pymux, state, "run sleep 30")
         job = pymux.jobs.get(1)
         assert job is not None and not job.is_done
         job.last_active -= 7200
@@ -108,7 +101,7 @@ async def test_a_running_job_idle_past_its_time_is_ended():
 
 async def test_a_waited_job_stays_however_idle():
     async with create_session() as (pymux, state):
-        await _run(pymux, state, "run sleep 30")
+        await run_as(pymux, state, "run sleep 30")
         job = pymux.jobs.get(1)
         assert job is not None and not job.is_done
         job.last_active -= 7200

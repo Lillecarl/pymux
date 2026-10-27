@@ -11,8 +11,8 @@ import pytest
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.key_binding.key_processor import KeyPress
 from prompt_toolkit.keys import Keys
+from run_commands import run_as
 from session import create_session, once
-from test_click_selects_pane import run
 
 from pymux import layout
 from pymux.actions import Kind
@@ -38,7 +38,7 @@ def _mouse(state, code: int, x: int, y: int, end: str = "M") -> None:
 
 
 async def _beside(pymux, state, command="split-window -h"):
-    await run(pymux, state, command)
+    await run_as(pymux, state, command)
     window = pymux.arrangement.get_active_window()
     first, second = window.panes
     return window, first, second, _drawn(state)
@@ -93,7 +93,7 @@ async def test_a_drag_moves_the_line_between_two_rows():
 async def test_a_drag_in_a_strip_widens_that_column_alone():
     "A strip column's width is its own: the next one moves along and keeps its width."
     async with create_session() as (pymux, state):
-        await run(pymux, state, "set-window-option strip on")
+        await run_as(pymux, state, "set-window-option strip on")
         _, left, right, drawn = await _beside(pymux, state)
         widths = drawn[left].width, drawn[right].width
         x, y = drawn[left].xpos + drawn[left].width, drawn[left].ypos + 1
@@ -138,21 +138,21 @@ async def test_a_click_in_the_other_pane_still_selects_it(strip, go_left, small)
     "The right pane's program asks for the mouse, as jjui and Claude Code do."
     async with create_session() as (pymux, state):
         if strip:
-            await run(pymux, state, "set-window-option strip on")
+            await run_as(pymux, state, "set-window-option strip on")
         if small:
-            await run(pymux, state, "resize-window -x 60 -y 15")
+            await run_as(pymux, state, "resize-window -x 60 -y 15")
         window, left, right, drawn = await _beside(
             pymux, state, 'split-window -h "sh -c \'printf \\"\\\\033[?1003h\\\\033[?1006h\\"; sleep 30\'"'
         )
         await once(lambda: right.terminal.terminal_control.screen.sgr_mouse_support_enabled, 10.0, "no mouse mode")
-        await run(pymux, state, "select-pane -R" if go_left else "select-pane -L")
+        await run_as(pymux, state, "select-pane -R" if go_left else "select-pane -L")
         with set_app(state.app):
             state.sync_focus()
         target = left if go_left else right
-        await run(pymux, state, "split-window -v -t %%%d \"sh -c 'seq 1 500; sleep 30'\"" % left.pane_id)
+        await run_as(pymux, state, "split-window -v -t %%%d \"sh -c 'seq 1 500; sleep 30'\"" % left.pane_id)
         (history,) = [pane for pane in window.panes if pane not in (left, right)]
         await once(lambda: history.terminal.terminal_control.screen.max_y > 400, 10.0, "no history")
-        await run(pymux, state, "select-pane -t %%%d" % (right if go_left else left).pane_id)
+        await run_as(pymux, state, "select-pane -t %%%d" % (right if go_left else left).pane_id)
         with set_app(state.app):
             state.sync_focus()
         target = history

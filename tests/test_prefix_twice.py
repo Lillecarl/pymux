@@ -8,9 +8,10 @@ from __future__ import annotations
 
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.keys import Keys
+from run_commands import run
 from session import create_session, once
 from test_command_mode import press
-from test_key_tables import listed, run, written_keys
+from test_key_tables import listed, written_keys
 
 
 def set_prefix(pymux, state, key):

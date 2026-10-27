@@ -10,8 +10,8 @@ Lillecarl/pymux#235.
 from __future__ import annotations
 
 import pytest
+from run_commands import complaints
 
-from pymux.commands import handle_command
 from pymux.main import Pymux
 
 #: Three names for one key, and one that reads as nothing.
@@ -23,13 +23,6 @@ def pymux():
     return Pymux()
 
 
-def run(pymux, command):
-    "Run one command and give back what it complained about."
-    before = len(pymux.startup_errors)
-    handle_command(pymux, command)
-    return pymux.startup_errors[before:]
-
-
 def bindings(pymux):
     return pymux.key_bindings_manager.custom_bindings
 
@@ -38,8 +31,8 @@ def bindings(pymux):
 @pytest.mark.parametrize("second", CTRL_A)
 def test_one_key_holds_one_binding_however_it_is_written(pymux, first, second):
     "The second name binds the same key, so it replaces the first."
-    run(pymux, "bind-key -n %s new-window" % (first,))
-    run(pymux, "bind-key -n %s kill-pane" % (second,))
+    complaints(pymux, "bind-key -n %s new-window" % (first,))
+    complaints(pymux, "bind-key -n %s kill-pane" % (second,))
 
     (binding,) = bindings(pymux).values()
     assert binding.command == "kill-pane"
@@ -48,23 +41,23 @@ def test_one_key_holds_one_binding_however_it_is_written(pymux, first, second):
 @pytest.mark.parametrize("bound", CTRL_A)
 @pytest.mark.parametrize("unbound", CTRL_A)
 def test_key_unbinds_under_any_of_its_names(pymux, bound, unbound):
-    run(pymux, "bind-key -n %s new-window" % (bound,))
-    run(pymux, "unbind-key -n %s" % (unbound,))
+    complaints(pymux, "bind-key -n %s new-window" % (bound,))
+    complaints(pymux, "unbind-key -n %s" % (unbound,))
 
     assert bindings(pymux) == {}
 
 
 def test_prefix_tells_two_bindings_of_one_key_apart(pymux):
     "The same key with and beside the prefix are two bindings."
-    run(pymux, "bind-key -n c-a new-window")
-    run(pymux, "bind-key c-a kill-pane")
+    complaints(pymux, "bind-key -n c-a new-window")
+    complaints(pymux, "bind-key c-a kill-pane")
 
     assert len(bindings(pymux)) == 2
 
 
 def test_unbinding_key_nobody_bound_says_nothing(pymux):
     "It is not an error in tmux either."
-    assert run(pymux, "unbind-key -n c-a") == []
+    assert complaints(pymux, "unbind-key -n c-a") == []
 
 
 def test_unbinding_name_that_reads_as_no_key_is_error(pymux):
@@ -72,10 +65,10 @@ def test_unbinding_name_that_reads_as_no_key_is_error(pymux):
     It used to be silence, because the name went straight into a
     dictionary that did not hold it. `bind-key` has always said so.
     """
-    complaints = run(pymux, "unbind-key -n M-Nope")
+    problems = complaints(pymux, "unbind-key -n M-Nope")
 
-    assert complaints
-    assert "M-Nope" in complaints[0]
+    assert problems
+    assert "M-Nope" in problems[0]
 
 
 def test_caller_asks_for_binding_by_any_name_of_its_key(pymux):
@@ -84,7 +77,7 @@ def test_caller_asks_for_binding_by_any_name_of_its_key(pymux):
     the shape of the dictionary key. `nix/home-manager-judge.py` did,
     and the gate caught it.
     """
-    run(pymux, "bind-key -n ctrl+a new-window")
+    complaints(pymux, "bind-key -n ctrl+a new-window")
 
     manager = pymux.key_bindings_manager
 
@@ -98,7 +91,7 @@ def test_list_keys_shows_name_person_wrote(pymux):
     name has to be kept beside it. Otherwise the line a person reads
     back is a re-spelling of what they typed.
     """
-    run(pymux, "bind-key -n ctrl+a new-window")
+    complaints(pymux, "bind-key -n ctrl+a new-window")
 
     (binding,) = bindings(pymux).values()
     assert binding.written == "ctrl+a"
@@ -114,7 +107,7 @@ def test_a_semicolon_is_the_key_being_bound_under_either_spelling(pymux, spellin
     held for the long name and not for the alias a tmux configuration
     actually writes. Lillecarl/pymux#313.
     """
-    problems = run(pymux, "%s -n ';' new-window" % (spelling,))
+    problems = complaints(pymux, "%s -n ';' new-window" % (spelling,))
 
     assert problems == []
     (binding,) = bindings(pymux).values()

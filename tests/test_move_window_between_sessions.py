@@ -13,6 +13,7 @@ from __future__ import annotations
 import sys
 
 import pytest
+from run_commands import over_socket
 
 from pymux.commands import call_command_handler
 from pymux.main import Pymux
@@ -37,21 +38,6 @@ async def pymux():
                         process = getattr(pane, "process", None)
                         if process is not None and not process.is_terminated:
                             process.kill()
-
-
-async def run(mux, command, *arguments):
-    "Run a command the way the socket does, and give back what it said."
-    errors = []
-    mux.add_command_error = errors.append
-    mux.show_message = lambda message: None
-    mux.command_output = []
-    try:
-        answer = call_command_handler(command, mux, list(arguments))
-        if answer is not None:
-            await answer
-    finally:
-        mux.command_output = None
-    return errors
 
 
 async def new_session(mux, name) -> None:
@@ -95,7 +81,7 @@ async def test_a_window_moves_to_another_session(pymux):
     home = pymux.get_session("home")
     moving = home.arrangement.get_window_by_index(1)
 
-    assert await run(pymux, "move-window", "-s", "home:1", "-t", "work:7") == []
+    assert await over_socket(pymux, "move-window", "-s", "home:1", "-t", "work:7") == []
 
     assert moving.index == 7
     assert indices(pymux, "home") == [2]
@@ -107,7 +93,7 @@ async def test_a_window_that_leaves_closes_its_gap_under_renumber_windows(pymux)
     await two_sessions(pymux, home_windows=3)
     pymux.get_session("home").arrangement.renumber_windows = True
 
-    assert await run(pymux, "move-window", "-s", "home:2", "-S", "work") == []
+    assert await over_socket(pymux, "move-window", "-s", "home:2", "-S", "work") == []
 
     assert indices(pymux, "home") == [1, 2]
     assert indices(pymux, "work") == [1, 2]
@@ -116,7 +102,7 @@ async def test_a_window_that_leaves_closes_its_gap_under_renumber_windows(pymux)
 async def test_a_window_that_leaves_keeps_its_gap_without_renumber_windows(pymux):
     await two_sessions(pymux, home_windows=3)
 
-    assert await run(pymux, "move-window", "-s", "home:2", "-S", "work") == []
+    assert await over_socket(pymux, "move-window", "-s", "home:2", "-S", "work") == []
 
     assert indices(pymux, "home") == [1, 3]
 
@@ -129,7 +115,7 @@ async def test_a_live_pane_survives_the_move(pymux):
     moving = home.arrangement.get_window_by_index(2)
     await new_session(pymux, "work")
 
-    assert await run(pymux, "move-window", "-s", "home:2", "-t", "work:3") == []
+    assert await over_socket(pymux, "move-window", "-s", "home:2", "-t", "work:3") == []
 
     assert len(moving.panes) == 1
     assert not moving.panes[0].process.is_terminated
@@ -140,7 +126,7 @@ async def test_moving_the_last_window_empties_the_session(pymux):
     "An empty arrangement is a state a server has always been in."
     await two_sessions(pymux, home_windows=1)
 
-    assert await run(pymux, "move-window", "-s", "home:1", "-t", "work:5") == []
+    assert await over_socket(pymux, "move-window", "-s", "home:1", "-t", "work:5") == []
 
     assert pymux.get_session("home").arrangement.windows == []
     assert indices(pymux, "work") == [1, 5]
@@ -151,7 +137,7 @@ async def test_a_taken_index_in_the_destination_is_refused(pymux):
     await two_sessions(pymux)
     moving = pymux.get_session("home").arrangement.get_window_by_index(1)
 
-    assert await run(pymux, "move-window", "-s", "home:1", "-t", "work:1") == [
+    assert await over_socket(pymux, "move-window", "-s", "home:1", "-t", "work:1") == [
         "pymux: Can't move window: index in use."
     ]
 
@@ -167,7 +153,7 @@ async def test_kill_takes_the_destination_index(pymux):
     moving = home.arrangement.get_window_by_index(1)
     doomed = pymux.get_session("work").arrangement.get_window_by_index(1)
 
-    assert await run(pymux, "move-window", "-k", "-s", "home:1", "-t", "work:1") == []
+    assert await over_socket(pymux, "move-window", "-k", "-s", "home:1", "-t", "work:1") == []
 
     assert moving.index == 1
     assert doomed not in pymux.get_session("work").arrangement.windows
@@ -180,7 +166,7 @@ async def test_before_inserts_at_the_destination_index(pymux):
     moving = pymux.get_session("home").arrangement.get_window_by_index(1)
     second = pymux.get_session("work").arrangement.get_window_by_index(2)
 
-    assert await run(pymux, "move-window", "-b", "-s", "home:1", "-t", "work:1") == []
+    assert await over_socket(pymux, "move-window", "-b", "-s", "home:1", "-t", "work:1") == []
 
     assert moving.index == 1
     assert second.index == 3
@@ -192,7 +178,7 @@ async def test_a_move_inside_one_session_still_works(pymux):
     await two_sessions(pymux)
     moving = pymux.get_session("home").arrangement.get_window_by_index(2)
 
-    assert await run(pymux, "move-window", "-s", "home:2", "-t", "home:7") == []
+    assert await over_socket(pymux, "move-window", "-s", "home:2", "-t", "home:7") == []
 
     assert moving.index == 7
     assert indices(pymux, "home") == [1, 7]
@@ -202,7 +188,9 @@ async def test_a_move_inside_one_session_still_works(pymux):
 async def test_an_unknown_destination_session_is_an_error(pymux):
     await two_sessions(pymux)
 
-    assert await run(pymux, "move-window", "-s", "home:1", "-t", "nope:5") == ["pymux: can't find session: nope:5"]
+    assert await over_socket(pymux, "move-window", "-s", "home:1", "-t", "nope:5") == [
+        "pymux: can't find session: nope:5"
+    ]
 
     assert indices(pymux, "home") == [1, 2]
 
@@ -210,7 +198,7 @@ async def test_an_unknown_destination_session_is_an_error(pymux):
 async def test_a_destination_that_is_not_an_index_is_an_error(pymux):
     await two_sessions(pymux)
 
-    assert await run(pymux, "move-window", "-s", "home:1", "-t", "work:five") == [
+    assert await over_socket(pymux, "move-window", "-s", "home:1", "-t", "work:five") == [
         "pymux: Can't move window: bad index."
     ]
 
@@ -222,7 +210,7 @@ async def test_a_session_alone_takes_the_next_free_index(pymux, target):
     await two_sessions(pymux, work_windows=2)
     moving = pymux.get_session("home").arrangement.get_window_by_index(1)
 
-    assert await run(pymux, "move-window", "-s", "home:1", "-t", target) == []
+    assert await over_socket(pymux, "move-window", "-s", "home:1", "-t", target) == []
 
     assert moving.index == 3
     assert indices(pymux, "home") == [2]
@@ -234,11 +222,11 @@ async def test_the_session_switch_moves_the_window(pymux):
     await two_sessions(pymux)
     moving = pymux.get_session("home").arrangement.get_window_by_index(1)
 
-    assert await run(pymux, "move-window", "-s", "home:1", "--session", "work") == []
+    assert await over_socket(pymux, "move-window", "-s", "home:1", "--session", "work") == []
     assert pymux.session_of_window(moving) is pymux.get_session("work")
     assert moving.index == 2
 
-    assert await run(pymux, "move-window", "-s", "work:2", "-S", "home", "-t", "7") == []
+    assert await over_socket(pymux, "move-window", "-s", "work:2", "-S", "home", "-t", "7") == []
     assert pymux.session_of_window(moving) is pymux.get_session("home")
     assert moving.index == 7
 
@@ -246,7 +234,7 @@ async def test_the_session_switch_moves_the_window(pymux):
 async def test_the_session_switch_and_a_session_in_t_are_refused_together(pymux):
     await two_sessions(pymux)
 
-    assert await run(pymux, "move-window", "-s", "home:1", "--session", "work", "-t", "home:3") == [
+    assert await over_socket(pymux, "move-window", "-s", "home:1", "--session", "work", "-t", "home:3") == [
         "pymux: Can't move window: -t names a session, and so does --session."
     ]
     assert indices(pymux, "home") == [1, 2]
@@ -258,7 +246,7 @@ async def test_after_with_a_session_alone_goes_after_its_active_window(pymux):
     work.arrangement.set_active_window(work.arrangement.get_window_by_index(1))
     moving = pymux.get_session("home").arrangement.get_window_by_index(1)
 
-    assert await run(pymux, "move-window", "-a", "-s", "home:1", "-t", "work:") == []
+    assert await over_socket(pymux, "move-window", "-a", "-s", "home:1", "-t", "work:") == []
 
     assert moving.index == 2
     assert indices(pymux, "work") == [1, 2, 3]
@@ -273,7 +261,7 @@ async def test_a_window_links_into_another_session(pymux):
     home = pymux.get_session("home")
     moving = home.arrangement.get_window_by_index(1)
 
-    assert await run(pymux, "link-window", "-s", "home:1", "-t", "work:9") == []
+    assert await over_socket(pymux, "link-window", "-s", "home:1", "-t", "work:9") == []
 
     assert moving.index == 9
     assert indices(pymux, "home") == [2]
@@ -284,7 +272,7 @@ async def test_a_session_without_an_index_parks_after_the_last_window(pymux):
     await two_sessions(pymux)
     moving = pymux.get_session("home").arrangement.get_window_by_index(1)
 
-    assert await run(pymux, "link-window", "-s", "home:1", "-t", "work:") == []
+    assert await over_socket(pymux, "link-window", "-s", "home:1", "-t", "work:") == []
 
     assert moving.index == 2
     assert indices(pymux, "home") == [2]
@@ -297,8 +285,8 @@ async def test_an_unlinked_window_links_into_another_session(pymux):
     work = pymux.get_session("work")
     moving = work.arrangement.get_window_by_index(1)
 
-    assert await run(pymux, "unlink-window", "-t", "work:1") == []
-    assert await run(pymux, "link-window", "-s", "@%d" % moving.window_id, "-t", "home:") == []
+    assert await over_socket(pymux, "unlink-window", "-t", "work:1") == []
+    assert await over_socket(pymux, "link-window", "-s", "@%d" % moving.window_id, "-t", "home:") == []
 
     assert work.arrangement._unlinked_windows == []
     assert indices(pymux, "work") == [2]

@@ -19,9 +19,9 @@ pane**. An offset that is not shared is a real disagreement.
 from __future__ import annotations
 
 from prompt_toolkit.data_structures import Size
+from run_commands import run
 from test_strip_draws import CHROME, create_client
 
-from pymux.commands import handle_command
 from pymux.layout import plan_of
 
 #: Wide enough for two columns of half a window, so a third runs past
@@ -44,18 +44,6 @@ async def create_row_of_panes(pymux, count=3):
         panes.append(window.active_pane)
 
     return panes
-
-
-async def run(pymux, command):
-    """
-    Run a command, and wait for what it started.
-
-    A key binding does not wait, but a test that did not would draw
-    before the pane exists. The end state is the same either way.
-    """
-    answer = handle_command(pymux, command)
-    if answer is not None:
-        await answer
 
 
 def frame(pymux):

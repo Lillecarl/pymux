@@ -20,22 +20,15 @@ from __future__ import annotations
 import anyio
 import pytest
 from prompt_toolkit.application.current import set_app
+from run_commands import run_as
 from session import create_session
 
 from pymux.commands import handle_command
 
 
-async def _run(pymux, state, command) -> None:
-    "Run a command and wait for it, the way the socket route does."
-    with set_app(state.app):
-        answer = handle_command(pymux, command)
-        if answer is not None:
-            await answer
-
-
 async def test_run_shell_shows_what_command_said():
     async with create_session() as (pymux, state):
-        await _run(pymux, state, "run-shell echo hello-from-the-shell")
+        await run_as(pymux, state, "run-shell echo hello-from-the-shell")
 
         dialog = state.layout_manager.popup_dialog
         assert dialog is not None and dialog.title == "run-shell"
@@ -45,7 +38,7 @@ async def test_run_shell_from_command_line_answers_on_it():
     async with create_session() as (pymux, state):
         pymux.command_output = []
         try:
-            await _run(pymux, state, "run-shell echo straight-back")
+            await run_as(pymux, state, "run-shell echo straight-back")
             said = pymux.command_output
         finally:
             pymux.command_output = None
@@ -57,7 +50,7 @@ async def test_run_shell_strips_a_leading_separator():
     async with create_session() as (pymux, state):
         pymux.command_output = []
         try:
-            await _run(pymux, state, "run-shell -- echo stripped")
+            await run_as(pymux, state, "run-shell -- echo stripped")
             said = pymux.command_output
         finally:
             pymux.command_output = None
@@ -83,7 +76,7 @@ async def test_run_shell_says_why_a_shell_that_will_not_start_failed(monkeypatch
     async with create_session() as (pymux, state):
         pymux.command_output = []
         try:
-            await _run(pymux, state, "run-shell echo never-runs")
+            await run_as(pymux, state, "run-shell echo never-runs")
             answer = "\n".join(pymux.command_output)
         finally:
             pymux.command_output = None
@@ -125,7 +118,7 @@ async def test_run_shell_lets_the_server_serve_while_it_runs():
     async with create_session() as (pymux, state):
         async with anyio.create_task_group() as tasks:
             tasks.start_soon(keep_turning)
-            await _run(pymux, state, "run-shell 'sleep 0.2'")
+            await run_as(pymux, state, "run-shell 'sleep 0.2'")
             tasks.cancel_scope.cancel()
 
     assert turned, "the server did not turn while the shell ran"
@@ -133,14 +126,14 @@ async def test_run_shell_lets_the_server_serve_while_it_runs():
 
 async def test_if_shell_runs_then_command_on_zero():
     async with create_session() as (pymux, state):
-        await _run(pymux, state, "if-shell true 'display yes' 'display no'")
+        await run_as(pymux, state, "if-shell true 'display yes' 'display no'")
 
         assert state.message == "yes"
 
 
 async def test_if_shell_runs_else_command_otherwise():
     async with create_session() as (pymux, state):
-        await _run(pymux, state, "if-shell false 'display yes' 'display no'")
+        await run_as(pymux, state, "if-shell false 'display yes' 'display no'")
 
         assert state.message == "no"
 
@@ -162,7 +155,7 @@ async def test_if_shell_keeps_the_question_output_off_the_terminal(capfd):
     drew over the frame. Lillecarl/pymux#312.
     """
     async with create_session() as (pymux, state):
-        await _run(pymux, state, "if-shell 'echo scribble; echo noise >&2' 'display yes'")
+        await run_as(pymux, state, "if-shell 'echo scribble; echo noise >&2' 'display yes'")
 
         assert state.message == "yes"
 

@@ -35,9 +35,9 @@ from prompt_toolkit.layout.screen import Screen, WritePosition
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 from pyte.colors import parse_color
+from run_commands import run
 from session import Connection
 
-from pymux.commands import handle_command
 from pymux.cut_shade import hex_of
 from pymux.main import Pymux
 from pymux.plan_container import PlanContainer
@@ -95,18 +95,6 @@ async def create_client(commands=(), rows=ROWS, columns=COLUMNS):
                         process = getattr(pane, "process", None)
                         if process is not None and not process.is_terminated:
                             process.kill()
-
-
-async def run(pymux, command):
-    """
-    Run a command, and wait for what it started.
-
-    A key binding does not wait, but a test that did not would draw
-    before the pane exists. The end state is the same either way.
-    """
-    answer = handle_command(pymux, command)
-    if answer is not None:
-        await answer
 
 
 def panes_of(state) -> PlanContainer:

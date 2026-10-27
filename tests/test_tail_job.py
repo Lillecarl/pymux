@@ -15,17 +15,10 @@ import anyio
 import pytest
 from libpymux.agentic import CallerContext
 from prompt_toolkit.application.current import set_app
+from run_commands import run_as
 from session import create_session
 
 from pymux.commands import CommandException, handle_command
-
-
-async def _run(pymux, state, command) -> None:
-    "Run a command and wait for it, the way the socket route does."
-    with set_app(state.app):
-        answer = handle_command(pymux, command)
-        if answer is not None:
-            await answer
 
 
 async def _tail(pymux, state, command) -> tuple[list, list, int | None]:
@@ -47,7 +40,7 @@ async def _tail(pymux, state, command) -> tuple[list, list, int | None]:
 
 async def test_tail_replays_and_follows_to_the_job_s_exit():
     async with create_session() as (pymux, state):
-        await _run(pymux, state, "run --tag lines -- sh -c 'echo one; echo two; echo three'")
+        await run_as(pymux, state, "run --tag lines -- sh -c 'echo one; echo two; echo three'")
         job = pymux.jobs.get(1)
         with anyio.fail_after(5):
             await pymux.jobs.wait(job)
@@ -60,7 +53,7 @@ async def test_tail_replays_and_follows_to_the_job_s_exit():
 
 async def test_tail_reports_a_nonzero_exit():
     async with create_session() as (pymux, state):
-        await _run(pymux, state, "run --tag oops -- sh -c 'exit 3'")
+        await run_as(pymux, state, "run --tag oops -- sh -c 'exit 3'")
         said, errors, code = await _tail(pymux, state, "tail --tag oops")
         assert said == []
         assert code == 3
@@ -68,7 +61,7 @@ async def test_tail_reports_a_nonzero_exit():
 
 async def test_tail_with_zero_lines_follows_only():
     async with create_session() as (pymux, state):
-        await _run(pymux, state, "run --tag quiet -- echo said-long-ago")
+        await run_as(pymux, state, "run --tag quiet -- echo said-long-ago")
         job = pymux.jobs.get(1)
         with anyio.fail_after(5):
             await pymux.jobs.wait(job)
@@ -81,7 +74,7 @@ async def test_tail_replays_and_follows_without_gap_or_overlap():
     # A job still producing when the tail starts: the replay and the
     # follow meet exactly, so every line arrives once, in order.
     async with create_session() as (pymux, state):
-        await _run(pymux, state, "run --tag counting -- sh -c 'for i in 1 2 3 4 5; do echo line-$i; sleep 0.2; done'")
+        await run_as(pymux, state, "run --tag counting -- sh -c 'for i in 1 2 3 4 5; do echo line-$i; sleep 0.2; done'")
         said, errors, code = await _tail(pymux, state, "tail --tag counting --lines 2 --timeout 10")
         assert code == 0
         text = "\n".join(said)
@@ -94,7 +87,7 @@ async def test_tail_replays_and_follows_without_gap_or_overlap():
 
 async def test_tail_past_timeout_stops_with_124_and_the_job_runs_on():
     async with create_session() as (pymux, state):
-        await _run(pymux, state, "run --tag slow -- sleep 30")
+        await run_as(pymux, state, "run --tag slow -- sleep 30")
         said, errors, code = await _tail(pymux, state, "tail --tag slow --timeout 0.2")
         try:
             assert any("still running" in line for line in said)
@@ -109,7 +102,7 @@ async def test_tail_past_timeout_stops_with_124_and_the_job_runs_on():
 
 async def test_tail_with_zero_timeout_replays_without_waiting():
     async with create_session() as (pymux, state):
-        await _run(pymux, state, "run --tag quick -- echo done-already")
+        await run_as(pymux, state, "run --tag quick -- echo done-already")
         job = pymux.jobs.get(1)
         with anyio.fail_after(5):
             await pymux.jobs.wait(job)
@@ -117,7 +110,7 @@ async def test_tail_with_zero_timeout_replays_without_waiting():
         assert any("done-already" in line for line in said)
         assert code == 0
 
-        await _run(pymux, state, "run --tag slow -- sleep 30")
+        await run_as(pymux, state, "run --tag slow -- sleep 30")
         try:
             said, errors, code = await _tail(pymux, state, "tail --tag slow --timeout 0")
             assert said == []
@@ -138,7 +131,7 @@ async def test_tail_of_no_job_is_a_4():
 
 async def test_tail_without_a_timeout_refuses_for_an_agent():
     async with create_session() as (pymux, state):
-        await _run(pymux, state, "run --tag boundless -- sleep 30")
+        await run_as(pymux, state, "run --tag boundless -- sleep 30")
         pymux.caller_context = CallerContext(session_id="s1", environment={}, cwd=None)
         try:
             said, errors, code = await _tail(pymux, state, "tail --tag boundless")
@@ -154,7 +147,7 @@ async def test_tail_without_a_timeout_refuses_for_an_agent():
 
 async def test_tail_without_a_timeout_waits_for_a_person():
     async with create_session() as (pymux, state):
-        await _run(pymux, state, "run --tag patient -- echo hi")
+        await run_as(pymux, state, "run --tag patient -- echo hi")
         job = pymux.jobs.get(1)
         with anyio.fail_after(5):
             await pymux.jobs.wait(job)
@@ -165,7 +158,7 @@ async def test_tail_without_a_timeout_waits_for_a_person():
 
 async def test_tail_with_a_negative_timeout_refuses():
     async with create_session() as (pymux, state):
-        await _run(pymux, state, "run --tag neg -- echo hi")
+        await run_as(pymux, state, "run --tag neg -- echo hi")
         said, errors, code = await _tail(pymux, state, "tail --tag neg --timeout -5")
         assert said == []
         assert any("cannot be negative" in line for line in errors)
@@ -176,7 +169,7 @@ async def test_wait_job_refuses_for_an_agent():
     from pymux.commands.wait_job import wait_job
 
     async with create_session() as (pymux, state):
-        await _run(pymux, state, "run --tag unwatched -- echo hi")
+        await run_as(pymux, state, "run --tag unwatched -- echo hi")
         pymux.caller_context = CallerContext(session_id="s1", environment={}, cwd=None)
         pymux.command_output = []
         try:

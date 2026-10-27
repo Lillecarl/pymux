@@ -15,9 +15,9 @@ Lillecarl/pymux#199.
 from __future__ import annotations
 
 import pytest
+from run_commands import complaints
 
 from pymux.arrangement import Arrangement, Pane, VSplit
-from pymux.commands import handle_command
 from pymux.main import Pymux
 from pymux.options import ALL_OPTIONS, SetOptionError
 
@@ -89,20 +89,6 @@ def test_default_that_reshapes_window_sees_pane():
 # What a configuration file can say.
 
 
-def run(pymux, command):
-    """
-    One command, and whatever it complained about.
-
-    A command that fails does not raise. It records the message, which
-    is how a line of a configuration file reaches the first client
-    (Lillecarl/pymux#38), and `startup_errors` is where it lands
-    before the startup is done.
-    """
-    was = len(pymux.startup_errors)
-    handle_command(pymux, command)
-    return pymux.startup_errors[was:]
-
-
 def test_window_option_before_window_says_to_use_dash_g():
     """
     It used to crash the startup with an `IndexError`. The message has
@@ -111,17 +97,17 @@ def test_window_option_before_window_says_to_use_dash_g():
     """
     pymux = Pymux()
 
-    complaints = run(pymux, "set-window-option strip on")
+    problems = complaints(pymux, "set-window-option strip on")
 
-    assert complaints
-    assert "-g" in complaints[0]
+    assert problems
+    assert "-g" in problems[0]
 
 
 def test_dash_g_works_before_there_is_window():
     "The whole point: a configuration file is read before one exists."
     pymux = Pymux()
 
-    assert run(pymux, "set-window-option -g strip on") == []
+    assert complaints(pymux, "set-window-option -g strip on") == []
     assert pymux.arrangement.window_defaults == {"strip": True}
 
 
@@ -143,7 +129,7 @@ def test_dash_g_on_session_option_just_sets_it():
     pymux = Pymux()
     assert pymux.session_defaults.status is True
 
-    assert run(pymux, "set-option -g status off") == []
+    assert complaints(pymux, "set-option -g status off") == []
 
     assert pymux.session_defaults.status is False
 
@@ -152,8 +138,8 @@ def test_tmux_spelling_of_it_works_too():
     "`set` and `setw` are what a person writes."
     pymux = Pymux()
 
-    assert run(pymux, "set -g status off") == []
-    assert run(pymux, "setw -g strip on") == []
+    assert complaints(pymux, "set -g status off") == []
+    assert complaints(pymux, "setw -g strip on") == []
 
     assert pymux.session_defaults.status is False
     assert pymux.arrangement.window_defaults == {"strip": True}
@@ -162,5 +148,5 @@ def test_tmux_spelling_of_it_works_too():
 def test_value_that_is_not_on_or_off_is_refused_with_dash_g_too():
     pymux = Pymux()
 
-    assert run(pymux, "set-window-option -g strip maybe")
+    assert complaints(pymux, "set-window-option -g strip maybe")
     assert pymux.arrangement.window_defaults == {}

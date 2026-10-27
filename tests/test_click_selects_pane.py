@@ -14,9 +14,8 @@ from __future__ import annotations
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.layout.screen import Point
 from prompt_toolkit.mouse_events import MouseButton, MouseEvent, MouseEventType
+from run_commands import run_as
 from session import create_session
-
-from pymux.commands import handle_command
 
 
 def _click(kind):
@@ -26,27 +25,14 @@ def _click(kind):
 async def _two_panes_left_active(pymux, state):
     "Two panes side by side, the left one active and focused, and the window that holds them."
     with set_app(state.app):
-        await run(pymux, state, "split-window -h")
-        await run(pymux, state, "select-pane -L")
+        await run_as(pymux, state, "split-window -h")
+        await run_as(pymux, state, "select-pane -L")
         state.sync_focus()
     window = pymux.arrangement.get_active_window()
     left, right = window.panes
     assert window.active_pane is left
     assert state.app.layout.has_focus(left.terminal)
     return window, left, right
-
-
-async def run(pymux, state, command):
-    """
-    Run a command as the person at this client, and wait for it.
-
-    A key binding does not wait, but a test that did not would assert
-    before the window exists. The end state is the same either way.
-    """
-    with set_app(state.app):
-        answer = handle_command(pymux, command)
-        if answer is not None:
-            await answer
 
 
 async def test_a_press_in_an_unfocused_pane_selects_nothing():

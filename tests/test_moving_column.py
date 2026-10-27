@@ -16,6 +16,7 @@ three bars, and nothing in the move says so.
 
 from __future__ import annotations
 
+from run_commands import run
 from test_strip_draws import CHROME, create_client
 from test_title_bar_names_neighbours import (
     COLUMNS,
@@ -24,7 +25,6 @@ from test_title_bar_names_neighbours import (
 )
 
 from pymux.arrangement import Pane, Window
-from pymux.commands import handle_command
 
 STRIP = [*CHROME, "set-window-option strip on"]
 
@@ -75,18 +75,6 @@ def order_of(window):
 
 # ----------------------------------------------------------------------
 # The order of the row.
-
-
-async def run(pymux, command):
-    """
-    Run a command, and wait for what it started.
-
-    A key binding does not wait, but a test that did not would draw
-    before the pane exists. The end state is the same either way.
-    """
-    answer = handle_command(pymux, command)
-    if answer is not None:
-        await answer
 
 
 async def test_column_moves_to_left():

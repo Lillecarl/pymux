@@ -10,9 +10,9 @@ float that draws the bar. Lillecarl/pymux#211.
 
 from __future__ import annotations
 
+from run_commands import run
 from test_strip_draws import CHROME, ROWS, create_client
 
-from pymux.commands import handle_command
 from pymux.layout import ABOVE_MARK, BELOW_MARK
 
 NAMES = ["top", "middle", "bottom"]
@@ -33,18 +33,6 @@ async def create_stack_of_named_panes(pymux, names=NAMES):
         pane.chosen_name = name
 
     return panes
-
-
-async def run(pymux, command):
-    """
-    Run a command, and wait for what it started.
-
-    A key binding does not wait, but a test that did not would draw
-    before the pane exists. The end state is the same either way.
-    """
-    answer = handle_command(pymux, command)
-    if answer is not None:
-        await answer
 
 
 def bars_under(pymux, draw, panes):

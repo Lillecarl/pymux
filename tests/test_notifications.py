@@ -14,9 +14,9 @@ from __future__ import annotations
 import os
 
 from prompt_toolkit.application.current import set_app
+from run_commands import run_as
 from session import create_session
 
-from pymux.commands import handle_command
 from pymux.enums import Chooser
 from pymux.hub import Heading, age
 from pymux.main import Pymux
@@ -96,19 +96,6 @@ def test_osc99_is_collected_for_the_hub():
     )
 
 
-async def run(pymux, state, command):
-    """
-    Run a command as the person at this client, and wait for it.
-
-    A key binding does not wait, but a test that did not would assert
-    before the window exists. The end state is the same either way.
-    """
-    with set_app(state.app):
-        answer = handle_command(pymux, command)
-        if answer is not None:
-            await answer
-
-
 async def test_notify_records_title_body_and_pane():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -169,7 +156,7 @@ async def test_each_window_gets_a_heading_newest_window_first():
         with set_app(state.app):
             first = pymux.current_session.arrangement.get_active_window()
             pymux.handle_command("notify Old One")
-            await run(pymux, state, "new-window")
+            await run_as(pymux, state, "new-window")
             second = pymux.current_session.arrangement.get_active_window()
             pymux.handle_command("notify New Two")
             pymux.handle_command("choose-notifications")
@@ -184,7 +171,7 @@ async def test_unread_follows_the_window_s_mark():
         with set_app(state.app):
             first = pymux.current_session.arrangement.get_active_window()
             pane = first.active_pane
-            await run(pymux, state, "new-window")
+            await run_as(pymux, state, "new-window")
             pymux.notification_center.add("Built", pane_id=pane.pane_id)
             pymux.handle_command("choose-notifications")
         assert first.notified
@@ -257,10 +244,10 @@ async def test_enter_from_hub_jumps_to_the_pane():
             first = pymux.current_session.arrangement.get_active_window()
             assert first is not None and first.active_pane is not None
             pane_id = first.active_pane.pane_id
-            await run(pymux, state, "notify Build Ready")
-            await run(pymux, state, "new-window")
+            await run_as(pymux, state, "notify Build Ready")
+            await run_as(pymux, state, "new-window")
             assert pymux.current_session.arrangement.get_active_window() is not first
-            await run(pymux, state, "choose-notifications")
+            await run_as(pymux, state, "choose-notifications")
 
         state.layout_manager.choose_pointed_notification()
 

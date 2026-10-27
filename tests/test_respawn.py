@@ -17,23 +17,11 @@ import argparse
 import anyio
 import pytest
 from prompt_toolkit.application.current import set_app
+from run_commands import run_as
 from session import create_session, once
 
-from pymux.commands import CommandException, handle_command
+from pymux.commands import CommandException
 from pymux.commands.respawn_pane import respawn_pane
-
-
-async def run(pymux, state, command):
-    """
-    Run a command as the person at this client, and wait for it.
-
-    A key binding does not wait, but a test that did not would assert
-    before the window exists. The end state is the same either way.
-    """
-    with set_app(state.app):
-        answer = handle_command(pymux, command)
-        if answer is not None:
-            await answer
 
 
 async def test_an_upgrading_server_refuses_a_command():
@@ -41,7 +29,7 @@ async def test_an_upgrading_server_refuses_a_command():
     async with create_session() as (pymux, state):
         panes = set(pymux.panes_by_id)
         pymux.refusing_commands = True
-        await run(pymux, state, "kill-pane")
+        await run_as(pymux, state, "kill-pane")
         assert set(pymux.panes_by_id) == panes
         assert "the server is upgrading" in state.message
 
@@ -52,7 +40,7 @@ async def test_pane_whose_program_runs_refuses_without_k():
             # A program that stays alive, where the plain session's
             # has gone before the first command reads it. `sleep` is
             # in the sandbox's PATH.
-            await run(pymux, state, "new-window 'sleep 30'")
+            await run_as(pymux, state, "new-window 'sleep 30'")
             with pytest.raises(CommandException):
                 await respawn_pane(pymux, argparse.Namespace(k=False, target_pane=None, command=None))
 
@@ -60,13 +48,13 @@ async def test_pane_whose_program_runs_refuses_without_k():
 async def test_respawn_keeps_place_and_replaces_pane():
     async with create_session() as (pymux, state):
         with set_app(state.app):
-            await run(pymux, state, "split-window")
+            await run_as(pymux, state, "split-window")
             window = pymux.arrangement.get_active_window()
             count = len(window.panes)
             old_pane = pymux.arrangement.get_active_pane()
             old_id = old_pane.pane_id
 
-            await run(pymux, state, "respawn-pane -k 'sleep 30'")
+            await run_as(pymux, state, "respawn-pane -k 'sleep 30'")
 
             assert len(window.panes) == count
             assert pymux.arrangement.get_active_pane().pane_id != old_id
@@ -83,13 +71,13 @@ async def test_respawn_keeps_the_share_of_the_split():
     "A pane resized to take more of its split keeps that share. #306."
     async with create_session() as (pymux, state):
         with set_app(state.app):
-            await run(pymux, state, "split-window")
+            await run_as(pymux, state, "split-window")
             window = pymux.arrangement.get_active_window()
             pane = pymux.arrangement.get_active_pane()
             split = window._get_parent(pane)
             split.set_weight(pane, 7)
 
-            await run(pymux, state, "respawn-pane -k 'sleep 30'")
+            await run_as(pymux, state, "respawn-pane -k 'sleep 30'")
 
             assert split.weight_of(pymux.arrangement.get_active_pane()) == 7
 
@@ -124,11 +112,11 @@ async def test_pane_whose_program_ended_is_gone_and_says_so():
 async def test_respawn_window_takes_active_pane_of_its_target():
     async with create_session() as (pymux, state):
         with set_app(state.app):
-            await run(pymux, state, "new-window")
+            await run_as(pymux, state, "new-window")
             window = pymux.arrangement.get_active_window()
             old_id = window.active_pane.pane_id
 
-            await run(pymux, state, "respawn-window -k 'sleep 30'")
+            await run_as(pymux, state, "respawn-window -k 'sleep 30'")
 
             assert window.active_pane.pane_id != old_id
 

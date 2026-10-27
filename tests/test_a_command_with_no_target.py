@@ -15,6 +15,7 @@ from __future__ import annotations
 import sys
 
 import pytest
+from run_commands import over_socket
 
 from pymux.commands import call_command_handler
 from pymux.main import Pymux
@@ -36,21 +37,6 @@ async def pymux():
                         process = getattr(pane, "process", None)
                         if process is not None and not process.is_terminated:
                             process.kill()
-
-
-async def run(mux, command, *arguments):
-    "Run a command the way the socket does, and give back what it said."
-    errors = []
-    mux.add_command_error = errors.append
-    mux.show_message = lambda message: None
-    mux.command_output = []
-    try:
-        answer = call_command_handler(command, mux, list(arguments))
-        if answer is not None:
-            await answer
-    finally:
-        mux.command_output = None
-    return errors
 
 
 async def new_session(mux, *arguments) -> None:
@@ -78,10 +64,10 @@ async def test_a_server_that_holds_a_window_somewhere_finds_it(pymux):
     await new_session(pymux, "-s", "work", "-x", "111")
     assert pymux.arrangement.get_active_window() is not None
 
-    assert await run(pymux, "resize-window", "-x", "200") == []
+    assert await over_socket(pymux, "resize-window", "-x", "200") == []
     assert pymux.sessions[-1].arrangement.windows[0].manual_size.columns == 200
 
 
 async def test_a_window_command_with_no_target_says_there_is_none(pymux):
     "An IndexError out of the handler reached nobody."
-    assert await run(pymux, "resize-window", "-x", "200") == ["pymux: no current window"]
+    assert await over_socket(pymux, "resize-window", "-x", "200") == ["pymux: no current window"]

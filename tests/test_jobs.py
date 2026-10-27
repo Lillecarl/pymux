@@ -22,6 +22,7 @@ import anyio
 import pytest
 from libpymux.agentic import CallerContext
 from prompt_toolkit.application.current import set_app
+from run_commands import run_as
 from session import create_session
 
 import pymux.jobs as jobs_module
@@ -30,14 +31,6 @@ from pymux.commands.kill_job import kill_job
 from pymux.commands.run import run_job
 from pymux.commands.show_job import show_job
 from pymux.commands.wait_job import wait_job
-
-
-async def _run(pymux, state, command) -> None:
-    "Run a command and wait for it, the way the socket route does."
-    with set_app(state.app):
-        answer = handle_command(pymux, command)
-        if answer is not None:
-            await answer
 
 
 async def _run_answering(pymux, state, command) -> list:
@@ -126,7 +119,7 @@ async def test_run_wait_fails_on_a_nonzero_exit():
 
 async def test_wait_job_reports_the_same_way():
     async with create_session() as (pymux, state):
-        await _run(pymux, state, "run sh -c 'exit 3'")
+        await run_as(pymux, state, "run sh -c 'exit 3'")
         pymux.command_output = []
         try:
             with set_app(state.app):
@@ -157,7 +150,7 @@ async def test_wait_job_of_no_job_says_so():
 async def test_list_jobs_shows_every_job_in_one_line_each():
     async with create_session() as (pymux, state):
         await _run_answering(pymux, state, "run -w echo first")
-        await _run(pymux, state, "run sleep 30")
+        await run_as(pymux, state, "run sleep 30")
         said = await _run_answering(pymux, state, "list-jobs")
         lines = "\n".join(said).splitlines()
 
@@ -169,9 +162,9 @@ async def test_list_jobs_shows_every_job_in_one_line_each():
 
 async def test_list_jobs_sorts_the_callers_session_first():
     async with create_session() as (pymux, state):
-        await _run(pymux, state, "run --tag a --session s2 true")
-        await _run(pymux, state, "run --tag b --session s1 true")
-        await _run(pymux, state, "run --tag c true")
+        await run_as(pymux, state, "run --tag a --session s2 true")
+        await run_as(pymux, state, "run --tag b --session s1 true")
+        await run_as(pymux, state, "run --tag c true")
 
         def ids(said) -> list:
             return [line.split()[0] for line in "\n".join(said).splitlines()]
@@ -189,7 +182,7 @@ async def test_list_jobs_sorts_the_callers_session_first():
 
 async def test_show_job_reads_both_streams_of_a_running_job():
     async with create_session() as (pymux, state):
-        await _run(
+        await run_as(
             pymux,
             state,
             "run sh -c 'echo out-line; echo err-line >&2; sleep 30'",
@@ -219,7 +212,7 @@ async def test_show_job_of_no_job_says_so():
 
 async def test_kill_job_ends_a_running_job_and_refuses_a_done_one():
     async with create_session() as (pymux, state):
-        await _run(pymux, state, "run sleep 30")
+        await run_as(pymux, state, "run sleep 30")
         said = await _run_answering(pymux, state, "kill-job 1")
         assert any("job 1 stopping" in line for line in said)
 
@@ -280,7 +273,7 @@ async def test_the_table_forgets_the_oldest_finished_past_its_cap(monkeypatch):
 async def test_the_table_never_forgets_a_running_job(monkeypatch):
     async with create_session() as (pymux, state):
         monkeypatch.setattr(jobs_module, "FINISHED_KEEP", 0)
-        await _run(pymux, state, "run sleep 30")
+        await run_as(pymux, state, "run sleep 30")
         await _run_answering(pymux, state, "run -w echo quick")
 
         assert pymux.jobs.get(1) is not None and not pymux.jobs.get(1).is_done

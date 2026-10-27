@@ -15,9 +15,8 @@ from contextlib import asynccontextmanager
 from types import SimpleNamespace
 
 from prompt_toolkit.application.current import set_app
+from run_commands import run_as
 from session import create_session
-
-from pymux.commands import handle_command
 
 
 @contextlib.contextmanager
@@ -45,7 +44,7 @@ async def reported_session():
     """
     async with create_session() as (pymux, state):
         with set_app(state.app):
-            await run(pymux, state, "split-window 'sleep 30'")
+            await run_as(pymux, state, "split-window 'sleep 30'")
             split = pymux.arrangement.get_active_window()
             active = pymux.arrangement.get_active_pane()
             reported = next(pane for pane in split.panes if pane is not active)
@@ -54,9 +53,9 @@ async def reported_session():
             reported.user_vars["BRANCH"] = "main"
             reported.last_exit_status = 3
 
-            await run(pymux, state, "new-window 'sleep 30'")
+            await run_as(pymux, state, "new-window 'sleep 30'")
 
-            await run(pymux, state, "info")
+            await run_as(pymux, state, "info")
 
         yield pymux, state, json.loads(state.message)
 
@@ -68,19 +67,6 @@ def reported_pane(tree):
             if pane["current_directory"] == "/home/you":
                 return window, pane
     raise AssertionError("no reported pane in tree")
-
-
-async def run(pymux, state, command):
-    """
-    Run a command as the person at this client, and wait for it.
-
-    A key binding does not wait, but a test that did not would assert
-    before the window exists. The end state is the same either way.
-    """
-    with set_app(state.app):
-        answer = handle_command(pymux, command)
-        if answer is not None:
-            await answer
 
 
 async def test_tree_lists_every_window_and_pane():
@@ -100,7 +86,7 @@ async def test_the_tree_names_the_socket_it_came_from():
     "Two servers' answers side by side still say which is which. Lillecarl/pymux#525."
     async with create_session() as (pymux, state):
         pymux.socket_name = "/run/user/1000/pymux.sock.default"
-        await run(pymux, state, "info")
+        await run_as(pymux, state, "info")
         assert json.loads(state.message)["socket"] == "/run/user/1000/pymux.sock.default"
 
 
@@ -139,7 +125,7 @@ async def test_calling_pane_names_caller():
         window, reported = reported_pane(tree)
         caller_id = reported["pane_id"]
         with set_app(state.app), calling_as(pymux, pymux.current_session, caller_pane_id=caller_id) as caller_state:
-            await run(pymux, state, "info")
+            await run_as(pymux, state, "info")
 
         caller = json.loads(caller_state.message)["caller"]
         assert caller["pane_id"] == caller_id
@@ -152,6 +138,6 @@ async def test_calling_pane_names_caller():
 async def test_dead_caller_names_nobody():
     async with reported_session() as (pymux, state, _tree):
         with set_app(state.app), calling_as(pymux, pymux.current_session, caller_pane_id=999999) as caller_state:
-            await run(pymux, state, "info")
+            await run_as(pymux, state, "info")
 
         assert json.loads(caller_state.message)["caller"] is None

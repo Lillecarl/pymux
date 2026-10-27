@@ -14,27 +14,20 @@ from __future__ import annotations
 import anyio
 import pytest
 from prompt_toolkit.application.current import set_app
+from run_commands import run_as
 from session import create_session, once
 
-from pymux.commands import call_command_handler, handle_command
+from pymux.commands import call_command_handler
 from pymux.enums import Chooser
 from pymux.jobs import JobFeed
 from pymux.main import Pymux
-
-
-async def _run(pymux, state, command) -> None:
-    "Run a command and wait for it, the way the socket route does."
-    with set_app(state.app):
-        answer = handle_command(pymux, command)
-        if answer is not None:
-            await answer
 
 
 async def _run_answering(pymux, state, command) -> None:
     "Run a command a client waits for: `run -w` refuses without one."
     pymux.command_output = []
     try:
-        await _run(pymux, state, command)
+        await run_as(pymux, state, command)
     finally:
         pymux.command_output = None
 
@@ -54,7 +47,7 @@ async def test_the_picker_lists_newest_first(pymux_state):
     pymux, state = pymux_state
     await _run_answering(pymux, state, "run -w echo first-job")
     await _run_answering(pymux, state, "run -w echo second-job")
-    await _run(pymux, state, "choose-job")
+    await run_as(pymux, state, "choose-job")
 
     assert state.chooser is Chooser.JOB
     matches = state.layout_manager.chooser_matches()
@@ -65,7 +58,7 @@ async def test_the_search_narrows_on_command_and_tags(pymux_state):
     pymux, state = pymux_state
     await _run_answering(pymux, state, "run -w echo first-job")
     await _run_answering(pymux, state, "run --tag nightly -w echo second-job")
-    await _run(pymux, state, "choose-job")
+    await run_as(pymux, state, "choose-job")
 
     state.choose_window_filter.text = "nightly"
     assert [job.command for job in state.layout_manager.chooser_matches()] == ["echo second-job"]
@@ -77,7 +70,7 @@ async def test_the_search_narrows_on_command_and_tags(pymux_state):
 async def test_enter_shows_the_job_in_the_overlay(pymux_state):
     pymux, state = pymux_state
     await _run_answering(pymux, state, "run -w echo hello-from-the-job")
-    await _run(pymux, state, "choose-job")
+    await run_as(pymux, state, "choose-job")
 
     with set_app(state.app):
         state.layout_manager.choose_pointed_job()
@@ -99,8 +92,8 @@ async def test_enter_shows_the_job_in_the_overlay(pymux_state):
 
 async def test_closing_the_overlay_leaves_the_job_running(pymux_state):
     pymux, state = pymux_state
-    await _run(pymux, state, "run sh -c 'sleep 30'")
-    await _run(pymux, state, "choose-job")
+    await run_as(pymux, state, "run sh -c 'sleep 30'")
+    await run_as(pymux, state, "choose-job")
 
     with set_app(state.app):
         state.layout_manager.choose_pointed_job()
@@ -124,7 +117,7 @@ async def test_closing_the_overlay_leaves_the_job_running(pymux_state):
 async def test_o_opens_the_job_as_a_pane(pymux_state):
     pymux, state = pymux_state
     await _run_answering(pymux, state, "run -w echo hello-from-the-pane")
-    await _run(pymux, state, "choose-job")
+    await run_as(pymux, state, "choose-job")
     before = set(_windows(pymux))
 
     with set_app(state.app):
@@ -146,8 +139,8 @@ async def test_o_opens_the_job_as_a_pane(pymux_state):
 async def test_t_runs_the_command_again(pymux_state):
     "Taking over respawns: a job holds no stdin to attach to."
     pymux, state = pymux_state
-    await _run(pymux, state, "run sh -c 'sleep 30'")
-    await _run(pymux, state, "choose-job")
+    await run_as(pymux, state, "run sh -c 'sleep 30'")
+    await run_as(pymux, state, "choose-job")
     before = set(_windows(pymux))
 
     with set_app(state.app):

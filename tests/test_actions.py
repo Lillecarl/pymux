@@ -18,8 +18,9 @@ import apsw
 import pytest
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.keys import Keys
+from run_commands import run_as
 from session import create_session
-from test_choose_window import press, run
+from test_choose_window import press
 from test_command_mode import press as press_key
 from test_helix_mode_keys import _copy_mode_on
 from test_helix_status_keys import _helix
@@ -133,12 +134,12 @@ async def test_a_key_that_runs_no_command_is_written(tmp_path):
     async with create_session() as (pymux, state):
         pymux.actions.path = tmp_path / "actions.db"
         pymux.options.action_log = True
-        await run(pymux, state, "new-window")
-        await run(pymux, state, "choose-window")
+        await run_as(pymux, state, "new-window")
+        await run_as(pymux, state, "choose-window")
         press(state, "l", "j", "/")
         press(state, "escape")
         press(state, "escape")
-        await run(pymux, state, "clock-mode")
+        await run_as(pymux, state, "clock-mode")
         press(state, "x")
         await pymux.actions.settled()
 
