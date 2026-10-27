@@ -17,6 +17,7 @@ Lillecarl/pymux#330.
 from __future__ import annotations
 
 import os
+import re
 import socket
 import time
 from collections.abc import Callable
@@ -457,6 +458,21 @@ def _pane_current_path(context: FormatContext) -> str:
         return ""
 
 
+def compact_path(path: str, home: str) -> str:
+    """
+    A path the way fish's `prompt_pwd` writes it at its defaults: the
+    home as `~`, each directory but the last cut to one character, a
+    dot kept with it. `/home/me/.config/fish` is `~/.c/fish`.
+    """
+    if home and home != "/" and (path == home or path.startswith(home.rstrip("/") + "/")):
+        path = "~" + path[len(home.rstrip("/")) :]
+    return re.sub(r"(\.?[^/])[^/]*/", r"\1/", path)
+
+
+def _pane_current_path_compact(context: FormatContext) -> str:
+    return compact_path(_pane_current_path(context), os.path.expanduser("~"))
+
+
 def _history_size(context: FormatContext) -> str:
     "Number of lines in the history."
     pane = context.pane
@@ -821,6 +837,7 @@ tmux_variables: dict[str, Callable[[FormatContext], str]] = {
     "pane_pid": _pane_pid,
     "pane_current_command": _pane_current_command,
     "pane_current_path": _pane_current_path,
+    "pane_current_path_compact": _pane_current_path_compact,
     "pane_start_path": _pane_current_path,
     "pane_dead": lambda c: "1" if c.pane.process.is_terminated else "0",
     # Read off the mode, and not off copy mode alone: tmux counts the

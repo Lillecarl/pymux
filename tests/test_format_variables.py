@@ -16,6 +16,7 @@ import pytest
 
 from pymux.format import (
     FormatContext,
+    compact_path,
     format_pymux_string,
     symbol_variables,
     tmux_variables,
@@ -147,6 +148,29 @@ async def test_the_current_path_is_where_the_pane_says_it_is(pymux):
     _context(pymux).pane.current_directory = "/reported"
 
     assert format_pymux_string(pymux, "#{pane_current_path}") == "/reported"
+
+
+@pytest.mark.parametrize(
+    ("path", "compact"),
+    [
+        ("/home/me/Code/pyterm", "~/C/pyterm"),
+        ("/home/me", "~"),
+        ("/home/me/.config/fish", "~/.c/fish"),
+        ("/home/meme/x", "/h/m/x"),
+        ("/nix/store", "/n/store"),
+        ("/", "/"),
+        ("", ""),
+    ],
+)
+def test_a_compact_path_is_the_one_fish_prompts_with(path, compact):
+    assert compact_path(path, "/home/me") == compact
+
+
+async def test_the_compact_path_reads_the_current_path(pymux, monkeypatch):
+    monkeypatch.setenv("HOME", "/home/me")
+    _context(pymux).pane.current_directory = "/home/me/Code/pyterm"
+
+    assert format_pymux_string(pymux, "#{pane_current_path_compact}") == "~/C/pyterm"
 
 
 async def test_the_prefix_a_client_holds_is_a_format(pymux):
