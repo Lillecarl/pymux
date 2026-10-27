@@ -14,21 +14,13 @@ Lillecarl/pymux#198, and the fourth width is Lillecarl/pymux#215.
 from __future__ import annotations
 
 import pytest
+from fake_panes import create_pane
 
 from pymux.arrangement import (
     DEFAULT_COLUMN_WIDTH,
     PRESET_COLUMN_WIDTHS,
-    Pane,
     Window,
 )
-
-
-class _Fake:
-    "Enough of a pane for the arrangement to hold it."
-
-
-def create_pane():
-    return Pane(terminal=_Fake())
 
 
 def create_strip(columns=1):

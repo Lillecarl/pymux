@@ -13,15 +13,9 @@ back and ask for the tree they started with. Lillecarl/pymux#213.
 
 from __future__ import annotations
 
+from fake_panes import create_pane
+
 from pymux.arrangement import HSplit, Pane, VSplit, Window
-
-
-class _Fake:
-    "Enough of a pane for the arrangement to hold it."
-
-
-def create_pane():
-    return Pane(terminal=_Fake())
 
 
 def create_strip(columns=1):

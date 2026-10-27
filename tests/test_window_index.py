@@ -7,11 +7,9 @@ base-index 0` brings the tmux default back.
 
 from __future__ import annotations
 
+from fake_panes import FakeTerminal
+
 from pymux.arrangement import Arrangement, Pane
-
-
-class _Fake:
-    "Enough of a pane for the arrangement to hold it."
 
 
 def _arrangement(windows=1, base_index=None):
@@ -19,7 +17,7 @@ def _arrangement(windows=1, base_index=None):
     if base_index is not None:
         arrangement.base_index = base_index
     for _ in range(windows):
-        arrangement.create_window(Pane(terminal=_Fake()), set_active=False)
+        arrangement.create_window(Pane(terminal=FakeTerminal()), set_active=False)
     return arrangement
 
 
@@ -47,7 +45,7 @@ def _indexes(arrangement):
 
 
 def _open(arrangement, index=None):
-    arrangement.create_window(Pane(terminal=_Fake()), set_active=False, index=index)
+    arrangement.create_window(Pane(terminal=FakeTerminal()), set_active=False, index=index)
 
 
 def test_window_goes_where_it_is_asked_to():

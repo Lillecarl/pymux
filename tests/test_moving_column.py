@@ -16,6 +16,7 @@ three bars, and nothing in the move says so.
 
 from __future__ import annotations
 
+from fake_panes import create_pane
 from run_commands import run
 from test_strip_draws import CHROME, create_client
 from test_title_bar_names_neighbours import (
@@ -27,14 +28,6 @@ from test_title_bar_names_neighbours import (
 from pymux.arrangement import Pane, Window
 
 STRIP = [*CHROME, "set-window-option strip on"]
-
-
-class _Fake:
-    "Enough of a pane for the arrangement to hold it."
-
-
-def create_pane():
-    return Pane(terminal=_Fake())
 
 
 def create_strip(columns=3):

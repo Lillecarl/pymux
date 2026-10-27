@@ -13,28 +13,19 @@ elsewhere in this suite hold what is drawn against what a person sees.
 
 from __future__ import annotations
 
+from fake_panes import create_pane
 from hypothesis import given
 from hypothesis import strategies as st
 from prompt_toolkit.data_structures import Point, Size
 from test_plane import every_promise_holds, everything_is_reachable
 
-from pymux.arrangement import Pane, Window
+from pymux.arrangement import Window
 from pymux.divided import Divided
 from pymux.plane import View
 from pymux.tiling import BORDER_HORIZONTAL, BORDER_VERTICAL, BORDER_WIDTH, Gaps
 
 #: A window big enough that a pane is wide and a stack is deep.
 SIZE = Size(rows=24, columns=80)
-
-
-class _Fake:
-    "Enough of a terminal for the arrangement to hold a pane."
-
-
-def create_pane(name: str) -> Pane:
-    pane = Pane(terminal=_Fake())
-    pane.chosen_name = name
-    return pane
 
 
 def create_window(splits=(), focus=None):

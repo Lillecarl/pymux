@@ -16,15 +16,9 @@ split, so its panes came last. Lillecarl/pymux#210.
 
 from __future__ import annotations
 
-from pymux.arrangement import HSplit, Pane, VSplit, Window
+from fake_panes import create_pane
 
-
-class _Fake:
-    "Enough of a pane for the arrangement to hold it."
-
-
-def create_pane():
-    return Pane(terminal=_Fake())
+from pymux.arrangement import HSplit, VSplit, Window
 
 
 def create_window(root):

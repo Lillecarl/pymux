@@ -15,19 +15,12 @@ Lillecarl/pymux#199.
 from __future__ import annotations
 
 import pytest
+from fake_panes import create_pane
 from run_commands import complaints
 
-from pymux.arrangement import Arrangement, Pane, VSplit
+from pymux.arrangement import Arrangement, VSplit
 from pymux.main import Pymux
 from pymux.options import ALL_OPTIONS, SetOptionError
-
-
-class _Fake:
-    "Enough of a pane for the arrangement to hold it."
-
-
-def create_pane():
-    return Pane(terminal=_Fake())
 
 
 def create_arrangement(windows=0):

@@ -16,22 +16,15 @@ Lillecarl/pymux#198.
 
 from __future__ import annotations
 
+from fake_panes import create_pane
+
 from pymux.arrangement import (
     DEFAULT_COLUMN_WIDTH,
     HSplit,
     LayoutTypes,
-    Pane,
     VSplit,
     Window,
 )
-
-
-class _Fake:
-    "Enough of a pane for the arrangement to hold it."
-
-
-def create_pane():
-    return Pane(terminal=_Fake())
 
 
 def create_window(panes=1):

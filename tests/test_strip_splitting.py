@@ -19,15 +19,9 @@ Lillecarl/pymux#198.
 
 from __future__ import annotations
 
-from pymux.arrangement import DEFAULT_COLUMN_WIDTH, HSplit, Pane, VSplit, Window
+from fake_panes import create_pane
 
-
-class _Fake:
-    "Enough of a pane for the arrangement to hold it."
-
-
-def create_pane():
-    return Pane(terminal=_Fake())
+from pymux.arrangement import DEFAULT_COLUMN_WIDTH, HSplit, VSplit, Window
 
 
 def create_strip(columns=1):
