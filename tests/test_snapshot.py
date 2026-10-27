@@ -235,6 +235,7 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     stacked.options.window_size = WindowSize.LARGEST
     stacked.previous_selected_layout = LayoutTypes.TILED
     stacked.options.frame_rate = 60
+    stacked.options.pane_title_format = " #T "
     stacked.frame_rate_set = True
     stacked.options.wayland_scale = "auto*1.5"
     stacked.options.window_codec = WindowCodec.VP9
@@ -523,6 +524,7 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                 "set-environment -g WHERE here",
                 "set-environment ONLY session",
                 "set-window-option -g frame-rate 10",
+                "set-window-option -g pane-title-format ' #T '",
                 "new-window",
                 "set-window-option strip on",
                 "split-window -h",

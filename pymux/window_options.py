@@ -64,6 +64,14 @@ def _redraw(pymux: Pymux, window: Window) -> None:
 @options
 class WindowOptions(Options):
     synchronize_panes: bool = option(False, doc="Send what is typed to every pane of the window.")
+    pane_title_format: str = option(
+        " #T  #{pane_current_path_compact} ",
+        doc=(
+            "What the bar over each pane says, after its marks and its name: its title, and its "
+            "directory the way fish's prompt writes it, which stays after the program ends."
+        ),
+        on_set=_redraw,
+    )
     monitor_bell: bool = option(
         True,
         doc="Whether a bell nobody saw flags the window and the pane it rang in. Lillecarl/pymux#501.",

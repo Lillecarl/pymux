@@ -26,8 +26,12 @@ COLUMNS = 120
 
 
 async def create_row_of_named_panes(pymux, names=NAMES):
-    "One pane for each name, side by side, named in order."
+    """
+    One pane for each name, side by side, named in order. The bar says
+    the name and no title or directory, so the name is all its middle holds.
+    """
     window = pymux.arrangement.get_active_window()
+    window.options.pane_title_format = ""
     panes = [window.active_pane]
 
     for _ in names[1:]:

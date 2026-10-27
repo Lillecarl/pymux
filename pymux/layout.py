@@ -1671,6 +1671,7 @@ class LayoutManager:
             parts.append(self._get_status_right_tokens())
             parts += [text for _, text, *_ in self._get_status_tokens()]
 
+        window = self.client_state.session.arrangement.get_active_window()
         for pane in self._panes_in_view():
             if pane.clock_mode:
                 parts.append(pymux.displayed_now().strftime(CLOCK_FORMAT))
@@ -1678,7 +1679,8 @@ class LayoutManager:
                 parts.append(
                     format_pymux_string(
                         pymux,
-                        PANE_TITLE_FORMAT,
+                        window.options.pane_title_format,
+                        window=window,
                         pane=pane,
                         session=self.client_state.session,
                         client=self.client_state,
@@ -3375,7 +3377,9 @@ def _create_container_for_process(
         # this, so a space that hangs off the end of it moves the title
         # off the middle of the pane by half of that space.
         # Lillecarl/pymux#207.
-        title = format_pymux_string(pymux, PANE_TITLE_FORMAT, pane=arrangement_pane).strip()
+        title = format_pymux_string(
+            pymux, window.options.pane_title_format, window=window, pane=arrangement_pane
+        ).strip()
 
         if title:
             result.append(("", " %s " % title))

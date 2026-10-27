@@ -252,6 +252,16 @@ async def test_window_list_still_carries_other_windows(session):
     assert text(state) != before
 
 
+async def test_the_pane_title_format_is_the_window_s_option(session, monkeypatch):
+    pymux, state, frames = session
+    monkeypatch.setenv("HOME", "/home/me")
+    window = in_view(pymux, state)
+    window.options.pane_title_format = "#{pane_current_path_compact}"
+    window.active_pane.current_directory = "/home/me/Code/pyterm"
+
+    assert "~/C/pyterm" in text(state)
+
+
 async def test_clock_in_window_out_of_view_asks_for_nothing(session):
     "A clock that is not drawn is not a reason to draw."
     pymux, state, frames = session
