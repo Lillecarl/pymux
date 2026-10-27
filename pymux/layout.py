@@ -65,7 +65,7 @@ from .cut_shade import Hidden, hex_of, hidden_of, lifts, shade
 from .divided import Divided
 from .enums import Chooser, EditingKeys, Justify, Woke
 from .filters import WaitsForConfirmation
-from .format import format_pymux_string
+from .format import format_pymux_string, marks_of, window_marks
 from .log import logger
 from .plan_container import PlanContainer
 from .plane import Plan, Side, View, bounding_box
@@ -923,7 +923,8 @@ class LayoutManager:
         `chooser-session-lines` the line's label says it once.
         Lillecarl/pymux#765. A star marks the window this client was
         on when the chooser opened, which is the one Escape goes back
-        to.
+        to. The window's marks come before the star, as in the status
+        line, and the point clears them when it lands, as a visit does.
 
         The pane count is not here. The bar sits over the window
         itself, so a person counts the panes by looking at them.
@@ -943,6 +944,9 @@ class LayoutManager:
                 )
             else:
                 label = "%s:%s" % (window.index, window.name)
+            session = self.pymux.session_of_window(window)
+            if session is not None:
+                label += window_marks(session.options, window)
             if window is started_on:
                 label += "*"
             entries.append(label)
@@ -998,8 +1002,6 @@ class LayoutManager:
         A session's name, and the marks its windows carry, so a line
         says which session wants attention. Lillecarl/pymux#767.
         """
-        from pymux.format import marks_of
-
         return session.name + marks_of(session.options, session.arrangement.windows)
 
     def chooser_line_labels(self, lines: list[list[int]]) -> list[str]:

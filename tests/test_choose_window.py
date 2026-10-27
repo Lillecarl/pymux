@@ -314,6 +314,22 @@ async def test_a_star_marks_the_window_escape_goes_back_to():
         assert [label for label in entries(state) if label.endswith("*")] == marked
 
 
+async def test_an_entry_carries_its_window_s_marks():
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            await run(pymux, state, "new-window")
+            await run(pymux, state, "new-window")
+            options = state.session.options
+            quiet, loud = state.session.arrangement.windows[:2]
+            loud.activity = loud.notified = True
+            await run(pymux, state, "choose-window")
+
+        assert entries(state)[:2] == [
+            "%s:%s" % (quiet.index, quiet.name),
+            "%s:%s%s%s" % (loud.index, loud.name, options.activity_symbol, options.notification_symbol),
+        ]
+
+
 # ----------------------------------------------------------------------
 # The search.
 
