@@ -94,6 +94,7 @@ from .enums import (
 from .error_notice import ErrorNotice
 from .forwarding import LOOPBACK_NAMES, loopback_port
 from .graphics import OuterImageIds, PaneView
+from .hooks import Hooks
 from .ids import PaneId, SessionId, WindowIndex
 from .jobs import JOB_SWEEP_EVERY, Job, JobFeed, JobTable, describe
 from .key_bindings import PymuxKeyBindings
@@ -1143,22 +1144,6 @@ class ClientState:
         self.app.layout.focus(pane.terminal)
 
 
-#: The hook a wake runs, when it has tmux's name for one. A command
-#: that ran wakes as `Woke.COMMAND_RAN`, and every command has an
-#: `after-` hook in tmux, so its name is read back off the reason.
-_HOOKS_BY_WAKE: dict[str, str] = {
-    Woke.PANE_WAS_SPLIT_OFF: "after-split-window",
-    Woke.WINDOW_OPENED: "after-new-window",
-    Woke.PANE_BROKE_OUT: "after-break-pane",
-    Woke.PANE_WAS_RESPAWNED: "after-respawn-pane",
-    Woke.PANE_ENDED: "pane-died",
-    Woke.CLIENT_ATTACHED: "client-attached",
-    Woke.CLIENT_DETACHED: "client-detached",
-}
-
-_COMMAND_RAN_BEFORE, _, _COMMAND_RAN_AFTER = Woke.COMMAND_RAN.partition("%s")
-
-
 def _open_question(url: str, forward: dict | None) -> str:
     """
     What a person is asked before a URL opens on their machine.
@@ -1177,15 +1162,6 @@ def _open_question(url: str, forward: dict | None) -> str:
         forward["host"],
         forward["port"],
     )
-
-
-def _hook_of(reason: str) -> str | None:
-    "The hook name of one wake, or None for a wake that is not an event."
-    if reason.startswith(_COMMAND_RAN_BEFORE) and reason.endswith(_COMMAND_RAN_AFTER):
-        name = reason[len(_COMMAND_RAN_BEFORE) : len(reason) - len(_COMMAND_RAN_AFTER)]
-        return "after-%s" % name
-
-    return _HOOKS_BY_WAKE.get(reason)
 
 
 #: Where the command that this task is running writes its answer, and
@@ -1300,7 +1276,6 @@ class Pymux:
         # next server may hand out other ids.
         "outer_image_ids": Keep.DROPPED,
         "sourcing": Keep.DROPPED,
-        "_hooks_running": Keep.DROPPED,
         # `display-panes` showing, which a timer ends; the timer does
         # not survive, so neither does this.
         "display_pane_numbers": Keep.DROPPED,
@@ -1436,10 +1411,7 @@ class Pymux:
         #: any pane, so it outlives every view onto it.
         self.jobs = JobTable()
 
-        # The hooks of the session: a name for an event, and the
-        # commands it runs. `set-hook` fills it, `invalidate` reads it.
-        self.hooks: dict[str, list[str]] = {}
-        self._hooks_running: set[str] = set()
+        self.hooks = Hooks()
 
         # The file and the line that `source-file` is reading now, so
         # that a failure can say which line it was.
@@ -2974,7 +2946,7 @@ class Pymux:
         here, and holds every reason but the one that carries a name.
         """
         self.counters.invalidated(reason)
-        self.fire_hook(_hook_of(reason))
+        self.hooks.fire(reason, self.handle_command)
         # DEBUG: a server draws eleven frames a second when a pane
         # animates, and a line each is what made one log 86 MB in four
         # days. `pymux counters` holds the same reasons with nothing
@@ -4414,26 +4386,6 @@ exec pymux notify -u "$urgency" -- "$@"
             raise
         except Exception:
             logger.exception("A command that ran in the background failed.")
-
-    def fire_hook(self, name: str | None) -> None:
-        """
-        Run the commands of one hook, if somebody set it and it is not
-        running already: a hook that runs a command fires the hooks of
-        that command, and only the guard keeps that from walking in a
-        circle. Lillecarl/pymux#297.
-        """
-        if name is None or name in self._hooks_running:
-            return
-        commands = self.hooks.get(name)
-        if not commands:
-            return
-        self._hooks_running.add(name)
-        try:
-            with started_by(Origin.HOOK):
-                for command in commands:
-                    self.handle_command(command)
-        finally:
-            self._hooks_running.discard(name)
 
     def show_message(self, message):
         """

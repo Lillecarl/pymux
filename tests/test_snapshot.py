@@ -292,7 +292,7 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     pymux.prompt_history.append_string("rename-window a")
     pymux.prompt_history.append_string("rename-window b")
     pymux.message_log.extend(["said once", "said twice"])
-    pymux.hooks = {"after-new-window": ["display-message new", "display-panes"], "pane-died": ["kill-pane"]}
+    pymux.hooks.commands = {"after-new-window": ["display-message new", "display-panes"], "pane-died": ["kill-pane"]}
     pymux.key_bindings_manager.add_custom_binding("F5", "display-message", ["it's F5"], table="root")
     pymux.key_bindings_manager.add_custom_binding("x", "kill-pane", [])
 
@@ -612,7 +612,7 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                 assert (clipboard.text, clipboard.type) == ("copied", SelectionType.LINES)
                 assert fresh.prompt_history.get_strings()[-2:] == ["rename-window a", "rename-window b"]
                 assert list(fresh.message_log)[-2:] == ["said once", "said twice"]
-                assert fresh.hooks == pymux.hooks
+                assert fresh.hooks.commands == pymux.hooks.commands
                 assert fresh.notification_center.notifications() == pymux.notification_center.notifications()
                 assert fresh.notification_center._pending == pymux.notification_center._pending
                 assert fresh.notification_center._next == pymux.notification_center._next

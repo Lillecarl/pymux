@@ -230,6 +230,8 @@ WRITES: dict[str, frozenset[str]] = {
     "pymux.main.ClientState": frozenset({"session", "previous_session", "options", *CLIENT_SETTINGS, *CLIENT_MODES}),
     # The record goes by the client's id, in `clients`.
     "pymux.server.ServerConnection": frozenset({"client_state", "created"}),
+    # In `hooks`, one row per command.
+    "pymux.hooks.Hooks": frozenset({"commands"}),
     "pymux.jobs.JobTable": frozenset({"_jobs", "last_id", "saved_queries", "forgotten_seeds"}),
     # The kept counts are the lengths of the chunks `job_output` holds.
     "pymux.jobs.Job": frozenset(name for name, fate in Job.KEEP.items() if fate == Keep.SAVED),
@@ -585,7 +587,7 @@ def rows_of(pymux: Pymux) -> Iterator[Row]:
         yield ServerListRow("prompt_history", position, text)
     for position, text in enumerate(pymux.message_log):
         yield ServerListRow("message_log", position, text)
-    for hook, commands in sorted(pymux.hooks.items()):
+    for hook, commands in sorted(pymux.hooks.commands.items()):
         for position, command in enumerate(commands):
             yield HookRow(hook, position, command)
     for (table, _keys), binding in sorted(
@@ -978,9 +980,9 @@ def _read_bindings(pymux: Pymux, db: apsw.Connection) -> None:
     a person's `bind-key` and `set-hook` since the server started are in
     these and not in it.
     """
-    pymux.hooks = {}
+    pymux.hooks.commands = {}
     for row in select(db, HookRow, "ORDER BY hook, position"):
-        pymux.hooks.setdefault(row.hook, []).append(row.command)
+        pymux.hooks.add(row.hook, row.command)
     bindings = pymux.key_bindings_manager
     for table, keys in list(bindings.custom_bindings):
         bindings.remove_custom_binding(bindings.custom_bindings[table, keys].written, table=table)

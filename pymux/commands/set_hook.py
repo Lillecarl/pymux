@@ -27,13 +27,13 @@ def set_hook(pymux: Pymux, args: argparse.Namespace) -> None:
     is the global one. Lillecarl/pymux#297.
     """
     if args.u:
-        pymux.hooks.pop(args.hook, None)
+        pymux.hooks.forget(args.hook)
         return
 
     if args.hook_command is None:
         raise CommandException("A hook runs a command; name one.")
 
-    pymux.hooks.setdefault(args.hook, []).append(args.hook_command)
+    pymux.hooks.add(args.hook, args.hook_command)
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):

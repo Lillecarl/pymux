@@ -92,6 +92,7 @@ def live_objects(pymux):
                 yield screen.colors
                 yield screen.pointer_shapes
                 yield screen.graphics
+    yield pymux.hooks
     yield pymux.jobs
     yield from pymux.jobs.listing()
     for connection in pymux.connections:

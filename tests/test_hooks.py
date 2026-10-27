@@ -51,7 +51,7 @@ async def test_hook_holds_its_commands_in_order():
             await run_as(pymux, state, "select-pane -L")
 
         assert state.message == "second"
-        lines = pymux.hooks["after-select-pane"]
+        lines = pymux.hooks.commands["after-select-pane"]
         assert lines == ["display first", "display second"]
 
 
