@@ -12,7 +12,7 @@ import contextlib
 import json
 import socket
 import sys
-from typing import override
+from typing import Any, override
 
 from libpymux.agentic import caller_fields
 from libpymux.protocol import READ_SIZE, Field, Framer, Packet
@@ -37,7 +37,7 @@ class CommandClient(Client):
         self.socket.setblocking(True)
 
     @override
-    def run_command(self, command, pane_id=None, timeout=None) -> int:
+    def run_command(self, command: str, pane_id: str | None = None, timeout: float | None = None) -> int:
         """
         Ask the server to run this command. Print the output that the server
         sends back, and return the exit code of the command.
@@ -97,7 +97,7 @@ class CommandClient(Client):
             return 1
         return exit_code
 
-    def _send_packet(self, data) -> None:
+    def _send_packet(self, data: dict[str, Any]) -> None:
         "Send to the server, and say nothing when it has gone: the read says that."
         with contextlib.suppress(BrokenPipeError, ConnectionResetError):
             self.socket.sendall(encode_json(data))

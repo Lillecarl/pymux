@@ -20,8 +20,14 @@ from __future__ import annotations
 
 import math
 import random as _random
+from typing import TYPE_CHECKING
 
 import anyio
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from prompt_toolkit.output import Output
 
 __all__ = [
     "Backoff",
@@ -84,7 +90,7 @@ class Backoff:
         self,
         first: float = FIRST_WAIT,
         longest: float = LONGEST_WAIT,
-        random=_random.random,
+        random: Callable[[], float] = _random.random,
     ) -> None:
         self.first = first
         self.longest = longest
@@ -220,7 +226,7 @@ def _left(seconds: float) -> str:
     return "1 second" if whole == 1 else "%d seconds" % (whole,)
 
 
-def draw(output, rows: int, columns: int, lines: list[str]) -> None:
+def draw(output: Output, rows: int, columns: int, lines: list[str]) -> None:
     """
     Put those lines in the middle of the terminal.
 

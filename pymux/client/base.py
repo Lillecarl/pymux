@@ -5,6 +5,10 @@ import os
 import signal
 from abc import ABC
 from collections.abc import Awaitable
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from prompt_toolkit.output import ColorDepth
 
 __all__ = [
     "Client",
@@ -46,13 +50,15 @@ class Client(ABC):
     #: Lillecarl/pymux#347.
     hang_up_asked: bool = False
 
-    def run_command(self, command, pane_id=None) -> int:
+    def run_command(self, command: str, pane_id: str | None = None) -> int:
         """
         Ask the server to run this command. Return the exit code.
         """
         return 0
 
-    def attach(self, detach_other_clients=False, color_depth=None) -> Awaitable[None] | None:
+    def attach(
+        self, detach_other_clients: bool = False, color_depth: ColorDepth | None = None
+    ) -> Awaitable[None] | None:
         """
         Attach client user interface.
 

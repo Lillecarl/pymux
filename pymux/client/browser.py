@@ -47,8 +47,12 @@ import threading
 import time
 from enum import StrEnum
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import anyio
+
+if TYPE_CHECKING:
+    from anyio.abc import Process
 
 __all__ = [
     "START_SECONDS",
@@ -227,7 +231,7 @@ def _end_app(profile: Path) -> None:
                 os.kill(int(pid), signal.SIGTERM)
 
 
-def end(process, profile: Path) -> None:
+def end(process: subprocess.Popen[bytes] | Process, profile: Path) -> None:
     """
     Stop a browser. On macOS that is the app `open` started, found by its
     profile on a thread of its own, so no loop waits on `ps`; `open`
@@ -251,7 +255,9 @@ def _did_not_listen(argv: list[str], code: int | None) -> BrowserError:
     return BrowserError("%s did not listen within %d seconds" % (os.path.basename(argv[0]), START_SECONDS))
 
 
-def start(program: str, profile: str, port: int, arguments: list[str]) -> tuple[subprocess.Popen, str, Remote, Path]:
+def start(
+    program: str, profile: str, port: int, arguments: list[str]
+) -> tuple[subprocess.Popen[bytes], str, Remote, Path]:
     """
     Start the browser and wait until it listens: the process, the
     endpoint's path, the protocol and the profile. For the client that has no event

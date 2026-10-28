@@ -39,7 +39,7 @@ from __future__ import annotations
 import contextlib
 import os
 import sys
-from typing import override
+from typing import TYPE_CHECKING, Any, override
 
 import anyio
 from libpymux.protocol import Field, Packet
@@ -47,6 +47,9 @@ from prompt_toolkit.input.vt100 import raw_mode
 
 from ..pipes import BrokenPipeError, MemoryConnection
 from .terminal import TerminalClient
+
+if TYPE_CHECKING:
+    from prompt_toolkit.output import ColorDepth
 
 __all__ = [
     "MemoryClient",
@@ -109,14 +112,14 @@ class MemoryClient(TerminalClient):
             del self._backlog[:written]
 
     @override
-    def _send_packet(self, data) -> None:
+    def _send_packet(self, data: dict[str, Any]) -> None:
         "Send to the server. (The queue has no limit, so this waits for nothing.)"
         # The server is gone. The read loop ends on its own.
         with contextlib.suppress(BrokenPipeError):
             self.connection.write_nowait(self._encode(data))
 
     @override
-    async def attach(self, detach_other_clients: bool = False, color_depth=None) -> None:
+    async def attach(self, detach_other_clients: bool = False, color_depth: ColorDepth | None = None) -> None:
         """
         Attach the user interface, and return when it ends.
 

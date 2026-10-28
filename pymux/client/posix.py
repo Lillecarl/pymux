@@ -8,7 +8,7 @@ import sys
 import threading
 import time
 from select import select
-from typing import override
+from typing import TYPE_CHECKING, Any, override
 
 from libpymux.protocol import READ_SIZE
 from libpymux.sockets import servers_newest_first
@@ -19,6 +19,11 @@ from prompt_toolkit.output.vt100 import Vt100_Output
 from .audio import AudioClient, sound_devices
 from .reconnect import draw
 from .terminal import DELETE_EVERY_IMAGE, TerminalClient
+
+if TYPE_CHECKING:
+    from types import FrameType
+
+    from prompt_toolkit.output import ColorDepth
 
 #: How often a client waiting for a restarted server tries the socket,
 #: in seconds.
@@ -45,7 +50,7 @@ class PosixClient(TerminalClient):
     #: One send at a time: the microphone sends from a thread of its own.
     _sending = threading.Lock()
 
-    def __init__(self, socket_name):
+    def __init__(self, socket_name: str) -> None:
         super().__init__()
         self.socket_name = socket_name
 
@@ -59,12 +64,12 @@ class PosixClient(TerminalClient):
         self.audio = AudioClient(devices, self._send_packet) if devices is not None else None
 
     @override
-    def attach(self, detach_other_clients: bool = False, color_depth=None):
+    def attach(self, detach_other_clients: bool = False, color_depth: ColorDepth | None = None) -> None:
         """
         Attach client user interface.
         """
 
-        def winch_handler(signum, frame):
+        def winch_handler(signum: int, frame: FrameType | None) -> None:
             self._send_size()
 
         # Before `start-gui`, which carries the size: SIGWINCH is ignored
@@ -83,7 +88,7 @@ class PosixClient(TerminalClient):
                     socket_fd = self.socket.fileno()
                     # A browser that ends says nothing on either fd, so
                     # the loop looks once a second while one runs.
-                    r, _, _ = select([stdin_fd, socket_fd], [], [], BROWSER_POLL if self._browsers else None)
+                    r, _, _ = select([stdin_fd, socket_fd], (), (), BROWSER_POLL if self._browsers else None)
                     self._reap_browsers()
 
                     if socket_fd in r:
@@ -129,7 +134,7 @@ class PosixClient(TerminalClient):
                 self.stop_browsers()
                 self._leave_the_terminal()
 
-    def _wait_for_the_next_server(self, stdin_fd) -> bool:
+    def _wait_for_the_next_server(self, stdin_fd: int) -> bool:
         """
         Connect to the server that follows a restart, on the same socket.
 
@@ -190,7 +195,7 @@ class PosixClient(TerminalClient):
         return False
 
     @override
-    def _send_packet(self, data):
+    def _send_packet(self, data: dict[str, Any]) -> None:
         """
         Send to server, and say nothing when the server has gone.
 

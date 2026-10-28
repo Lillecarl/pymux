@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .base import Client
+    from .terminal import TerminalClient
+
 __all__ = [
     "command_client",
     "create_client",
@@ -16,7 +22,7 @@ def is_ssh_url(name: str | None) -> bool:
     return bool(name) and str(name).startswith(SCHEME)
 
 
-def create_client(socket_name):
+def create_client(socket_name: str) -> TerminalClient:
     # A machine, and not a path on this one. The import is here so that
     # a server never loads asyncssh: only a client that was given an
     # `ssh://` address needs it. Lillecarl/pymux#90.
@@ -30,7 +36,7 @@ def create_client(socket_name):
     return PosixClient(socket_name)
 
 
-def command_client(socket_name):
+def command_client(socket_name: str) -> Client:
     """
     A client to run one command on, which draws nothing and so imports
     nothing that draws. Lillecarl/pymux#589.

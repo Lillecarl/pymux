@@ -20,12 +20,16 @@ from __future__ import annotations
 
 import time
 import weakref
-from typing import TYPE_CHECKING, NamedTuple, override
+from typing import TYPE_CHECKING, Any, NamedTuple, override
 
 from pymux.forwarding import ANY_PORT, LOOPBACK_NAMES, Direction, Forward
 
 if TYPE_CHECKING:
+    import asyncio
+
     from asyncssh import SSHClientConnection, SSHListener
+    from asyncssh.forward import SSHForwarderCoro
+    from asyncssh.session import SSHTCPSessionFactory
 
 __all__ = [
     "Forwards",
@@ -83,7 +87,7 @@ class Opened(NamedTuple):
     live: int = 0
     left: float | None = None
 
-    def report(self) -> dict:
+    def report(self) -> dict[str, Any]:
         """
         What crosses the wire to the server's copy.
 
@@ -131,7 +135,7 @@ class Forwards:
         #: that a forwarder nothing else holds cannot keep a forward
         #: looking busy for ever: if it has been collected, its
         #: connection is gone.
-        self._live: dict[Where, weakref.WeakSet] = {}
+        self._live: dict[Where, weakref.WeakSet[object]] = {}
 
     def __len__(self) -> int:
         return len(self._wanted)
@@ -432,7 +436,7 @@ class Forwards:
 
         from asyncssh.listener import create_tcp_local_listener
 
-        async def tunnel(session_factory, orig_host: str, orig_port: int):
+        async def tunnel(session_factory: SSHTCPSessionFactory[bytes], orig_host: str, orig_port: int):
             return await connection.create_connection(
                 session_factory,
                 forward.dest_host,
@@ -478,7 +482,7 @@ class Forwards:
         "Every wanted forward, with the port it got or the reason it has none."
         return [self._one(where) for where in self._wanted]
 
-    def report(self) -> list[dict]:
+    def report(self) -> list[dict[str, Any]]:
         "The whole table, for the copy the server draws."
         return [one.report() for one in self.opened()]
 
@@ -531,18 +535,20 @@ def _counting_forwarder() -> type:
     class _Counting(SSHLocalPortForwarder):
         "One forwarded connection, telling the table what it does."
 
-        def __init__(self, connection, coro, table: Forwards, where: Where):
+        def __init__(
+            self, connection: SSHClientConnection, coro: SSHForwarderCoro, table: Forwards, where: Where
+        ) -> None:
             super().__init__(connection, coro)
             self._table = table
             self._where = where
 
         @override
-        def connection_made(self, transport) -> None:
+        def connection_made(self, transport: asyncio.BaseTransport) -> None:
             self._table._began(self._where, self)
             super().connection_made(transport)
 
         @override
-        def connection_lost(self, exc) -> None:
+        def connection_lost(self, exc: Exception | None) -> None:
             # **asyncssh reports this twice when the far side refuses
             # the channel**: `SSHLocalForwarder._forward` calls it by
             # hand on `ChannelOpenError`, and asyncio calls it again
@@ -553,7 +559,7 @@ def _counting_forwarder() -> type:
             super().connection_lost(exc)
 
         @override
-        def data_received(self, data, datatype=None) -> None:
+        def data_received(self, data: bytes, datatype: int | None = None) -> None:
             # **One direction only: bytes from the browser.** The peer
             # that carries the other way is built by asyncssh inside
             # `SSHLocalForwarder._forward` and is a plain
