@@ -20,6 +20,7 @@ import sys
 import termios
 import threading
 import time
+import traceback
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
@@ -797,14 +798,32 @@ async def test_a_client_told_to_hang_up_does_not_come_back(monkeypatch):
         it.client._process = recording_process
         it.client._link_again = recording_link_again
 
+        # The client once read nothing at all and saw a clean close, so
+        # the server's side is recorded too: whether the exit packet's
+        # write began on a connection still open, and who closed it first.
+        written: list[tuple[object, bool]] = []
+        closed_by: list[str] = []
         for connection in list(it.pymux.connections):
+            write_packet, close = connection._write_packet, connection._close_connection
+
+            async def recording_write_packet(data_obj, connection=connection, write_packet=write_packet):
+                written.append((data_obj.get(Field.CMD), connection._closed))
+                await write_packet(data_obj)
+
+            def recording_close(connection=connection, close=close):
+                if not connection._closed and not closed_by:
+                    closed_by.append("".join(traceback.format_stack(limit=12)))
+                close()
+
+            connection._write_packet = recording_write_packet
+            connection._close_connection = recording_close
             connection.detach_and_close(hang_up=True)
 
         await it.wait_for_attach(10)
 
-        assert it.client.hang_up_asked, "the client never heard the hangup: read %r, then retried %r" % (
-            read[-5:],
-            retried,
+        assert it.client.hang_up_asked, (
+            "the client never heard the hangup: read %r, then retried %r; the server wrote %r and was closed by\n%s"
+            % (read[-5:], retried, written, closed_by[0] if closed_by else "nobody")
         )
         assert "lost the server" not in it.terminal.said
 
