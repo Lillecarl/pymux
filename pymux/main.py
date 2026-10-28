@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, ClassVar, NamedTuple, override
 import anyio
 import anyio.abc
 from libpymux.agentic import CallerContext
-from libpymux.protocol import Field, Packet
+from libpymux.protocol import Field, Message, Packet
 from prompt_toolkit.application import Application
 from prompt_toolkit.application.current import get_app, set_app
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
@@ -3265,7 +3265,7 @@ class Pymux:
 
         return not in_person or forward.listen_host not in LOOPBACK_NAMES
 
-    def forward_through(self, client_state: ClientState, packet: dict) -> None:
+    def forward_through(self, client_state: ClientState, packet: Message) -> None:
         """
         Ask a client to open or close a forward.
 

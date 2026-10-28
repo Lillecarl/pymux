@@ -8,9 +8,9 @@ import sys
 import threading
 import time
 from select import select
-from typing import TYPE_CHECKING, Any, override
+from typing import TYPE_CHECKING, override
 
-from libpymux.protocol import READ_SIZE
+from libpymux.protocol import READ_SIZE, Message
 from libpymux.sockets import servers_newest_first
 from libpymux.wire import PacketReader
 from prompt_toolkit.input.vt100 import raw_mode
@@ -195,7 +195,7 @@ class PosixClient(TerminalClient):
         return False
 
     @override
-    def _send_packet(self, data: dict[str, Any]) -> None:
+    def _send_packet(self, data: Message) -> None:
         """
         Send to server, and say nothing when the server has gone.
 

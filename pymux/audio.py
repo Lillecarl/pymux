@@ -43,7 +43,7 @@ from typing import TYPE_CHECKING, Any
 
 import anyio
 import anyio.abc
-from libpymux.protocol import Field, Packet
+from libpymux.protocol import Field, Message, Packet
 
 from pymux.enums import AudioFrame, AudioServerMode, ClientAudio
 from pymux.jitter import (
@@ -363,7 +363,7 @@ class AudioLink:
         #: Whether the client's microphone gave only zeros.
         self.silent = False
 
-    def send(self, packet: dict) -> None:
+    def send(self, packet: Message) -> None:
         "Queue a packet. A full queue lets the oldest go."
         if len(self._queue) == self._queue.maxlen:
             self.late += 1
@@ -468,7 +468,7 @@ class AudioLink:
         self.reframe(longer[0])
         return longer[0]
 
-    def heard(self, packet: dict) -> None:
+    def heard(self, packet: Message) -> None:
         kind = packet.get(Field.CMD)
         if kind == Packet.BEHIND:
             self._trouble.append(anyio.current_time())

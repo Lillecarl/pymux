@@ -30,7 +30,7 @@ from typing import Any
 
 import ormsgpack
 
-from .protocol import END, Field, Packet
+from .protocol import END, Field, Message, Packet
 
 __all__ = [
     "MSGPACK",
@@ -70,7 +70,7 @@ def encode_msgpack(packet: Any) -> bytes:
     return len(message).to_bytes(_LENGTH, "big") + message
 
 
-def turned_to(packet: dict) -> str | None:
+def turned_to(packet: Message) -> str | None:
     "The format its writer writes after this packet, when it is a `wire` packet."
     if packet.get(Field.CMD) != Packet.WIRE:
         return None

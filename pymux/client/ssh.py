@@ -50,7 +50,7 @@ from urllib.parse import urlparse
 
 import anyio
 from libpymux.agentic import caller_fields
-from libpymux.protocol import READ_SIZE, Field, Packet
+from libpymux.protocol import READ_SIZE, Field, Message, Packet
 from libpymux.wire import MSGPACK, MSGPACK_ZSTD, PacketReader
 from prompt_toolkit.input.vt100 import raw_mode
 from prompt_toolkit.output.vt100 import Vt100_Output
@@ -873,7 +873,7 @@ class SshClient(TerminalClient):
             }
         )
 
-    def _send_from_a_thread(self, packet: dict) -> None:
+    def _send_from_a_thread(self, packet: Message) -> None:
         """
         Send from the microphone's thread. asyncssh's writer belongs to
         the loop, so the write goes there; a link that went drops it.
@@ -882,7 +882,7 @@ class SshClient(TerminalClient):
         if loop is not None and not loop.is_closed():
             loop.call_soon_threadsafe(self._send_quietly, packet)
 
-    def _send_quietly(self, packet: dict) -> None:
+    def _send_quietly(self, packet: Message) -> None:
         with contextlib.suppress(BrokenPipeError):
             self._send_packet(packet)
 

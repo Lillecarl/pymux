@@ -12,10 +12,10 @@ import contextlib
 import json
 import socket
 import sys
-from typing import Any, override
+from typing import override
 
 from libpymux.agentic import caller_fields
-from libpymux.protocol import READ_SIZE, Field, Framer, Packet
+from libpymux.protocol import READ_SIZE, Field, Framer, Message, Packet
 from libpymux.wire import encode_json
 
 from .base import Client
@@ -97,7 +97,7 @@ class CommandClient(Client):
             return 1
         return exit_code
 
-    def _send_packet(self, data: dict[str, Any]) -> None:
+    def _send_packet(self, data: Message) -> None:
         "Send to the server, and say nothing when it has gone: the read says that."
         with contextlib.suppress(BrokenPipeError, ConnectionResetError):
             self.socket.sendall(encode_json(data))

@@ -39,10 +39,10 @@ from __future__ import annotations
 import contextlib
 import os
 import sys
-from typing import TYPE_CHECKING, Any, override
+from typing import TYPE_CHECKING, override
 
 import anyio
-from libpymux.protocol import Field, Packet
+from libpymux.protocol import Field, Message, Packet
 from prompt_toolkit.input.vt100 import raw_mode
 
 from ..pipes import BrokenPipeError, MemoryConnection
@@ -112,7 +112,7 @@ class MemoryClient(TerminalClient):
             del self._backlog[:written]
 
     @override
-    def _send_packet(self, data: dict[str, Any]) -> None:
+    def _send_packet(self, data: Message) -> None:
         "Send to the server. (The queue has no limit, so this waits for nothing.)"
         # The server is gone. The read loop ends on its own.
         with contextlib.suppress(BrokenPipeError):

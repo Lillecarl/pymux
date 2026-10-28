@@ -11,7 +11,7 @@ from collections.abc import Callable
 from typing import override
 
 import anyio
-from libpymux.protocol import READ_SIZE
+from libpymux.protocol import READ_SIZE, Message
 from libpymux.sockets import nobody_answers, socket_directory
 from libpymux.wire import Compressor, PacketReader
 
@@ -306,7 +306,7 @@ class PosixSocketConnection(PipeConnection):
             await self._empty.wait()
 
     @override
-    async def read(self) -> dict:
+    async def read(self) -> Message:
         "The next packet, decoded."
         if self._closed:
             raise BrokenPipeError

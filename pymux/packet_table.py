@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from libpymux.protocol import Field
+from libpymux.protocol import Field, Message
 
 __all__ = ["PacketTable"]
 
@@ -32,7 +32,7 @@ class PacketTable[T]:
 
         return register
 
-    def handle(self, owner: T, packet: dict) -> None:
+    def handle(self, owner: T, packet: Message) -> None:
         "Hand the packet to the method for its kind. A kind with none is dropped."
         handler = self._by_kind.get(packet.get(Field.CMD, ""))
         if handler is not None:

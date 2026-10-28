@@ -29,15 +29,20 @@ This module imports nothing else.
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Any
 
 __all__ = [
     "END",
+    "READ_SIZE",
     "Field",
     "Framer",
+    "Message",
     "Mode",
     "Packet",
-    "READ_SIZE",
 ]
+
+#: One packet as it crosses the wire: each `Field` to its value.
+type Message = dict[str, Any]
 
 #: The byte that ends one JSON message on the wire.
 END = b"\0"

@@ -24,7 +24,7 @@ import socket
 from typing import TYPE_CHECKING
 
 import anyio
-from libpymux.protocol import Field, Packet
+from libpymux.protocol import Field, Message, Packet
 
 if TYPE_CHECKING:
     from pymux.main import ClientState, Pymux
@@ -151,7 +151,7 @@ class Browsers:
         if launch is not None:
             launch.approved = True
 
-    def started(self, packet: dict) -> None:
+    def started(self, packet: Message) -> None:
         "The client says the browser listens, or why it does not."
         launch = self.launches.get(packet.get(Field.BROWSER, ""))
         if launch is None:

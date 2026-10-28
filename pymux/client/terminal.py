@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import anyio
-from libpymux.protocol import Field, Mode, Packet
+from libpymux.protocol import Field, Message, Mode, Packet
 from libpymux.wire import MSGPACK, encode_json, encode_msgpack
 from prompt_toolkit.input.posix_utils import PosixStdinReader
 from prompt_toolkit.input.vt100 import cooked_mode, raw_mode
@@ -535,7 +535,7 @@ class TerminalClient(Client):
             with contextlib.suppress(Exception):
                 self._shm.close()
 
-    def _window_frame(self, packet: dict) -> bool:
+    def _window_frame(self, packet: Message) -> bool:
         """
         Gather a window pane's frame, and at its last part write it to
         the terminal, encoded the way the terminal reads it.
@@ -601,12 +601,12 @@ class TerminalClient(Client):
             return None
         return decoded
 
-    def _process(self, packet: dict) -> None:
+    def _process(self, packet: Message) -> None:
         "Hand a packet from the server to the method that handles its kind."
         _PACKETS.handle(self, packet)
 
     @_PACKETS.handles(Packet.WIRE)
-    def _on_wire(self, packet: dict) -> None:
+    def _on_wire(self, packet: Message) -> None:
         # The server writes msgpack from here on, and the reader has
         # turned already. This side turns too, saying so first. Its
         # packets are keystrokes, too small for zstd to win on.
@@ -614,7 +614,7 @@ class TerminalClient(Client):
         self._encode = encode_msgpack
 
     @_PACKETS.handles(Packet.OUT)
-    def _on_output(self, packet: dict) -> None:
+    def _on_output(self, packet: Message) -> None:
         data = packet[Field.DATA]
         self._write_terminal(data.encode("utf-8"))
         if KITTY_GRAPHICS in data:
@@ -623,7 +623,7 @@ class TerminalClient(Client):
         self._draw_question()
 
     @_PACKETS.handles(Packet.WINDOW_FRAME)
-    def _on_window_frame(self, packet: dict) -> None:
+    def _on_window_frame(self, packet: Message) -> None:
         answered = False
         try:
             answered = self._window_frame(packet)
@@ -636,12 +636,12 @@ class TerminalClient(Client):
             self._draw_question()
 
     @_PACKETS.handles(Packet.SHM)
-    def _on_shm(self, packet: dict) -> None:
+    def _on_shm(self, packet: Message) -> None:
         if self._shm is not None:
             self._carrier = self._shm
 
     @_PACKETS.handles(Packet.EXIT)
-    def _on_exit(self, packet: dict) -> None:
+    def _on_exit(self, packet: Message) -> None:
         # The server is about to close this connection, and says
         # what this client leaves with. The read loop ends on the
         # close itself.
@@ -654,25 +654,25 @@ class TerminalClient(Client):
             self.hang_up_asked = True
 
     @_PACKETS.handles(Packet.RESTARTING)
-    def _on_restarting(self, packet: dict) -> None:
+    def _on_restarting(self, packet: Message) -> None:
         self.restart_wait = float(packet[Field.WAIT])
         # An older server says no reason.
         self.restart_why = str(packet.get(Field.MESSAGE) or RESTARTING)
 
     @_PACKETS.handles(Packet.ECHO)
-    def _on_echo(self, packet: dict) -> None:
+    def _on_echo(self, packet: Message) -> None:
         # The server measures the round trip that sizes the sound
         # buffers: the answer goes at once, before anything else.
         # Lillecarl/pymux#657.
         self._send_packet({Field.CMD: Packet.ECHO, Field.TIME: packet.get(Field.TIME)})
 
     @_PACKETS.handles(Packet.SOUND, Packet.AUDIO, Packet.LATENCY, Packet.MICROPHONE)
-    def _on_sound(self, packet: dict) -> None:
+    def _on_sound(self, packet: Message) -> None:
         if self.audio is not None:
             self.audio.heard(packet)
 
     @_PACKETS.handles(Packet.PING)
-    def _on_ping(self, packet: dict) -> None:
+    def _on_ping(self, packet: Message) -> None:
         # The server is asking whether anybody is still here. An
         # answer costs one packet and keeps this client's place;
         # silence is what tells the server the person is gone.
@@ -680,12 +680,12 @@ class TerminalClient(Client):
         self._send_packet({Field.CMD: Packet.PONG})
 
     @_PACKETS.handles(Packet.SUSPEND)
-    def _on_suspend(self, packet: dict) -> None:
+    def _on_suspend(self, packet: Message) -> None:
         # Suspend client process to background.
         os.kill(os.getpid(), signal.SIGTSTP)
 
     @_PACKETS.handles(Packet.OPEN)
-    def _on_open(self, packet: dict) -> None:
+    def _on_open(self, packet: Message) -> None:
         # The server asks this machine, not the machine of the
         # server, to open the URL. A machine with no browser says
         # so back, where the request was made visible.
@@ -694,11 +694,11 @@ class TerminalClient(Client):
             self._send_packet({Field.CMD: Packet.OPEN_FAILED, Field.DATA: url})
 
     @_PACKETS.handles(Packet.BROWSER)
-    def _on_browser(self, packet: dict) -> None:
+    def _on_browser(self, packet: Message) -> None:
         self._start_browser(packet)
 
     @_PACKETS.handles(Packet.FILE)
-    def _on_file(self, packet: dict) -> None:
+    def _on_file(self, packet: Message) -> None:
         # A pane's download, saved on this machine. The server
         # shows where it went: only this side knows the path.
         arrived = self.downloads.receive(packet)
@@ -708,23 +708,23 @@ class TerminalClient(Client):
             self._send_packet({Field.CMD: Packet.FILE_SAVED, Field.MESSAGE: arrived})
 
     @_PACKETS.handles(Packet.SEND_FILES)
-    def _on_send_files(self, packet: dict) -> None:
+    def _on_send_files(self, packet: Message) -> None:
         self._files_asked(packet)
 
     @_PACKETS.handles(Packet.FILES_WITHDRAWN)
-    def _on_files_withdrawn(self, packet: dict) -> None:
+    def _on_files_withdrawn(self, packet: Message) -> None:
         self._files_withdrawn(str(packet.get(Field.REQUEST) or ""))
 
     @_PACKETS.handles(Packet.LIST_FILES)
-    def _on_list_files(self, packet: dict) -> None:
+    def _on_list_files(self, packet: Message) -> None:
         self._listing_asked(packet)
 
     @_PACKETS.handles(Packet.BROWSER_STOP)
-    def _on_browser_stop(self, packet: dict) -> None:
+    def _on_browser_stop(self, packet: Message) -> None:
         self.stop_browser(packet[Field.BROWSER])
 
     @_PACKETS.handles(Packet.KITTY_KEYBOARD)
-    def _on_kitty_keyboard(self, packet: dict) -> None:
+    def _on_kitty_keyboard(self, packet: Message) -> None:
         # Kitty keyboard protocol instructions for the outer
         # terminal.
         data = packet[Field.DATA]
@@ -738,7 +738,7 @@ class TerminalClient(Client):
                 self._set_kitty_flags(data["flags"])
 
     @_PACKETS.handles(Packet.MODE)
-    def _on_mode(self, packet: dict) -> None:
+    def _on_mode(self, packet: Message) -> None:
         # Set terminal to raw/cooked.
         action = packet[Field.DATA]
 
@@ -846,7 +846,7 @@ class TerminalClient(Client):
     def _granted(self) -> bool:
         return self._grant_until is not None and self._clock() < self._grant_until
 
-    def _files_asked(self, packet: dict) -> None:
+    def _files_asked(self, packet: Message) -> None:
         """
         A pane asks for files on this machine. Look at the paths and
         the settings off the loop, then send or ask.
@@ -869,7 +869,7 @@ class TerminalClient(Client):
         self._looking.add(request)
         self._off_the_loop(look, then)
 
-    def _listing_asked(self, packet: dict) -> None:
+    def _listing_asked(self, packet: Message) -> None:
         "A completion of `pymux receive` asks what a directory here holds. Nobody is asked."
         request = str(packet.get(Field.REQUEST) or "")
         asked = str(packet.get(Field.PATH) or "")
@@ -973,7 +973,7 @@ class TerminalClient(Client):
                     self._send_packet(packet)
             self._send_packet(done_packet(request))
 
-    def _start_browser(self, packet: dict) -> None:
+    def _start_browser(self, packet: Message) -> None:
         """
         Start the browser a program on the server asked for, and say
         where it listens, or why it does not. This machine is the
@@ -995,7 +995,7 @@ class TerminalClient(Client):
             {Field.CMD: Packet.BROWSER_STARTED, Field.BROWSER: launch, Field.PATH: path, Field.REMOTE: kind}
         )
 
-    async def run_browser(self, packet: dict, forward=None) -> None:
+    async def run_browser(self, packet: Message, forward=None) -> None:
         """
         `_start_browser` for a client with an event loop, which holds
         the browser until it ends and then says so. `forward(port)`,

@@ -17,7 +17,7 @@ from typing import (
 
 import anyio
 from libpymux.agentic import caller_context
-from libpymux.protocol import Field, Mode, Packet
+from libpymux.protocol import Field, Message, Mode, Packet
 from libpymux.wire import MSGPACK_ZSTD, choose, encode_json, encode_msgpack
 from prompt_toolkit.application.current import create_app_session, set_app
 from prompt_toolkit.data_structures import Size
@@ -886,34 +886,34 @@ class ServerConnection:
             else:
                 failures = 0
 
-    def _process(self, packet: dict) -> None:
+    def _process(self, packet: Message) -> None:
         "Hand a packet from the client to the method that handles its kind."
         _PACKETS.handle(self, packet)
 
     @_PACKETS.handles(Packet.WIRE)
-    def _on_wire(self, packet: dict) -> None:
+    def _on_wire(self, packet: Message) -> None:
         "The client's writer turned to msgpack. The pipe's reader has turned with it already."
 
     @_PACKETS.handles(Packet.RUN_COMMAND)
-    def _on_run_command(self, packet: dict) -> None:
+    def _on_run_command(self, packet: Message) -> None:
         # Handle this in a task. The command handler can produce output
         # that has to be sent back to the client.
         self._spawn(self._run_command(packet))
 
     @_PACKETS.handles(Packet.STREAM_PANE)
-    def _on_stream_pane(self, packet: dict) -> None:
+    def _on_stream_pane(self, packet: Message) -> None:
         # "Send me this pane as frames." A stream holds the connection
         # and writes many packets, so it is not a command that prints.
         self._spawn(self._stream_pane(packet))
 
     @_PACKETS.handles(Packet.SOUND, Packet.ECHO, Packet.MICROPHONE, Packet.BEHIND)
-    def _on_sound(self, packet: dict) -> None:
+    def _on_sound(self, packet: Message) -> None:
         # Sound from a client that plays it. Lillecarl/pymux#657.
         if self._audio is not None:
             self._audio.heard(packet)
 
     @_PACKETS.handles(Packet.STREAM_IN)
-    def _on_stream_in(self, packet: dict) -> None:
+    def _on_stream_in(self, packet: Message) -> None:
         # One input message of a stream, which the stream itself reads:
         # a packet that arrives with no stream running has nowhere to go.
         if self._stream is None:
@@ -922,7 +922,7 @@ class ServerConnection:
             self._stream.take(packet.get(Field.DATA, ""))
 
     @_PACKETS.handles(Packet.IN)
-    def _on_input(self, packet: dict) -> None:
+    def _on_input(self, packet: Message) -> None:
         if self.recording is not None:
             self.recording.hear("in", packet[Field.DATA])
         self._pipeinput.send_text(self._take_clipboard_answer(packet[Field.DATA]))
@@ -933,7 +933,7 @@ class ServerConnection:
             self.client_state.input_tick += 1
 
     @_PACKETS.handles(Packet.KITTY_DETECT)
-    def _on_kitty_detect(self, packet: dict) -> None:
+    def _on_kitty_detect(self, packet: Message) -> None:
         # The client queried its terminal for kitty keyboard protocol
         # support. (The replies come back as input on this connection.)
         self._kitty_detection_pending = True
@@ -945,7 +945,7 @@ class ServerConnection:
         self._flush_output()
 
     @_PACKETS.handles(Packet.SIZE)
-    def _on_size(self, packet: dict) -> None:
+    def _on_size(self, packet: Message) -> None:
         rows, columns = packet[Field.DATA]
         if self.recording is not None and (rows, columns) != tuple(self.size):
             self.recording.hear("size", "%dx%d" % (columns, rows))
@@ -958,7 +958,7 @@ class ServerConnection:
             self._flush_output()
 
     @_PACKETS.handles(Packet.START_GUI)
-    def _on_start_gui(self, packet: dict) -> None:
+    def _on_start_gui(self, packet: Message) -> None:
         if not self.may_attach:
             self._spawn(self._refuse_the_attach())
             return
@@ -1060,18 +1060,18 @@ class ServerConnection:
             self._spawn(self._watch_the_client())
 
     @_PACKETS.handles(Packet.BROWSER_STARTED)
-    def _on_browser_started(self, packet: dict) -> None:
+    def _on_browser_started(self, packet: Message) -> None:
         # A URL that the client of this connection could not open. The
         # request went out as a status line here, so the answer goes
         # there too, and it names the URL to copy.
         self.pymux.browsers.started(packet)
 
     @_PACKETS.handles(Packet.BROWSER_ENDED)
-    def _on_browser_ended(self, packet: dict) -> None:
+    def _on_browser_ended(self, packet: Message) -> None:
         self.pymux.browsers.ended(packet[Field.BROWSER])
 
     @_PACKETS.handles(Packet.FILE_SAVED)
-    def _on_file_saved(self, packet: dict) -> None:
+    def _on_file_saved(self, packet: Message) -> None:
         # Where the client saved a pane's download, or why it did not.
         # Only the client knows the path. Lillecarl/pymux#743.
         if self.client_state is not None:
@@ -1079,7 +1079,7 @@ class ServerConnection:
             self.client_state.app.invalidate()
 
     @_PACKETS.handles(Packet.UPLOAD, Packet.UPLOAD_DONE)
-    def _on_upload(self, packet: dict) -> None:
+    def _on_upload(self, packet: Message) -> None:
         # A file `pymux receive` asked this client for, a part at a
         # time. Only the connection that was asked holds the request,
         # so another client cannot answer it. Lillecarl/pymux#743.
@@ -1088,34 +1088,34 @@ class ServerConnection:
             upload.take(packet)
 
     @_PACKETS.handles(Packet.FILES_LISTED)
-    def _on_files_listed(self, packet: dict) -> None:
+    def _on_files_listed(self, packet: Message) -> None:
         listed = self.listings.pop(str(packet.get(Field.REQUEST)), None)
         if listed is not None:
             listed.take(packet)
 
     @_PACKETS.handles(Packet.REDRAW)
-    def _on_redraw(self, packet: dict) -> None:
+    def _on_redraw(self, packet: Message) -> None:
         # The client drew a question over the frame, and it is gone.
         if self.client_state is not None:
             self.pymux.redraw(self.client_state)
 
     @_PACKETS.handles(Packet.OPEN_FAILED)
-    def _on_open_failed(self, packet: dict) -> None:
+    def _on_open_failed(self, packet: Message) -> None:
         if self.client_state is not None:
             self.client_state.message = "Could not open %s in a browser on this machine." % (packet[Field.DATA],)
 
     @_PACKETS.handles(Packet.PONG)
-    def _on_pong(self, packet: dict) -> None:
+    def _on_pong(self, packet: Message) -> None:
         # The client is still there. Any answer clears the count, so a
         # client that is merely slow keeps its place.
         self._unanswered = 0
 
     @_PACKETS.handles(Packet.FRAME_SHOWN)
-    def _on_frame_shown(self, packet: dict) -> None:
+    def _on_frame_shown(self, packet: Message) -> None:
         self._frame_answered()
 
     @_PACKETS.handles(Packet.FORWARDS)
-    def _on_forwards(self, packet: dict) -> None:
+    def _on_forwards(self, packet: Message) -> None:
         # What this client is forwarding, after it changed or after the
         # link came back. The server keeps a copy and never the truth:
         # it holds no SSH connection, so only the client can say whether

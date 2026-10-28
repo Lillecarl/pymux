@@ -5,6 +5,7 @@ from collections import deque
 from contextlib import asynccontextmanager
 
 import anyio
+from libpymux.protocol import Message
 
 __all__ = [
     "BrokenPipeError",
@@ -72,7 +73,7 @@ class PipeConnection(ABC):
     bytes_in: int
 
     @abstractmethod
-    async def read(self) -> dict:
+    async def read(self) -> Message:
         """
         Read the next packet, decoded: JSON or msgpack, as the peer turned
         to (`libpymux.wire`).

@@ -19,6 +19,7 @@ from collections.abc import Callable
 from typing import override
 
 import anyio
+from libpymux.protocol import Message
 from libpymux.wire import PacketReader
 
 from .base import BrokenPipeError, PipeConnection
@@ -65,7 +66,7 @@ class MemoryConnection(PipeConnection):
         peer._peer = self
 
     @override
-    async def read(self) -> dict:
+    async def read(self) -> Message:
         """
         Take the next packet. Raise `BrokenPipeError` at the end.
         """

@@ -24,9 +24,9 @@ import sys
 import threading
 import time
 from collections.abc import Callable, Mapping
-from typing import TYPE_CHECKING, Protocol
+from typing import IO, TYPE_CHECKING, Any, Protocol
 
-from libpymux.protocol import Field, Packet
+from libpymux.protocol import Field, Message, Packet
 
 from pymux.audio import programs
 from pymux.enums import ClientAudio
@@ -38,7 +38,13 @@ except ImportError:
     opuslib = None
 
 if TYPE_CHECKING:
+    from types import ModuleType
+
+    import sounddevice
     from opuslib import Decoder
+
+#: What a `pw-cat` thread runs: write to or read from its pipe until told to stop.
+type Feed = Callable[[IO[bytes], threading.Event], None]
 
 __all__ = [
     "AudioClient",
@@ -96,7 +102,7 @@ class AudioClient:
     call from any thread.
     """
 
-    def __init__(self, devices: Devices, send: Callable[[dict], None]) -> None:
+    def __init__(self, devices: Devices, send: Callable[[Message], None]) -> None:
         self.devices = devices
         self._send = send
         self.mode = ClientAudio.ON
@@ -136,7 +142,7 @@ class AudioClient:
                 self.speaker_buffer.describe(),
             )
 
-    def heard(self, packet: dict) -> None:
+    def heard(self, packet: dict[str, Any]) -> None:
         kind = packet.get(Field.CMD)
         if kind == Packet.SOUND:
             self._play(packet)
@@ -183,7 +189,7 @@ class AudioClient:
     # ------------------------------------------------------------------
     # The speaker.
 
-    def _play(self, packet: dict) -> None:
+    def _play(self, packet: dict[str, Any]) -> None:
         data = packet.get(Field.DATA)
         channels = packet.get(Field.CHANNELS)
         if self.mode == ClientAudio.OFF or opuslib is None or not isinstance(data, bytes):
@@ -289,7 +295,7 @@ class _Microphone:
     and no error. The server is told once, and says so to the person.
     """
 
-    def __init__(self, devices: Devices, send: Callable[[dict], None], frame_ms: float, bitrate: int) -> None:
+    def __init__(self, devices: Devices, send: Callable[[Message], None], frame_ms: float, bitrate: int) -> None:
         assert opuslib is not None
         self._send = send
         #: What the encoder takes before its next frame. Only this
@@ -341,7 +347,7 @@ class _Microphone:
 
 
 class _SoundDeviceStream:
-    def __init__(self, stream) -> None:
+    def __init__(self, stream: sounddevice.RawOutputStream | sounddevice.RawInputStream) -> None:
         self.stream = stream
         stream.start()
 
@@ -353,13 +359,13 @@ class _SoundDeviceStream:
 class SoundDevices:
     "PortAudio through `sounddevice`: CoreAudio on macOS, ALSA or PipeWire on Linux."
 
-    def __init__(self, sounddevice) -> None:
+    def __init__(self, sounddevice: ModuleType) -> None:
         self.sd = sounddevice
 
     def speaker(self, channels: int, samples: int, pull: Callable[[], bytes | None]) -> Stream:
         silence = bytes(samples * channels * 2)
 
-        def callback(outdata, frames, _time, _status) -> None:
+        def callback(outdata: memoryview, frames: int, _time: object, _status: object) -> None:
             frame = pull() if frames == samples else None
             outdata[:] = frame if frame is not None else silence[: len(outdata)]
 
@@ -370,7 +376,7 @@ class SoundDevices:
         )
 
     def microphone(self, channels: int, samples: int, push: Callable[[bytes], None]) -> Stream:
-        def callback(indata, frames, _time, _status) -> None:
+        def callback(indata: memoryview, frames: int, _time: object, _status: object) -> None:
             if frames == samples:
                 push(bytes(indata))
 
@@ -387,12 +393,12 @@ class _PwCatStream:
     which starts the program too: nothing here blocks the event loop.
     """
 
-    def __init__(self, argv: list[str], environment: dict[str, str] | None, feed) -> None:
+    def __init__(self, argv: list[str], environment: dict[str, str] | None, feed: Feed) -> None:
         self._argv = argv
         self._environment = environment
         self._feed = feed
         self._stop = threading.Event()
-        self._process: subprocess.Popen | None = None
+        self._process: subprocess.Popen[bytes] | None = None
         self._lock = threading.Lock()
         self._thread = threading.Thread(target=self._run, name="pymux-pw-cat", daemon=True)
         self._thread.start()
@@ -481,7 +487,7 @@ class PipeWireDevices:
     def speaker(self, channels: int, samples: int, pull: Callable[[], bytes | None]) -> Stream:
         silence = bytes(samples * channels * 2)
 
-        def feed(pipe, stop: threading.Event) -> None:
+        def feed(pipe: IO[bytes], stop: threading.Event) -> None:
             while not stop.is_set():
                 frame = pull()
                 pipe.write(frame if frame is not None else silence)
@@ -492,7 +498,7 @@ class PipeWireDevices:
     def microphone(self, channels: int, samples: int, push: Callable[[bytes], None]) -> Stream:
         size = samples * channels * 2
 
-        def feed(pipe, stop: threading.Event) -> None:
+        def feed(pipe: IO[bytes], stop: threading.Event) -> None:
             while not stop.is_set():
                 frame = pipe.read(size)
                 if len(frame) < size:
