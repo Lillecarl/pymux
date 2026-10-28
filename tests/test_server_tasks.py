@@ -54,6 +54,9 @@ class FakePipe:
         self.closed = True
         self._gone.set()
 
+    async def linger(self):
+        self.close()
+
 
 class FailingPipe(FakePipe):
     """

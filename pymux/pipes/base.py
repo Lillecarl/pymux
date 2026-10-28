@@ -101,6 +101,10 @@ class PipeConnection(ABC):
         Close connection.
         """
 
+    async def linger(self) -> None:
+        "Close, and let the far end read what it was sent before it goes: the last thing a connection does."
+        self.close()
+
     @property
     def outstanding(self) -> int:
         "Bytes given to `write` that the other end has not taken yet."

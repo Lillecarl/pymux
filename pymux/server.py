@@ -497,14 +497,17 @@ class ServerConnection:
         job -- `contrib/ssh/server.py` wraps each client the same way.
         """
         with create_app_session():
-            async with anyio.create_task_group() as tasks:
-                self._tasks = tasks
-                try:
-                    await self._read_until_it_ends()
-                finally:
-                    # What the client still had running goes with it.
-                    self._tasks = None
-                    tasks.cancel_scope.cancel()
+            try:
+                async with anyio.create_task_group() as tasks:
+                    self._tasks = tasks
+                    try:
+                        await self._read_until_it_ends()
+                    finally:
+                        # What the client still had running goes with it.
+                        self._tasks = None
+                        tasks.cancel_scope.cancel()
+            finally:
+                await self.pipe_connection.linger()
 
     def _write_output_raw(self, data: str) -> None:
         "Write to the outer terminal, without escaping. (For graphics.)"

@@ -259,6 +259,10 @@ def _bind_posix_socket(socket_name: str | None = None):
 #: ended attachment, and the server goes on. Lillecarl/pymux#418.
 TOO_SLOW_BYTES = 1024 * 1024
 
+#: How long a closed connection reads on, for the far end to read what
+#: it was sent and close its side too.
+LINGER_SECONDS = 2.0
+
 
 class PosixSocketConnection(PipeConnection):
     """
@@ -409,11 +413,37 @@ class PosixSocketConnection(PipeConnection):
         self._closed = True
         if self._empty is not None:
             self._empty.set()
-        # Wake whatever is parked on this descriptor **before** the
-        # descriptor goes. A reader that learns about the close
-        # afterwards waits on a number the kernel has already given
-        # to somebody else. No loop here: nothing is parked on it either.
+        # **Only the sending side shuts here**; `linger` closes the
+        # descriptor. A close with the far end's bytes unread fails its
+        # next write, and an asyncio peer -- asyncssh's forwarder, in
+        # front of an SSH client -- then drops what it had not read yet:
+        # the exit packet of a hangup, the notice of a restart.
+        # Lillecarl/pymux#710, Lillecarl/pymux#766.
+        with contextlib.suppress(OSError):
+            self.socket.shutdown(socket.SHUT_WR)
+        # Wake whatever is parked on this descriptor. No loop here:
+        # nothing is parked on it either.
         with contextlib.suppress(Exception):
             anyio.notify_closing(self.socket)
-        with contextlib.suppress(OSError):
-            self.socket.close()
+
+    @override
+    async def linger(self) -> None:
+        """
+        Read until the far end closes too, for at most `LINGER_SECONDS`,
+        then close the descriptor. What arrives now is dropped.
+        """
+        self.close()
+        try:
+            with anyio.move_on_after(LINGER_SECONDS):
+                while True:
+                    await anyio.wait_readable(self.socket)
+                    try:
+                        if not self.socket.recv(READ_SIZE):
+                            break
+                    except BlockingIOError:
+                        continue
+        except anyio.ClosedResourceError, OSError:
+            pass
+        finally:
+            with contextlib.suppress(OSError):
+                self.socket.close()
