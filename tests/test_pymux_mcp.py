@@ -36,6 +36,7 @@ def test_every_operation_has_a_summary_and_a_schema():
         "pane.capture",
         "pane.send",
         "pane.wait",
+        "pane.wait_until",
         "job.run",
         "job.tail",
         "job.view",
@@ -78,6 +79,13 @@ async def test_a_wait_of_no_time_is_refused_before_the_server_is_asked(tmp_path)
 async def test_a_missing_argument_is_refused_before_the_server_is_asked(tmp_path):
     with pytest.raises(pydantic.ValidationError):
         await OPERATIONS.call(await _nowhere(tmp_path), "pane.wait", {"pane": "%1"})
+
+
+async def test_a_wait_until_with_two_conditions_is_refused_before_the_server_is_asked(tmp_path):
+    with pytest.raises(ValueError, match="one condition"):
+        await OPERATIONS.call(
+            await _nowhere(tmp_path), "pane.wait_until", {"pane": "%1", "timeout": 1, "quiet": 1, "exit": True}
+        )
 
 
 class RecordingServer:

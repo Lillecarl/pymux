@@ -348,6 +348,40 @@ async def wait(
     return {"revision": revision, "changed": revision != since}
 
 
+@operation("pane.wait_until")
+async def wait_until(
+    server: Server,
+    pane: Annotated[str, Field(description="The pane's id: `%5`.")],
+    timeout: Annotated[float, Field(gt=0, description="How long to wait, in seconds.")],
+    quiet: Annotated[
+        float | None, Field(gt=0, description="Until nothing changed in the pane for this many seconds.")
+    ] = None,
+    text: Annotated[str | None, Field(description="Until a visible line matches this regular expression.")] = None,
+    next_text: Annotated[
+        str | None,
+        Field(
+            description=(
+                "Until a line written after the wait began matches this regular expression. The echo of a "
+                "command line is on the screen already, so it does not match; start this before sending keys."
+            )
+        ),
+    ] = None,
+    exit: Annotated[bool, Field(description="Until the program in the pane ends.")] = False,
+) -> Json:
+    """
+    Hold until a pane meets one condition, or `timeout` passes.
+
+    Instead of sleeping after `pane.send`: `quiet` for output that
+    stops, `text` for a line on the screen, `exit` for the program's
+    end. Answers `met`, and `text`: the line that matched, or the screen
+    when the wait ran out.
+    """
+    waited = await Pane(server, {"pane_id": pane}).wait_until(
+        quiet=quiet, text=text, next_text=next_text, exit=exit, timeout=timeout
+    )
+    return {"met": waited.met, "text": waited.text}
+
+
 @operation("pane.kill")
 async def kill_pane(server: Server, pane: Annotated[str, Field(description="The pane's id: `%5`.")]) -> None:
     "End the program in a pane, and take the pane away."
