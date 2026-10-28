@@ -375,8 +375,8 @@ async def test_the_chooser_lists_every_session():
         await _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
         await _command(pymux, state, "set-option chooser-session-lines off")
         with set_app(state.app):
-            state.layout_manager.display_chooser()
-            labels = state.layout_manager.chooser_entries()
+            state.layout_manager.chooser.display_chooser()
+            labels = state.layout_manager.chooser.chooser_entries()
 
         assert any(label.startswith("0:1") for label in labels)
         assert any(label.startswith("work:1") for label in labels)
@@ -389,7 +389,7 @@ async def test_a_session_line_names_its_session_once():
         state, _ = await session.attach("only", SIZE)
         await _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
         await _command(pymux, state, "new-window -d -t work: '%s'" % (WAITING,))
-        manager = state.layout_manager
+        manager = state.layout_manager.chooser
         with set_app(state.app):
             manager.display_chooser()
             entries = manager.chooser_entries()
@@ -410,7 +410,7 @@ async def test_a_wrapped_session_line_leaves_the_label_blank():
         await _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
         for _ in range(3):
             await _command(pymux, state, "new-window -d -t work: '%s'" % (WAITING,))
-        manager = state.layout_manager
+        manager = state.layout_manager.chooser
         with set_app(state.app):
             manager.display_chooser()
             width = len(manager.chooser_entries()[1]) + 6
@@ -425,7 +425,7 @@ async def test_a_wrapped_session_line_leaves_the_label_blank():
 
 def _sessions_of_lines(pymux, state) -> list[set]:
     "The sessions on each line of the chooser."
-    manager = state.layout_manager
+    manager = state.layout_manager.chooser
     with set_app(state.app):
         matches = manager.chooser_matches()
         lines = manager.chooser_lines(manager._bar_width())
@@ -439,7 +439,7 @@ async def test_each_session_starts_a_line_of_the_chooser():
         state, _ = await session.attach("only", SIZE)
         await _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
         with set_app(state.app):
-            state.layout_manager.display_chooser()
+            state.layout_manager.chooser.display_chooser()
 
         lines = _sessions_of_lines(pymux, state)
 
@@ -454,7 +454,7 @@ async def test_k_and_j_over_a_shorter_line_come_back_to_the_same_place():
         await _command(pymux, state, "new-session -d -s many '%s'" % (WAITING,))
         for _ in range(3):
             await _command(pymux, state, "new-window -d -t many '%s'" % (WAITING,))
-        manager = state.layout_manager
+        manager = state.layout_manager.chooser
         with set_app(state.app):
             manager.display_chooser()
             lines = manager.chooser_lines(manager._bar_width())
@@ -482,7 +482,7 @@ async def test_the_option_off_flows_the_sessions_together():
         await _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
         await _command(pymux, state, "set-option chooser-session-lines off")
         with set_app(state.app):
-            state.layout_manager.display_chooser()
+            state.layout_manager.chooser.display_chooser()
 
         assert len(_sessions_of_lines(pymux, state)) == 1
 
@@ -494,12 +494,12 @@ async def test_choosing_a_window_of_another_session_moves_the_client():
 
         await _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
         with set_app(state.app):
-            state.layout_manager.display_chooser()
+            state.layout_manager.chooser.display_chooser()
             # Pointing at it is the switch: the chooser has no picture
             # of a window, it moves the client onto it.
-            state.layout_manager.point_at(1)
+            state.layout_manager.chooser.point_at(1)
             assert state.session.name == "work"
-            state.layout_manager.choose_pointed_window()
+            state.layout_manager.chooser.choose_pointed_window()
 
         assert state.session.name == "work"
 

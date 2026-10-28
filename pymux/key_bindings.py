@@ -433,7 +433,7 @@ class PymuxKeyBindings:
         @_noted(self.pymux, "chooser-search")
         def _chooser_search(event: E) -> None:
             "Search the names; what is typed narrows the list."
-            get_app().layout.focus(self.pymux.get_client_state().layout_manager.chooser_search_control())
+            get_app().layout.focus(self.pymux.get_client_state().layout_manager.chooser.chooser_search_control())
 
         @kb.add("left", filter=chooser_displayed & ~chooser_search_focused)
         @kb.add("h", filter=chooser_displayed & ~chooser_search_focused)
@@ -444,7 +444,7 @@ class PymuxKeyBindings:
         def _chooser_back(event: E) -> None:
             "The entry before this one, rolling round to the last."
             state = self.pymux.get_client_state()
-            state.layout_manager.point_at(state.choose_window_index - 1)
+            state.layout_manager.chooser.point_at(state.choose_window_index - 1)
 
         @kb.add("right", filter=chooser_displayed & ~chooser_search_focused)
         @kb.add("l", filter=chooser_displayed & ~chooser_search_focused)
@@ -455,7 +455,7 @@ class PymuxKeyBindings:
         def _chooser_on(event: E) -> None:
             "The entry after this one, rolling round to the first."
             state = self.pymux.get_client_state()
-            state.layout_manager.point_at(state.choose_window_index + 1)
+            state.layout_manager.chooser.point_at(state.choose_window_index + 1)
 
         # The bar wraps, so up and down are a line and not an entry.
         # In the box a line holds one entry and the two agree, which
@@ -465,19 +465,19 @@ class PymuxKeyBindings:
         @_noted(self.pymux, "chooser-line-up")
         def _bar_up(event: E) -> None:
             "The line above, keeping the place along it."
-            self.pymux.get_client_state().layout_manager.step_line(-1)
+            self.pymux.get_client_state().layout_manager.chooser.step_line(-1)
 
         @kb.add("down", filter=window_bar & ~chooser_search_focused)
         @kb.add("j", filter=window_bar & ~chooser_search_focused)
         @_noted(self.pymux, "chooser-line-down")
         def _bar_down(event: E) -> None:
             "The line below, keeping the place along it."
-            self.pymux.get_client_state().layout_manager.step_line(1)
+            self.pymux.get_client_state().layout_manager.chooser.step_line(1)
 
         @kb.add("enter", filter=chooser_displayed & ~chooser_search_focused)
         def _chooser_choose(event: E) -> None:
             "Take the row the chooser points at."
-            self.pymux.get_client_state().layout_manager.choose_pointed()
+            self.pymux.get_client_state().layout_manager.chooser.choose_pointed()
 
         @Condition
         def job_chooser_displayed() -> bool:
@@ -488,13 +488,13 @@ class PymuxKeyBindings:
         @_noted(self.pymux, "open-job-in-pane")
         def _chooser_open_job_in_pane(event: E) -> None:
             "Open the pointed job as a pane in a new window."
-            self.pymux.get_client_state().layout_manager.open_pointed_job_in_pane()
+            self.pymux.get_client_state().layout_manager.chooser.open_pointed_job_in_pane()
 
         @kb.add("t", filter=job_chooser_displayed & ~chooser_search_focused)
         @_noted(self.pymux, "take-over-job")
         def _chooser_take_over_job(event: E) -> None:
             "Run the pointed job's command again, interactively."
-            self.pymux.get_client_state().layout_manager.take_over_pointed_job()
+            self.pymux.get_client_state().layout_manager.chooser.take_over_pointed_job()
 
         @kb.add("q", filter=chooser_displayed & ~chooser_search_focused, eager=True)
         @kb.add("escape", filter=chooser_displayed & ~chooser_search_focused, eager=True)
@@ -509,7 +509,7 @@ class PymuxKeyBindings:
             window it started from. Lillecarl/pymux#327.
             """
             state = self.pymux.get_client_state()
-            state.layout_manager.leave_chooser(restore=True)
+            state.layout_manager.chooser.leave_chooser(restore=True)
 
         @kb.add("escape", filter=chooser_search_focused, eager=True)
         @_noted(self.pymux, "leave-chooser-search")
@@ -517,7 +517,7 @@ class PymuxKeyBindings:
             "Leave the search, keeping the chooser."
             state = self.pymux.get_client_state()
             state.choose_window_filter.reset()
-            get_app().layout.focus(state.layout_manager.chooser_rows_control())
+            get_app().layout.focus(state.layout_manager.chooser.chooser_rows_control())
 
         # The menu that `display-menu` opened. It is modal: the keys
         # of its entries are the keys it takes, Escape and ctrl+c

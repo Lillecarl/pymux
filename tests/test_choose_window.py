@@ -95,13 +95,13 @@ def here(pymux, state):
 def entries(state) -> list:
     "What the bar says, entry by entry."
     with set_app(state.app):
-        return state.layout_manager.chooser_entries()
+        return state.layout_manager.chooser.chooser_entries()
 
 
 def bar_text(state) -> str:
     "The bar as it draws, newlines and all."
     with set_app(state.app):
-        return fragment_list_to_text(state.layout_manager._choose_window_tokens())
+        return fragment_list_to_text(state.layout_manager.chooser._choose_window_tokens())
 
 
 def _bar_float(state):
@@ -153,8 +153,8 @@ async def test_the_entries_wrap_when_the_line_is_full():
                 await run_as(pymux, state, "rename-window a-long-window-name-%i" % number)
             await run_as(pymux, state, "choose-window")
 
-            width = state.layout_manager._bar_width()
-            lines = state.layout_manager.chooser_lines(width)
+            width = state.layout_manager.chooser._bar_width()
+            lines = state.layout_manager.chooser.chooser_lines(width)
 
         assert len(lines) > 1, "eight long names fitted on one line"
         assert bar_text(state).count("\n") == len(lines) - 1
@@ -170,7 +170,7 @@ async def test_the_bar_takes_the_rows_its_entries_need():
     async with create_session() as (pymux, state):
         with set_app(state.app):
             await run_as(pymux, state, "choose-window")
-            rows = state.layout_manager._bar_rows.height()
+            rows = state.layout_manager.chooser._bar_rows.height()
 
         # One window, so one line. The search line is under it.
         assert rows.preferred == 1
@@ -230,10 +230,10 @@ async def test_j_and_k_move_a_line_and_keep_the_place_along_it():
                 await run_as(pymux, state, "new-window")
                 await run_as(pymux, state, "rename-window a-long-window-name-%i" % number)
             await run_as(pymux, state, "choose-window")
-            lines = state.layout_manager.chooser_lines(state.layout_manager._bar_width())
+            lines = state.layout_manager.chooser.chooser_lines(state.layout_manager.chooser._bar_width())
 
             # Onto the second entry of the first line, then down.
-            state.layout_manager.point_at(lines[0][1])
+            state.layout_manager.chooser.point_at(lines[0][1])
 
         fire(state, "j")
         assert state.choose_window_index == lines[1][min(1, len(lines[1]) - 1)]
@@ -459,7 +459,7 @@ async def test_slash_moves_the_focus_to_the_search():
         type_bytes(state, "/")
 
         with set_app(state.app):
-            assert state.app.layout.has_focus(state.layout_manager.chooser_search_control()), (
+            assert state.app.layout.has_focus(state.layout_manager.chooser.chooser_search_control()), (
                 "the slash did not reach the search"
             )
 
@@ -566,7 +566,7 @@ async def test_escape_in_the_search_from_a_key_press_keeps_the_chooser():
         assert state.chooser is Chooser.WINDOW, "the search took the chooser with it"
         assert state.choose_window_filter.text == ""
         with set_app(state.app):
-            assert state.app.layout.has_focus(state.layout_manager.chooser_rows_control()), (
+            assert state.app.layout.has_focus(state.layout_manager.chooser.chooser_rows_control()), (
                 "the keys did not come back to the bar"
             )
 
@@ -587,7 +587,7 @@ async def test_click_on_an_entry_takes_its_window():
             await run_as(pymux, state, "new-window")
             await run_as(pymux, state, "choose-window")
 
-        tokens = [token for token in state.layout_manager._choose_window_tokens() if len(token) == 3]
+        tokens = [token for token in state.layout_manager.chooser._choose_window_tokens() if len(token) == 3]
         handler = tokens[0][2]
 
         # The click reaches the handler with the client's app

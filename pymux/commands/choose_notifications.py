@@ -27,7 +27,7 @@ def choose_notifications(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     if pymux.answer is not None:
         return
-    pymux.get_client_state().layout_manager.display_box_chooser(Chooser.NOTIFICATIONS)
+    pymux.get_client_state().layout_manager.chooser.display_box_chooser(Chooser.NOTIFICATIONS)
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):

@@ -25,7 +25,7 @@ def choose_buffer(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     if pymux.answer is not None:
         return
-    pymux.get_client_state().layout_manager.display_box_chooser(Chooser.BUFFER)
+    pymux.get_client_state().layout_manager.chooser.display_box_chooser(Chooser.BUFFER)
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):

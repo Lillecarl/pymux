@@ -27,7 +27,7 @@ def customize_mode(pymux: Pymux, args: argparse.Namespace) -> None:
     except ValueError:
         return  # A command from the command line: nobody to show it to.
 
-    state.layout_manager.display_box_chooser(Chooser.OPTIONS)
+    state.layout_manager.chooser.display_box_chooser(Chooser.OPTIONS)
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):

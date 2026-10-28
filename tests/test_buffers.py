@@ -123,7 +123,7 @@ async def test_buffer_chooser_opens_and_lists_buffers():
             pymux.handle_command("choose-buffer")
 
         assert state.chooser is Chooser.BUFFER
-        rows = state.layout_manager._choose_buffer_tokens()
+        rows = state.layout_manager.chooser._choose_buffer_tokens()
         assert len(rows) == 2
         assert "a" in rows[0][1] and "5" in rows[0][1]
 
@@ -140,13 +140,13 @@ async def test_the_buffer_chooser_rolls_over_at_the_ends():
             pymux.handle_command("set-buffer -b b hey")
             pymux.handle_command("choose-buffer")
 
-            last = len(state.layout_manager.chooser_matches()) - 1
+            last = len(state.layout_manager.chooser.chooser_matches()) - 1
             assert last == 1
 
-            state.layout_manager.point_at(-1)
+            state.layout_manager.chooser.point_at(-1)
             assert state.choose_window_index == last
 
-            state.layout_manager.point_at(last + 1)
+            state.layout_manager.chooser.point_at(last + 1)
             assert state.choose_window_index == 0
 
 
@@ -156,7 +156,7 @@ async def test_enter_from_buffer_chooser_fills_session_buffer():
             pymux.handle_command("set-buffer -b mine hello")
             pymux.handle_command("choose-buffer")
 
-        state.layout_manager.choose_pointed_buffer()
+        state.layout_manager.chooser.choose_pointed_buffer()
 
         assert state.chooser is not Chooser.BUFFER
         assert pymux.clipboard.get_data().text == "hello"
@@ -171,7 +171,7 @@ async def test_search_narrows_buffer_rows():
 
             state.choose_window_filter.insert_text("mi")
 
-        rows = state.layout_manager._choose_buffer_tokens()
+        rows = state.layout_manager.chooser._choose_buffer_tokens()
         assert len(rows) == 1
         assert "mine" in rows[0][1]
         assert state.choose_window_index == 0
@@ -192,7 +192,7 @@ def _box_float(state):
         if (
             isinstance(container, ConditionalContainer)
             and isinstance(container.content, DynamicContainer)
-            and container.content.get_container == state.layout_manager._chooser_box
+            and container.content.get_container == state.layout_manager.chooser._chooser_box
         ):
             return container
     raise AssertionError("no float holds the box chooser")
@@ -209,7 +209,7 @@ async def test_every_box_chooser_draws_and_keeps_its_search(command):
             pymux.handle_command(command)
             assert _box_float(state).filter()
 
-            search = state.layout_manager.chooser_search_control()
+            search = state.layout_manager.chooser.chooser_search_control()
             state.app.layout.focus(search)
         state.sync_focus()
 

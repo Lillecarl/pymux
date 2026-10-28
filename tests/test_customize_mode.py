@@ -21,7 +21,7 @@ async def test_options_list_with_their_values():
             pymux.handle_command("customize-mode")
 
             assert state.chooser is Chooser.OPTIONS
-            rows = state.layout_manager._choose_options_tokens()
+            rows = state.layout_manager.chooser._choose_options_tokens()
             text = "".join(t for _s, t, *_ in rows)
             assert "status-interval" in text
             assert "mouse" in text
@@ -33,7 +33,7 @@ async def test_search_narrows_options():
             pymux.handle_command("customize-mode")
             state.choose_window_filter.insert_text("status-int")
 
-        rows = state.layout_manager._choose_options_tokens()
+        rows = state.layout_manager.chooser._choose_options_tokens()
         text = "".join(t for _s, t, *_ in rows)
         assert "status-interval" in text
         assert "mouse" not in text
@@ -45,7 +45,7 @@ async def test_taking_row_asks_for_value():
             pymux.handle_command("customize-mode")
 
             state.choose_window_index = 0
-            state.layout_manager.choose_pointed_option()
+            state.layout_manager.chooser.choose_pointed_option()
 
         assert state.chooser is not Chooser.OPTIONS
         assert state.prompt_command.startswith("set-option ")
@@ -59,7 +59,7 @@ async def test_value_shown_is_what_option_holds():
             pymux.handle_command("customize-mode")
             state.choose_window_filter.insert_text("status-interval")
 
-        rows = state.layout_manager._choose_options_tokens()
+        rows = state.layout_manager.chooser._choose_options_tokens()
         text = "".join(t for _s, t, *_ in rows)
         assert "5" in text
 
@@ -73,7 +73,7 @@ async def test_a_client_option_is_listed():
         with set_app(state.app):
             pymux.handle_command("customize-mode")
 
-            rows = state.layout_manager._choose_options_tokens()
+            rows = state.layout_manager.chooser._choose_options_tokens()
             text = "".join(t for _s, t, *_ in rows)
             assert "theme" in text
             assert "full-screen" in text
@@ -91,7 +91,7 @@ async def test_a_client_option_is_set_by_its_own_command():
             state.choose_window_filter.insert_text("theme")
 
             state.choose_window_index = 0
-            state.layout_manager.choose_pointed_option()
+            state.layout_manager.chooser.choose_pointed_option()
 
         assert state.prompt_command.startswith("set-client-option theme ")
         assert state.prompt_command.endswith(" %")
@@ -110,7 +110,7 @@ async def test_taking_a_client_row_changes_this_client():
             state.choose_window_filter.insert_text("full-screen")
 
             state.choose_window_index = 0
-            state.layout_manager.choose_pointed_option()
+            state.layout_manager.chooser.choose_pointed_option()
             pymux.handle_command(state.prompt_command.replace("%", "on"))
 
             assert pymux.the_client_to_tell().options.full_screen is True
@@ -128,7 +128,7 @@ async def test_a_window_option_is_set_by_its_own_command():
             state.choose_window_filter.insert_text("window-size")
 
             state.choose_window_index = 0
-            state.layout_manager.choose_pointed_option()
+            state.layout_manager.chooser.choose_pointed_option()
 
         assert state.prompt_command.startswith("set-window-option window-size ")
         assert state.prompt_command.endswith(" %")

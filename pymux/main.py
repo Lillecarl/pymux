@@ -524,7 +524,7 @@ class ClientState:
             # Typing narrows the list, so the point goes back to the
             # first match -- and the window chooser switches to it,
             # which is how a search previews. Lillecarl/pymux#327.
-            on_text_changed=lambda buffer: self.layout_manager.point_at(0),
+            on_text_changed=lambda buffer: self.layout_manager.chooser.point_at(0),
         )
 
         # The menu that `display-menu` opened: a line per entry, as
@@ -839,7 +839,7 @@ class ClientState:
 
     def _accept_chooser(self, buffer) -> bool:
         "When the search of a chooser is accepted: it takes the row."
-        self.layout_manager.choose_pointed()
+        self.layout_manager.chooser.choose_pointed()
         return False
 
     def _create_app(self):
@@ -1049,9 +1049,9 @@ class ClientState:
             chooser = modes["chooser"]
             if chooser is not None:
                 if chooser == Chooser.WINDOW:
-                    layout.display_chooser(modes["choose_window_command"])
+                    layout.chooser.display_chooser(modes["choose_window_command"])
                 else:
-                    layout.display_box_chooser(Chooser(chooser))
+                    layout.chooser.display_box_chooser(Chooser(chooser))
                 self.choose_window_filter.text = modes["choose_window_filter"]
                 self.choose_window_index = modes["choose_window_index"]
                 going_back = modes["chooser_return_to"]

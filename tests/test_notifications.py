@@ -121,7 +121,7 @@ async def test_notify_takes_urgency():
 
 def _hub_lines(state) -> list[str]:
     "The hub as a person reads it, one string a row."
-    return "".join(fragment[1] for fragment in state.layout_manager._choose_notification_tokens()).splitlines()
+    return "".join(fragment[1] for fragment in state.layout_manager.chooser._choose_notification_tokens()).splitlines()
 
 
 async def test_hub_lists_newest_first_under_their_window():
@@ -161,7 +161,7 @@ async def test_each_window_gets_a_heading_newest_window_first():
             pymux.handle_command("notify New Two")
             pymux.handle_command("choose-notifications")
 
-        rows = state.layout_manager.chooser_matches()
+        rows = state.layout_manager.chooser.chooser_matches()
         assert [row.window for row in rows if isinstance(row, Heading)] == [second, first]
 
 
@@ -178,7 +178,7 @@ async def test_unread_follows_the_window_s_mark():
         assert all(line[2] == "\u25cf" for line in _hub_lines(state))
 
         with set_app(state.app):
-            state.layout_manager.choose_pointed_notification()
+            state.layout_manager.chooser.choose_pointed_notification()
             pymux.handle_command("choose-notifications")
         assert not first.notified
         assert all(line[2] == " " for line in _hub_lines(state))
@@ -216,7 +216,7 @@ async def test_empty_hub_says_so():
         with set_app(state.app):
             pymux.handle_command("choose-notifications")
 
-        rows = state.layout_manager._choose_notification_tokens()
+        rows = state.layout_manager.chooser._choose_notification_tokens()
         assert len(rows) == 1
         assert "No notifications" in rows[0][1]
 
@@ -249,7 +249,7 @@ async def test_enter_from_hub_jumps_to_the_pane():
             assert pymux.current_session.arrangement.get_active_window() is not first
             await run_as(pymux, state, "choose-notifications")
 
-        state.layout_manager.choose_pointed_notification()
+        state.layout_manager.chooser.choose_pointed_notification()
 
         assert pymux.current_session.arrangement.get_active_window() is first
         assert first.active_pane is not None
@@ -263,7 +263,7 @@ async def test_enter_on_a_gone_pane_says_so():
             pymux.notification_center.add("Build", "Ready", pane_id=999999)
             pymux.handle_command("choose-notifications")
 
-        state.layout_manager.choose_pointed_notification()
+        state.layout_manager.chooser.choose_pointed_notification()
 
         assert state.message == "The pane the notification came from is gone."
         assert state.chooser is not Chooser.NOTIFICATIONS

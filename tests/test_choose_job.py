@@ -51,7 +51,7 @@ async def test_the_picker_lists_newest_first(pymux_state):
     await run_as(pymux, state, "choose-job")
 
     assert state.chooser is Chooser.JOB
-    matches = state.layout_manager.chooser_matches()
+    matches = state.layout_manager.chooser.chooser_matches()
     assert [job.command for job in matches] == ["echo second-job", "echo first-job"]
 
 
@@ -62,10 +62,10 @@ async def test_the_search_narrows_on_command_and_tags(pymux_state):
     await run_as(pymux, state, "choose-job")
 
     state.choose_window_filter.text = "nightly"
-    assert [job.command for job in state.layout_manager.chooser_matches()] == ["echo second-job"]
+    assert [job.command for job in state.layout_manager.chooser.chooser_matches()] == ["echo second-job"]
 
     state.choose_window_filter.text = "first"
-    assert [job.command for job in state.layout_manager.chooser_matches()] == ["echo first-job"]
+    assert [job.command for job in state.layout_manager.chooser.chooser_matches()] == ["echo first-job"]
 
 
 async def test_enter_shows_the_job_in_the_overlay(pymux_state):
@@ -74,7 +74,7 @@ async def test_enter_shows_the_job_in_the_overlay(pymux_state):
     await run_as(pymux, state, "choose-job")
 
     with set_app(state.app):
-        state.layout_manager.choose_pointed_job()
+        state.layout_manager.chooser.choose_pointed_job()
 
     # The key handler hands the work to the server's task group, so
     # the overlay arrives a turn later.
@@ -97,7 +97,7 @@ async def test_closing_the_overlay_leaves_the_job_running(pymux_state):
     await run_as(pymux, state, "choose-job")
 
     with set_app(state.app):
-        state.layout_manager.choose_pointed_job()
+        state.layout_manager.chooser.choose_pointed_job()
     await once(
         lambda: pymux.current_session.overlay_pane is not None,
         5.0,
@@ -122,7 +122,7 @@ async def test_o_opens_the_job_as_a_pane(pymux_state):
     before = set(_windows(pymux))
 
     with set_app(state.app):
-        state.layout_manager.open_pointed_job_in_pane()
+        state.layout_manager.chooser.open_pointed_job_in_pane()
 
     await once(
         lambda: len([window for window in _windows(pymux) if window not in before]) == 1,
@@ -145,7 +145,7 @@ async def test_t_runs_the_command_again(pymux_state):
     before = set(_windows(pymux))
 
     with set_app(state.app):
-        state.layout_manager.take_over_pointed_job()
+        state.layout_manager.chooser.take_over_pointed_job()
 
     await once(
         lambda: len([window for window in _windows(pymux) if window not in before]) == 1,
