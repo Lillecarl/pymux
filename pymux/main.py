@@ -119,6 +119,7 @@ from .osc import (
     extension_key_of,
     file_url_dir_of,
     ftcs_of,
+    message_of,
     open_url_of,
     remote_host_of,
     request_attention_of,
@@ -3478,6 +3479,14 @@ class Pymux:
                     return
                 title, body = notice
                 self.notification_center.add(title, body, pane_id=pane.pane_id, source=NotificationSource.OSC_777)
+                recorded = True
+
+            if code == Osc.MESSAGE:
+                text = message_of(param)
+                # ConEmu's numbered commands drive ConEmu itself.
+                if text is None:
+                    return
+                self.notification_center.add(text, pane_id=pane.pane_id, source=NotificationSource.OSC_9)
                 recorded = True
 
             sequence = build_osc(code, param)

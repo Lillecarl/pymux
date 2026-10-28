@@ -469,6 +469,25 @@ def test_the_rest_of_777_stays_inside(param):
         assert connection.written == []
 
 
+def test_osc_9_is_a_notice_for_the_hub_and_the_clients():
+    "iTerm2's message. Lillecarl/pymux#787."
+    pymux, connections = make_pymux()
+    pymux.forward_osc(FakePane(pane_id=7), "9", "Build done; 3 warnings")
+    (record,) = pymux.notification_center.notifications()
+    assert (record.title, record.pane_id, record.source) == ("Build done; 3 warnings", 7, "osc 9")
+    for connection in connections:
+        assert connection.written == [sequence("9", "Build done; 3 warnings")]
+
+
+@pytest.mark.parametrize("param", ["", "4;1;50", "9;/home/me", "12"])
+def test_conemu_s_commands_under_osc_9_are_no_notice(param):
+    pymux, connections = make_pymux()
+    pymux.forward_osc(FakePane(), "9", param)
+    assert pymux.notification_center.notifications() == []
+    for connection in connections:
+        assert connection.written == []
+
+
 def test_copy_reaches_paste_buffer_and_clients():
     pymux, connections = make_pymux()
     pymux.forward_osc(FakePane(), "1337", "Copy=:aGVsbG8=")

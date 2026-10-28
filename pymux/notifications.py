@@ -92,6 +92,7 @@ class NotificationSource(StrEnum):
     UNKNOWN = ""
     OSC_99 = "osc 99"
     OSC_777 = "osc 777"
+    OSC_9 = "osc 9"
     ATTENTION = "osc 1337"
     COMMAND = "pymux notify"
 

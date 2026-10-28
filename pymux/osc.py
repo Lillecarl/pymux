@@ -21,6 +21,7 @@ instead of only naming a clipboard or a notification.
 from __future__ import annotations
 
 import base64
+import re
 import string
 from urllib.parse import unquote
 
@@ -34,6 +35,7 @@ __all__ = [
     "extension_key_of",
     "file_url_dir_of",
     "ftcs_of",
+    "message_of",
     "open_url_of",
     "remote_host_of",
     "request_attention_of",
@@ -279,6 +281,18 @@ def simple_notification_of(param: str) -> tuple[str, str] | None:
     if not title and not body:
         return None
     return title, body
+
+
+#: ConEmu's commands under OSC 9 start with a number: "4;1;50" is a
+#: progress bar, "9;path" a directory. iTerm2's message is any other text.
+_CONEMU_COMMAND = re.compile(r"^\d+(?:;|$)")
+
+
+def message_of(param: str) -> str | None:
+    "The text of iTerm2's `OSC 9 ; text`, or None for an empty one or one of ConEmu's commands."
+    if not param or _CONEMU_COMMAND.match(param):
+        return None
+    return param
 
 
 def copy_data_of(param: str) -> str | None:
