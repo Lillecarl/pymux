@@ -15,7 +15,7 @@ import weakref
 from collections import deque
 from collections.abc import Awaitable, Callable, Iterable
 from contextlib import asynccontextmanager, suppress
-from typing import TYPE_CHECKING, ClassVar, NamedTuple, override
+from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, override
 
 import anyio
 import anyio.abc
@@ -1419,7 +1419,7 @@ class Pymux:
         #: What a loaded snapshot says about each client, by the id it
         #: keeps across reattaches, until that client comes back.
         #: `snapshot.py` fills it. Lillecarl/pymux#399.
-        self.returning_clients: dict[str, dict] = {}
+        self.returning_clients: dict[str, dict[str, Any]] = {}
 
         # `new-session -x -y` on the route that starts a server: the
         # session is made here and its first window comes later, in

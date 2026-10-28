@@ -306,7 +306,7 @@ def _loaded_options(scope: type[Options], row: Any) -> dict[str, Any]:
     }
 
 
-def _optional_id(item) -> int | None:
+def _optional_id(item: Pane | HSplit | VSplit | None) -> int | None:
     return None if item is None else int(node_key(item)[1])
 
 
@@ -544,7 +544,7 @@ def _fds_of(job: Job) -> list[int]:
     raise SnapshotError("job %d runs on nothing an exec can carry" % job.job_id)
 
 
-def _text_of(cells: list) -> str:
+def _text_of(cells: list[tuple[int, str, object, object]]) -> str:
     "A frozen row as text, for a question to search. A gap reads as a space."
     chars = {column: char for column, char, _, _ in cells}
     if not chars:
@@ -739,13 +739,13 @@ def _title_of(pane: Pane) -> str | None:
     return screen.titles.window if screen is not None else None
 
 
-def _clients(pymux: Pymux) -> dict[str, dict]:
+def _clients(pymux: Pymux) -> dict[str, dict[str, Any]]:
     """
     Each client by the id it keeps across reattaches, and the windows it
     was on in each session. A client the server loaded and that has not
     come back yet is written again as it was read.
     """
-    clients: dict[str, dict] = {key: dict(value) for key, value in pymux.returning_clients.items()}
+    clients: dict[str, dict[str, Any]] = {key: dict(value) for key, value in pymux.returning_clients.items()}
     for connection in pymux.connections:
         state: ClientState | None = connection.client_state
         if state is None or not connection.client_id:
@@ -960,7 +960,7 @@ def _program(db: apsw.Connection, pane_id: PaneId) -> Program:
     appearances = [
         json.loads(entry.value) for entry in select(db, AppearanceRow, "WHERE pane_id = ? ORDER BY appearance", pane_id)
     ]
-    buffers: dict[str, list] = {}
+    buffers: dict[str, list[list[Any]]] = {}
     for entry in select(db, ScreenRow, "WHERE pane_id = ? ORDER BY buffer, number", pane_id):
         buffers.setdefault(entry.buffer, []).append(
             [entry.number, bool(entry.wrapped), json.loads(entry.cells), entry.marks]

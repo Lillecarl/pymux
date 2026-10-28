@@ -212,7 +212,7 @@ def grid_of(screen: Screen, first: int, last: int, colors: ColorOverrides | None
     paint = Paint.of(colors)
     reverse_video = screen.has_reverse_video
     looks: dict[Appearance, Look] = {}
-    rows = []
+    rows: list[list[tuple[str, Look]]] = []
     for number in range(first, last + 1):
         row = page.data_buffer.get(number)
         if row is None:

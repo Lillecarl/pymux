@@ -34,10 +34,10 @@ answer, which is the whole point of the work.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from functools import partial
 from time import monotonic
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING, Any, override
 
 from prompt_toolkit.application import get_app
 from prompt_toolkit.data_structures import Point, Size
@@ -51,6 +51,11 @@ from prompt_toolkit.mouse_events import MouseEvent
 
 if TYPE_CHECKING:
     from prompt_toolkit.key_binding.key_bindings import NotImplementedOrNone
+    from prompt_toolkit.layout.containers import AnyContainer
+
+    from .divided import Divided
+    from .strip import Strip
+    from .zoomed import Zoomed
 
 from .plane import Line, Pane, Plan, Rect, View
 
@@ -93,11 +98,11 @@ class PlanContainer(Container):
 
     def __init__(
         self,
-        layout,
-        containers: dict,
-        tell_its_size=None,
+        layout: Divided | Strip | Zoomed,
+        containers: Mapping[Any, AnyContainer],
+        tell_its_size: Callable[[Any, Rect], None] | None = None,
         view: View | None = None,
-        room=None,
+        room: Callable[[], Size] | None = None,
         glide_time: Callable[[], float] = lambda: 0.0,
         clock: Callable[[], float] | None = None,
         on_line: Callable[[Line, MouseEvent], NotImplementedOrNone] | None = None,
@@ -381,7 +386,7 @@ class PlanContainer(Container):
         return list(self.containers.values())
 
 
-def _holds(container: Container, window) -> bool:
+def _holds(container: Container, window: Container) -> bool:
     "Whether this container is that window, or holds it somewhere below."
     if container is window:
         return True

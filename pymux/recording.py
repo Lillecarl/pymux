@@ -57,7 +57,7 @@ class Recording:
         self.columns = columns
         self.term = term
         self.idle_time_limit = idle_time_limit
-        self.events: list = []
+        self.events: list[list[float | str]] = []
         self.stop: Callable[[], None] = lambda: None
         self._timestamp = int(time.time())
         self._started = time.monotonic()

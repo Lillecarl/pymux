@@ -23,6 +23,7 @@ from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
 from .actions import Origin, started_by
 
 if TYPE_CHECKING:
+    from prompt_toolkit.keys import Keys
     from prompt_toolkit.layout.controls import NotImplementedOrNone
 
     from .layout import LayoutManager
@@ -41,7 +42,7 @@ class Menu:
         self._box: Container | None = None
         self._rows: Window | None = None
 
-    def show(self, entries: list, title: str = "") -> None:
+    def show(self, entries: list[tuple[str, str, str]], title: str = "") -> None:
         """
         The menu of `display-menu`: a line per entry, with the key
         that runs it beside the name. The box draws where the other
@@ -60,7 +61,7 @@ class Menu:
         "The menu goes, without running anything."
         self.client_state.menu_entries = []
 
-    def key_pressed(self, key, data=None) -> None:
+    def key_pressed(self, key: Keys | str, data: str | None = None) -> None:
         """
         A key while the menu shows: the entry whose key it is runs,
         and a key that is nobody's stays in the menu, which is modal.
@@ -78,13 +79,13 @@ class Menu:
                 self._run_entry(entry)
                 return
 
-    def _run_entry(self, entry) -> None:
+    def _run_entry(self, entry: tuple[str, str, str]) -> None:
         _key, _name, command = entry
         self.close()
         with started_by(Origin.MENU):
             self.pymux.handle_command(command)
 
-    def _click_handler(self, entry) -> Callable[[MouseEvent], NotImplementedOrNone]:
+    def _click_handler(self, entry: tuple[str, str, str]) -> Callable[[MouseEvent], NotImplementedOrNone]:
         "Return a mouse handler that runs the entry when clicking."
 
         def handler(mouse_event: MouseEvent) -> NotImplementedOrNone:
