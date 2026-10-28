@@ -29,11 +29,11 @@ import time
 from collections import deque
 from collections.abc import Callable, Iterable, Mapping
 from contextlib import suppress
-from typing import ClassVar, NewType
+from typing import TYPE_CHECKING, ClassVar, NewType
 
 import anyio
 import anyio.abc
-from anyio.streams.memory import MemoryObjectSendStream
+from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 from ptyhost.backends.posix import PosixBackend, reaped_now, stranger_ended
 from ptyhost.spawn import Spawn, fork_on_pipes
 from pyte.keep import Keep
@@ -42,6 +42,9 @@ from pymux.commands import CommandException
 from pymux.log import logger
 from pymux.query import SEEDS
 from pymux.tags import Tags, carries, parse_tag, spelled
+
+if TYPE_CHECKING:
+    from pymux.main import Pymux
 
 #: A newline with no return before it. What the viewer turns into a
 #: full return, the way ONLCR would have on a pty.
@@ -187,7 +190,7 @@ class Job:
         #: pumped chunk and the end of the job poke every one. A hint
         #: only wakes; what is new is read by offset, so a hint that
         #: finds a full queue is dropped without loss.
-        self.followers: set = set()
+        self.followers: set[MemoryObjectSendStream[None]] = set()
         #: Set when the job ends, whatever ended it.
         self.done = anyio.Event()
         #: Commands waiting on `done`, so reaping never takes a job
@@ -612,7 +615,14 @@ class JobTable:
                 await recv.aclose()
             job.waiters -= 1
 
-    async def _drain(self, job, recv, out_decode, err_decode, emit) -> None:
+    async def _drain(
+        self,
+        job: Job,
+        recv: MemoryObjectReceiveStream[None],
+        out_decode: codecs.IncrementalDecoder,
+        err_decode: codecs.IncrementalDecoder,
+        emit: Callable[[str], None],
+    ) -> None:
         "Feed everything new until the job ends with nothing left."
         out_offset, err_offset = job.end("stdout"), job.end("stderr")
         while True:
@@ -827,7 +837,7 @@ class JobFeed:
                 await recv.aclose()
             job.waiters -= 1
 
-    def _feed_new(self, stream: str, offset: int, decode) -> int:
+    def _feed_new(self, stream: str, offset: int, decode: codecs.IncrementalDecoder) -> int:
         """
         Feed what one stream holds past an offset; answer the offset past it.
 
@@ -860,7 +870,7 @@ class JobFeed:
             logger.exception("Feeding a job marker to its viewer failed.")
 
 
-def find_job(pymux, job: int | None, words: list[str], session: str | None) -> Job:
+def find_job(pymux: Pymux, job: int | None, words: list[str], session: str | None) -> Job:
     """
     The job an id or a set of tags names: the id as given, or what the
     tags resolve to.

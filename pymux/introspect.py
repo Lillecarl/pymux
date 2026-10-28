@@ -43,13 +43,16 @@ import traceback
 from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import anyio
 
 from .log import level, logfile, logger
 
 if TYPE_CHECKING:
+    import asyncio
+    from types import FrameType
+
     from pymux.main import Pymux
     from pymux.pipes.base import PipeConnection
 
@@ -180,12 +183,12 @@ def log_what_escapes() -> None:
             "Thread %s died.", name, exc_info=(info.exc_type, info.exc_value or info.exc_type(), info.exc_traceback)
         )
 
-    def unraisable(info) -> None:
+    def unraisable(info: sys.UnraisableHookArgs) -> None:
         logger.error(
             "Unraisable: %s %r",
             info.err_msg or "Exception ignored in",
             info.object,
-            exc_info=(info.exc_type, info.exc_value, info.exc_traceback),
+            exc_info=(info.exc_type, info.exc_value or info.exc_type(), info.exc_traceback),
         )
 
     threading.excepthook = thread_died
@@ -394,7 +397,7 @@ async def _stop_after(seconds: float, stop: Callable[[], None]) -> None:
     stop()
 
 
-def _over_window(counters: Counters, before, seconds: float) -> str:
+def _over_window(counters: Counters, before: tuple[int, int, Counter[str]], seconds: float) -> str:
     "What the server did while the profiler watched, and nothing before."
     frames, frame_bytes, invalidates = before
     moved = Counter(counters.invalidates)
@@ -584,7 +587,7 @@ def _tasks(pymux: Pymux) -> str:
     return "\n".join(lines)
 
 
-def _awaiting(coroutine, limit: int):
+def _awaiting(coroutine: object, limit: int) -> list[FrameType]:
     """
     The frames from a task's coroutine down to the await it sits in.
 
@@ -592,7 +595,7 @@ def _awaiting(coroutine, limit: int):
     runs every task in a wrapper of its own, so that frame is anyio's
     and never the one that names the hang.
     """
-    frames = []
+    frames: list[FrameType] = []
     while coroutine is not None and len(frames) < limit:
         frame = getattr(coroutine, "cr_frame", None) or getattr(coroutine, "gi_frame", None)
         if frame is None:
@@ -602,7 +605,7 @@ def _awaiting(coroutine, limit: int):
     return frames
 
 
-def _what_task_is_doing(task) -> str:
+def _what_task_is_doing(task: asyncio.Task[object]) -> str:
     if task.cancelled():
         return "cancelled"
     if task.done():
@@ -612,7 +615,7 @@ def _what_task_is_doing(task) -> str:
     return "pending in %s" % (own_coroutine(task),)
 
 
-def own_coroutine(task) -> str:
+def own_coroutine(task: asyncio.Task[object]) -> str:
     """
     The name of the coroutine a task runs, past anyio's wrapper.
 
@@ -621,7 +624,8 @@ def own_coroutine(task) -> str:
     step awaits nothing yet, so the wrapper hides what it runs; anyio
     names the task after that, so the name says it instead.
     """
-    coroutine = task.get_coro()
+    # Read through `getattr`: a wrapper's coroutine is whatever anyio made.
+    coroutine: Any = task.get_coro()
     while getattr(coroutine, "cr_frame", None) is not None:
         if not coroutine.cr_frame.f_globals.get("__name__", "").startswith("anyio."):
             return coroutine.__qualname__

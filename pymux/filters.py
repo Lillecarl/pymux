@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from prompt_toolkit.filters import Filter
+
+if TYPE_CHECKING:
+    from pymux.main import Pymux
 
 __all__ = [
     "HasPrefix",
@@ -18,7 +23,7 @@ class HasPrefix(Filter):
     When the prefix key (Usual C-b) has been pressed.
     """
 
-    def __init__(self, pymux):
+    def __init__(self, pymux: Pymux) -> None:
         self.pymux = pymux
         super().__init__()
 
@@ -38,7 +43,7 @@ class KeyTableIs(Filter):
     stack, and `root` otherwise. Lillecarl/pymux#394.
     """
 
-    def __init__(self, pymux, table: str):
+    def __init__(self, pymux: Pymux, table: str) -> None:
         self.pymux = pymux
         self.table = table
         super().__init__()
@@ -58,7 +63,7 @@ class ModeActive(Filter):
     the mode lasts. Lillecarl/pymux#394.
     """
 
-    def __init__(self, pymux):
+    def __init__(self, pymux: Pymux) -> None:
         self.pymux = pymux
         super().__init__()
 
@@ -76,7 +81,7 @@ class ModeTakesPrefix(Filter):
     Lillecarl/pymux#530.
     """
 
-    def __init__(self, pymux):
+    def __init__(self, pymux: Pymux) -> None:
         self.pymux = pymux
         super().__init__()
 
@@ -96,7 +101,7 @@ class WaitsForConfirmation(Filter):
     Waiting for a yes/no key press.
     """
 
-    def __init__(self, pymux):
+    def __init__(self, pymux: Pymux) -> None:
         self.pymux = pymux
         super().__init__()
 
@@ -112,7 +117,7 @@ class InCommandMode(Filter):
     When ':' has been pressed.'
     """
 
-    def __init__(self, pymux):
+    def __init__(self, pymux: Pymux) -> None:
         self.pymux = pymux
         super().__init__()
 
@@ -129,7 +134,7 @@ class WaitsForPrompt(Filter):
     Waiting for input for a "command-prompt" command.
     """
 
-    def __init__(self, pymux):
+    def __init__(self, pymux: Pymux) -> None:
         self.pymux = pymux
         super().__init__()
 
@@ -141,14 +146,13 @@ class WaitsForPrompt(Filter):
         return bool(client_state.prompt_command) and not client_state.confirm_command
 
 
-def _confirm_or_prompt_or_command(pymux):
+def _confirm_or_prompt_or_command(pymux: Pymux) -> bool:
     "True when we are waiting for a command, prompt or confirmation."
     try:
         client_state = pymux.get_client_state()
     except ValueError:
         return False
-    if client_state.confirm_text or client_state.prompt_command or client_state.command_mode:
-        return True
+    return bool(client_state.confirm_text or client_state.prompt_command or client_state.command_mode)
 
 
 # Three filters for copy mode stood here: `InScrollBuffer`,

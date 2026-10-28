@@ -128,7 +128,13 @@ class KeyTable:
     gets the prefix too. Lillecarl/pymux#530.
     """
 
-    def __init__(self, name: str, on_enter=None, on_leave=None, keeps_prefix: bool = True) -> None:
+    def __init__(
+        self,
+        name: str,
+        on_enter: Callable[[Pymux], None] | None = None,
+        on_leave: Callable[[Pymux], None] | None = None,
+        keeps_prefix: bool = True,
+    ) -> None:
         self.name = name
         #: The mode's own side effects. Each takes the pymux.
         self.on_enter = on_enter
@@ -662,7 +668,7 @@ class PymuxKeyBindings:
 
         return kb
 
-    def add_custom_binding(self, key_name: str, command: str, arguments: list, table: str = PREFIX_TABLE) -> None:
+    def add_custom_binding(self, key_name: str, command: str, arguments: list[str], table: str = PREFIX_TABLE) -> None:
         """
         Add custom binding (for the "bind-key" command.)
         Raises ValueError if the give `key_name` is an invalid name.
@@ -824,7 +830,7 @@ class CustomBinding:
         self,
         handler: Callable[[E], None],
         command: str,
-        arguments: list,
+        arguments: list[str],
         written: str,
     ) -> None:
         self.handler = handler

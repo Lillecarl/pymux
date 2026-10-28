@@ -41,7 +41,8 @@ from collections.abc import Iterable, Iterator, Sequence
 from enum import StrEnum
 from typing import override
 
-from prompt_toolkit.completion import Completer, Completion
+from prompt_toolkit.completion import CompleteEvent, Completer, Completion
+from prompt_toolkit.document import Document
 from prompt_toolkit.keys import Keys
 from pyte.keys import FIRST_FUNCTIONAL_KEY, KeyEvent, Modifier
 
@@ -341,7 +342,7 @@ def as_chord(name: str) -> str:
     "Super-a" is "super+a". A name with no modifier prefix on it is
     already a chord of one key.
     """
-    modifiers = []
+    modifiers: list[str] = []
     found = True
     while found:
         found = False
@@ -460,9 +461,9 @@ def why_pane_cannot_read(event: KeyEvent, lost: int, encoded: str) -> str:
     )
 
 
-def _other_names_of() -> dict[str, list]:
+def _other_names_of() -> dict[str, list[str]]:
     "Every tmux name of a base key, under the name the toolkit uses."
-    others: dict[str, list] = {}
+    others: dict[str, list[str]] = {}
     for alias, base in ALIASES.items():
         others.setdefault(base, []).append(alias)
     return others
@@ -476,10 +477,10 @@ _OTHER_NAMES_OF = _other_names_of()
 _NUMBER_AT_THE_END = re.compile(r"^(.*?)(\d*)$")
 
 
-def _in_reading_order(names) -> list:
+def _in_reading_order(names: Iterable[str]) -> list[str]:
     "The names sorted the way a person reads them."
 
-    def parts(name: str):
+    def parts(name: str) -> tuple[str, int]:
         found = _NUMBER_AT_THE_END.match(name)
         if found is None:
             return name, 0
@@ -489,7 +490,7 @@ def _in_reading_order(names) -> list:
     return sorted(names, key=parts)
 
 
-def _names_offered() -> list:
+def _names_offered() -> list[tuple[str, str]]:
     """
     Every name a completer offers, with what to say beside it, in the
     order they are offered.
@@ -587,5 +588,5 @@ class KeyCompleter(Completer):
         self.offer_prefix = offer_prefix
 
     @override
-    def get_completions(self, document, complete_event):
+    def get_completions(self, document: Document, complete_event: CompleteEvent) -> Iterator[Completion]:
         yield from key_completions(document.text_before_cursor, key_words(), self.offer_prefix)

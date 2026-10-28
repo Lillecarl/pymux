@@ -36,13 +36,17 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import cast, override
+from typing import TYPE_CHECKING, cast, override
 
 from prompt_toolkit.input.vt100_parser import Vt100Parser
 from prompt_toolkit.key_binding.key_processor import _Flush
 from prompt_toolkit.keys import KeyName, Keys
+
+if TYPE_CHECKING:
+    from prompt_toolkit.key_binding.key_processor import KeyPress
 from pyte.keys import (
     FIRST_FUNCTIONAL_KEY,
     EventType,
@@ -534,7 +538,7 @@ def _modified_form_of(key: Keys, ctrl: bool, shift: bool) -> Keys | None:
     return None
 
 
-def _code_and_final_of_name() -> dict:
+def _code_and_final_of_name() -> dict[str, tuple[int, str]]:
     """
     The number and form of every key that has a name: `_base_of` read
     the other way.
@@ -847,10 +851,10 @@ class KittyVt100Parser(Vt100Parser):
 
     def __init__(
         self,
-        feed_key_callback,
-        reply_callback=None,
-        speaks_protocol=None,
-        pixel_cell=None,
+        feed_key_callback: Callable[[KeyPress], None],
+        reply_callback: Callable[[str], None] | None = None,
+        speaks_protocol: Callable[[], bool | None] | None = None,
+        pixel_cell: Callable[[], tuple[int, int, int] | None] | None = None,
     ) -> None:
         self.reply_callback = reply_callback
         # The cell size of a terminal that reports the mouse in pixels
@@ -956,7 +960,7 @@ class KittyVt100Parser(Vt100Parser):
         return cast("Keys | tuple[Keys, ...] | None", parse_kitty_key(prefix))
 
     @override
-    def _call_handler(self, key: str | Keys | tuple, insert_text: str) -> None:
+    def _call_handler(self, key: str | Keys | tuple[Keys, ...], insert_text: str) -> None:
         if isinstance(key, tuple):
             # A key that arrives as several, such as alt and a letter.
             # The escape in one of those is not the Escape key, so it

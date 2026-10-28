@@ -20,7 +20,7 @@ import os
 import re
 import socket
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from enum import Enum
 from typing import TYPE_CHECKING, NamedTuple
 
@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from pymux.pipes.base import PipeConnection
     from pymux.rate import Rate
     from pymux.server import ServerConnection
-    from pymux.session import Session
+    from pymux.session import OwnOptions, Session
 
 __all__ = ["FormatContext", "Language", "format_pymux_string"]
 
@@ -344,7 +344,7 @@ def _symbol_window_name(context: FormatContext) -> str:
     return context.window.name or "(noname)"
 
 
-def marks_of(options, windows) -> str:
+def marks_of(options: OwnOptions, windows: Iterable[Window]) -> str:
     """
     The symbols of the marks any of `windows` carries, in tmux's order:
     activity, bell, silence, then pymux's notification.
@@ -362,7 +362,7 @@ def marks_of(options, windows) -> str:
     )
 
 
-def window_marks(options, window) -> str:
+def window_marks(options: OwnOptions, window: Window) -> str:
     "The symbols of one window's marks."
     # Every window of every status line asks, every frame, and almost
     # none carry a mark: the keystroke budget sees the generator.
