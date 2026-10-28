@@ -85,6 +85,9 @@ class FakeTerminals:
     def sync_color_bases(self):
         self.color_base_syncs += 1
 
+    def sync_cell_size(self):
+        pass
+
 
 class FakePymux:
     "What a `ServerConnection` asks its server for, and nothing else."

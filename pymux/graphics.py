@@ -607,8 +607,10 @@ class ClientGraphics:
         match = _CELL_SIZE_REPLY_RE.match(data)
         if match is None:
             return None
-        height = int(match.group(1))
-        width = int(match.group(2))
+        return self.set_cell_size(width=int(match.group(2)), height=int(match.group(1)))
+
+    def set_cell_size(self, width: int, height: int) -> bool:
+        "Take a cell size in pixels, and say whether it is new. A size out of range changes nothing."
         if not (0 < width <= MAX_CELL_SIZE and 0 < height <= MAX_CELL_SIZE):
             return False
         new = not self.cell_size_known or (width, height) != (self.cell_width, self.cell_height)

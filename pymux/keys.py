@@ -451,8 +451,10 @@ _FLAGS_REPLY_RE = re.compile(r"^\x1b\[\?(\d+)u$")
 _DA1_REPLY_RE = re.compile(r"^\x1b\[[?>][\d;]*c$")
 
 # Reply of the "CSI 16 t" cell size query, and of the "CSI 14 t" text
-# area and "CSI 14 ; 2 t" window size queries of the survey.
-_CELL_SIZE_REPLY_RE = re.compile(r"^\x1b\[[46];\d+;\d+t$")
+# area and "CSI 14 ; 2 t" window size queries of the survey. Or the
+# in-band size report of DEC 2048, "CSI 48 ; rows ; cols ; height ;
+# width t".
+_CELL_SIZE_REPLY_RE = re.compile(r"^\x1b\[(?:[46];\d+;\d+|48;\d+;\d+;\d+;\d+)t$")
 
 # Reply of a DECRQM request: "CSI ? <mode> ; <state> $ y".
 _MODE_REPLY_RE = re.compile(r"^\x1b\[\?\d+;\d+\$y$")

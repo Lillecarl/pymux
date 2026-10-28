@@ -91,6 +91,9 @@ FOCUS_REPORTS_OFF = "\x1b[?1004l"
 THEME_REPORTS_ON = "\x1b[?2031h"
 THEME_REPORTS_OFF = "\x1b[?2031l"
 _THEME_REPORT_RE = re.compile(r"^\x1b\[\?997;[12]n$")
+INBAND_RESIZE_ON = "\x1b[?2048h"
+INBAND_RESIZE_OFF = "\x1b[?2048l"
+_INBAND_RESIZE_RE = re.compile(r"^\x1b\[48;(\d+);(\d+);(\d+);(\d+)t$")
 _PIXEL_MOUSE_REPLY_RE = re.compile(r"^\x1b\[\?1016;(\d+)\$y$")
 
 #: A status report and its answer: 0 is ready, 3 a malfunction, and
@@ -228,6 +231,7 @@ class ServerConnection:
         "answers_reports": Keep.DROPPED,
         # The next server asks the terminal again.
         "pixel_mouse": Keep.DROPPED,
+        "sizes_in_band": Keep.DROPPED,  # the terminal reports again when the mode is set
         "widens_text_emoji": Keep.DROPPED,
         "_frames_shown": Keep.DROPPED,
         # A recording holds Python objects of this build, so it ends
@@ -263,6 +267,9 @@ class ServerConnection:
         #: Whether this client's terminal reports the mouse in pixels.
         #: Lillecarl/pymux#648.
         self.pixel_mouse = False
+        #: Whether this client's terminal reports its size in band, DEC
+        #: 2048, pixels and all. Lillecarl/pymux#797.
+        self.sizes_in_band = False
 
         #: Whether this client's terminal draws a text emoji with U+FE0F
         #: two columns wide, where a pane holds one. Lillecarl/pymux#539.
@@ -806,6 +813,19 @@ class ServerConnection:
                 self.pymux.terminals.sync_cell_size()
             return
 
+        # DEC 2048: the size and the pixels in one report, which the
+        # terminal sends when the mode is set and at each resize. From
+        # here on a resize needs no cell size query. Lillecarl/pymux#797.
+        resize = _INBAND_RESIZE_RE.match(data)
+        if resize is not None:
+            rows, columns, height, width = map(int, resize.groups())
+            self.sizes_in_band = True
+            if rows and columns:
+                self._resized(Size(rows=rows, columns=columns))
+                if self.graphics.set_cell_size(width=width // columns, height=height // rows):
+                    self.pymux.terminals.sync_cell_size()
+            return
+
         if not self._kitty_detection_pending:
             return
 
@@ -1018,15 +1038,19 @@ class ServerConnection:
     @_PACKETS.handles(Packet.SIZE)
     def _on_size(self, packet: Message) -> None:
         rows, columns = packet[Field.DATA]
-        if self.recording is not None and (rows, columns) != tuple(self.size):
-            self.recording.hear("size", "%dx%d" % (columns, rows))
-        self.size = Size(rows=rows, columns=columns)
-        self.pymux.invalidate(Woke.CLIENT_RESIZED)
+        self._resized(Size(rows=rows, columns=columns))
         # A SIGWINCH comes for pixels alone too: the terminal moved
-        # to a display of another density. Lillecarl/pymux#774.
-        if self.graphics.cell_size_known:
+        # to a display of another density. Lillecarl/pymux#774. A
+        # terminal that reports its size in band says the pixels too.
+        if self.graphics.cell_size_known and not self.sizes_in_band:
             self._write_output_raw(CELL_SIZE_QUERY)
             self._flush_output()
+
+    def _resized(self, size: Size) -> None:
+        if self.recording is not None and size != self.size:
+            self.recording.hear("size", "%dx%d" % (size.columns, size.rows))
+        self.size = size
+        self.pymux.invalidate(Woke.CLIENT_RESIZED)
 
     @_PACKETS.handles(Packet.START_GUI)
     def _on_start_gui(self, packet: Message) -> None:
@@ -1990,18 +2014,19 @@ class _FrameOutput(Vt100_Output):
         # pixels where it expects cells.
         self.write_raw(PIXEL_MOUSE_OFF)
 
-    # Focus and theme reports go with the alternate screen: on at the
-    # first frame and at a redraw, off at a detach. A window that gains
-    # the focus with a click iTerm2 keeps to itself is still a client in
-    # use. Lillecarl/pymux#794, Lillecarl/pymux#796.
+    # Focus, theme and size reports go with the alternate screen: on at
+    # the first frame and at a redraw, off at a detach. A window that
+    # gains the focus with a click iTerm2 keeps to itself is still a
+    # client in use. Lillecarl/pymux#794, Lillecarl/pymux#796,
+    # Lillecarl/pymux#797.
     @override
     def enter_alternate_screen(self) -> None:
         super().enter_alternate_screen()
-        self.write_raw(FOCUS_REPORTS_ON + THEME_REPORTS_ON)
+        self.write_raw(FOCUS_REPORTS_ON + THEME_REPORTS_ON + INBAND_RESIZE_ON)
 
     @override
     def quit_alternate_screen(self) -> None:
-        self.write_raw(FOCUS_REPORTS_OFF + THEME_REPORTS_OFF)
+        self.write_raw(FOCUS_REPORTS_OFF + THEME_REPORTS_OFF + INBAND_RESIZE_OFF)
         super().quit_alternate_screen()
 
     def write_after_frame(self, data: str) -> None:

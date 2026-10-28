@@ -12,6 +12,7 @@ from types import SimpleNamespace
 
 import anyio
 import pytest
+from libpymux.protocol import Field, Packet
 from prompt_toolkit.output import ColorDepth
 from pyte import escape
 from pyte.colors import DEFAULT_COLORS, PALETTE, Color
@@ -393,6 +394,40 @@ def test_theme_report_asks_for_colours_again(report):
         connection._handle_kitty_reply(report)
 
         assert output.written == [COLOR_QUERIES]
+        connection._close_connection()
+
+    anyio.run(check)
+
+
+def test_in_band_size_report_sets_size_and_cell():
+    """
+    DEC 2048 says the cells and the pixels in one report, so a resize
+    after it asks no cell size. Lillecarl/pymux#797.
+    """
+
+    class Output:
+        def __init__(self):
+            self.written = []
+
+        def write_raw(self, data):
+            self.written.append(data)
+
+        def flush(self):
+            pass
+
+    async def check():
+        pymux = FakePymux()
+        pymux.invalidate = lambda reason: None
+        connection = ServerConnection(pymux, FakePipe())
+        output = Output()
+        connection.client_state = SimpleNamespace(output=output)
+
+        connection._handle_kitty_reply("\x1b[48;30;100;600;800t")
+
+        assert (connection.size.rows, connection.size.columns) == (30, 100)
+        assert (connection.graphics.cell_width, connection.graphics.cell_height) == (8, 20)
+        connection._on_size({Field.CMD: Packet.SIZE, Field.DATA: [31, 100]})
+        assert output.written == []
         connection._close_connection()
 
     anyio.run(check)
