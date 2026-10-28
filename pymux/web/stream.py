@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import anyio
 from pyte.modes import PrivateMode
@@ -26,6 +26,13 @@ from pymux.commands import CommandException
 from pymux.commands.common import send_key
 from pymux.key_spelling import event_however_it_is_written
 from pymux.web.protocol import PaneView, Typed, encode_unsent, typed_of
+
+if TYPE_CHECKING:
+    from ptterm import Terminal
+    from pyte.screen import Screen
+
+    from pymux.arrangement import Pane
+    from pymux.main import Pymux
 
 __all__ = ["PaneStream"]
 
@@ -52,13 +59,17 @@ class PaneStream:
 
     def __init__(
         self,
-        pymux,
-        pane,
+        pymux: Pymux,
+        pane: Pane,
+        terminal: Terminal,
         send: Callable[[dict[str, Any]], Awaitable[None]],
         writable: bool = False,
     ) -> None:
         self.pymux = pymux
         self.pane = pane
+        #: The pane's terminal. A pane that shows a Wayland window has
+        #: none and is refused before a stream is made.
+        self.terminal = terminal
         self.writable = writable
         self._send = send
         self._view = PaneView()
@@ -75,10 +86,10 @@ class PaneStream:
         runs hooks nothing and a stream that ends unhooks itself whatever
         ended it.
         """
-        changed = self.pane.terminal.terminal_control.on_content_changed
+        changed = self.terminal.terminal_control.on_content_changed
         changed.add_handler(self._it_changed)
         try:
-            await self._send(self._view.welcome(self.pane.screen, self.pane.revision, self.writable))
+            await self._send(self._view.welcome(self.terminal.screen, self.pane.revision, self.writable))
             await self._push()
 
             while not self._closed:
@@ -100,12 +111,12 @@ class PaneStream:
 
     async def _push(self) -> None:
         "Send what this viewer has not seen, if anything."
-        await encode_unsent(self._view, self.pane.screen)
-        frame = self._view.frame(self.pane.screen, self.pane.revision)
+        await encode_unsent(self._view, self.terminal.screen)
+        frame = self._view.frame(self.terminal.screen, self.pane.revision)
         if frame is not None:
             await self._send(frame)
 
-    def _it_changed(self, _sender) -> None:
+    def _it_changed(self, _sender: object) -> None:
         self._changed.set()
 
     def close(self) -> None:
@@ -161,8 +172,8 @@ class PaneStream:
         if not typed.named:
             text = typed.text
             if typed.bracketed:
-                text = _a_paste(self.pane, text)
-            self.pane.process.write_input(text)
+                text = _a_paste(self.terminal.screen, text)
+            self.terminal.process.write_input(text)
             return
 
         for name in typed.text.split():
@@ -171,12 +182,12 @@ class PaneStream:
             except ValueError:
                 # Not a key anybody names. `send-keys` sends such a word
                 # as text, and so does this.
-                self.pane.process.write_input(name)
+                self.terminal.process.write_input(name)
                 continue
             send_key(self.pane, event, name)
 
 
-def _a_paste(pane, text: str) -> str:
+def _a_paste(screen: Screen, text: str) -> str:
     """
     A paste, marked as one when the program asked for that.
 
@@ -186,6 +197,6 @@ def _a_paste(pane, text: str) -> str:
     lines in it. A program that did not ask reads plain text, and
     wrapping it anyway would put the two markers on its screen.
     """
-    if PrivateMode.BRACKETED_PASTE.flag not in pane.screen.mode:
+    if PrivateMode.BRACKETED_PASTE.flag not in screen.mode:
         return text
     return "\x1b[200~%s\x1b[201~" % (text,)

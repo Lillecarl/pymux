@@ -166,6 +166,28 @@ async def test_a_pane_nobody_can_find_is_refused(pymux):
         pymux.stop()
 
 
+async def test_a_pane_that_shows_a_window_is_refused(pymux):
+    "A Wayland window has no rows to send. The stand-in is anything but a `Terminal`."
+    pane = the_pane(pymux)
+    terminal = pane.terminal
+    async with pymux.running():
+        pane.terminal = object()
+        try:
+            server_end, client_end = connect_in_memory()
+            ServerConnection(pymux, server_end)
+            ask(client_end, pane)
+
+            said = await frames_of(client_end, 2)
+        finally:
+            pane.terminal = terminal
+
+        assert said[0]["cmd"] == "err"
+        assert "shows a Wayland window" in said[0]["data"]
+        assert said[1] == {"cmd": "exit", "code": 1}
+
+        pymux.stop()
+
+
 # ----------------------------------------------------------------------
 # What arrives after.
 
@@ -211,7 +233,7 @@ async def test_a_stream_ends_when_the_pane_has_ended(pymux):
     async def send(frame):
         sent.append(frame)
 
-    stream = PaneStream(pymux, ended(pane), send)
+    stream = PaneStream(pymux, ended(pane), pane.terminal, send)
 
     with anyio.fail_after(LOOK_AGAIN + 2):
         await stream.run()
@@ -230,7 +252,7 @@ async def test_a_stream_that_ended_leaves_no_handler_behind(pymux):
     async def send(_frame):
         pass
 
-    stream = PaneStream(pymux, ended(pane), send)
+    stream = PaneStream(pymux, ended(pane), pane.terminal, send)
     with anyio.fail_after(LOOK_AGAIN + 2):
         await stream.run()
 

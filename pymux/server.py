@@ -31,7 +31,8 @@ from pyte.cells import VS16, without_widening_selectors
 from pyte.keep import Keep
 from pyte.placeholders import PLACEHOLDER, blanked
 
-from pymux.commands.common import find_pane
+from pymux.commands import CommandException
+from pymux.commands.common import find_pane, terminal_of
 
 from .actions import Origin, started_by
 from .answer import Answer
@@ -1291,8 +1292,12 @@ class ServerConnection:
 
         target = packet.get(Field.PANE)
         pane = find_pane(self.pymux, target) if target else None
-        if pane is None:
-            await self._write_packet({Field.CMD: Packet.ERR, Field.DATA: "can't find pane: %s\n" % (target,)})
+        try:
+            if pane is None:
+                raise CommandException("can't find pane: %s" % (target,))
+            terminal = terminal_of(pane)
+        except CommandException as refused:
+            await self._write_packet({Field.CMD: Packet.ERR, Field.DATA: "%s\n" % (refused.message,)})
             await self._write_packet({Field.CMD: Packet.EXIT, Field.CODE: 1})
             self._close_connection()
             return
@@ -1300,7 +1305,7 @@ class ServerConnection:
         async def send(frame: dict[str, Any]) -> None:
             await self._write_packet({Field.CMD: Packet.STREAM_OUT, Field.DATA: json.dumps(frame)})
 
-        self._stream = PaneStream(self.pymux, pane, send, writable=bool(packet.get(Field.WRITABLE)))
+        self._stream = PaneStream(self.pymux, pane, terminal, send, writable=bool(packet.get(Field.WRITABLE)))
         try:
             await self._stream.run()
         except BrokenPipeError:
