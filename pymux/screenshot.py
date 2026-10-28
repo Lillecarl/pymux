@@ -333,11 +333,51 @@ def client_grid_of(client_state: ClientState, colors: ColorOverrides, cell: tupl
     return Grid(rows, size.columns, paint.foreground, paint.background, cursor, images)
 
 
-def _mixed(color: str, toward: str) -> str:
-    "Halfway from one colour to the other: how a terminal draws dim."
+def _mixed(color: str, toward: str, quarters: int = 2) -> str:
+    "`quarters` parts in four of `color`, the rest `toward`. Two is how a terminal draws dim."
     ours = [int(color[index : index + 2], 16) for index in (1, 3, 5)]
     theirs = [int(toward[index : index + 2], 16) for index in (1, 3, 5)]
-    return "#%02x%02x%02x" % tuple((a + b) // 2 for a, b in zip(ours, theirs, strict=True))
+    return "#%02x%02x%02x" % tuple((a * quarters + b * (4 - quarters)) // 4 for a, b in zip(ours, theirs, strict=True))
+
+
+# U+2596 to U+259F in order, as the quarters each fills: 1 upper left,
+# 2 upper right, 3 lower left, 4 lower right.
+_QUADRANTS = ("3", "4", "1", "134", "14", "123", "124", "2", "23", "234")
+
+
+def _half_up(value: float) -> int:
+    "C's round, as foot rounds a block's edge. Python's round goes to even."
+    return int(value + 0.5)
+
+
+def _block(code: int, width: int, height: int) -> tuple[list[tuple[int, int, int, int]], int] | None:
+    """
+    How foot draws a block element, U+2580 to U+259F: the rectangles it
+    fills, each end exclusive, and the quarters of foreground it mixes
+    in. None for any other character. A font's glyph need not reach the
+    cell's edge, so block art drawn from one shows a gap between cells.
+    """
+    w, h = width, height
+    if code == 0x2580:
+        return [(0, 0, w, _half_up(h / 2))], 4
+    if 0x2581 <= code <= 0x2588:
+        return [(0, h - _half_up((code - 0x2580) * h / 8), w, h)], 4
+    if 0x2589 <= code <= 0x258F:
+        return [(0, 0, _half_up((0x2590 - code) * w / 8), h)], 4
+    if code == 0x2590:
+        return [(_half_up(w / 2), 0, w, h)], 4
+    if 0x2591 <= code <= 0x2593:
+        return [(0, 0, w, h)], code - 0x2590
+    if code == 0x2594:
+        return [(0, 0, w, _half_up(h / 8))], 4
+    if code == 0x2595:
+        return [(w - _half_up(w / 8), 0, w, h)], 4
+    if 0x2596 <= code <= 0x259F:
+        # foot rounds a quarter out, so two quarters overlap and never part.
+        left, right, upper, lower = (0, (w + 1) // 2), (w // 2, w), (0, (h + 1) // 2), (h // 2, h)
+        quarters = {"1": (left, upper), "2": (right, upper), "3": (left, lower), "4": (right, lower)}
+        return [(x1, y1, x2, y2) for (x1, x2), (y1, y2) in (quarters[q] for q in _QUADRANTS[code - 0x2596])], 4
+    return None
 
 
 def _size_of(path: str, width: int, height: int) -> int:
@@ -415,7 +455,14 @@ def draw(grid: Grid, faces: Faces, width: int, height: int) -> bytes:
             right, lower = left + span * width - 1, upper + height - 1
             foreground = _mixed(look.foreground, look.background) if look.dim else look.foreground
             glyph = visible_char(char)
-            if glyph.strip() and not look.hidden:
+            block = _block(ord(glyph), span * width, height) if len(glyph) == 1 else None
+            if block is not None and not look.hidden:
+                rectangles, quarters = block
+                fill = _mixed(foreground, look.background, quarters)
+                for x1, y1, x2, y2 in rectangles:
+                    if x2 > x1 and y2 > y1:
+                        pen.rectangle((left + x1, upper + y1, left + x2 - 1, upper + y2 - 1), fill=fill)
+            elif glyph.strip() and not look.hidden:
                 face = ("bold" if look.bold else "") + ("italic" if look.italic else "")
                 font, top = pens.font_for(glyph, face or "regular")
                 pen.text((left, upper + top), glyph, font=font, fill=foreground)

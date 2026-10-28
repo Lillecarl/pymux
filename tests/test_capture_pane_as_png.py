@@ -115,6 +115,28 @@ async def test_a_glyph_leaves_ink_and_a_blank_does_not(pymux):
     assert _cell(image, 1, 0, 9, 18) == {_rgb(paint.background)}
 
 
+def _colors(image: Image.Image, box: tuple[int, int, int, int]) -> set[tuple[int, int, int]]:
+    found = image.crop(box)
+    return {color for _count, color in found.getcolors(found.width * found.height)}
+
+
+async def test_a_block_element_fills_its_cell_to_the_edge(pymux):
+    "Drawn as foot draws it, so block art shows no gap between cells. Lillecarl/pymux#777."
+    pane = create_pane(pymux, "\x1b[?25l██▀▐▛▒")
+    paint = Paint.of(pane.screen.colors)
+    image = await picture(pymux, "--cell", "9x18")
+    ink, paper = _rgb(paint.foreground), _rgb(paint.background)
+    assert _colors(image, (0, 0, 18, 18)) == {ink}
+    assert (_colors(image, (18, 0, 27, 9)), _colors(image, (18, 9, 27, 18))) == ({ink}, {paper})
+    # foot rounds half a cell of nine up, to five.
+    assert (_colors(image, (27, 0, 32, 18)), _colors(image, (32, 0, 36, 18))) == ({paper}, {ink})
+    # Three quarters, each rounded out: the lower left reaches column five.
+    assert (_colors(image, (36, 0, 45, 9)), _colors(image, (36, 9, 41, 18))) == ({ink}, {ink})
+    assert _colors(image, (41, 9, 45, 18)) == {paper}
+    halfway = tuple((a + b) // 2 for a, b in zip(ink, paper, strict=True))
+    assert _colors(image, (45, 0, 54, 18)) == {halfway}
+
+
 async def test_a_nerd_font_icon_is_drawn_and_not_the_missing_glyph(pymux):
     """
     U+F07B, the folder a file manager draws: a Nerd Font has it, and
