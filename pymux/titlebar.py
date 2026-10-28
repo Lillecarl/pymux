@@ -41,7 +41,7 @@ The order the parts give way in is the order they matter:
 
 from __future__ import annotations
 
-from collections.abc import Hashable
+from collections.abc import Callable, Hashable
 from typing import override
 
 from prompt_toolkit.formatted_text import StyleAndTextTuples
@@ -79,7 +79,13 @@ class PaneTitleBar(UIControl):
     :param get_right: Fragments for the right edge, cut the same way.
     """
 
-    def __init__(self, get_number, get_left, get_middle, get_right) -> None:
+    def __init__(
+        self,
+        get_number: Callable[[], StyleAndTextTuples],
+        get_left: Callable[[], StyleAndTextTuples],
+        get_middle: Callable[[], StyleAndTextTuples],
+        get_right: Callable[[], StyleAndTextTuples],
+    ) -> None:
         self.get_number = get_number
         self.get_left = get_left
         self.get_middle = get_middle
@@ -136,7 +142,8 @@ def lay_out_bar(
 
     budget = (width - fragment_list_width(number)) // EDGE_SHARE
     if budget < NARROWEST_EDGE:
-        left = right = []
+        left = []
+        right = []
         budget = 0
 
     left = number + _cut_to(left, budget)

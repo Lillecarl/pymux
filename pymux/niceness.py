@@ -27,7 +27,12 @@ import os
 import subprocess
 import sys
 from collections.abc import Iterable, Sequence
-from typing import NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
+
+if TYPE_CHECKING:
+    from types import ModuleType
+
+    import psutil
 
 __all__ = ["DEFAULT_NICENESS", "as_a_person_runs", "renice"]
 
@@ -127,7 +132,7 @@ def renice(socket_names: Sequence[str], niceness: int) -> int:
     return 0
 
 
-def _with_children(targets: list[Target], psutil) -> list[Target]:
+def _with_children(targets: list[Target], psutil: ModuleType) -> list[Target]:
     """
     Each target, and every process under a client. Never under a
     server: what it starts is mostly a person's. An integrated server is
@@ -143,7 +148,7 @@ def _with_children(targets: list[Target], psutil) -> list[Target]:
     return found
 
 
-def _threads_of(process) -> list[int]:
+def _threads_of(process: psutil.Process) -> list[int]:
     """
     What `setpriority` takes to reach all of a process. On Linux a
     niceness is a thread's, and a thread that is already running keeps

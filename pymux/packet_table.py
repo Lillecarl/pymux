@@ -12,7 +12,7 @@ from libpymux.protocol import Field, Message
 
 __all__ = ["PacketTable"]
 
-type Handler[T] = Callable[[T, dict], None]
+type Handler[T] = Callable[[T, Message], None]
 
 
 class PacketTable[T]:

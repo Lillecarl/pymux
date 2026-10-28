@@ -19,10 +19,14 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from pymux import __version__
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from pymux.main import ClientState
 
 __all__ = ["LIES", "PYMUX_VERSION", "Lie", "outer_term", "version"]
 
@@ -70,7 +74,7 @@ def version(program: str | None, outer_term: str | None) -> str:
     return PYMUX_VERSION
 
 
-def outer_term(client) -> str:
+def outer_term(client: ClientState | None) -> str:
     """
     The TERM of the terminal `client` sits at. A client that came over a
     socket reported it; an integrated server is its own client, so its

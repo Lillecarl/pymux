@@ -678,7 +678,7 @@ def insert(db: apsw.Connection, rows: Iterable[Row], replace: bool = False) -> N
 
 
 #: Each table's rows by key, as a `ChangedRows` last wrote them.
-Written = dict[type[Row], dict[tuple, Row]]
+type Written = dict[type[Row], dict[tuple[apsw.SQLiteValue, ...], Row]]
 
 
 @functools.cache
@@ -686,7 +686,7 @@ def _delete_of(kind: type[Row]) -> str:
     return "DELETE FROM %s WHERE %s" % (kind.TABLE, " AND ".join("%s = ?" % name for name in kind.KEY))
 
 
-def key_of(row: Row) -> tuple:
+def key_of(row: Row) -> tuple[apsw.SQLiteValue, ...]:
     return tuple(getattr(row, name) for name in row.KEY)
 
 
@@ -749,7 +749,7 @@ def missing_from(db: apsw.Connection) -> str:
     return "".join(statements)
 
 
-def select[R: Row](db: apsw.Connection, kind: type[R], where: str = "", *params) -> list[R]:
+def select[R: Row](db: apsw.Connection, kind: type[R], where: str = "", *params: apsw.SQLiteValue) -> list[R]:
     """
     `kind` for each row of its table that `where` picks.
 

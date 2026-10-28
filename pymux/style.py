@@ -46,7 +46,7 @@ def _to_rgb(a: str) -> tuple[int, int, int]:
     return (int(a[1:3], 16), int(a[3:5], 16), int(a[5:7], 16))
 
 
-def _from_rgb(rgb) -> str:
+def _from_rgb(rgb: tuple[int, ...]) -> str:
     return "#%02x%02x%02x" % rgb
 
 
@@ -64,7 +64,7 @@ def _readable(a: str) -> str:
     nearly four times closer to black than to white.
     """
 
-    def contrast(other):
+    def contrast(other: str) -> float:
         base = _lightness(other) / 255.0
         base = base / 12.92 if base <= 0.04045 else ((base + 0.055) / 1.055) ** 2.4
         over = _lightness(a) / 255.0

@@ -16,8 +16,12 @@ pymux. Lillecarl/pymux#574.
 from __future__ import annotations
 
 import os
+from typing import TYPE_CHECKING
 
 from pyte.images import PixelFormat
+
+if TYPE_CHECKING:
+    from types import ModuleType
 
 __all__ = ["install"]
 
@@ -52,7 +56,7 @@ def install() -> None:
             _install_images(pymux_rs)
 
 
-def _install_images(native) -> None:
+def _install_images(native: ModuleType) -> None:
     """
     `pymux.sixel`'s loops in Rust. The kernels answer the cases a frame
     meets, and every edge -- a size out of bounds, data cut short, a size

@@ -50,7 +50,13 @@ class Gaps(NamedTuple):
     between_panes: int = 1
 
 
-def lay_out(item, rect: Rect, gaps: Gaps, into: list, lines: list | None = None) -> Rect:
+def lay_out(
+    item: arrangement.Pane | arrangement.HSplit | arrangement.VSplit,
+    rect: Rect,
+    gaps: Gaps,
+    into: list[tuple[Slot, Rect]],
+    lines: list[Line] | None = None,
+) -> Rect:
     """
     Put every pane of this item on the plane, inside that rectangle.
 

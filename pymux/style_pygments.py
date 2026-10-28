@@ -30,7 +30,7 @@ So the rest is derived, by three rules:
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import overload
+from typing import TYPE_CHECKING, overload
 
 from prompt_toolkit.styles import BaseStyle
 from prompt_toolkit.styles.named_colors import NAMED_COLORS
@@ -43,6 +43,10 @@ from pymux.style import (
     create_theme,
     derive,
 )
+
+if TYPE_CHECKING:
+    from pygments.style import Style
+    from pygments.token import _TokenType
 
 __all__ = ["names", "pygments_roles", "pygments_theme"]
 
@@ -102,7 +106,7 @@ def pygments_roles(name: str) -> dict[str, str]:
 pygments_roles = lru_cache(maxsize=None)(pygments_roles)
 
 
-def _roles(style_cls) -> dict[str, str]:
+def _roles(style_cls: type[Style]) -> dict[str, str]:
     """
     The roles of pymux, from the colours of one pygments style.
 
@@ -111,11 +115,11 @@ def _roles(style_cls) -> dict[str, str]:
     from pygments.token import Token
 
     @overload
-    def color(token, fallback: None = None, accept_bg: bool = False) -> str | None: ...
+    def color(token: _TokenType, fallback: None = None, accept_bg: bool = False) -> str | None: ...
     @overload
-    def color(token, fallback: str, accept_bg: bool = False) -> str: ...
+    def color(token: _TokenType, fallback: str, accept_bg: bool = False) -> str: ...
 
-    def color(token, fallback=None, accept_bg=False):
+    def color(token: _TokenType, fallback: str | None = None, accept_bg: bool = False) -> str | None:
         """
         The colour in the fragment of one token, ignoring its weight.
 
@@ -154,10 +158,10 @@ def _roles(style_cls) -> dict[str, str]:
         )
     highlight = _hex(style_cls.highlight_color) if style_cls.highlight_color else _blend(surface, text, 0.1)
 
-    def on(a):
+    def on(a: str) -> str:
         return _readable(a)
 
-    def base(*tokens, conventional_key):
+    def base(*tokens: _TokenType, conventional_key: str) -> str:
         """
         One colour of the pane's palette, from the first token that
         says one.

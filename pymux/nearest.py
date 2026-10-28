@@ -29,8 +29,12 @@ here so that a picture that looks wrong has somewhere to be answered.
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
+from typing import TYPE_CHECKING
 
 from pyte.colors import Color, parse_color
+
+if TYPE_CHECKING:
+    from pymux.colors import DefaultColors
 
 __all__ = [
     "NEAREST",
@@ -109,7 +113,7 @@ def _apart(one: Lab, other: Lab) -> float:
     return sum((a - b) ** 2 for a, b in zip(one, other))
 
 
-def wanted_from(colors) -> list[Lab | None]:
+def wanted_from(colors: DefaultColors) -> list[Lab | None]:
     """
     What one terminal said about itself, in this module's order.
 

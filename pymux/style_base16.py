@@ -47,7 +47,7 @@ def _schemes_path() -> Path | None:
 
 
 @cache
-def _schemes() -> dict:
+def _schemes() -> dict[str, dict[str, str]]:
     """
     Every scheme the collection holds, by its name.
 
@@ -90,7 +90,7 @@ def base16_roles(name: str) -> dict[str, str]:
     """
     p = _schemes()[name]
 
-    def blend(a, b, towards_b):
+    def blend(a: str, b: str, towards_b: float) -> str:
         # A letter finds its colour here; a literal hex is itself.
         return _blend(p.get(a, a), p.get(b, b), towards_b)
 

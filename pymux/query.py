@@ -430,7 +430,7 @@ class _Cursor:
         self._rows: list[Any] = []
         self._at = 0
 
-    def Filter(self, indexnum: int, indexname: str | None, constraintargs: tuple | None) -> None:
+    def Filter(self, indexnum: int, indexname: str | None, constraintargs: tuple[apsw.SQLiteValue, ...] | None) -> None:
         narrowed = dict(zip(indexname.split(","), constraintargs or (), strict=True)) if indexname else {}
         self._rows = self._table.build(**narrowed)
         self._at = 0
@@ -537,7 +537,7 @@ def _without_comments(sql: str) -> str:
     value, and stripping it would both corrupt the query and teach
     the gate to misread what follows it.
     """
-    out = []
+    out: list[str] = []
     i, n = 0, len(sql)
     while i < n:
         char = sql[i]

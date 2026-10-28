@@ -77,7 +77,7 @@ def _built_name(key: str) -> KeyName | None:
     return name_of(rest, mods)
 
 
-def pymux_key_to_prompt_toolkit_key_sequence(key):
+def pymux_key_to_prompt_toolkit_key_sequence(key: str) -> tuple[Keys | str, ...]:
     """
     Turn a pymux description of a key. E.g.  "C-a" or "M-x" into a
     prompt-toolkit key sequence.
