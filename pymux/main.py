@@ -2562,6 +2562,7 @@ class Pymux:
             unreadable_key_func=_say_key_did_not_fit(),
             key_profile_func=lambda: self.key_profile_of(self.client_of(get_app())),
             helix_keys=lambda: self.options_of_pane(pane).mode_keys is EditingKeys.HELIX,
+            wheel_lines=lambda: self.options_of_pane(pane).copy_mode_wheel_lines,
         )
         terminal.on_copy_command = lambda keys: note_keys(self, "copy-mode", keys)
         pane = Pane(terminal)

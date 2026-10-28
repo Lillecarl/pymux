@@ -166,6 +166,11 @@ class SessionOptions(Options):
         factory=editor_keys,
         doc="Which keys copy mode takes, from $EDITOR like `status-keys`. Lillecarl/pymux#375.",
     )
+    copy_mode_wheel_lines: int = option(
+        1,
+        doc="How many lines one notch of the wheel scrolls copy mode. tmux binds five.",
+        choices=[1, 3, 5],
+    )
     lock_command: str = option(
         "vlock", doc="What lock-server, lock-session and lock-client run to hold the keyboard.", choices=["vlock"]
     )
