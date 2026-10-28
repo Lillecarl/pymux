@@ -21,7 +21,7 @@ from libpymux.protocol import Field, Message, Mode, Packet
 from libpymux.wire import MSGPACK_ZSTD, choose, encode_json, encode_msgpack
 from prompt_toolkit.application.current import create_app_session, set_app
 from prompt_toolkit.data_structures import Size
-from prompt_toolkit.input import PipeInput
+from prompt_toolkit.input import Input, PipeInput
 from prompt_toolkit.input.defaults import create_pipe_input
 from prompt_toolkit.input.vt100 import Vt100Input
 from prompt_toolkit.output import ColorDepth
@@ -1625,7 +1625,8 @@ class ServerConnection:
         output.narrows_text_emoji = lambda: self.widens_text_emoji
 
         client_state = self.pymux.add_client(
-            input=self._pipeinput,
+            # A proxy: what it lacks of an `Input` it forwards to its pipe.
+            input=cast("Input", self._pipeinput),
             output=output,
             connection=self,
             color_depth=color_depth,
@@ -1636,8 +1637,15 @@ class ServerConnection:
             session=session,
         )
         self.client_state = client_state
-        client_state.app.before_render += lambda _app: output.frame_begins()
-        client_state.app.after_render += lambda _app: output.frame_ends()
+
+        def frame_begins(_app: object) -> None:
+            output.frame_begins()
+
+        def frame_ends(_app: object) -> None:
+            output.frame_ends()
+
+        client_state.app.before_render += frame_begins
+        client_state.app.after_render += frame_ends
 
         if start:
 

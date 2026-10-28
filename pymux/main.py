@@ -13,7 +13,7 @@ import socket
 import time
 import weakref
 from collections import deque
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Awaitable, Callable, Coroutine, Iterable
 from contextlib import asynccontextmanager, suppress
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, override
 
@@ -127,10 +127,18 @@ from .shims import Shims
 from .style import DEFAULT_THEME, theme
 from .terminals import Terminals
 from .wayland import WaylandServer
-from .window_pane import WindowWidget, is_window_pane
+from .window_pane import WindowScreen, WindowWidget, is_window_pane
 
 if TYPE_CHECKING:
+    from prompt_toolkit.input import Input
+    from prompt_toolkit.output import ColorDepth, Output
+    from pyte.keys import KeyEvent
+
     from .border_drag import BorderDrag
+    from .client.memory import MemoryClient
+    from .commands.wait_for import WaitChannel
+    from .forwarding import Forward
+    from .graphics import WindowView
     from .pipes import PipeConnection
     from .pipes.posix import PosixSocketListener
     from .url_mode import UrlMode
@@ -173,7 +181,7 @@ class PaneCursor(CursorShapeConfig):
         self.pymux = pymux
 
     @override
-    def get_cursor_shape(self, application) -> CursorShape:
+    def get_cursor_shape(self, application: Application[Any]) -> CursorShape:
         session = self.pymux.session_of(application)
         pane = session.overlay_pane
         if pane is None:
@@ -244,9 +252,9 @@ def _say_key_did_not_fit():
     `KittyVt100Parser._say_it_has_no_name` uses for a key pymux itself
     cannot name, so the two failures read alike. Lillecarl/pymux#238.
     """
-    already_said: set = set()
+    already_said: set[KeyEvent] = set()
 
-    def say(event, lost: int, encoded: str) -> None:
+    def say(event: KeyEvent, lost: int, encoded: str) -> None:
         if event in already_said:
             return
         if len(already_said) < MAX_KEYS_TO_REMEMBER:
@@ -256,7 +264,7 @@ def _say_key_did_not_fit():
     return say
 
 
-def _any_of_them_wants_chrome(watchers) -> bool:
+def _any_of_them_wants_chrome(watchers: Iterable[ClientState]) -> bool:
     """
     Whether any of those clients is not in full screen.
 
@@ -369,7 +377,13 @@ class ClientState:
     }
 
     def __init__(
-        self, pymux: Pymux, input, output, color_depth, connection: ServerConnection, session: Session
+        self,
+        pymux: Pymux,
+        input: Input,
+        output: Output,
+        color_depth: ColorDepth,
+        connection: ServerConnection,
+        session: Session,
     ) -> None:
         self.pymux = pymux
         self.input = input
@@ -699,7 +713,7 @@ class ClientState:
             return DefaultColors()
         return self.connection.default_colors
 
-    def graphics_views(self):
+    def graphics_views(self) -> list[PaneView]:
         """
         One `PaneView` per pane whose images the outer terminal should
         show.
@@ -734,7 +748,7 @@ class ClientState:
             )
         return result
 
-    def refresh_window_pane(self, pane) -> None:
+    def refresh_window_pane(self, pane: Pane) -> None:
         """
         Send this client the new frame of a window pane it shows, and
         draw nothing else: the window drew, and the cells around it did
@@ -746,7 +760,7 @@ class ClientState:
             self._windows_after_drain()
             return
         write_position = self.layout_manager.pane_write_positions.get(pane)
-        if write_position is None:
+        if write_position is None or not isinstance(pane.terminal, WindowWidget):
             return
         drained = self.connection.frame_drained
         self.connection.graphics.refresh_window(
@@ -773,7 +787,7 @@ class ClientState:
 
         connection._spawn(wait())
 
-    def _window_views(self):
+    def _window_views(self) -> list[WindowView]:
         "One `WindowView` per window pane this client can see. A popup covers them all."
         if self.display_popup or self.connection is None:
             return []
@@ -813,7 +827,7 @@ class ClientState:
         "Drop every question, answered by nobody."
         self.confirmations.clear()
 
-    def _handle_command(self, buffer) -> bool:
+    def _handle_command(self, buffer: Buffer) -> bool:
         "When text is accepted in the command line."
         text = buffer.text
 
@@ -825,7 +839,7 @@ class ClientState:
             self.pymux.handle_command(text)
         return False
 
-    def _handle_prompt_command(self, buffer) -> bool:
+    def _handle_prompt_command(self, buffer: Buffer) -> bool:
         "When a command-prompt command is accepted."
         text = buffer.text
         prompt_command = self.prompt_command
@@ -838,7 +852,7 @@ class ClientState:
             self.pymux.handle_command(prompt_command.replace("%%", text))
         return False
 
-    def _accept_chooser(self, buffer) -> bool:
+    def _accept_chooser(self, buffer: Buffer) -> bool:
         "When the search of a chooser is accepted: it takes the row."
         self.layout_manager.chooser.choose_pointed()
         return False
@@ -960,7 +974,7 @@ class ClientState:
         with set_app(self.app):
             self._sync_focus()
 
-    def modes(self) -> dict:
+    def modes(self) -> dict[str, Any]:
         """
         What this client is in the middle of, as plain values: what a
         snapshot holds and `take_modes` opens again.
@@ -994,7 +1008,7 @@ class ClientState:
             "copying": self._copy_modes(),
         }
 
-    def _copy_modes(self) -> list[list]:
+    def _copy_modes(self) -> list[list[Any]]:
         """
         Each pane this client reads the history of: the pane, the caret,
         and where the selection starts and what it selects.
@@ -1019,7 +1033,7 @@ class ClientState:
             )
         return copying
 
-    def take_modes(self, modes: dict) -> None:
+    def take_modes(self, modes: dict[str, Any]) -> None:
         """
         Open again what `modes` says this client was in the middle of,
         through the same calls a key opens each with, so each takes the
@@ -1144,7 +1158,7 @@ class ClientState:
         self.app.layout.focus(pane.terminal)
 
 
-def _open_question(url: str, forward: dict | None) -> str:
+def _open_question(url: str, forward: dict[str, Any] | None) -> str:
     """
     What a person is asked before a URL opens on their machine.
 
@@ -1256,8 +1270,8 @@ class Pymux:
 
     def __init__(
         self,
-        source_file=None,
-        startup_command=None,
+        source_file: str | None = None,
+        startup_command: str | None = None,
         session_name: str | None = None,
         size_with_no_client: Size | None = None,
     ):
@@ -1361,7 +1375,7 @@ class Pymux:
         #: as long as it remembers something: a signal nobody took, a
         #: lock somebody holds, or somebody waiting.
         #: Lillecarl/pymux#302.
-        self.wait_channels: dict = {}
+        self.wait_channels: dict[str, WaitChannel] = {}
 
         #: The jobs of `run`, by id. A job is a command with pipes
         #: instead of a terminal, owned by the server rather than by
@@ -1529,7 +1543,7 @@ class Pymux:
         if session in self.sessions:
             self.remove_session(session)
 
-    def take_environment_from(self, client_state) -> None:
+    def take_environment_from(self, client_state: ClientState) -> None:
         """
         Refresh the named variables of a session from the client that
         just attached to it. ("update-environment".)
@@ -1565,7 +1579,7 @@ class Pymux:
             if not found:
                 environment.pop(pattern, None)
 
-    def welcome_back(self, client_state, client_id: str) -> None:
+    def welcome_back(self, client_state: ClientState, client_id: str) -> None:
         """
         Give a client that attaches again after `upgrade-server` the
         view and the settings it left with. A record names ids, and one
@@ -1611,7 +1625,7 @@ class Pymux:
                 logger.exception("Could not open again what a returning client was in the middle of.")
         self.invalidate(Woke.SESSION_CHANGED)
 
-    def attach_client_to(self, client_state, session: Session) -> None:
+    def attach_client_to(self, client_state: ClientState, session: Session) -> None:
         "Put one client on a session, and draw what it shows."
         if client_state.session is session:
             return
@@ -1665,14 +1679,14 @@ class Pymux:
         holding = [one for one in self.sessions if one.arrangement.windows]
         return max(holding or self.sessions, key=lambda session: session.last_used)
 
-    def client_of(self, app) -> ClientState | None:
+    def client_of(self, app: Application[Any]) -> ClientState | None:
         "The client that this application draws for."
         for client_state in self._client_states.values():
             if client_state.app is app:
                 return client_state
         return None
 
-    def session_of(self, app) -> Session:
+    def session_of(self, app: Application[Any]) -> Session:
         "The session of the client that this application draws for."
         client_state = self.client_of(app)
         return self.last_used_session if client_state is None else client_state.session
@@ -1781,7 +1795,7 @@ class Pymux:
         """
         return any(one.options.full_screen for one in self._client_states.values())
 
-    def any_watcher_shows_pane_status(self, window=None) -> bool:
+    def any_watcher_shows_pane_status(self, window: Window | None = None) -> bool:
         """
         Whether any client watching that window draws the titlebar of a
         pane.
@@ -1806,7 +1820,7 @@ class Pymux:
             return wanted
         return wanted and _any_of_them_wants_chrome(self.clients_watching(window))
 
-    def refresh_what_time_moves(self, but_not=None) -> None:
+    def refresh_what_time_moves(self, but_not: Application[Any] | None = None) -> None:
         """
         Ask for a frame from each client whose screen moved by itself.
 
@@ -1854,7 +1868,7 @@ class Pymux:
                 )
                 client_state.app.invalidate()
 
-    def client_asked_for_frame(self, app) -> None:
+    def client_asked_for_frame(self, app: Application[Any]) -> None:
         """
         What one client's own invalidate means for the other clients.
 
@@ -1946,7 +1960,7 @@ class Pymux:
             raise RuntimeError("A listener is served inside `Pymux.running`, once there is one.")
         self.tasks.start_soon(self.listener.serve)
 
-    def serve_connection(self, connection) -> None:
+    def serve_connection(self, connection: ServerConnection) -> None:
         """
         Put a connection's own read loop in the server's task group.
 
@@ -2080,7 +2094,7 @@ class Pymux:
         """
         return [client for client in self._client_states.values() if not client.temporary]
 
-    def clients_on(self, session, except_for=None) -> list[ClientState]:
+    def clients_on(self, session: Session, except_for: ClientState | None = None) -> list[ClientState]:
         """
         Every client that holds this session, other than one.
 
@@ -2228,14 +2242,14 @@ class Pymux:
         """
         return DEFAULT_SIZE if session is None else session.default_size
 
-    def session_showing(self, window) -> Session | None:
+    def session_showing(self, window: Window) -> Session | None:
         "The session whose windows hold this one, or None when it is gone."
         for session in self.sessions:
             if window in session.arrangement.windows:
                 return session
         return None
 
-    def client_was_used(self, client_state) -> None:
+    def client_was_used(self, client_state: ClientState) -> None:
         """
         Note that a person just used this client.
 
@@ -2248,7 +2262,7 @@ class Pymux:
         client_state.last_used = self._uses
         client_state.session.last_used = self._uses
 
-    def clients_watching(self, window=None) -> list[ClientState]:
+    def clients_watching(self, window: Window | None = None) -> list[ClientState]:
         """
         Every client that is looking at that window.
 
@@ -2257,7 +2271,7 @@ class Pymux:
         about how big this one should be.
         """
 
-        def active_window_for_app(app):
+        def active_window_for_app(app: Application[Any]) -> Window | None:
             with set_app(app):
                 return self.arrangement.get_active_window()
 
@@ -2566,7 +2580,10 @@ class Pymux:
         # that has no terminal control at all. `ptyhost` fires this after
         # every read from the program, whatever the bytes were.
         # Lillecarl/pymux#387.
-        terminal_control.on_content_changed += lambda _sender: pane.content_changed()
+        def changed(_sender: object) -> None:
+            pane.content_changed()
+
+        terminal_control.on_content_changed += changed
 
         def focus_pane_on_click() -> None:
             """
@@ -2978,7 +2995,7 @@ class Pymux:
             return 0
         return pane.screen.kitty_keyboard_flags
 
-    def resize_pane_for_program(self, pane, lines: int | None, columns: int | None) -> None:
+    def resize_pane_for_program(self, pane: Pane, lines: int | None, columns: int | None) -> None:
         """
         Give a pane the size that the program inside it asks for.
 
@@ -3014,7 +3031,7 @@ class Pymux:
         except Exception:
             logger.exception("Failed to resize a pane for the program in it.")
 
-    def _place_of(self, pane) -> tuple[Session, Window] | None:
+    def _place_of(self, pane: Pane) -> tuple[Session, Window] | None:
         "The session and window that hold this pane, or None when it is gone."
         for session in self.sessions:
             for window in session.arrangement.windows:
@@ -3022,7 +3039,7 @@ class Pymux:
                     return session, window
         return None
 
-    def options_of_pane(self, pane) -> OwnOptions | SessionOptions:
+    def options_of_pane(self, pane: Pane) -> OwnOptions | SessionOptions:
         """
         The options of the session holding this pane, read when asked:
         `move-window` takes a pane to another session. A pane that is
@@ -3031,19 +3048,19 @@ class Pymux:
         place = self._place_of(pane)
         return self.session_defaults if place is None else place[0].options
 
-    def _window_holding(self, pane):
+    def _window_holding(self, pane: Pane) -> Window | None:
         "The window that holds this pane, or None when it is gone."
         place = self._place_of(pane)
         return None if place is None else place[1]
 
-    def session_of_window(self, window) -> Session | None:
+    def session_of_window(self, window: Window) -> Session | None:
         "The session whose arrangement holds this window."
         for session in self.sessions:
             if window in session.arrangement.windows:
                 return session
         return None
 
-    def session_holding(self, pane) -> Session | None:
+    def session_holding(self, pane: Pane) -> Session | None:
         """
         The session whose windows hold this pane, or None when it is
         gone.
@@ -3155,7 +3172,7 @@ class Pymux:
                 packet[Field.FORWARD] = forward
             client_state.connection._send_packet(packet)
 
-    def url_forward(self, url: str, client_state: ClientState) -> dict | None:
+    def url_forward(self, url: str, client_state: ClientState) -> dict[str, Any] | None:
         """
         What to forward so that this URL works on that client, or
         `None`.
@@ -3246,7 +3263,7 @@ class Pymux:
             )
         return asker
 
-    def forward_needs_asking(self, forward, in_person: bool) -> bool:
+    def forward_needs_asking(self, forward: Forward, in_person: bool) -> bool:
         """
         Whether this forward has to be confirmed before it is made.
 
@@ -3308,7 +3325,7 @@ class Pymux:
                 merged[name] = value
         return merged
 
-    def forward_osc(self, pane, code: str, param: str) -> None:
+    def forward_osc(self, pane: Pane, code: str, param: str) -> None:
         """
         Write an OSC sequence of a pane to the terminals of the
         clients. ptterm hands over the three that only the terminal of
@@ -3410,7 +3427,7 @@ class Pymux:
         except Exception:
             logger.exception("Forwarding an OSC sequence failed.")
 
-    def _directory_to_start_in(self, window, session) -> str | None:
+    def _directory_to_start_in(self, window: Window | None, session: Session | None) -> str | None:
         """
         Where a new pane starts when `-c` named nothing.
 
@@ -3436,7 +3453,7 @@ class Pymux:
             return window.active_process.get_cwd()
         return None
 
-    def _read_current_directory(self, pane, param: str) -> None:
+    def _read_current_directory(self, pane: Pane, param: str) -> None:
         """
         Keep where the program says it is.
 
@@ -3451,7 +3468,7 @@ class Pymux:
         pane.current_host = host
         pane.current_directory = directory
 
-    def _read_shell_integration(self, pane, param: str) -> None:
+    def _read_shell_integration(self, pane: Pane, param: str) -> None:
         """
         Keep the shell integration zone and the exit status.
 
@@ -3473,10 +3490,11 @@ class Pymux:
         # The rows copy mode jumps between, as tmux's `input_osc_133`
         # marks them. Lillecarl/pymux#500.
         mark = _FTCS_ROW_MARKS.get(letter)
-        if mark is not None:
-            pane.screen.mark_row(mark)
+        screen = pane.screen
+        if mark is not None and not isinstance(screen, WindowScreen):
+            screen.mark_row(mark)
 
-    def _read_terminal_extension(self, pane, param: str) -> bool:
+    def _read_terminal_extension(self, pane: Pane, param: str) -> bool:
         """
         Read one subcommand of "OSC 1337". True when the sequence may
         travel on to the terminal of the user.
@@ -3511,7 +3529,9 @@ class Pymux:
                 return False
             # iTerm2's mark is where a person wants to come back to,
             # which is what a prompt mark is for.
-            pane.screen.mark_row(RowMark.PROMPT)
+            screen = pane.screen
+            if not isinstance(screen, WindowScreen):
+                screen.mark_row(RowMark.PROMPT)
             return True
 
         if key == "SetUserVar":
@@ -3564,7 +3584,7 @@ class Pymux:
 
         return False
 
-    def _read_download(self, pane, key: str, rest: str) -> None:
+    def _read_download(self, pane: Pane, key: str, rest: str) -> None:
         "Read one sequence of a pane's download, and send a whole file on."
         try:
             finished = pane.downloads.read(key, rest)
@@ -3577,7 +3597,7 @@ class Pymux:
         if finished is not None:
             self.send_download(pane, finished)
 
-    def download_client(self, pane) -> ClientState | None:
+    def download_client(self, pane: Pane) -> ClientState | None:
         """
         The client a download from this pane goes to: of the clients on
         the pane's session, the one a person used last. `None` when
@@ -3596,7 +3616,7 @@ class Pymux:
             return None
         return max(clients, key=lambda client: client.last_used)
 
-    def send_download(self, pane, download: FinishedDownload) -> None:
+    def send_download(self, pane: Pane, download: FinishedDownload) -> None:
         """
         Give a whole file from a pane to the person, the way the
         client's `file-transfer` says. Lillecarl/pymux#743.
@@ -3704,11 +3724,11 @@ class Pymux:
             return  # Not base64. `build_osc` drops it as well.
         self.clipboard.set_data(ClipboardData(text))
 
-    def _has_focus(self, client_state, pane) -> bool:
+    def _has_focus(self, client_state: ClientState, pane: Pane) -> bool:
         "True when this client looks at this pane."
         return self.focused_pane_of(client_state) is pane
 
-    def focused_pane_of(self, client_state):
+    def focused_pane_of(self, client_state: ClientState) -> Pane | None:
         """
         The pane that this client looks at, or `None`.
 
@@ -3810,7 +3830,7 @@ class Pymux:
         self,
         command: str | None = None,
         start_directory: str | None = None,
-        name=None,
+        name: str | None = None,
         index: WindowIndex | None = None,
         session: Session | None = None,
         task_group: anyio.abc.TaskGroup | None = None,
@@ -3897,7 +3917,7 @@ class Pymux:
         if session is not None:
             session.arrangement.remove_pane(pane)
 
-    def leave_command_mode(self, append_to_history=False):
+    def leave_command_mode(self, append_to_history: bool = False) -> None:
         """
         Leave the command/prompt mode.
         """
@@ -3919,7 +3939,7 @@ class Pymux:
 
         client_state.app.layout.focus_previous()
 
-    def handle_command(self, command):
+    def handle_command(self, command: str) -> None:
         """
         Handle a command from a key binding, a hook or a config file.
 
@@ -3932,7 +3952,7 @@ class Pymux:
         """
         self.spawn_command(handle_command(self, command))
 
-    def spawn_command(self, answer) -> None:
+    def spawn_command(self, answer: Coroutine[Any, Any, object] | None) -> None:
         """
         Finish a command that answered with work, in the background.
 
@@ -3949,7 +3969,7 @@ class Pymux:
 
         self.tasks.start_soon(self._finish_command, answer)
 
-    async def _finish_command(self, answer) -> None:
+    async def _finish_command(self, answer: Coroutine[Any, Any, object]) -> None:
         """
         A command nobody waits for still says what went wrong.
 
@@ -3963,7 +3983,7 @@ class Pymux:
         except Exception:
             logger.exception("A command that ran in the background failed.")
 
-    def show_message(self, message):
+    def show_message(self, message: str) -> None:
         """
         Set a warning message. This will be shown at the bottom until a key has
         been pressed.
@@ -4031,7 +4051,7 @@ class Pymux:
             logger.warning("%s", message)
             self.startup_errors.append(message)
 
-    def report_startup_errors(self, client_state) -> None:
+    def report_startup_errors(self, client_state: ClientState) -> None:
         """
         Show the lines of the configuration file that failed, once.
 
@@ -4046,10 +4066,11 @@ class Pymux:
         """
         if not self.startup_errors:
             return
-        messages, self.startup_errors = self.startup_errors, []
+        messages = self.startup_errors
+        self.startup_errors = []
         client_state.message = "; ".join(messages)
 
-    def detach_client(self, app, hang_up: bool = False):
+    def detach_client(self, app: Application[Any], hang_up: bool = False) -> None:
         """
         Detach the client that belongs to this CLI.
 
@@ -4066,7 +4087,7 @@ class Pymux:
         # Redraw all clients -> Maybe their size has to change.
         self.invalidate(Woke.CLIENT_DETACHED)
 
-    def listen_on_socket(self, socket_name=None):
+    def listen_on_socket(self, socket_name: str | None = None) -> str:
         """
         Bind the socket that clients connect to, and say its name.
 
@@ -4137,7 +4158,7 @@ class Pymux:
         # Ignore keyboard. (When people run "pymux server" and press Ctrl-C.)
         # Pymux has to be terminated by termining all the processes running in
         # its panes.
-        def handle_sigint(*a):
+        def handle_sigint(*a: object) -> None:
             print("Ignoring keyboard interrupt.")
 
         signal.signal(signal.SIGINT, handle_sigint)
@@ -4188,7 +4209,7 @@ class Pymux:
 
     def run_integrated(
         self,
-        color_depth,
+        color_depth: ColorDepth | None,
         detach_other_clients: bool = False,
         chosen_name: str | None = None,
         hang_up_others: bool = False,
@@ -4223,7 +4244,7 @@ class Pymux:
 
         #: The client, kept so that the hangup of `attach -x` can be
         #: sent after the loop has gone. Lillecarl/pymux#347.
-        attached: list = []
+        attached: list[MemoryClient] = []
 
         async def run() -> None:
             try:
@@ -4282,10 +4303,10 @@ class Pymux:
 
     def add_client(
         self,
-        output,
-        input,
-        color_depth,
-        connection,
+        output: Output,
+        input: Input,
+        color_depth: ColorDepth,
+        connection: ServerConnection,
         temporary: bool = False,
         session: Session | None = None,
     ) -> ClientState:
@@ -4336,7 +4357,7 @@ class Pymux:
 
         return client_state
 
-    def remove_client(self, connection):
+    def remove_client(self, connection: ServerConnection) -> None:
         """
         Forget a client that has gone, and everything of it.
 
