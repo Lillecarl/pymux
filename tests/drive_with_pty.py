@@ -56,7 +56,7 @@ import tempfile
 import termios
 import time
 import traceback
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed, wait
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -345,6 +345,20 @@ class Failed(AssertionError):
 def _clock(when):
     "A moment, spelled the way the server log spells one."
     return datetime.datetime.fromtimestamp(when).strftime("%H:%M:%S,%f")[:-3]
+
+
+def first_alone(pool: ThreadPoolExecutor, work, items) -> list[Future]:
+    """
+    `work` on each item on `pool`, the first finished before the rest start.
+
+    deferimport rewrites each module once and caches the result, and a
+    sandbox starts with no cache: forty pymux started together each
+    rewrote everything they import, about 4 CPU seconds apiece. The first
+    fills the cache for the rest. Lillecarl/pymux#579.
+    """
+    first = [pool.submit(work, item) for item in items[:1]]
+    wait(first)
+    return first + [pool.submit(work, item) for item in items[1:]]
 
 
 def run_cli(sock_path, args):
@@ -3372,7 +3386,8 @@ def main() -> None:
     failed = []
     workers = max(2, (int(os.environ.get("NIX_BUILD_CORES") or 0) or os.cpu_count()) // 4)
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        running = {pool.submit(run, number, check): check for number, check in enumerate(checks)}
+        futures = first_alone(pool, lambda numbered: run(*numbered), list(enumerate(checks)))
+        running = dict(zip(futures, checks, strict=True))
         for done in as_completed(running):
             name = running[done].__name__
             try:

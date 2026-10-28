@@ -127,6 +127,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
+from drive_with_pty import first_alone
 from recorded import how_to_record
 from recorded import lines as recorded_lines
 
@@ -380,7 +381,8 @@ def main() -> int:
     # process, and mostly waits on it, so the files run at once.
     workers = int(os.environ.get("NIX_BUILD_CORES") or 0) or os.cpu_count()
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        answers = pool.map(lambda name: run_one(suite, name, wires), ran)
+        futures = first_alone(pool, lambda name: run_one(suite, name, wires), ran)
+        answers = [future.result() for future in futures]
 
     for name, (output, errors) in zip(ran, answers, strict=True):
         failed += failures_in(name, output)

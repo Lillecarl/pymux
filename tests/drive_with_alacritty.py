@@ -205,6 +205,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from tests.drive_with_pty import first_alone
 from tests.middleman import Pane
 
 HERE = Path(__file__).parent
@@ -451,7 +452,8 @@ def main() -> int:
     # minutes.
     workers = int(os.environ.get("NIX_BUILD_CORES") or 0) or os.cpu_count()
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        answers = pool.map(lambda name: run_one(tmp, judge, name, directory / name), ran)
+        futures = first_alone(pool, lambda name: run_one(tmp, judge, name, directory / name), ran)
+        answers = [future.result() for future in futures]
 
     for name, (agreed, said) in zip(ran, answers, strict=True):
         if not agreed:
