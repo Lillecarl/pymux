@@ -45,6 +45,7 @@ from .ids import PaneId
 from .keys import KittyVt100Parser
 from .log import logger
 from .nearest import NEAREST, nearest_theme, wanted_from
+from .notifications import QUERY as NOTIFICATION_QUERY
 from .notifications import QUERY_IDENTIFIER, is_click, read_actions, read_identifier, split_payload
 from .options import Scope, SetOptionError
 from .osc import NO_PROGRESS, Progress
@@ -983,8 +984,12 @@ class ServerConnection:
         # The server asks this one itself, so a client of any age
         # gets a pointer to the pixel. Lillecarl/pymux#648.
         # And the survey, whose answers are only kept.
-        # Lillecarl/pymux#725.
-        self._write_output_raw(PIXEL_MOUSE_QUERY + EMOJI_WIDTH_PROBE + SURVEY)
+        # Lillecarl/pymux#725. And what a desktop notification's click
+        # can do (OSC 99 `p=?`), which a client of an older build never
+        # asked. Lillecarl/pymux#779.
+        self._write_output_raw(
+            PIXEL_MOUSE_QUERY + EMOJI_WIDTH_PROBE + SURVEY + "\x1b]99;" + NOTIFICATION_QUERY + "\x1b\\"
+        )
         self._flush_output()
 
     @_PACKETS.handles(Packet.SIZE)

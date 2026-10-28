@@ -41,7 +41,6 @@ from pymux.files import ArrivingFiles, Whole
 from pymux.graphics import CELL_SIZE_QUERY, RESTORE_CURSOR, SAVE_CURSOR, VERSION_QUERY
 from pymux.graphics import QUERY_SEQUENCE as GRAPHICS_QUERY
 from pymux.kitty_frames import Base64Carrier, Pictures, ShmCarrier, decoders, frame_commands, shm_probe
-from pymux.notifications import QUERY as NOTIFICATION_QUERY
 from pymux.osc import PASSTHROUGH_VARIABLE, set_user_var
 from pymux.utils import nonblocking
 
@@ -128,9 +127,6 @@ DETECTION_QUERIES = (
     + VERSION_QUERY.encode("ascii")
     + TRUECOLOR_PROBE.encode("ascii")
     + COLOR_QUERIES.encode("ascii")
-    + b"\x1b]99;"
-    + NOTIFICATION_QUERY.encode("ascii")
-    + b"\x1b\\"
     + DEVICE_ATTRIBUTES_QUERY
 )
 
