@@ -29,7 +29,7 @@ from libpymux import (
     quote,
 )
 from libpymux.connection import CommandResult, Reply, command_packet
-from libpymux.operations import PANE_FIELDS, SEPARATOR, JobRecord, Waited, format_string
+from libpymux.operations import PANE_FIELDS, SEPARATOR, JobRecord, Waited, WaitFor, format_string
 from libpymux.protocol import Framer
 
 # ----------------------------------------------------------------------
@@ -371,6 +371,14 @@ async def test_a_wait_until_that_runs_out_answers_the_screen(fake):
     server = fake([("still compiling\n", "", 124)])
     pane = Pane(Server(server.path), {"pane_id": "%5"})
     assert await pane.wait_until(quiet=1, timeout=2) == Waited(False, "still compiling")
+
+
+async def test_send_and_wait_arms_the_wait_on_send_keys(fake):
+    server = fake([("ok\n", "", 0)])
+    pane = Pane(Server(server.path), {"pane_id": "%5"})
+    waited = await pane.send_and_wait("make", WaitFor(next_text="^ok", timeout=9), literal=True)
+    assert waited == Waited(True, "ok")
+    assert server.asked == ["send-keys -t %5 --wait-next-text '^ok' --wait-timeout 9 -l make"]
 
 
 async def test_a_wait_until_takes_one_condition(fake):

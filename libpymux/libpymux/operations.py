@@ -34,6 +34,7 @@ __all__ = [
     "SqlRow",
     "Tags",
     "Tail",
+    "WaitFor",
     "Waited",
     "drive",
     "format_string",
@@ -364,26 +365,47 @@ class Waited(NamedTuple):
     text: str
 
 
-def wait_until(
-    pane_id: str,
-    quiet: float | None,
-    text: str | None,
-    next_text: str | None,
-    exit: bool,
-    timeout: float | None,
-) -> Operation[Waited]:
-    conditions = [
-        ["--quiet", str(quiet)] if quiet is not None else None,
-        ["--text", text] if text is not None else None,
-        ["--next-text", next_text] if next_text is not None else None,
-        ["--exit"] if exit else None,
-    ]
-    given = [condition for condition in conditions if condition is not None]
-    if len(given) != 1:
-        raise ValueError("a wait takes one condition: quiet, text, next_text or exit")
-    arguments = ["wait-pane", "-t", pane_id, *given[0]]
-    if timeout is not None:
-        arguments += ["--timeout", str(timeout)]
+class WaitFor(NamedTuple):
+    "One condition of `wait-pane`, and how long to wait for it."
+
+    quiet: float | None = None
+    text: str | None = None
+    next_text: str | None = None
+    exit: bool = False
+    timeout: float | None = None
+
+    def words(self, prefix: str) -> list[str]:
+        "The flags, each spelled after `prefix`: `--quiet` for `wait-pane`, `--wait-quiet` for `send-keys`."
+        conditions = [
+            ["--%squiet" % prefix, str(self.quiet)] if self.quiet is not None else None,
+            ["--%stext" % prefix, self.text] if self.text is not None else None,
+            ["--%snext-text" % prefix, self.next_text] if self.next_text is not None else None,
+            ["--%sexit" % prefix] if self.exit else None,
+        ]
+        given = [condition for condition in conditions if condition is not None]
+        if len(given) != 1:
+            raise ValueError("a wait takes one condition: quiet, text, next_text or exit")
+        if self.timeout is None:
+            return given[0]
+        return [*given[0], "--%stimeout" % prefix, str(self.timeout)]
+
+
+def wait_until(pane_id: str, condition: WaitFor) -> Operation[Waited]:
+    return (yield from _waited(["wait-pane", "-t", pane_id, *condition.words("")]))
+
+
+def send_and_wait(pane_id: str, word: str, literal: bool, condition: WaitFor) -> Operation[Waited]:
+    """
+    Send one key name or one text, with the wait armed before it goes
+    out: output faster than a second round trip is not lost.
+    """
+    arguments = ["send-keys", "-t", pane_id, *condition.words("wait-")]
+    if literal:
+        arguments.append("-l")
+    return (yield from _waited([*arguments, word]))
+
+
+def _waited(arguments: list[str]) -> Operation[Waited]:
     result = yield Ask(arguments, check=False)
     if result.exit_code == WAIT_TIMED_OUT:
         return Waited(False, result.stdout.removesuffix("\n"))

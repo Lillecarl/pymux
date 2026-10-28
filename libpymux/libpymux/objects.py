@@ -181,7 +181,17 @@ class Pane(PaneFields):
         `Waited.met` is False when the wait ran out, and `Waited.text`
         is then the screen it ran out on. Lillecarl/pymux#388.
         """
-        return await self.server.run(operations.wait_until(self.id, quiet, text, next_text, exit, timeout))
+        condition = operations.WaitFor(quiet, text, next_text, exit, timeout)
+        return await self.server.run(operations.wait_until(self.id, condition))
+
+    async def send_and_wait(self, word: str, wait: operations.WaitFor, literal: bool = False) -> operations.Waited:
+        """
+        Send one key name, or one text with `literal`, and hold until
+        `wait` holds. The wait is armed before the key goes out, so
+        output that comes back at once is not lost; `wait_until` says
+        what each condition means. Lillecarl/pymux#388.
+        """
+        return await self.server.run(operations.send_and_wait(self.id, word, literal, wait))
 
     def stream(self, writable: bool = False) -> PaneStream:
         """
