@@ -24,7 +24,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Final
 
-from libpymux.protocol import Field, Packet
+from libpymux.protocol import Field, Message, Packet
 from prompt_toolkit.utils import get_cwidth
 
 from ..downloads import MAX_DOWNLOAD_BYTES, FinishedDownload, file_packets
@@ -226,7 +226,7 @@ def listing(asked: str, home: Path, roots: tuple[Path, ...], granted: bool) -> l
     return names
 
 
-def listed_packet(request: str, names: list[str]) -> dict[Field, object]:
+def listed_packet(request: str, names: list[str]) -> Message:
     "The answer to `list-files`."
     return {Field.CMD: Packet.FILES_LISTED, Field.REQUEST: request, Field.PATHS: names}
 
@@ -322,11 +322,11 @@ def read(wanted: Wanted) -> bytes:
     return data
 
 
-def _refusal(request: str, asked: str, why: str) -> dict[Field, object]:
+def _refusal(request: str, asked: str, why: str) -> Message:
     return {Field.CMD: Packet.UPLOAD, Field.REQUEST: request, Field.PATH: asked, Field.ERROR: why}
 
 
-def outcome_packets(request: str, wanted: Wanted) -> Iterator[dict[Field, object]]:
+def outcome_packets(request: str, wanted: Wanted) -> Iterator[Message]:
     """
     The `upload` packets of one path: its parts, or why it is not sent.
     **It blocks**: the read happens before the first packet.
@@ -343,9 +343,9 @@ def outcome_packets(request: str, wanted: Wanted) -> Iterator[dict[Field, object
         yield {**packet, Field.CMD: Packet.UPLOAD, Field.REQUEST: request, Field.PATH: wanted.asked}
 
 
-def done_packet(request: str, error: str | None = None) -> dict[Field, object]:
+def done_packet(request: str, error: str | None = None) -> Message:
     "The end of the answer to `request`, with `error` when none of it is sent."
-    packet: dict[Field, object] = {Field.CMD: Packet.UPLOAD_DONE, Field.REQUEST: request}
+    packet: Message = {Field.CMD: Packet.UPLOAD_DONE, Field.REQUEST: request}
     if error is not None:
         packet[Field.ERROR] = error
     return packet

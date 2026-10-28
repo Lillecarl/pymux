@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import BinaryIO, Final, TextIO
 
-from libpymux.protocol import Field, Packet
+from libpymux.protocol import Field, Message, Packet
 
 from .enums import FileTransfer
 
@@ -312,7 +312,7 @@ def route_of(chosen: FileTransfer, over_ssh: bool, terminal_saves: bool) -> File
     return FileTransfer.PASSTHROUGH
 
 
-def file_packets(download: FinishedDownload) -> Iterator[dict[Field, object]]:
+def file_packets(download: FinishedDownload) -> Iterator[Message]:
     "The download as `file` packets to the pymux client, `last` on the final one."
     transfer = secrets.token_hex(8)
     starts = range(0, max(len(download.data), 1), PACKET_BYTES)

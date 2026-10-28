@@ -45,7 +45,7 @@ import contextlib
 import os
 import sys
 import time
-from typing import TYPE_CHECKING, NamedTuple, override
+from typing import TYPE_CHECKING, Any, NamedTuple, override
 from urllib.parse import urlparse
 
 import anyio
@@ -81,7 +81,13 @@ from .reconnect import (
 from .terminal import DELETE_EVERY_IMAGE, TerminalClient
 
 if TYPE_CHECKING:
-    from asyncssh import SSHWriter
+    from collections.abc import AsyncIterator, Awaitable, Callable
+
+    from asyncssh import SSHClientConnection, SSHReader, SSHWriter
+    from prompt_toolkit.output import ColorDepth
+
+    #: An open link: the SSH connection, and the stream of the server's socket over it.
+    type Link = tuple[SSHClientConnection, SSHReader[bytes]]
 
 __all__ = [
     "SshClient",
@@ -293,7 +299,7 @@ class SshClient(TerminalClient):
     #: zstd makes text 6.5x smaller. Lillecarl/pymux#633.
     wire_formats = (MSGPACK_ZSTD, MSGPACK)
 
-    def __init__(self, socket_name: str, **connect_with) -> None:
+    def __init__(self, socket_name: str, **connect_with: Any) -> None:
         super().__init__()
         self.target = ssh_target(socket_name)
         #: What a test overrides: a key to use, and no `known_hosts`.
@@ -303,7 +309,7 @@ class SshClient(TerminalClient):
         #: The socket that was really opened, once it has been. It is
         #: the address's path, or the one the listing found.
         self.path = self.target.path
-        self._writer: SSHWriter | None = None
+        self._writer: SSHWriter[bytes] | None = None
         #: What changed about the forwards when the link came back, for
         #: `_attached` to say once it has a client to say it to.
         #: Lillecarl/pymux#442.
@@ -332,7 +338,7 @@ class SshClient(TerminalClient):
         return self.target.host
 
     @override
-    def _send_packet(self, data) -> None:
+    def _send_packet(self, data: Message) -> None:
         "Send to the server."
         if self._writer is None:
             raise BrokenPipeError("This client is not connected.")
@@ -345,7 +351,7 @@ class SshClient(TerminalClient):
             # way.
             raise BrokenPipeError(str(error)) from error
 
-    async def _connect(self, connect_timeout: float | None = None):
+    async def _connect(self, connect_timeout: float | None = None) -> Link:
         """
         Open the channel to the socket on the far side.
 
@@ -404,7 +410,7 @@ class SshClient(TerminalClient):
 
         return connection, reader
 
-    async def _socket(self, connection) -> str:
+    async def _socket(self, connection: SSHClientConnection) -> str:
         """
         Which socket to open, when the address named none.
 
@@ -434,6 +440,8 @@ class SshClient(TerminalClient):
             # No exec channel: some servers refuse sessions entirely.
             return default_socket(username)
 
+        # `run` decodes as UTF-8 unless told otherwise.
+        assert not isinstance(result.stdout, bytes)
         found = (result.stdout or "").splitlines()
         if result.exit_status == 0 and found:
             return found[0].strip()
@@ -448,10 +456,10 @@ class SshClient(TerminalClient):
     # What a person runs.
 
     @override
-    def run_command(self, command, pane_id=None) -> int:
+    def run_command(self, command: str, pane_id: str | None = None) -> int:
         return anyio.run(self._run_command, command, pane_id)
 
-    async def _run_command(self, command, pane_id=None) -> int:
+    async def _run_command(self, command: str, pane_id: str | None = None) -> int:
         """
         Ask the server to run this command, print what it says, and
         return the exit code. `client/posix.py` reads the same packets.
@@ -503,10 +511,10 @@ class SshClient(TerminalClient):
                 await connection.wait_closed()
 
     @override
-    def attach(self, detach_other_clients: bool = False, color_depth=None) -> None:
+    def attach(self, detach_other_clients: bool = False, color_depth: ColorDepth | None = None) -> None:
         anyio.run(self._attach, detach_other_clients, color_depth)
 
-    async def _attach(self, detach_other_clients: bool = False, color_depth=None) -> None:
+    async def _attach(self, detach_other_clients: bool = False, color_depth: ColorDepth | None = None) -> None:
         """
         Attach the user interface, and return when the person is done
         with it.
@@ -578,7 +586,14 @@ class SshClient(TerminalClient):
             sys.stderr.write("pymux cannot reach the server on %s: %s\n" % (self.target.host, why(cannot)))
             self.exit_code = 1
 
-    async def _attached(self, connection, reader, stdin_fd, detach_other_clients, color_depth):
+    async def _attached(
+        self,
+        connection: SSHClientConnection,
+        reader: SSHReader[bytes],
+        stdin_fd: int,
+        detach_other_clients: bool,
+        color_depth: ColorDepth | None,
+    ) -> Exception | None:
         """
         Draw one attachment, until it ends.
 
@@ -714,7 +729,7 @@ class SshClient(TerminalClient):
     # ------------------------------------------------------------------
     # Forwarded ports.
 
-    async def _forward_asked(self, connection, packet) -> None:
+    async def _forward_asked(self, connection: SSHClientConnection, packet: Message) -> None:
         """
         Add or remove one forward, because the server asked.
 
@@ -782,7 +797,7 @@ class SshClient(TerminalClient):
 
         self._report_forwards(said)
 
-    async def _open_asked(self, connection, packet) -> None:
+    async def _open_asked(self, connection: SSHClientConnection, packet: Message) -> None:
         """
         Forward the port a URL names, then open the URL.
 
@@ -824,7 +839,7 @@ class SshClient(TerminalClient):
         if not reached:
             self._send_packet({Field.CMD: Packet.OPEN_FAILED, Field.DATA: url})
 
-    async def _browser_asked(self, connection, packet) -> None:
+    async def _browser_asked(self, connection: SSHClientConnection, packet: Message) -> None:
         """
         Start the browser a program on the server asked for, forward its
         port from the server's machine to this one, and say where it
@@ -886,7 +901,7 @@ class SshClient(TerminalClient):
         with contextlib.suppress(BrokenPipeError):
             self._send_packet(packet)
 
-    async def _while_the_link_holds(self, work, *arguments) -> None:
+    async def _while_the_link_holds(self, work: Callable[..., Awaitable[None]], *arguments: object) -> None:
         """
         Run one task of an attachment, and end it quietly when the link
         stops taking packets.
@@ -908,7 +923,7 @@ class SshClient(TerminalClient):
         """
         return time.time(), anyio.current_time()
 
-    async def _watch_for_suspend(self, connection) -> None:
+    async def _watch_for_suspend(self, connection: SSHClientConnection) -> None:
         """
         End the link when this machine has been asleep.
 
@@ -967,7 +982,7 @@ class SshClient(TerminalClient):
     # ------------------------------------------------------------------
     # The link, when it goes.
 
-    async def _link_again(self, stdin_fd: int, waits: Backoff, lost):
+    async def _link_again(self, stdin_fd: int, waits: Backoff, lost: Exception) -> Link | None:
         """
         Show that the server is gone, and open the link again.
 
@@ -998,7 +1013,7 @@ class SshClient(TerminalClient):
                 # the next image takes the socket over within it, and
                 # its queue may be full until then. Lillecarl/pymux#750.
                 while link_may_come_back(lost) or restarting():
-                    if restarting():
+                    if restart is not None and restarting():
                         outcome = await self._one_try(output, stdin_fd, RESTART_RETRY, restart, internet)
                     else:
                         outcome = await self._one_try(output, stdin_fd, waits.next(), lost, internet)
@@ -1016,7 +1031,9 @@ class SshClient(TerminalClient):
             raise lost
         return None if isinstance(outcome, _Left) else outcome
 
-    async def _one_try(self, output, stdin_fd: int, wait: float, lost, internet):
+    async def _one_try(
+        self, output: Vt100_Output, stdin_fd: int, wait: float, lost: Exception, internet: Internet
+    ) -> Link | Exception | _Left:
         """
         Count down one wait, then attempt the link.
 
@@ -1045,7 +1062,9 @@ class SshClient(TerminalClient):
 
         return await self._attempt(output, stdin_fd, lost, internet)
 
-    def _draw(self, output, lost, internet, seconds: float, trying: bool = False) -> None:
+    def _draw(
+        self, output: Vt100_Output, lost: Exception, internet: Internet, seconds: float, trying: bool = False
+    ) -> None:
         "Put the notice of this moment on the terminal."
         rows, columns = self.size()
         draw(
@@ -1063,7 +1082,9 @@ class SshClient(TerminalClient):
             return None
         return typed
 
-    async def _attempt(self, output, stdin_fd: int, lost, internet):
+    async def _attempt(
+        self, output: Vt100_Output, stdin_fd: int, lost: Exception, internet: Internet
+    ) -> Link | Exception | _Left:
         """
         Open the link while the screen keeps saying it is trying.
 
@@ -1071,7 +1092,7 @@ class SshClient(TerminalClient):
         task of its own, so this one can draw and listen beside it;
         cancelling the scope is how the winner ends the other.
         """
-        link = None
+        link: Link | None = None
         failure: Exception | None = None
         left = False
 
@@ -1105,11 +1126,13 @@ class SshClient(TerminalClient):
             return _LEFT
         if failure is not None:
             return failure
+        # `connect` cancels the loop only after it set `link` or `failure`.
+        assert link is not None
         return link
 
     # ------------------------------------------------------------------
 
-    async def _packets(self, reader):
+    async def _packets(self, reader: SSHReader[bytes]) -> AsyncIterator[Message]:
         """
         The packets of the server, one at a time.
 

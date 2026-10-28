@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import anyio
-from libpymux.protocol import Field, Packet
+from libpymux.protocol import Field, Message, Packet
 
 from .files import ArrivingFiles, Whole, save
 
@@ -77,7 +77,7 @@ class Upload:
         #: The client said it sent all it will, or it went.
         self.ended = False
 
-    def packet(self, pane: str) -> dict[Field, object]:
+    def packet(self, pane: str) -> Message:
         "The `send-files` packet that asks the client."
         return {Field.CMD: Packet.SEND_FILES, Field.REQUEST: self.request, Field.PATHS: self.paths, Field.PANE: pane}
 
@@ -118,7 +118,7 @@ class Listing:
         self.names: list[str] = []
         self.answered = anyio.Event()
 
-    def packet(self) -> dict[Field, object]:
+    def packet(self) -> Message:
         return {Field.CMD: Packet.LIST_FILES, Field.REQUEST: self.request, Field.PATH: self.path}
 
     def take(self, packet: Mapping[str, object]) -> None:

@@ -66,6 +66,12 @@ from .uploads import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable
+
+    from prompt_toolkit.output import ColorDepth
+
+    from pymux.kitty_frames import Rect
+
     from .audio import AudioClient
 
 __all__ = [
@@ -141,7 +147,7 @@ def _write_all(fd: int, data: bytes) -> None:
         try:
             view = view[os.write(fd, view) :]
         except BlockingIOError:
-            select.select([], [fd], [])
+            select.select((), (fd,), ())
 
 
 #: Go to the start of a row, and erase it.
@@ -272,7 +278,7 @@ class TerminalClient(Client):
         self._shm: ShmCarrier | None = None
         #: The bands of the frames that have not had their last part, by
         #: outer image id.
-        self._frame_parts: dict[int, list] = {}
+        self._frame_parts: dict[int, list[Any]] = {}
         #: What makes a decoder of each codec this client decodes, and
         #: the decoder of each window pane's stream, by outer image id.
         #: Lillecarl/pymux#639.
@@ -333,11 +339,11 @@ class TerminalClient(Client):
             self.__stdin_reader = PosixStdinReader(sys.stdin.fileno(), errors="replace")
         return self.__stdin_reader
 
-    def _send_packet(self, data):
+    def _send_packet(self, data: Message) -> None:
         "Send one packet to the server. (The transport gives this.)"
         raise NotImplementedError
 
-    def _start_gui(self, detach_other_clients: bool, color_depth) -> None:
+    def _start_gui(self, detach_other_clients: bool, color_depth: ColorDepth | None) -> None:
         """
         Tell the server that this client wants the user interface, and
         ask the outer terminal what it supports.
@@ -467,7 +473,7 @@ class TerminalClient(Client):
             with contextlib.suppress(Exception):
                 self._mode_context_managers.pop().__exit__()
 
-    def _client_options(self) -> list:
+    def _client_options(self) -> list[tuple[str, str]]:
         """
         What this client announces about itself, in the order the
         server applies it.
@@ -581,7 +587,7 @@ class TerminalClient(Client):
             self.placed_images = True
         return answer
 
-    def _decoded(self, image: int, codec: str, data: bytes, rects: list) -> list | None:
+    def _decoded(self, image: int, codec: str, data: bytes, rects: list[list[int]]) -> list[Rect] | None:
         "What changed in a window pane's encoded frame, as RGB rectangles; None when it would not decode."
         if not data:
             return []
@@ -995,7 +1001,7 @@ class TerminalClient(Client):
             {Field.CMD: Packet.BROWSER_STARTED, Field.BROWSER: launch, Field.PATH: path, Field.REMOTE: kind}
         )
 
-    async def run_browser(self, packet: Message, forward=None) -> None:
+    async def run_browser(self, packet: Message, forward: Callable[[int], Awaitable[str | None]] | None = None) -> None:
         """
         `_start_browser` for a client with an event loop, which holds
         the browser until it ends and then says so. `forward(port)`,

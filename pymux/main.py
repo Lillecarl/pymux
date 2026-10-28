@@ -3142,7 +3142,7 @@ class Pymux:
             return
 
         for client_state, forward in zip(clients, forwards):
-            packet: dict[Field, object] = {Field.CMD: Packet.OPEN, Field.DATA: url}
+            packet: Message = {Field.CMD: Packet.OPEN, Field.DATA: url}
             if forward is None:
                 client_state.message = "Opened %s in the browser of this machine." % (url,)
             else:

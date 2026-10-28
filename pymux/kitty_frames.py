@@ -178,7 +178,7 @@ class Pictures:
     def clear(self) -> None:
         self._held.clear()
 
-    def merged(self, image: int, whole: bool, width: int, height: int, rects: list) -> list:
+    def merged(self, image: int, whole: bool, width: int, height: int, rects: list[Rect]) -> list[Rect]:
         "Take the frame into the copy, and answer the rectangles to send: one, when the copy allows."
         if whole:
             if len(rects) == 1 and len(rects[0][4]) == width * height * 3:
