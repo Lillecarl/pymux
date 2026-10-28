@@ -265,7 +265,7 @@ class WaylandServer:
                 self.pymux.invalidate(Woke.WINDOW_PANE_CHANGED)
             case ("pointer", int(toplevel), str(shape)) if toplevel in self.widgets:
                 self.widgets[toplevel].screen.pointer_shapes.shape = shape
-                self.pymux.sync_pointer_shape()
+                self.pymux.terminals.sync_pointer_shape()
                 # The shape goes out behind a frame (`forward_osc`).
                 self.pymux.invalidate(Woke.WINDOW_PANE_CHANGED)
             case ("commit", int(toplevel), _damage) if toplevel in self.panes:
@@ -444,7 +444,7 @@ class WaylandServer:
         """
         if self.compositor is None:
             return
-        width, height = self.pymux.cell_size()
+        width, height = self.pymux.terminals.cell_size()
         wanted = (columns * width, rows * height, self._scale_of(toplevel, height))
         if self._configured.get(toplevel) == wanted:
             return
@@ -506,7 +506,7 @@ class WaylandServer:
         it the terminal said, for one that reports pixels; else the middle.
         Lillecarl/pymux#648.
         """
-        width, height = self.pymux.cell_size()
+        width, height = self.pymux.terminals.cell_size()
         across, down = self._pointer_fraction()
         return (position.x + across) * width, (position.y + down) * height
 
@@ -542,7 +542,7 @@ class WaylandServer:
         with contextlib.suppress(KeyError):
             compositor.pointer_motion(toplevel, x, y, time)
             if self._scrolls_smooth():
-                compositor.pointer_scroll_smooth(toplevel, steps * self.pymux.cell_size()[1], time)
+                compositor.pointer_scroll_smooth(toplevel, steps * self.pymux.terminals.cell_size()[1], time)
             else:
                 compositor.pointer_scroll(steps, time)
 

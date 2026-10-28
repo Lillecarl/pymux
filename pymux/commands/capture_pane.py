@@ -96,7 +96,7 @@ async def _print_png(pymux: Pymux, screen: Screen, page: Page, args: argparse.Na
     pane at the moment the command arrived.
     """
     first, last = _drawn_rows(screen, page, args)
-    cell = cell_from(args.cell, pymux.cell_size(), "capture-pane")
+    cell = cell_from(args.cell, pymux.terminals.cell_size(), "capture-pane")
     cell = fitted_cell(cell, screen.columns, max(1, last - first + 1), args.fit)
     grid = screenshot.grid_of(screen, first, last, cast(ColorOverrides, screen.colors), cell)
     pymux.print_command_line(await drawn(grid, args, cell, "capture-pane"))

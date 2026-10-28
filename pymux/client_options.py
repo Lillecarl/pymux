@@ -67,7 +67,7 @@ def _parse_theme(value: str) -> str:
 def _theme_chosen(pymux: Pymux, client: ClientState) -> None:
     # The colour base of every pane follows which theme owns the
     # screen; `paint-screen` says whether one does. Lillecarl/pymux#283.
-    pymux.sync_color_bases()
+    pymux.terminals.sync_color_bases()
     pymux.invalidate(Woke.THEME_WAS_CHOSEN)
 
 

@@ -331,7 +331,7 @@ async def test_theme_that_owns_screen_gives_pane_its_palette():
         client.options.theme = "pygments:dracula"
         pane = SimpleNamespace(screen=Screen(24, 80, write_process_input=lambda data: None))
 
-        pymux.tell_pane_about_colours(pane)
+        pymux.terminals.tell_pane_about_colours(pane)
 
         assert pane.screen.color_base.palette[1] == Color(0x8B, 0x08, 0x0B)
 
@@ -340,7 +340,7 @@ def test_a_pane_falls_back_when_nobody_is_attached():
     "The theme a new client starts on, because there is no client to ask."
     pymux = Pymux()
 
-    assert pymux.latest_theme() == DEFAULT_THEME
+    assert pymux.terminals.latest_theme() == DEFAULT_THEME
 
 
 def test_pane_keeps_convention_while_terminal_owns_colours():
@@ -352,7 +352,7 @@ def test_pane_keeps_convention_while_terminal_owns_colours():
     screen = Screen(24, 80, write_process_input=lambda data: None)
     pane = SimpleNamespace(screen=screen)
 
-    pymux.tell_pane_about_colours(pane)
+    pymux.terminals.tell_pane_about_colours(pane)
 
     # Nobody attached, and the theme does not own the screen: the pane
     # stays on what `pyte` reports, as before any of this.
@@ -422,7 +422,7 @@ def test_learned_colour_tells_panes_again():
         connection._handle_kitty_reply(osc("4", "1;rgb:ffff/0000/0000"))
         connection._handle_kitty_reply(osc("11", "rgb:0000/0000/0000"))
 
-        assert pymux.color_base_syncs == 2
+        assert pymux.terminals.color_base_syncs == 2
         connection._close_connection()
 
     anyio.run(check)
@@ -440,7 +440,7 @@ def test_reply_that_learns_nothing_tells_panes_nothing():
         # index beyond the sixteen is one nobody asked for.
         connection._handle_kitty_reply(osc("12", "rgb:ffff/0000/0000"))
 
-        assert pymux.color_base_syncs == 0
+        assert pymux.terminals.color_base_syncs == 0
         connection._close_connection()
 
     anyio.run(check)

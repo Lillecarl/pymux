@@ -733,7 +733,7 @@ class ServerConnection:
                 # answer their programs with, so they are told again.
                 if self.default_colors.handle_osc_reply(osc.group(1), osc.group(2)):
                     self._match_the_theme()
-                    self.pymux.sync_color_bases()
+                    self.pymux.terminals.sync_color_bases()
             return
 
         # The cell size, whenever it comes: asked again at each resize.
@@ -743,7 +743,7 @@ class ServerConnection:
         new_cell = self.graphics.take_cell_size(data)
         if new_cell is not None:
             if new_cell:
-                self.pymux.sync_cell_size()
+                self.pymux.terminals.sync_cell_size()
             return
 
         if not self._kitty_detection_pending:
@@ -759,7 +759,7 @@ class ServerConnection:
                 self.kitty_source_flags = int(data[3:-1] or 0)
             except ValueError:
                 self.kitty_source_flags = 0
-            self.pymux.sync_keyboard_source_flags()
+            self.pymux.terminals.sync_keyboard_source_flags()
             return
 
         # The answer to the synchronised output query. A terminal that
@@ -794,13 +794,13 @@ class ServerConnection:
             }
         )
         # Enable the flags on this client's terminal as well. (Other
-        # clients are kept in sync through `Pymux.sync_kitty_flags`,
+        # clients are kept in sync through `Terminals.sync_kitty_flags`,
         # which only sends on change, so a client that attaches after
         # the value settled would otherwise never hear it.)
         self._send_packet(
             {
                 Field.CMD: Packet.KITTY_KEYBOARD,
-                Field.DATA: {"flags": self.pymux.keyboard_flags_for_client()},
+                Field.DATA: {"flags": self.pymux.terminals.keyboard_flags_for_client()},
             }
         )
 
@@ -1211,7 +1211,7 @@ class ServerConnection:
                 # typed to know which line to go and fix.
                 self.client_state.message = "%s %s: %s" % (name, value, e.message)
 
-        self.pymux.sync_color_bases()
+        self.pymux.terminals.sync_color_bases()
 
     def _send_packet(self, data: object, compress_after: bool = False) -> None:
         """

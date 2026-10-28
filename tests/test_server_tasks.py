@@ -73,13 +73,23 @@ class FailingPipe(FakePipe):
         raise OSError(9, "Bad file descriptor")
 
 
+class FakeTerminals:
+    "Counts what a connection tells the panes about its terminal's colours."
+
+    def __init__(self):
+        self.color_base_syncs = 0
+
+    def sync_color_bases(self):
+        self.color_base_syncs += 1
+
+
 class FakePymux:
     "What a `ServerConnection` asks its server for, and nothing else."
 
     def __init__(self, tasks=None):
         self.tasks = tasks
         self.removed = []
-        self.color_base_syncs = 0
+        self.terminals = FakeTerminals()
         self.outer_image_ids = OuterImageIds()
 
     def serve_connection(self, connection):
@@ -91,9 +101,6 @@ class FakePymux:
 
     def remove_client(self, connection):
         self.removed.append(connection)
-
-    def sync_color_bases(self):
-        self.color_base_syncs += 1
 
 
 async def _until(question, seconds: float = 2.0) -> None:

@@ -17,6 +17,7 @@ from pyte.sequences import Terminator, csi, osc
 from pymux.enums import Clipboard
 from pymux.main import Pymux
 from pymux.osc import MAX_OSC_LENGTH, build_osc
+from pymux.terminals import pointer_shape_of
 
 
 def sequence(code, param):
@@ -239,26 +240,26 @@ def test_shape_reaches_client_that_looks_at_pane():
 def test_shape_goes_away_when_focus_leaves_pane():
     pane = FakePane(pointer_shape="pointer")
     pymux, connections = make_pymux(focused=[0], pane=pane)
-    pymux.sync_pointer_shape()
+    pymux.terminals.sync_pointer_shape()
     assert connections[0].written == [sequence("22", "pointer")]
 
     # The client looks at another pane now, which asks for no shape.
     pymux.focused_pane_of = lambda state: None
-    pymux.sync_pointer_shape()
+    pymux.terminals.sync_pointer_shape()
     assert connections[0].written[-1] == sequence("22", "")
 
 
 def test_same_shape_goes_out_once():
     pane = FakePane(pointer_shape="pointer")
     pymux, connections = make_pymux(focused=[0], pane=pane)
-    pymux.sync_pointer_shape()
-    pymux.sync_pointer_shape()
+    pymux.terminals.sync_pointer_shape()
+    pymux.terminals.sync_pointer_shape()
     assert connections[0].written == [sequence("22", "pointer")]
 
 
 def test_client_that_never_saw_shape_is_not_told_to_reset_it():
     pymux, connections = make_pymux()
-    pymux.sync_pointer_shape()
+    pymux.terminals.sync_pointer_shape()
     assert connections[0].written == []
 
 
@@ -272,7 +273,7 @@ def test_shape_skips_client_with_no_connection():
     pane = FakePane(pointer_shape="pointer")
     pymux, connections = make_pymux(focused=[0, 1], pane=pane)
     pymux._client_states = {None: FakeClientState(), **pymux._client_states}
-    pymux.sync_pointer_shape()
+    pymux.terminals.sync_pointer_shape()
     assert connections[0].written == [sequence("22", "pointer")]
     assert connections[1].written == [sequence("22", "pointer")]
 
@@ -283,8 +284,8 @@ def test_no_pane_asks_for_no_shape():
     a pane whose program never named one.
     """
     pymux, _connections = make_pymux()
-    assert pymux.pointer_shape_of(None) == ""
-    assert pymux.pointer_shape_of(FakePane()) == ""
+    assert pointer_shape_of(None) == ""
+    assert pointer_shape_of(FakePane()) == ""
 
 
 def test_unsafe_payload_reaches_nobody():

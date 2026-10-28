@@ -49,9 +49,8 @@ from ptterm import Terminal
 from ptyhost.backends import Backend
 from ptyhost.backends.posix import GRACE, PosixBackend
 from ptyhost.ending import say_how_it_ends
-from pyte.images import ASSUMED_CELL_HEIGHT, ASSUMED_CELL_WIDTH
 from pyte.keep import Keep
-from pyte.keys import KEY_PROFILES, KeyboardFlag, KeyProfile, key_profile_of
+from pyte.keys import KEY_PROFILES, KeyProfile, key_profile_of
 from pyte.osc import CLEAR_SCROLLBACK, Osc
 from pyte.page import RowMark
 
@@ -63,7 +62,7 @@ from .audio import AudioServer
 from .browsers import Browsers
 from .client.memory import MemoryClient
 from .client_options import ClientOptions
-from .colors import DefaultColors, theme_color_base
+from .colors import DefaultColors
 from .commands import CommandException, call_command_handler, handle_command
 from .commands.completer import create_command_completer
 from .downloads import (
@@ -82,7 +81,6 @@ from .enums import (
     Chooser,
     Clipboard,
     EditingKeys,
-    ExtendedKeys,
     FileTransfer,
     ForwardMode,
     OpenUrlMode,
@@ -130,6 +128,7 @@ from .server_options import ServerOptions
 from .session import DEFAULT_SIZE, OwnOptions, Session
 from .session_options import SessionOptions
 from .style import DEFAULT_THEME, theme
+from .terminals import Terminals
 from .wayland import WaylandServer
 from .window_pane import WindowWidget, is_window_pane
 
@@ -1245,9 +1244,7 @@ class Pymux:
         "_open_url_shim_dir": Keep.REBUILT,
         "options": Keep.SAVED,
         "session_defaults": Keep.SAVED,
-        "_kitty_flags_sent": Keep.REBUILT,
-        "_keyboard_state_sent": Keep.REBUILT,
-        "_cell_size_sent": Keep.REBUILT,
+        "terminals": Keep.REBUILT,
         # The running server.
         "connections": Keep.DROPPED,
         "tasks": Keep.DROPPED,
@@ -1341,18 +1338,8 @@ class Pymux:
 
         self.connections = []
 
-        #: Kitty keyboard protocol flags last sent to the clients. (The
-        #: flags of the focused pane; clients enable the protocol on
-        #: their outer terminals accordingly.)
-        self._kitty_flags_sent: int | None = None
+        self.terminals = Terminals(self)
 
-        # What the panes were last told about the keyboards of the
-        # clients: the flags and the switch above. (None: nothing was
-        # told yet.)
-        self._keyboard_state_sent: tuple[int, tuple[tuple[SessionId, bool], ...], ExtendedKeys] | None = None
-
-        # The cell size the panes were last told. (None: nothing yet.)
-        self._cell_size_sent: tuple[int, int] | None = None
         #: The task group every route runs in. `running()` owns it, so
         #: it is there for exactly as long as this server serves, and
         #: `None` before and after. Lillecarl/pymux#87.
@@ -1615,7 +1602,7 @@ class Pymux:
             setattr(client_state, name, value)
         for name, value in record["options"].items():
             setattr(client_state.options, name, value)
-        self.sync_color_bases()
+        self.terminals.sync_color_bases()
         if record.get("connected") is not None:
             client_state.connection.created = record["connected"]
 
@@ -1910,9 +1897,9 @@ class Pymux:
 
         self.refresh_what_time_moves(but_not=app)
 
-        self.sync_kitty_flags()
-        self.sync_pointer_shape()
-        self.sync_keyboard_source_flags()
+        self.terminals.sync_kitty_flags()
+        self.terminals.sync_pointer_shape()
+        self.terminals.sync_keyboard_source_flags()
 
     def server_starts(self) -> None:
         """
@@ -2736,9 +2723,9 @@ class Pymux:
         self.panes_by_id[pane.pane_id] = pane
 
         # A pane that starts now missed the last walk of the panes.
-        self.tell_pane_about_keyboard(pane)
-        self.tell_pane_about_colours(pane)
-        self.tell_pane_about_cell_size(pane)
+        self.terminals.tell_pane_about_keyboard(pane)
+        self.terminals.tell_pane_about_colours(pane)
+        self.terminals.tell_pane_about_cell_size(pane)
 
     async def display_overlay(
         self,
@@ -2944,10 +2931,10 @@ class Pymux:
         # The focused pane can have changed, or the process inside it
         # can have pushed/popped kitty keyboard protocol flags or asked
         # for a different pointer.
-        self.sync_kitty_flags()
-        self.sync_pointer_shape()
+        self.terminals.sync_kitty_flags()
+        self.terminals.sync_pointer_shape()
         # "set-option synthesize-key-events" takes effect here.
-        self.sync_keyboard_source_flags()
+        self.terminals.sync_keyboard_source_flags()
 
     def sync_frame_rate(self) -> None:
         """
@@ -3439,7 +3426,7 @@ exec pymux notify -u "$urgency" -- "$@"
                 # has to see the shape of the pane it looks at. The
                 # screen of the pane holds it; this only asks every
                 # client to look again.
-                self.sync_pointer_shape()
+                self.terminals.sync_pointer_shape()
                 return
 
             if code == Osc.TERMINAL_EXTENSION:
@@ -3837,224 +3824,6 @@ exec pymux notify -u "$urgency" -- "$@"
             return None
         return window.active_pane if window is not None else None
 
-    def pointer_shape_of(self, pane) -> str:
-        """
-        The shape of the pointer that the program in a pane asks for.
-
-        An empty string means that it asked for none, and that the
-        terminal of the user picks the shape itself.
-        """
-        if pane is None:
-            return ""
-        return pane.screen.pointer_shapes.shape
-
-    def sync_pointer_shape(self) -> None:
-        """
-        Give every client the shape of the pointer that the pane it
-        looks at asks for.
-
-        Two clients can look at two panes, so this is answered for each
-        of them. A client that moves to a pane which asks for no shape
-        is told so, or the pointer keeps the shape of a pane that the
-        user left.
-        """
-        try:
-            for connection, client_state in self._client_states.items():
-                # A socket command runs under a temporary client with
-                # no connection: no terminal to send to, and stopping
-                # here would starve every client after it.
-                # Lillecarl/pymux#493.
-                if connection is None:
-                    continue
-                connection.set_pointer_shape(self.pointer_shape_of(self.focused_pane_of(client_state)))
-        except Exception:
-            logger.exception("Sending the shape of the pointer failed.")
-
-    def keyboard_source_flags(self) -> int:
-        """
-        What the terminals of the clients can report of the keyboard
-        protocol, in the flags of that protocol.
-
-        A pane may be looked at by several clients at once, and a key
-        can come from any of them. So only what every attached client
-        can report counts. No client at all reports nothing.
-
-        Only an attached client counts. A connection that runs one
-        command and leaves has no terminal of the user behind it, and
-        it never asked one what it does.
-        """
-        # A client that runs in the process that started pymux has no
-        # connection, so nothing ever asked its terminal what it can
-        # report. It counts as reporting nothing, which is what it
-        # already did.
-        #
-        # **The temporary client of a socket command is not here.** It
-        # never asked a terminal anything, so its report of nothing
-        # would drag the mask of every real client down with it for as
-        # long as the command runs. Lillecarl/pymux#420.
-        masks = [
-            0 if connection is None else connection.kitty_source_flags
-            for connection, client_state in self._client_states.items()
-            if not client_state.temporary
-        ]
-        if not masks:
-            return 0
-        common = masks[0]
-        for mask in masks[1:]:
-            common &= mask
-        return common
-
-    def sync_keyboard_source_flags(self) -> None:
-        """
-        Tell every pane what the keyboards of the clients can report.
-
-        A pane answers the query of its program with the flags that it
-        really gets, and that answer needs this. (Only walks the panes
-        when something changed.)
-        """
-        state = (
-            self.keyboard_source_flags(),
-            tuple((session.session_id, session.options.synthesize_key_events) for session in self.sessions),
-            self.options.extended_keys,
-        )
-        if state == self._keyboard_state_sent:
-            return
-        self._keyboard_state_sent = state
-        for pane in list(self.panes_by_id.values()):
-            self.tell_pane_about_keyboard(pane)
-
-    def cell_size(self) -> tuple[int, int]:
-        """
-        How big one cell is, in pixels, for the panes of this server.
-
-        **The cell of the client that has been here longest and knows
-        one.** A pane serves several clients and they do not share a
-        cell size, so one of them has to speak for the pane. First come
-        is the stable choice: a later client attaching does not move
-        what the panes already hold, and a session usually keeps one
-        client for its whole life. tmux picks a client's cell for the
-        window in the same spirit (`resize.c`).
-
-        A client that never answered "CSI 16 t" is passed over rather
-        than counted at its default, and a connection that runs one
-        command and leaves is not a terminal anybody is looking at.
-        With nobody to ask, the panes keep the size `pyte` assumes.
-        Lillecarl/pymux#369.
-        """
-        for connection, client_state in self._client_states.items():
-            if connection is None or client_state.temporary:
-                continue
-            graphics = connection.graphics
-            if graphics.cell_size_known:
-                return (graphics.cell_width, graphics.cell_height)
-        return (ASSUMED_CELL_WIDTH, ASSUMED_CELL_HEIGHT)
-
-    def sync_cell_size(self) -> None:
-        """
-        Tell every pane how big a cell is. (Only walks the panes when
-        the answer changed.)
-
-        A client attaching, a client leaving and a terminal answering
-        the query all reach this. The answer moves rarely: it takes the
-        client that speaks for the panes going away, or the first one
-        ever to answer.
-        """
-        size = self.cell_size()
-        if size == self._cell_size_sent:
-            return
-        self._cell_size_sent = size
-        for pane in list(self.panes_by_id.values()):
-            self.tell_pane_about_cell_size(pane)
-
-    def tell_pane_about_cell_size(self, pane) -> None:
-        """
-        Tell one pane how big a cell is. Never raises: this runs when a
-        client attaches and when a pane starts, and neither may stop
-        for it.
-        """
-        # An older ptterm has a screen that cannot be told. It then
-        # keeps the size `pyte` assumes, as before.
-        with suppress(AttributeError):
-            pane.screen.set_cell_size(*self.cell_size())
-
-    def sync_keyboard(self) -> None:
-        """
-        Tell the panes and the clients everything about the keyboard.
-
-        `set-option extended-keys` calls this, because that option
-        moves both halves at once: what a pane may ask for, and what
-        the terminal of a client is put into. Lillecarl/pymux#173.
-        """
-        self.sync_keyboard_source_flags()
-        self.sync_kitty_flags()
-
-    def tell_pane_about_keyboard(self, pane) -> None:
-        """
-        Tell one pane what the keyboards of the clients can report.
-
-        Never raises: this runs when a client attaches and when a pane
-        starts, and neither may stop for it.
-        """
-        try:
-            screen = pane.screen
-        except Exception:
-            return
-        try:
-            screen.keyboard_source_flags = self.keyboard_source_flags()
-            screen.synthesize_key_events = self.options_of_pane(pane).synthesize_key_events
-            screen.extended_keys_allowed = self.options.extended_keys is not ExtendedKeys.OFF
-        except AttributeError:
-            # An older ptterm knows nothing about the keyboard of the
-            # host. It then claims what a pane asks for, as before.
-            pass
-
-    def tell_pane_about_colours(self, pane) -> None:
-        """
-        Tell one pane what the colours around it are: the theme's,
-        when the theme owns the whole screen, and the terminal of the
-        latest client otherwise. Never raises: a pane that starts
-        without either, or whose embedder knows no `set_color_base`,
-        answers from the table `pyte` reports, as before.
-        Lillecarl/pymux#283.
-        """
-        try:
-            # The theme colours the whole screen, and the palette
-            # a program asks for is part of that screen.
-            #
-            # **A pane has one palette and its clients may have two
-            # themes.** So this takes the theme of the client a
-            # person used last, which is the rule the line below
-            # already follows for a terminal's own colours, and the
-            # one that decides where a browser opens.
-            # Lillecarl/pymux#223.
-            painted = self.options_of_pane(pane).paint_screen
-            base = theme_color_base(self.latest_theme()) if painted else self.latest_client_color_base()
-            if base is None:
-                return
-            pane.screen.set_color_base(base)
-        except Exception:
-            # The pane keeps the base it had, and the log says what
-            # was swallowed: a pane that answers from the wrong table
-            # is a fault nobody sees otherwise.
-            logger.exception("Telling a pane about the colours failed.")
-
-    def sync_color_bases(self) -> None:
-        """
-        Tell every pane what the terminal of the latest client draws
-        with.
-
-        A pane answers the colour queries of its program with the
-        theme of that terminal, so what a program learns is what the
-        person in front of it sees. The latest is the client a person
-        used last, by the stamp that `window-size latest` reads -- the
-        same rule that decides where a browser opens.
-
-        Nothing attached, or a client that answered nothing, leaves
-        every pane on the table `pyte` reports. Lillecarl/pymux#283.
-        """
-        for pane in list(self.panes_by_id.values()):
-            self.tell_pane_about_colours(pane)
-
     def latest_client(self):
         """
         The client a person used last, or `None` when nobody is
@@ -4076,80 +3845,6 @@ exec pymux notify -u "$urgency" -- "$@"
         term = hacks_and_lies.outer_term(client) if client is not None else ""
         options = client.session.options if client is not None else self.session_defaults
         return KEY_PROFILES[key_profile_of(version, term) or options.key_profile]
-
-    def latest_theme(self) -> str:
-        """
-        The theme of the client a person used last.
-
-        What a pane answers a colour query with, when the theme owns
-        the screen. A theme belongs to one client now, and a pane
-        belongs to all of them, so this is the tie break; nothing
-        attached falls back to the theme a new client starts on.
-        Lillecarl/pymux#223.
-        """
-        latest = self.latest_client()
-        return DEFAULT_THEME if latest is None else latest.theme_in_use
-
-    def latest_client_color_base(self):
-        """
-        The colour base of the client a person used last, or `None`
-        when nobody is attached, or when that client asked its terminal
-        nothing.
-        """
-        latest = self.latest_client()
-        if latest is None:
-            return None
-        try:
-            return latest.default_colors.color_base()
-        except AttributeError:
-            # A connection that never asked its terminal -- the
-            # in-process one -- has no colours to hand over.
-            return None
-
-    def keyboard_flags_for_client(self) -> int:
-        """
-        What the terminal of a client is asked to report.
-
-        Two things ask. The pane in front of the person asks for what
-        its program pushed, and that has to reach the terminal or the
-        program does not get the keys it wants. **pymux asks as well.**
-        A bare Escape is also the first byte of every escape sequence,
-        so a terminal that does not disambiguate leaves the parser
-        holding it until a timeout says no more is coming: half a
-        second before the command line closes, and the same half second
-        before any alt key does anything. A terminal that
-        disambiguates sends "CSI 27 u", which starts nothing, so the
-        key arrives on the press.
-
-        The two are one set of flags, because one terminal sends the
-        keys of both. A pane reads what it asked for all the same: the
-        key data reaches it as the terminal wrote it, and
-        `Screen.encode_key` writes it again in the encoding of that
-        pane. Lillecarl/pymux#164.
-
-        `set-option extended-keys off` asks for nothing at all, and
-        the client then writes "CSI = 0 ; 1 u" to put the terminal
-        back in the legacy encoding. Lillecarl/pymux#173.
-        """
-        if self.options.extended_keys is ExtendedKeys.OFF:
-            return 0
-        return KeyboardFlag.DISAMBIGUATE | self.get_focused_kitty_flags()
-
-    def sync_kitty_flags(self) -> None:
-        """
-        Send the kitty keyboard protocol flags to all clients, so that
-        they can enable the protocol on their outer terminals. (Only
-        sends when the value changed.)
-        """
-        flags = self.keyboard_flags_for_client()
-        if flags == self._kitty_flags_sent:
-            return
-        self._kitty_flags_sent = flags
-        try:
-            for connection in self.connections:
-                connection._send_packet({Field.CMD: Packet.KITTY_KEYBOARD, Field.DATA: {"flags": flags}})
-        except Exception:
-            logger.exception("Sending kitty keyboard flags failed.")
 
     def finish_recordings(self, holders: Iterable[Pane | ServerConnection] | None = None) -> None:
         """
@@ -4730,12 +4425,12 @@ exec pymux notify -u "$urgency" -- "$@"
         # are here, and the keyboard of every client has to serve what
         # a pane hears. (The detection of this client answers later,
         # and raises it again when the terminal can do more.)
-        self.sync_keyboard_source_flags()
+        self.terminals.sync_keyboard_source_flags()
 
         # This client speaks for the panes only if no earlier one does,
         # and only once its terminal has answered the cell size query.
         # Both are why the reply calls this again.
-        self.sync_cell_size()
+        self.terminals.sync_cell_size()
 
         return client_state
 
@@ -4758,6 +4453,6 @@ exec pymux notify -u "$urgency" -- "$@"
         if gone is not None:
             self.browsers.client_gone(gone)
         # One client fewer can mean that the rest speak more.
-        self.sync_keyboard_source_flags()
+        self.terminals.sync_keyboard_source_flags()
         # And the client that spoke for the panes may be the one gone.
-        self.sync_cell_size()
+        self.terminals.sync_cell_size()

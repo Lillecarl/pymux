@@ -52,7 +52,7 @@ def _recolor(pymux: Pymux, owner: object) -> None:
     # A pane's colour base comes from which theme owns the screen, and
     # whether it does. A pane that exists heard the old answer.
     # Lillecarl/pymux#283.
-    pymux.sync_color_bases()
+    pymux.terminals.sync_color_bases()
 
 
 @options

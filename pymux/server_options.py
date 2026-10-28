@@ -52,7 +52,7 @@ def _audio_changed(pymux: Pymux, owner: object) -> None:
 
 def _keyboard_changed(pymux: Pymux, owner: object) -> None:
     # Every client hears what its terminal should send now.
-    pymux.sync_keyboard()
+    pymux.terminals.sync_keyboard()
 
 
 def _render_mode_changed(pymux: Pymux, owner: object) -> None:

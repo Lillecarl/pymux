@@ -21,7 +21,7 @@ def _colors_of(pymux: Pymux, client_state: ClientState) -> ColorOverrides:
     """
     The colours this client's terminal shows with: its theme's when the
     theme paints the screen, else what the terminal said it draws with,
-    else the table pyte reports. `Pymux.tell_pane_about_colours` reads
+    else the table pyte reports. `Terminals.tell_pane_about_colours` reads
     them the same way.
     """
     if client_state.session.options.paint_screen:
@@ -38,7 +38,7 @@ def _cell_of(pymux: Pymux, client_state: ClientState) -> tuple[int, int]:
     graphics = client_state.connection.graphics
     if graphics.cell_size_known:
         return graphics.cell_width, graphics.cell_height
-    return pymux.cell_size()
+    return pymux.terminals.cell_size()
 
 
 def _grid_of(pymux: Pymux, client_state: ClientState, cell: tuple[int, int]) -> screenshot.Grid:

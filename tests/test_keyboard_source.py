@@ -75,37 +75,37 @@ def make_pymux(*masks):
 
 
 def test_no_client_reports_nothing():
-    assert Pymux().keyboard_source_flags() == 0
+    assert Pymux().terminals.keyboard_source_flags() == 0
 
 
 def test_one_client_reports_what_its_terminal_took():
     pymux, _ = make_pymux(0b11111)
-    assert pymux.keyboard_source_flags() == 0b11111
+    assert pymux.terminals.keyboard_source_flags() == 0b11111
 
 
 def test_legacy_client_holds_others_back():
     "A key can come from any client, so only what all of them serve counts."
     pymux, _ = make_pymux(0b11111, 0)
-    assert pymux.keyboard_source_flags() == 0
+    assert pymux.terminals.keyboard_source_flags() == 0
 
 
 def test_two_clients_report_what_they_share():
     pymux, _ = make_pymux(0b11111, 0b00011)
-    assert pymux.keyboard_source_flags() == 0b00011
+    assert pymux.terminals.keyboard_source_flags() == 0b00011
 
 
 def test_connection_that_never_attached_does_not_count():
     "It runs one command and leaves. No terminal of a user is behind it."
     pymux, _ = make_pymux(0b11111)
     pymux.connections = [*list(pymux._client_states), FakeConnection(0)]
-    assert pymux.keyboard_source_flags() == 0b11111
+    assert pymux.terminals.keyboard_source_flags() == 0b11111
 
 
 def test_client_that_leaves_lets_rest_speak():
     pymux, connections = make_pymux(0b11111, 0)
-    assert pymux.keyboard_source_flags() == 0
+    assert pymux.terminals.keyboard_source_flags() == 0
     pymux.remove_client(connections[1])
-    assert pymux.keyboard_source_flags() == 0b11111
+    assert pymux.terminals.keyboard_source_flags() == 0b11111
 
 
 def test_temporary_client_does_not_hold_the_mask_back():
@@ -118,11 +118,11 @@ def test_temporary_client_does_not_hold_the_mask_back():
     temporary = FakeConnection(0)
     pymux._client_states[temporary] = FakeClientState(pymux.current_session)
     pymux._client_states[temporary].temporary = True
-    assert pymux.keyboard_source_flags() == 0b11111
+    assert pymux.terminals.keyboard_source_flags() == 0b11111
 
     # And when it leaves, the mask is the same: it never counted.
     pymux.remove_client(temporary)
-    assert pymux.keyboard_source_flags() == 0b11111
+    assert pymux.terminals.keyboard_source_flags() == 0b11111
 
 
 # ----------------------------------------------------------------------
@@ -135,7 +135,7 @@ def test_every_pane_hears_mask():
     for pane in panes:
         pymux.panes_by_id[pane.pane_id] = pane
 
-    pymux.sync_keyboard_source_flags()
+    pymux.terminals.sync_keyboard_source_flags()
     for pane in panes:
         assert pane.screen.keyboard_source_flags == 0b00011
 
@@ -143,7 +143,7 @@ def test_every_pane_hears_mask():
 def test_pane_that_starts_later_hears_it_as_well():
     pymux, _ = make_pymux(0b00110)
     pane = FakePane(1)
-    pymux.tell_pane_about_keyboard(pane)
+    pymux.terminals.tell_pane_about_keyboard(pane)
     assert pane.screen.keyboard_source_flags == 0b00110
 
 
@@ -151,7 +151,7 @@ def test_client_that_leaves_raises_mask_of_pane():
     pymux, connections = make_pymux(0b11111, 0)
     pane = FakePane(1)
     pymux.panes_by_id[pane.pane_id] = pane
-    pymux.sync_keyboard_source_flags()
+    pymux.terminals.sync_keyboard_source_flags()
     assert pane.screen.keyboard_source_flags == 0
 
     pymux.remove_client(connections[1])
@@ -169,7 +169,7 @@ def test_pane_without_process_is_no_error():
             raise AttributeError("no process yet")
 
     pymux, _ = make_pymux(0b11111)
-    pymux.tell_pane_about_keyboard(PaneWithoutProcess())  # Does not raise.
+    pymux.terminals.tell_pane_about_keyboard(PaneWithoutProcess())  # Does not raise.
 
 
 def test_screen_that_knows_nothing_about_host_is_no_error():
@@ -185,7 +185,7 @@ def test_screen_that_knows_nothing_about_host_is_no_error():
             self.screen = OldScreen()
 
     pymux, _ = make_pymux(0b11111)
-    pymux.tell_pane_about_keyboard(OldPane())  # Does not raise.
+    pymux.terminals.tell_pane_about_keyboard(OldPane())  # Does not raise.
 
 
 # ----------------------------------------------------------------------
@@ -201,11 +201,11 @@ def test_every_pane_hears_option():
     pane = FakePane(1)
     pymux.panes_by_id[pane.pane_id] = pane
 
-    pymux.sync_keyboard_source_flags()
+    pymux.terminals.sync_keyboard_source_flags()
     assert pane.screen.synthesize_key_events is True
 
     pymux.session_defaults.synthesize_key_events = False
-    pymux.sync_keyboard_source_flags()
+    pymux.terminals.sync_keyboard_source_flags()
     assert pane.screen.synthesize_key_events is False
 
 
@@ -214,10 +214,10 @@ def test_option_alone_reaches_panes():
     pymux, _ = make_pymux(0b11111)
     pane = FakePane(1)
     pymux.panes_by_id[pane.pane_id] = pane
-    pymux.sync_keyboard_source_flags()
+    pymux.terminals.sync_keyboard_source_flags()
 
     pymux.session_defaults.synthesize_key_events = False
-    pymux.sync_keyboard_source_flags()
+    pymux.terminals.sync_keyboard_source_flags()
     assert pane.screen.synthesize_key_events is False
     assert pane.screen.keyboard_source_flags == 0b11111
 
@@ -233,7 +233,7 @@ def test_pymux_asks_terminal_to_disambiguate():
     which can start nothing. pymux asks for that on its own account,
     and not only when a pane wants it. Lillecarl/pymux#164.
     """
-    assert Pymux().keyboard_flags_for_client() == KeyboardFlag.DISAMBIGUATE
+    assert Pymux().terminals.keyboard_flags_for_client() == KeyboardFlag.DISAMBIGUATE
 
 
 def test_what_pane_asks_for_reaches_terminal_as_well():
@@ -245,7 +245,7 @@ def test_what_pane_asks_for_reaches_terminal_as_well():
 
     pymux = Pymux()
     pymux.get_focused_pane = lambda: PaneThatAsked()
-    assert pymux.keyboard_flags_for_client() == (KeyboardFlag.DISAMBIGUATE | KeyboardFlag.REPORT_EVENT_TYPES)
+    assert pymux.terminals.keyboard_flags_for_client() == (KeyboardFlag.DISAMBIGUATE | KeyboardFlag.REPORT_EVENT_TYPES)
 
 
 # ----------------------------------------------------------------------
@@ -266,7 +266,7 @@ def test_off_asks_terminal_for_nothing():
     pymux, _ = make_pymux(0b11111)
     ALL_SERVER_OPTIONS["extended-keys"].set_value(pymux, "off")
 
-    assert pymux.keyboard_flags_for_client() == 0
+    assert pymux.terminals.keyboard_flags_for_client() == 0
 
 
 def test_off_tells_every_pane_as_well():
@@ -290,7 +290,7 @@ def test_turning_it_back_on_reaches_panes():
     ALL_SERVER_OPTIONS["extended-keys"].set_value(pymux, "on")
 
     assert pane.screen.extended_keys_allowed is True
-    assert pymux.keyboard_flags_for_client() == KeyboardFlag.DISAMBIGUATE
+    assert pymux.terminals.keyboard_flags_for_client() == KeyboardFlag.DISAMBIGUATE
 
 
 def test_always_still_asks_terminal():
@@ -298,7 +298,7 @@ def test_always_still_asks_terminal():
     pymux, _ = make_pymux(0b11111)
     ALL_SERVER_OPTIONS["extended-keys"].set_value(pymux, "always")
 
-    assert pymux.keyboard_flags_for_client() == KeyboardFlag.DISAMBIGUATE
+    assert pymux.terminals.keyboard_flags_for_client() == KeyboardFlag.DISAMBIGUATE
 
 
 def test_value_nobody_defines_is_error():

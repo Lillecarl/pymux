@@ -550,7 +550,7 @@ async def test_a_click_from_the_terminal_reaches_the_window(tmp_path):
             lambda: "no click arrived at %s in %s: %s" % ((x, y), where, logged(log)[-8:]),
         )
         assert "button 272 1" in logged(log)
-        width, height = pymux.cell_size()
+        width, height = pymux.terminals.cell_size()
         motion = [line for line in logged(log) if line.startswith("motion")][-1]
         assert motion == "motion %d %d" % ((column + 0.5) * width, (row + 0.5) * height)
 
@@ -576,7 +576,7 @@ async def test_a_terminal_that_reports_pixels_puts_the_pointer_on_the_pixel(tmp_
             state.connection._process({"cmd": "in", "data": "\x1b[<0;%d;%d%s" % (x, y, end)})
         await once(lambda: "button 272 0" in logged(log), 10.0, lambda: "no click: %s" % logged(log)[-6:])
         motion = [line for line in logged(log) if line.startswith("motion")][-1]
-        width, height = pymux.cell_size()
+        width, height = pymux.terminals.cell_size()
         assert motion == "motion %d %d" % (3.75 * width, 0.675 * height)
 
 
@@ -597,7 +597,7 @@ async def test_a_terminal_that_keeps_its_cell_size_keeps_the_mouse_in_cells(tmp_
             state.connection._process({"cmd": "in", "data": "\x1b[<0;%d;%d%s" % (x + 1, y + 1, end)})
         await once(lambda: "button 272 0" in logged(log), 10.0, lambda: "no click: %s" % logged(log)[-6:])
         assert not state.connection.pixel_mouse
-        width, height = pymux.cell_size()
+        width, height = pymux.terminals.cell_size()
         motion = [line for line in logged(log) if line.startswith("motion")][-1]
         assert motion == "motion %d %d" % (3.5 * width, 1.5 * height)
 
@@ -629,7 +629,7 @@ async def test_a_scroll_reaches_the_window_as_the_client_says(tmp_path, scroll):
         line = await once(
             lambda: next((one for one in logged(log) if one.startswith("axis")), None), 10.0, "no scroll arrived"
         )
-        _width, height = pymux.cell_size()
+        _width, height = pymux.terminals.cell_size()
         # 0 is `wl_pointer.axis.vertical_scroll`; a notch is 15 units.
         assert line == "axis 0 %d" % (height if scroll == WindowScroll.SMOOTH else 15)
 
