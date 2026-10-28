@@ -376,7 +376,11 @@ def _symbol_window_flags(context: FormatContext) -> str:
     window = context.window
     # tmux's order: the marks before the current mark, the zoom after.
     marks = window_marks(context.session.options, window)
-    z = "Z" if window.zoom else ""
+    # The progress follows the flags, so tmux's `#I:#W#F` shows it: a
+    # conditional in the default format cost every frame 6% more parsing.
+    # Lillecarl/pymux#788.
+    progress = _window_progress(context)
+    z = ("Z" if window.zoom else "") + (" " + progress if progress else "")
 
     if window == arrangement.get_active_window():
         return marks + "*" + z
@@ -385,7 +389,7 @@ def _symbol_window_flags(context: FormatContext) -> str:
     # One column wide either way, so the windows beside this one do
     # not move when it becomes the current one. `#{window_flags}`
     # answers the flags alone.
-    return marks + z + " "
+    return marks + z + ("" if progress else " ")
 
 
 def _symbol_pane_id(context: FormatContext) -> str:
@@ -486,11 +490,7 @@ def _window_flags(context: FormatContext) -> str:
     arrangement = context.session.arrangement
     window = context.window
     marks = window_marks(context.session.options, window)
-    # The progress follows the flags, so tmux's `#I:#W#F` shows it: a
-    # conditional in the default format cost every frame 6% more parsing.
-    # Lillecarl/pymux#788.
-    progress = _window_progress(context)
-    z = ("Z" if window.zoom else "") + (" " + progress if progress else "")
+    z = "Z" if window.zoom else ""
 
     if window == arrangement.get_active_window():
         return marks + "*" + z

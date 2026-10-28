@@ -548,6 +548,8 @@ async def test_a_pane_s_progress_reaches_the_status_line_and_the_client():
             assert pane.progress == Progress(1, 42)
             assert connection.progress == Progress(1, 42)
             assert format_pymux_string(pymux, "#{window_progress}") == "42%"
+            # tmux's default window list reads it through #F.
+            assert format_pymux_string(pymux, "#F") == "* 42%"
 
             pymux.forward_osc(pane, "9", "4;0")
             assert connection.progress == NO_PROGRESS
