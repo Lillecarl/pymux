@@ -118,6 +118,15 @@ class ServerOptions(Options):
         ),
         choices=[0, 600, 3600, 86400],
     )
+    notification_keep_seen: int = option(
+        3600,
+        doc=(
+            "How long the notification hub keeps a notification after a client saw the window it came "
+            "from, in seconds. An unseen one stays. Zero keeps every one until the hub holds 256. "
+            "Lillecarl/pymux#780."
+        ),
+        choices=[0, 600, 3600, 86400],
+    )
     action_log: bool = option(
         False,
         doc=(

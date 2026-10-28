@@ -54,8 +54,8 @@ def age(seconds: float) -> str:
 
 
 def _unread(window: Window | None, record: Notification) -> bool:
-    "Unread while the window's mark is up and nobody looked since it came."
-    return window is not None and window.notified and record.at > window.seen_at
+    "Unread while the window's mark is up and nobody looked since it came, nor before the last sweep."
+    return record.seen_at is None and window is not None and window.notified and record.at > window.seen_at
 
 
 def heading_text(heading: Heading) -> str:

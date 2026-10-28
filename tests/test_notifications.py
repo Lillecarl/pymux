@@ -260,6 +260,48 @@ async def test_enter_from_hub_jumps_to_the_pane():
 
 
 # ----------------------------------------------------------------------
+# What was seen goes after a while. Lillecarl/pymux#780.
+
+
+def test_the_sweep_marks_what_was_seen_and_forgets_it_later():
+    center = NotificationCenter()
+    seen = center.add("Seen")
+    center.add("Unseen")
+    center.sweep(lambda record: 100.0 if record.id == seen.id else None, keep=60, now=120.0)
+    assert [(one.title, one.seen_at) for one in center.notifications()] == [("Seen", 100.0), ("Unseen", None)]
+
+    center.sweep(lambda record: None, keep=60, now=160.0)
+    assert [one.title for one in center.notifications()] == ["Unseen"]
+
+
+def test_zero_keeps_what_was_seen():
+    center = NotificationCenter()
+    center.add("Seen")
+    center.sweep(lambda record: 100.0, keep=0, now=10_000.0)
+    assert [one.seen_at for one in center.notifications()] == [100.0]
+
+
+async def test_a_notification_is_seen_when_a_client_looks_at_its_window():
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            first = pymux.current_session.arrangement.get_active_window()
+            pane = first.active_pane
+            await run_as(pymux, state, "new-window")
+            away = pymux.notification_center.add("Away", pane_id=pane.pane_id)
+            assert pymux._seen_of(away) is None
+
+            pymux.current_session.arrangement.set_active_window(first)
+            assert pymux._seen_of(away) == first.seen_at
+
+            # One that comes while a client looks is seen at once.
+            here = pymux.notification_center.add("Here", pane_id=pane.pane_id)
+            assert pymux._seen_of(here) is not None
+
+        # One with no pane has no window to look at.
+        assert pymux._seen_of(pymux.notification_center.add("Script")) is not None
+
+
+# ----------------------------------------------------------------------
 # A click on a notification. Lillecarl/pymux#779.
 
 

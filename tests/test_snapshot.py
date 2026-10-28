@@ -314,6 +314,7 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     center.add("deploy", "", Urgency.CRITICAL, None)
     center.add_osc99(strip.panes[0].pane_id, "i=half:d=0:p=body;still coming")
     center._records = [record._replace(at=1000.0 + n) for n, record in enumerate(center._records)]
+    center._records[0] = center._records[0]._replace(seen_at=1500.0)
     pymux.notifications.outgoing(pane.pane_id, "i=one;first")
     pymux.notifications.outgoing(strip.panes[0].pane_id, "i=two:a=report,-focus;second")
 

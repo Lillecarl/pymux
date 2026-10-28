@@ -450,6 +450,7 @@ class NotificationRow:
     position: int | None = field(metadata=column(unique=True))
     identifier: str | None
     source: str = ""
+    seen_at: float | None = None
 
 
 @dataclass(frozen=True, slots=True)

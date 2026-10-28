@@ -598,9 +598,11 @@ def rows_of(pymux: Pymux) -> Iterator[Row]:
     # has the identifier its chunks name instead.
     center = pymux.notification_center
     for position, record in enumerate(center._records):
-        yield NotificationRow(*record[:-1], position=position, identifier=None, source=record.source)
+        yield NotificationRow(
+            *record[:6], position=position, identifier=None, source=record.source, seen_at=record.seen_at
+        )
     for (_pane_id, identifier), record in center._pending.items():
-        yield NotificationRow(*record[:-1], position=None, identifier=identifier, source=record.source)
+        yield NotificationRow(*record[:6], position=None, identifier=identifier, source=record.source)
     for name, (sql, description) in sorted(pymux.jobs.saved_queries.items()):
         yield SavedQueryRow(name, sql, description)
     for name in sorted(pymux.jobs.forgotten_seeds):
@@ -997,7 +999,14 @@ def _read_notifications(pymux: Pymux, db: apsw.Connection, counters: dict[str, i
     for row in select(db, NotificationRow, "ORDER BY position"):
         pane_id = PaneId(row.pane_id) if row.pane_id is not None else None
         record = Notification(
-            row.notification_id, row.title, row.body, row.urgency, pane_id, row.at, NotificationSource(row.source)
+            row.notification_id,
+            row.title,
+            row.body,
+            row.urgency,
+            pane_id,
+            row.at,
+            NotificationSource(row.source),
+            row.seen_at,
         )
         if row.identifier is None:
             center._records.append(record)

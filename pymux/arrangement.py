@@ -1230,12 +1230,12 @@ class Arrangement:
             pane.bell = raised = True
         return raised
 
-    def _watched(self, window: Window, apps: Iterable[Application[Any]]) -> bool:
+    def watched(self, window: Window, apps: Iterable[Application[Any]]) -> bool:
         return any(self._active_window_for_cli.get(app) is window for app in apps)
 
     def notify(self, window: Window, apps: Iterable[Application[Any]]) -> bool:
         "Mark a window a notification came from, unless a client looks at it. True when the mark went up."
-        if not window.options.monitor_notification or window.notified or self._watched(window, apps):
+        if not window.options.monitor_notification or window.notified or self.watched(window, apps):
             return False
         window.notified = True
         return True
@@ -1244,7 +1244,7 @@ class Arrangement:
         "`Window.check_output` for every window. True when a mark went up."
         raised = False
         for window in self.windows:
-            raised |= window.check_output(self._watched(window, apps), now)
+            raised |= window.check_output(self.watched(window, apps), now)
         return raised
 
     def set_active_window_from_pane_id(self, pane_id: PaneId) -> None:

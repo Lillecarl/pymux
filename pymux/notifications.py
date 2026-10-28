@@ -106,6 +106,8 @@ class Notification(NamedTuple):
     pane_id: PaneId | None
     at: float
     source: NotificationSource = NotificationSource.UNKNOWN
+    #: When a client first looked at the window it came from; None while unseen.
+    seen_at: float | None = None
 
 
 class NotificationCenter:
@@ -219,6 +221,20 @@ class NotificationCenter:
     def notifications(self) -> list[Notification]:
         "Every finished notification, oldest first."
         return list(self._records)
+
+    def sweep(self, seen_of: Callable[[Notification], float | None], keep: float, now: float) -> None:
+        """
+        Mark what `seen_of` says was seen, and forget what was seen more
+        than `keep` seconds ago. An unseen one stays, until the cap. Zero
+        keeps every one. Lillecarl/pymux#780.
+        """
+        records = []
+        for record in self._records:
+            if record.seen_at is None:
+                record = record._replace(seen_at=seen_of(record))
+            if not keep or record.seen_at is None or now - record.seen_at < keep:
+                records.append(record)
+        self._records = records
 
 
 def split_payload(param: str) -> tuple[str, str, str]:

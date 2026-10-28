@@ -2089,6 +2089,23 @@ class Pymux:
                     self.jobs.sweep(self.options.job_ttl)
             except Exception:
                 logger.exception("The sweep of idle jobs failed.")
+            try:
+                self.notification_center.sweep(self._seen_of, self.options.notification_keep_seen, time.time())
+            except Exception:
+                logger.exception("The sweep of seen notifications failed.")
+
+    def _seen_of(self, record: Notification) -> float | None:
+        """
+        When a client saw the window a notification came from, or None.
+        One with no window to look at is seen now, so it goes in time.
+        """
+        found = self.window_of_pane(record.pane_id)
+        if found is None:
+            return time.time()
+        session, window, _pane = found
+        if window.seen_at >= record.at:
+            return window.seen_at
+        return time.time() if session.arrangement.watched(window, self.apps) else None
 
     @property
     def apps(self):
