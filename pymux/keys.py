@@ -457,8 +457,9 @@ _CELL_SIZE_REPLY_RE = re.compile(r"^\x1b\[[46];\d+;\d+t$")
 # Reply of a DECRQM request: "CSI ? <mode> ; <state> $ y".
 _MODE_REPLY_RE = re.compile(r"^\x1b\[\?\d+;\d+\$y$")
 
-# Reply of a status report, "CSI 5 n": 0 is ready, 3 a malfunction.
-_STATUS_REPLY_RE = re.compile(r"^\x1b\[[03]n$")
+# Reply of a status report, "CSI 5 n": 0 is ready, 3 a malfunction. Or
+# a theme report of DEC 2031, "CSI ? 997 ; 1 n" dark and "; 2 n" light.
+_STATUS_REPLY_RE = re.compile(r"^\x1b\[(?:[03]|\?997;[12])n$")
 
 
 def _ctrl_mapping(char: str) -> Keys | None:

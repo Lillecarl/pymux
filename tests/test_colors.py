@@ -371,6 +371,33 @@ def test_detection_asks_outer_terminal_for_its_colours():
     assert queries.index(COLOR_QUERIES) < queries.index("\x1b[c")
 
 
+@pytest.mark.parametrize("report", ["\x1b[?997;1n", "\x1b[?997;2n"])
+def test_theme_report_asks_for_colours_again(report):
+    "A switch between light and dark says only which. Lillecarl/pymux#796."
+
+    class Output:
+        def __init__(self):
+            self.written = []
+
+        def write_raw(self, data):
+            self.written.append(data)
+
+        def flush(self):
+            pass
+
+    async def check():
+        connection = ServerConnection(FakePymux(), FakePipe())
+        output = Output()
+        connection.client_state = SimpleNamespace(output=output)
+
+        connection._handle_kitty_reply(report)
+
+        assert output.written == [COLOR_QUERIES]
+        connection._close_connection()
+
+    anyio.run(check)
+
+
 def test_reply_lands_on_connection_that_carried_it():
     """
     Each client asks its own terminal and keeps its own answer, so two

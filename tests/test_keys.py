@@ -262,6 +262,16 @@ def test_focus_reports_go_to_reply_callback():
     assert replies == [FOCUS_IN, FOCUS_OUT]
 
 
+def test_theme_report_goes_to_reply_callback():
+    "DEC 2031's report of a light or dark switch. Lillecarl/pymux#796."
+    pressed = []
+    replies = []
+    parser = KittyVt100Parser(pressed.append, reply_callback=replies.append)
+    parser.feed_and_flush("\x1b[?997;1n")
+    assert pressed == []
+    assert replies == ["\x1b[?997;1n"]
+
+
 def test_replies_are_consumed_without_callback():
     "No reply callback: replies must not garble into key presses."
     assert parse("\x1b[?5u") == []

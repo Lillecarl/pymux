@@ -37,7 +37,7 @@ from pymux.commands.common import find_pane, terminal_of
 from .actions import Origin, started_by
 from .answer import Answer
 from .audio import AudioLink
-from .colors import ColorDetection, DefaultColors
+from .colors import COLOR_QUERIES, ColorDetection, DefaultColors
 from .commands import handle_command
 from .enums import ExtendedKeys, Woke
 from .graphics import CELL_SIZE_QUERY, ClientGraphics, draws_placeholders, draws_progress
@@ -88,6 +88,9 @@ PIXEL_MOUSE_ON = "\x1b[?1016h"
 PIXEL_MOUSE_OFF = "\x1b[?1016l"
 FOCUS_REPORTS_ON = "\x1b[?1004h"
 FOCUS_REPORTS_OFF = "\x1b[?1004l"
+THEME_REPORTS_ON = "\x1b[?2031h"
+THEME_REPORTS_OFF = "\x1b[?2031l"
+_THEME_REPORT_RE = re.compile(r"^\x1b\[\?997;[12]n$")
 _PIXEL_MOUSE_REPLY_RE = re.compile(r"^\x1b\[\?1016;(\d+)\$y$")
 
 #: A status report and its answer: 0 is ready, 3 a malfunction, and
@@ -730,6 +733,13 @@ class ServerConnection:
                 self.pymux.invalidate(Woke.CLIENT_FOCUSED)
             return
         if data == FOCUS_OUT:
+            return
+        # The terminal switched between light and dark. The report says
+        # which, not the colours: those are asked again, and their
+        # answers match the theme as at attach. Lillecarl/pymux#796.
+        if _THEME_REPORT_RE.match(data):
+            self._write_output_raw(COLOR_QUERIES)
+            self._flush_output()
             return
 
         # Every reply is kept, whatever is done with it below.
@@ -1980,18 +1990,18 @@ class _FrameOutput(Vt100_Output):
         # pixels where it expects cells.
         self.write_raw(PIXEL_MOUSE_OFF)
 
-    # Focus reports go with the alternate screen: on at the first frame
-    # and at a redraw, off at a detach. A window that gains the focus
-    # with a click iTerm2 keeps to itself is still a client in use.
-    # Lillecarl/pymux#794.
+    # Focus and theme reports go with the alternate screen: on at the
+    # first frame and at a redraw, off at a detach. A window that gains
+    # the focus with a click iTerm2 keeps to itself is still a client in
+    # use. Lillecarl/pymux#794, Lillecarl/pymux#796.
     @override
     def enter_alternate_screen(self) -> None:
         super().enter_alternate_screen()
-        self.write_raw(FOCUS_REPORTS_ON)
+        self.write_raw(FOCUS_REPORTS_ON + THEME_REPORTS_ON)
 
     @override
     def quit_alternate_screen(self) -> None:
-        self.write_raw(FOCUS_REPORTS_OFF)
+        self.write_raw(FOCUS_REPORTS_OFF + THEME_REPORTS_OFF)
         super().quit_alternate_screen()
 
     def write_after_frame(self, data: str) -> None:

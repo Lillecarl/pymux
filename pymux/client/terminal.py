@@ -508,8 +508,9 @@ class TerminalClient(Client):
         # SGR pixel mouse, which the server may have turned on: the next
         # program would read pixels as cells. Lillecarl/pymux#648.
         output.write_raw("\x1b[?1016l")
-        # Focus reports, which the server turns on. Lillecarl/pymux#794.
-        output.write_raw("\x1b[?1004l")
+        # Focus and theme reports, which the server turns on.
+        # Lillecarl/pymux#794, Lillecarl/pymux#796.
+        output.write_raw("\x1b[?1004l\x1b[?2031l")
         # The user variable passthrough sets, which a terminal may hold
         # its own shortcuts back on. Cleared whatever mode the client
         # was in, because a detach in passthrough leaves no leave-mode.
