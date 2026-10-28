@@ -569,7 +569,7 @@ class JobTable:
             job.waiters -= 1
         return job
 
-    async def follow(self, job: Job, lines: int, timeout: float | None, emit) -> int:
+    async def follow(self, job: Job, lines: int, timeout: float | None, emit: Callable[[str], None]) -> int:
         """
         Replay the tail and follow the job live, and answer its exit.
 

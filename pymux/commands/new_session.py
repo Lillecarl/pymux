@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pymux.main import Pymux
+    from pymux.session import Session
 
 
 from prompt_toolkit.data_structures import Size
@@ -97,7 +98,7 @@ def new_session(pymux: Pymux, args: argparse.Namespace):
     return _open(pymux, args, session)
 
 
-async def _open(pymux: Pymux, args: argparse.Namespace, session) -> None:
+async def _open(pymux: Pymux, args: argparse.Namespace, session: Session) -> None:
     await pymux.create_window(
         command=args.command,
         start_directory=args.start_directory,

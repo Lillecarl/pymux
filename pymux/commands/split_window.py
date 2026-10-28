@@ -4,6 +4,7 @@ import argparse
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from pymux.arrangement import Window
     from pymux.main import Pymux
     from pymux.tags import Tags
 
@@ -36,7 +37,12 @@ def split_window(pymux: Pymux, args: argparse.Namespace):
 
 
 async def _split(
-    pymux: Pymux, executable, start_directory, target_window, tags: Tags, args: argparse.Namespace
+    pymux: Pymux,
+    executable: str | None,
+    start_directory: str | None,
+    target_window: Window | None,
+    tags: Tags,
+    args: argparse.Namespace,
 ) -> None:
     # The tmux definition of horizontal is the opposite of prompt_toolkit.
     pane = await pymux.add_process(

@@ -4,6 +4,8 @@ import argparse
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from pymux.arrangement import Pane
+    from pymux.jobs import Job
     from pymux.main import Pymux
 
 
@@ -33,7 +35,7 @@ def view_job(pymux: Pymux, args: argparse.Namespace):
     return _replace(pymux, pane, job, args)
 
 
-async def _replace(pymux: Pymux, pane, job, args: argparse.Namespace) -> None:
+async def _replace(pymux: Pymux, pane: Pane, job: Job, args: argparse.Namespace) -> None:
 
     if pymux._window_holding(pane) is None:
         raise CommandException(

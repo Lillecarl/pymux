@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import anyio
 
 if TYPE_CHECKING:
+    from pymux.arrangement import Pane
     from pymux.main import Pymux
     from pymux.wayland import Launch
 
@@ -39,7 +40,7 @@ def wl(pymux: Pymux, args: argparse.Namespace):
     return _run(pymux, pane, argv, cwd, env)
 
 
-async def _run(pymux: Pymux, pane, argv: list[str], cwd: str | None, env: dict[str, str]) -> None:
+async def _run(pymux: Pymux, pane: Pane, argv: list[str], cwd: str | None, env: dict[str, str]) -> None:
     try:
         launch = await pymux.wayland.launch(pane, argv, cwd, env)
     except OSError as e:

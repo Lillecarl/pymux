@@ -131,6 +131,7 @@ from .window_pane import WindowWidget, is_window_pane
 
 if TYPE_CHECKING:
     from .border_drag import BorderDrag
+    from .pipes import PipeConnection
     from .pipes.posix import PosixSocketListener
     from .url_mode import UrlMode
 
@@ -4107,7 +4108,7 @@ class Pymux:
         sock.listen(BACKLOG)
         self.listener = PosixSocketListener(socket_name, sock, self._accept_connection)
 
-    def _accept_connection(self, pipe_connection) -> None:
+    def _accept_connection(self, pipe_connection: PipeConnection) -> None:
         # We have to create a new `context`, because this will be the scope for
         # a new prompt_toolkit.Application to become active.
         #

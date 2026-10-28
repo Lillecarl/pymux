@@ -281,7 +281,7 @@ def send_key(pane: Pane, event: KeyEvent, written: str) -> None:
         raise CommandException(why_not(written, cannot))
 
 
-def terminal_of(pane) -> Terminal:
+def terminal_of(pane: Pane) -> Terminal:
     """
     The terminal of a pane, for a command that needs one: a pane that
     shows a Wayland window has no screen, no history and no pty.

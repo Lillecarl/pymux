@@ -177,7 +177,7 @@ class Questions:
         self.pymux = pymux
         self._db: apsw.Connection | None = None
 
-    def rows(self, name: str, **params: str) -> list[tuple]:
+    def rows(self, name: str, **params: str) -> list[tuple[Any, ...]]:
         "What the question of that name answers, or nothing when it fails or outruns its budget."
         saved = self.pymux.jobs.queries.get(name)
         if saved is None:

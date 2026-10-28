@@ -5,8 +5,15 @@ clients: a unix socket, or a pair of queues in one process.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from .base import BrokenPipeError, PipeConnection
 from .memory import MemoryConnection, connect_in_memory
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from .posix import PosixSocketListener
 
 __all__ = [
     "BrokenPipeError",
@@ -19,7 +26,9 @@ __all__ = [
 ]
 
 
-def bind_and_listen_on_socket(socket_name, accept_callback):
+def bind_and_listen_on_socket(
+    socket_name: str | None, accept_callback: Callable[[PipeConnection], None]
+) -> PosixSocketListener:
     """
     Bind the socket, and answer with the listener that serves it.
 

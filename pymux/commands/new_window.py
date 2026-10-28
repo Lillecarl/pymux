@@ -4,6 +4,7 @@ import argparse
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from pymux.arrangement import Arrangement, Window
     from pymux.main import Pymux
     from pymux.session import Session
     from pymux.tags import Tags
@@ -58,7 +59,7 @@ def word_window(session: Session, target: str | None):
     return None
 
 
-def which_session(pymux: Pymux, args: argparse.Namespace):
+def which_session(pymux: Pymux, args: argparse.Namespace) -> tuple[Session, str | None]:
     """
     The session a new window goes in, and the target with its session
     part taken off.
@@ -157,7 +158,15 @@ def new_window(pymux: Pymux, args: argparse.Namespace):
     return _open(pymux, args, session, target, arrangement, window, tags)
 
 
-async def _open(pymux: Pymux, args: argparse.Namespace, session, target, arrangement, window, tags: Tags) -> None:
+async def _open(
+    pymux: Pymux,
+    args: argparse.Namespace,
+    session: Session,
+    target: str | None,
+    arrangement: Arrangement,
+    window: Window | None,
+    tags: Tags,
+) -> None:
     made = await pymux.create_window(
         args.executable,
         start_directory=args.start_directory,

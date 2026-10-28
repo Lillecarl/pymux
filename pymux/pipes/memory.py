@@ -53,7 +53,7 @@ class MemoryConnection(PipeConnection):
         self._peer: MemoryConnection | None = None
         self._closed = False
         self._reader = PacketReader()
-        self._ready: list[dict] = []
+        self._ready: list[Message] = []
         #: The bytes the client on this end holds for its terminal, which
         #: has not taken them yet. `MemoryClient` sets it.
         #: Lillecarl/pymux#585.

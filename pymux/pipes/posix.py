@@ -34,7 +34,9 @@ __all__ = [
 BACKLOG = 128
 
 
-def bind_and_listen_on_posix_socket(socket_name: str, accept_callback: Callable):
+def bind_and_listen_on_posix_socket(
+    socket_name: str | None, accept_callback: Callable[[PipeConnection], None]
+) -> PosixSocketListener:
     """
     Bind a unix socket, and answer with the listener that serves it.
 
@@ -68,7 +70,9 @@ def bind_and_listen_on_posix_socket(socket_name: str, accept_callback: Callable)
 class PosixSocketListener:
     "A bound socket, and the coroutine that takes the clients of it."
 
-    def __init__(self, socket_name: str, sock, accept_callback: Callable) -> None:
+    def __init__(
+        self, socket_name: str, sock: socket.socket, accept_callback: Callable[[PipeConnection], None]
+    ) -> None:
         self.socket_name = socket_name
         self.socket = sock
         self._accept_callback = accept_callback
@@ -272,14 +276,14 @@ class PosixSocketConnection(PipeConnection):
     #: The socket can be the far end of an ssh channel.
     can_compress = True
 
-    def __init__(self, socket) -> None:
+    def __init__(self, socket: socket.socket) -> None:
         self.socket = socket
         # Non blocking. A send that finds no room parks this
         # connection's write and never the loop (`write`).
         # Lillecarl/pymux#418.
         self.socket.setblocking(False)
         self._reader = PacketReader()
-        self._ready: list[dict] = []
+        self._ready: list[Message] = []
         self._closed = False
 
         #: Bytes given to `write` and not yet taken by the kernel.
