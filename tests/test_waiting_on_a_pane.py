@@ -217,6 +217,49 @@ async def test_exit_answers_when_the_program_ends(pymux):
 
 
 # ----------------------------------------------------------------------
+# send-keys --wait-*
+
+
+async def test_send_keys_arms_the_wait_before_the_keys(pymux):
+    """
+    Output that lands before the wait first runs counts, because the
+    mark is taken when the command runs and not when it is awaited.
+    """
+    pane = the_pane(pymux)
+    arrives(pane, "ok from the last run\r\n")
+    waiting, answer = started_by_send_keys(pymux, pane, "--wait-next-text", "^ok", "-l", "go")
+
+    arrives(pane, "ok at once\r\n")
+    pymux.answer = answer
+    try:
+        with anyio.fail_after(2):
+            await waiting
+    finally:
+        pymux.answer = None
+
+    assert answer.output == ["ok at once"]
+
+
+async def test_send_keys_with_no_wait_answers_at_once(pymux):
+    pane = the_pane(pymux)
+    pymux.answer = Answer()
+    try:
+        assert call_command_handler("send-keys", pymux, ["-t", "%%%i" % pane.pane_id, "-l", "go"]) is None
+    finally:
+        pymux.answer = None
+
+
+def started_by_send_keys(mux, pane, *arguments: str):
+    answer = mux.answer = Answer()
+    try:
+        waiting = call_command_handler("send-keys", mux, ["-t", "%%%i" % pane.pane_id, *arguments])
+    finally:
+        mux.answer = None
+    assert waiting is not None, "send-keys with a wait has to answer a coroutine"
+    return waiting, answer
+
+
+# ----------------------------------------------------------------------
 # What every wait shares.
 
 

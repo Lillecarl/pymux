@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import argparse
-from typing import TYPE_CHECKING
+from collections.abc import Coroutine
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from pymux.arrangement import Pane
     from pymux.main import Pymux
 
 
@@ -11,7 +13,8 @@ from prompt_toolkit.application.current import set_app
 from pyte.page import RowMark
 
 from pymux.commands import CommandException, CommandParser, add_command
-from pymux.commands.common import send_key, terminal_of, the_pane
+from pymux.commands.common import refuse_without_a_waiter, send_key, terminal_of, the_pane
+from pymux.commands.wait_pane import add_condition_arguments, armed, asks_for_a_wait
 from pymux.key_spelling import event_however_it_is_written
 
 #: The copy mode commands `send-keys -X` runs, by tmux's names, and
@@ -46,7 +49,7 @@ def _copy_mode_command(pymux: Pymux, args: argparse.Namespace) -> None:
         view.jump_to_mark(RowMark.OUTPUT if flags else RowMark.PROMPT, down)
 
 
-def send_keys(pymux: Pymux, args: argparse.Namespace) -> None:
+def send_keys(pymux: Pymux, args: argparse.Namespace) -> Coroutine[Any, Any, None] | None:
     """
     Send keys to a pane, as key names or as text.
 
@@ -55,12 +58,30 @@ def send_keys(pymux: Pymux, args: argparse.Namespace) -> None:
     cannot type out of, and asking for a key as well means sending one
     to a terminal that is being reset. tmux takes it on its own.
     Lillecarl/pymux#118.
+
+    **`--wait-*` arms a `wait-pane` before the keys go out**, and the
+    command answers when it holds. One round trip, and output that comes
+    back faster than a second one could ask is not lost.
+    Lillecarl/pymux#388.
     """
     if args.X:
         _copy_mode_command(pymux, args)
-        return
+        return None
 
     pane = the_pane(pymux, args.target_pane)
+    if not asks_for_a_wait(args):
+        _send(pane, args)
+        return None
+    waiting = armed(pymux, refuse_without_a_waiter(pymux, "wait"), pane, args)
+    try:
+        _send(pane, args)
+    except BaseException:
+        waiting.close()
+        raise
+    return waiting
+
+
+def _send(pane: Pane, args: argparse.Namespace) -> None:
     terminal = terminal_of(pane)
 
     if args.R:
@@ -104,4 +125,5 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
         action="store_true",
         help="Run a copy mode command: %s, each with -o for output." % ", ".join(PROMPT_JUMPS),
     )
+    add_condition_arguments(parser, "wait-", required=False)
     parser.add_argument("keys", nargs=argparse.REMAINDER, metavar="<keys>")

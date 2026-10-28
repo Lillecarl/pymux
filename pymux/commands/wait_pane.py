@@ -12,13 +12,14 @@ One condition per wait:
   that works when the final text is unknown -- a build, a test run.
 - `--text REGEX`: a line of the visible screen matches.
 - `--next-text REGEX`: a line that changed after the wait began matches.
-  A command line a shell echoes is on the screen already when the wait
-  begins, so a pattern that names the command does not match its echo.
+  What the screen held before -- the result of the last run -- does not.
 - `--exit`: the program in the pane ended.
 
 **`--next-text` sees what changed after the wait began**, so a caller
-starts it before it sends the keys, not after: the echo and the output
-of a fast command can both land between two round trips.
+arms it before the keys go out: `send-keys --wait-next-text` does. Two
+round trips leave room for the output of a fast command to land between
+them. The echo of the typed command is new too, so a pattern that the
+command line also holds wants an anchor: `^DONE`, not `DONE`.
 
 Lillecarl/pymux#388.
 """
@@ -27,9 +28,9 @@ from __future__ import annotations
 
 import argparse
 import re
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Coroutine
 from functools import partial
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import anyio
 
@@ -41,6 +42,7 @@ if TYPE_CHECKING:
     from pyte.page import TextLine
     from pyte.screen import Screen
 
+    from pymux.answer import Answer
     from pymux.arrangement import Pane
     from pymux.main import Pymux
 
@@ -180,7 +182,23 @@ def wait_pane(pymux: Pymux, args: argparse.Namespace):
     visible screen.
     """
     reply = refuse_without_a_waiter(pymux, "wait")
-    pane = pane_to_wait_on(pymux, args.target_pane)
+    return armed(pymux, reply, pane_to_wait_on(pymux, args.target_pane), args)
+
+
+def asks_for_a_wait(args: argparse.Namespace) -> bool:
+    "Whether `args` names a condition, as `add_condition_arguments` reads them."
+    return args.quiet is not None or args.text is not None or args.next_text is not None or args.exit
+
+
+def armed(pymux: Pymux, reply: Answer, pane: Pane, args: argparse.Namespace) -> Coroutine[Any, Any, None]:
+    """
+    The wait on `pane`, ready to await.
+
+    **What `--next-text` counts as new is fixed here, and not when the
+    coroutine first runs.** `send-keys` arms the wait, then sends, then
+    hands the coroutine back: a mark taken later would count the echo
+    as old.
+    """
     timeout = timeout_of(args.timeout)
     terminal = terminal_of(pane)
     screen = terminal.screen
@@ -207,26 +225,39 @@ def wait_pane(pymux: Pymux, args: argparse.Namespace):
     return until_it_holds()
 
 
-def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    parser = add_command(subparsers, wait_pane, name="wait-pane")
-    parser.add_argument("-t", dest="target_pane", metavar="<target-pane>", help="The pane to watch.")
-    condition = parser.add_mutually_exclusive_group(required=True)
+def add_condition_arguments(parser: argparse.ArgumentParser, prefix: str, required: bool) -> None:
+    "The flags of a wait, each spelled after `prefix`: `wait-pane --quiet`, `send-keys --wait-quiet`."
+    condition = parser.add_mutually_exclusive_group(required=required)
     condition.add_argument(
-        "--quiet", dest="quiet", metavar="<seconds>", help="Until nothing changed in the pane for this long."
+        "--%squiet" % prefix,
+        dest="quiet",
+        metavar="<seconds>",
+        help="Until nothing changed in the pane for this long.",
     )
     condition.add_argument(
-        "--text", dest="text", metavar="<regex>", help="Until a line of the visible screen matches. Prints the line."
+        "--%stext" % prefix,
+        dest="text",
+        metavar="<regex>",
+        help="Until a line of the visible screen matches. Prints the line.",
     )
     condition.add_argument(
-        "--next-text",
+        "--%snext-text" % prefix,
         dest="next_text",
         metavar="<regex>",
-        help="Until a line that changed after the wait began matches. Prints the line. Start it before the keys.",
+        help="Until a line that changed after the wait began matches. Prints the line.",
     )
-    condition.add_argument("--exit", dest="exit", action="store_true", help="Until the program in the pane ends.")
+    condition.add_argument(
+        "--%sexit" % prefix, dest="exit", action="store_true", help="Until the program in the pane ends."
+    )
     parser.add_argument(
-        "--timeout",
+        "--%stimeout" % prefix,
         dest="timeout",
         metavar="<seconds>",
         help="Give up after this long: exit %i and print the screen. %g by default." % (TIMED_OUT, DEFAULT_TIMEOUT),
     )
+
+
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
+    parser = add_command(subparsers, wait_pane, name="wait-pane")
+    parser.add_argument("-t", dest="target_pane", metavar="<target-pane>", help="The pane to watch.")
+    add_condition_arguments(parser, "", required=True)
