@@ -21,9 +21,15 @@ row its title bar hangs in.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from prompt_toolkit.data_structures import Point, Size
 
 from .plane import GROUND, Pane, Plan, Rect, Slot, View
+
+if TYPE_CHECKING:
+    from .divided import Divided
+    from .strip import Strip
 
 __all__ = ["Zoomed"]
 
@@ -39,7 +45,7 @@ class Zoomed:
     :param pane: The one pane a person sees.
     """
 
-    def __init__(self, inner, pane: Pane) -> None:
+    def __init__(self, inner: Divided | Strip, pane: Pane) -> None:
         self.inner = inner
         self.pane = pane
 

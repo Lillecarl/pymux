@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import os
 import sys
+from collections.abc import Mapping
 
 from .enums import EditingKeys
 
@@ -20,7 +21,7 @@ __all__ = [
 HELIX_EDITORS = frozenset({"hx", "helix"})
 
 
-def editor_keys(environ=os.environ) -> EditingKeys:
+def editor_keys(environ: Mapping[str, str] = os.environ) -> EditingKeys:
     """
     The keys the editor of the person says a line takes.
 
@@ -46,7 +47,7 @@ def editor_keys(environ=os.environ) -> EditingKeys:
     return EditingKeys.EMACS
 
 
-def daemonize(stdin="/dev/null", stdout="/dev/null", stderr="/dev/null"):
+def daemonize(stdin: str = "/dev/null", stdout: str = "/dev/null", stderr: str = "/dev/null") -> int:
     """
     Double fork-trick. For starting a posix daemon.
 
@@ -124,16 +125,16 @@ class nonblocking:
     Make fd non blocking.
     """
 
-    def __init__(self, fd):
+    def __init__(self, fd: int) -> None:
         self.fd = fd
 
-    def __enter__(self):
+    def __enter__(self) -> None:
         import fcntl
 
         self.orig_fl = fcntl.fcntl(self.fd, fcntl.F_GETFL)
         fcntl.fcntl(self.fd, fcntl.F_SETFL, self.orig_fl | os.O_NONBLOCK)
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: object) -> None:
         import fcntl
 
         fcntl.fcntl(self.fd, fcntl.F_SETFL, self.orig_fl)

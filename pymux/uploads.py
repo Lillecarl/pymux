@@ -136,7 +136,7 @@ async def receive_into(upload: Upload, directory: Path, say: Callable[[str], Non
     A path is answered once. A second answer for it, or one for a path
     nobody asked for, is dropped.
     """
-    waiting = list(upload.paths)
+    waiting: list[str] = list(upload.paths)
     failed: list[str] = []
     with upload.outcomes:
         async for outcome in upload.outcomes:

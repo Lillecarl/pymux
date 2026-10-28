@@ -35,7 +35,7 @@ import os
 import sys
 from collections.abc import Awaitable, Callable
 from subprocess import DEVNULL, PIPE, STDOUT
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import anyio
 import anyio.abc
@@ -50,7 +50,9 @@ from pymux.wayland_scale import DEFAULT_WAYLAND_SCALE, resolve_scale
 from pymux.window_pane import WindowWidget, now
 
 if TYPE_CHECKING:
-    from pysmithay import Compositor
+    from prompt_toolkit.data_structures import Point
+    from prompt_toolkit.layout.containers import WritePosition
+    from pysmithay import Compositor, Vp9Encoder
 
     from pymux.arrangement import Pane
     from pymux.main import Pymux
@@ -248,7 +250,7 @@ class WaylandServer:
                 except Exception:
                     logger.exception("Handling the Wayland event %r failed.", event[:2])
 
-    def _handle(self, compositor: Compositor, event: tuple, tasks: anyio.abc.TaskGroup) -> None:
+    def _handle(self, compositor: Compositor, event: tuple[Any, ...], tasks: anyio.abc.TaskGroup) -> None:
         "One event of `dispatch`."
         match event:
             case ("selection", str(target), list(mime_types)) if mime_types:
@@ -500,7 +502,7 @@ class WaylandServer:
             return False
         return compositor.commit_text(text)
 
-    def _pixel_of(self, position) -> tuple[float, float]:
+    def _pixel_of(self, position: Point) -> tuple[float, float]:
         """
         Where in the window's pixels the pointer is: the cell, and where in
         it the terminal said, for one that reports pixels; else the middle.
@@ -522,7 +524,7 @@ class WaylandServer:
         client = self.pymux.client_of(get_app())
         return client is None or client.options.window_scroll == WindowScroll.SMOOTH
 
-    def pointer(self, toplevel: int, position, button: int | None, pressed: bool, time: int) -> None:
+    def pointer(self, toplevel: int, position: Point, button: int | None, pressed: bool, time: int) -> None:
         compositor = self.compositor
         if compositor is None:
             return
@@ -534,7 +536,7 @@ class WaylandServer:
                     compositor.focus(toplevel)
                 compositor.pointer_button(button, pressed, time)
 
-    def scroll(self, toplevel: int, position, steps: int, time: int) -> None:
+    def scroll(self, toplevel: int, position: Point, steps: int, time: int) -> None:
         compositor = self.compositor
         if compositor is None:
             return
@@ -547,7 +549,7 @@ class WaylandServer:
                 compositor.pointer_scroll(steps, time)
 
     def view_of(
-        self, pane_id: int, widget: WindowWidget, write_position, drained: Callable[[], Awaitable[None]]
+        self, pane_id: int, widget: WindowWidget, write_position: WritePosition, drained: Callable[[], Awaitable[None]]
     ) -> WindowView:
         """
         How one client brings this window pane up to date. `drained`
@@ -573,7 +575,7 @@ class WaylandServer:
                 return None
             return await read
 
-        async def video(encoder) -> VideoFrame | None:
+        async def video(encoder: Vp9Encoder) -> VideoFrame | None:
             if self.compositor is None:
                 return None
             try:

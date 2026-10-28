@@ -74,7 +74,7 @@ class UrlMode:
         links of. A window pane shows none that pymux can read.
         """
         terminal = pane.terminal
-        links = []
+        links: list[Link] = []
         if isinstance(terminal, Terminal):
             shown = terminal.shown_rows()
             page = terminal.screen.page

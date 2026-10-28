@@ -36,7 +36,9 @@ if TYPE_CHECKING:
     from prompt_toolkit.layout.containers import WritePosition
     from prompt_toolkit.layout.mouse_handlers import MouseHandlers
     from prompt_toolkit.layout.screen import Screen
+    from pyte.images import GraphicsImage, GraphicsPlacement
 
+    from pymux.arrangement import Pane
     from pymux.wayland import WaylandServer
 
 #: What a client that cannot draw kitty images sees in the pane.
@@ -155,8 +157,8 @@ class _Titles:
 class _Graphics:
     "A screen's images: a window pane has none of its own."
 
-    images_by_id: dict = {}
-    placements: dict = {}
+    images_by_id: dict[int, GraphicsImage] = {}
+    placements: tuple[GraphicsPlacement, ...] = ()
 
     def virtual_placement(self, *_arguments):
         return None
@@ -323,7 +325,7 @@ class WindowWidget:
 
     is_copying = False
 
-    def __init__(self, wayland: WaylandServer, toplevel: int, takes_keys) -> None:
+    def __init__(self, wayland: WaylandServer, toplevel: int, takes_keys: Callable[[], bool]) -> None:
         #: Empty for ever: `enter_copy_mode` opens nothing.
         self.copy_views: PerApplication[None] = PerApplication()
         self.wayland = wayland
@@ -393,5 +395,5 @@ class WindowWidget:
         self.wayland.pointer(self.toplevel, event.position, button, pressed, now())
 
 
-def is_window_pane(pane) -> bool:
+def is_window_pane(pane: Pane) -> bool:
     return isinstance(pane.terminal, WindowWidget)

@@ -10,7 +10,7 @@ answer changed since it last sent. Lillecarl/pymux#775.
 from __future__ import annotations
 
 from contextlib import suppress
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from libpymux.protocol import Field, Packet
 from pyte.images import ASSUMED_CELL_HEIGHT, ASSUMED_CELL_WIDTH
@@ -23,13 +23,14 @@ from .log import logger
 from .style import DEFAULT_THEME
 
 if TYPE_CHECKING:
+    from .arrangement import Pane
     from .ids import SessionId
     from .main import Pymux
 
 __all__ = ["Terminals", "pointer_shape_of"]
 
 
-def pointer_shape_of(pane) -> str:
+def pointer_shape_of(pane: Pane | None) -> str:
     """
     The shape of the pointer that the program in a pane asks for.
 
@@ -187,16 +188,17 @@ class Terminals:
         for pane in list(self.pymux.panes_by_id.values()):
             self.tell_pane_about_cell_size(pane)
 
-    def tell_pane_about_cell_size(self, pane) -> None:
+    def tell_pane_about_cell_size(self, pane: Pane) -> None:
         """
         Tell one pane how big a cell is. Never raises: this runs when a
         client attaches and when a pane starts, and neither may stop
         for it.
         """
-        # An older ptterm has a screen that cannot be told. It then
-        # keeps the size `pyte` assumes, as before.
+        # A window pane's screen, or an older ptterm's, cannot be told.
+        # It then keeps the size `pyte` assumes.
+        screen: Any = pane.screen
         with suppress(AttributeError):
-            pane.screen.set_cell_size(*self.cell_size())
+            screen.set_cell_size(*self.cell_size())
 
     def sync_keyboard(self) -> None:
         """
@@ -209,7 +211,7 @@ class Terminals:
         self.sync_keyboard_source_flags()
         self.sync_kitty_flags()
 
-    def tell_pane_about_keyboard(self, pane) -> None:
+    def tell_pane_about_keyboard(self, pane: Pane) -> None:
         """
         Tell one pane what the keyboards of the clients can report.
 
@@ -217,7 +219,7 @@ class Terminals:
         starts, and neither may stop for it.
         """
         try:
-            screen = pane.screen
+            screen: Any = pane.screen
         except Exception:
             return
         try:
@@ -225,11 +227,12 @@ class Terminals:
             screen.synthesize_key_events = self.pymux.options_of_pane(pane).synthesize_key_events
             screen.extended_keys_allowed = self.pymux.options.extended_keys is not ExtendedKeys.OFF
         except AttributeError:
-            # An older ptterm knows nothing about the keyboard of the
-            # host. It then claims what a pane asks for, as before.
+            # A window pane's screen, or an older ptterm's, knows nothing
+            # about the keyboard of the host. It then claims what a pane
+            # asks for.
             pass
 
-    def tell_pane_about_colours(self, pane) -> None:
+    def tell_pane_about_colours(self, pane: Pane) -> None:
         """
         Tell one pane what the colours around it are: the theme's,
         when the theme owns the whole screen, and the terminal of the
