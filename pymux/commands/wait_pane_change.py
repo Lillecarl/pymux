@@ -17,6 +17,7 @@ import argparse
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from pymux.arrangement import Pane
     from pymux.main import Pymux
 
 
@@ -53,9 +54,9 @@ def wait_pane_change(pymux: Pymux, args: argparse.Namespace):
     # press, and nobody would ever read the answer.
     refuse_without_a_waiter(pymux, "wait")
 
-    pane = _the_pane(pymux, args)
+    pane = pane_to_wait_on(pymux, args.target_pane)
 
-    seconds = _seconds(args.timeout)
+    seconds = timeout_of(args.timeout)
 
     # Read before any waiting, so that a pane which has already moved
     # past `--since` answers at once rather than after a round of the
@@ -97,15 +98,14 @@ def wait_pane_change(pymux: Pymux, args: argparse.Namespace):
     return until_it_changes()
 
 
-def _the_pane(pymux: Pymux, args: argparse.Namespace):
-    if not args.target_pane:
+def pane_to_wait_on(pymux: Pymux, target: str | None) -> Pane:
+    "The pane `-t` names, or the active one."
+    if not target:
         pane = find_pane(pymux, None)
         if pane is None:
             raise CommandException("no pane to wait on")
         return pane
-
-    pane = the_pane(pymux, args.target_pane)
-    return pane
+    return the_pane(pymux, target)
 
 
 def _since(given: str) -> int:
@@ -115,7 +115,7 @@ def _since(given: str) -> int:
         raise CommandException("Expecting a revision: %s" % (given,))
 
 
-def _seconds(given: str | None) -> float:
+def timeout_of(given: str | None) -> float:
     if given is None:
         return DEFAULT_TIMEOUT
     try:

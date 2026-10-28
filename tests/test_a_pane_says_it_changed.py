@@ -176,6 +176,31 @@ async def test_it_moves_for_what_the_row_counter_does_not_see(pymux, name, data)
     assert pane.revision > before
 
 
+async def test_the_end_of_the_program_moves_it():
+    """
+    A dead pane draws differently, so the revision moves once the pane
+    is dead. A change that fires before the process counts as ended
+    leaves a wait for the end asleep.
+    """
+    mux = Pymux()
+    async with mux.running():
+        await mux.create_window("%s -c 'import sys; sys.stdin.read()'" % (sys.executable,))
+        pane = mux.arrangement.get_active_window().active_pane
+        mux.options_of_pane(pane).remain_on_exit = True
+        await anyio.sleep(0.2)
+
+        ended = anyio.Event()
+
+        def changed(_sender: object) -> None:
+            if pane.process.is_terminated:
+                ended.set()
+
+        pane.terminal.terminal_control.on_content_changed += changed
+        pane.process.kill()
+        with anyio.fail_after(5):
+            await ended.wait()
+
+
 async def test_the_format_field_reads_it(pymux):
     pane = the_pane(pymux)
     arrives(pane, "hello")

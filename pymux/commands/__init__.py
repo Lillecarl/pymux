@@ -156,6 +156,7 @@ MODULES = [
     "customize_mode",
     "wait_for",
     "wait_pane_change",
+    "wait_pane",
     "enter_mode",
     "leave_mode",
     "noop",
