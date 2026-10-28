@@ -6,6 +6,7 @@ import argparse
 from typing import TYPE_CHECKING, NamedTuple
 
 if TYPE_CHECKING:
+    from pymux.answer import Answer
     from pymux.arrangement import Pane, Window
     from pymux.main import ClientState, Pymux
     from pymux.options import Holder
@@ -386,17 +387,17 @@ def answer(pymux: Pymux, text: str) -> None:
     Answer a question on the channel the asker reads.
 
     A command that arrives over the command line gets stdout, which
-    is what `command_output` says. A person typing at the prompt of a
+    is what an answer says. A person typing at the prompt of a
     pane gets the message line, because there is no stdout to write
     to. Lillecarl/pymux#289.
     """
-    if pymux.command_output is not None:
+    if pymux.answer is not None:
         pymux.print_command_line(text)
     else:
         pymux.get_client_state().message = text
 
 
-def refuse_without_a_waiter(pymux: Pymux, what: str) -> None:
+def refuse_without_a_waiter(pymux: Pymux, what: str) -> Answer:
     """
     A wait belongs to somebody who is waiting for the answer.
 
@@ -406,12 +407,14 @@ def refuse_without_a_waiter(pymux: Pymux, what: str) -> None:
     spawns, so `bind-key X wait-for done` would put a task in the
     server's group for every press and none of them would ever end.
 
-    `command_output` is what says a client is reading the answer: the
-    socket route sets it and a key binding, a hook and a configuration
+    An answer is what says a client is reading it: the
+    socket route makes one and a key binding, a hook and a configuration
     file do not. Lillecarl/pymux#302.
     """
-    if pymux.command_output is None:
+    reply = pymux.answer
+    if reply is None:
         raise CommandException("not able to %s" % (what,))
+    return reply
 
 
 def is_agent(pymux: Pymux) -> bool:
@@ -422,7 +425,7 @@ def is_agent(pymux: Pymux) -> bool:
     An agent that waits without bound hangs its turn, so the waits
     refuse one: every wait an agent runs names its timeout.
     """
-    caller = pymux.caller_context
+    caller = pymux.caller
     return caller is not None and caller.session_id is not None
 
 
@@ -437,11 +440,11 @@ def show_listing(pymux: Pymux, title: str, text: str) -> None:
     command line -- `get_client_state` has no app to answer with,
     which is one reason the listing was silence and not a fault. That
     asker reads stdout, so the listing is printed there, which is
-    what `command_output` says: the same question
+    what an answer says: the same question
     `print_command_line` asks. tmux prints a listing to stdout,
     always. Lillecarl/pymux#288.
     """
-    if pymux.command_output is not None:
+    if pymux.answer is not None:
         pymux.print_command_line(text)
     else:
         pymux.get_client_state().layout_manager.display_popup(title, text)

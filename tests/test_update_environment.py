@@ -17,6 +17,8 @@ from __future__ import annotations
 from prompt_toolkit.data_structures import Size
 from session import in_this_process, over_connection
 
+from pymux.answer import Answer
+
 SIZE = Size(rows=24, columns=80)
 
 #: What a client on somebody's desktop carries.
@@ -102,13 +104,13 @@ async def test_what_a_person_set_by_hand_is_not_touched():
 async def test_the_option_reads_back_as_it_was_written():
     async with in_this_process() as session:
         pymux = session.pymux
-        pymux.command_output = []
+        pymux.answer = Answer()
         try:
             pymux.handle_command("set-option update-environment 'DISPLAY MY_OWN'")
             pymux.handle_command("show-options update-environment")
-            said = list(pymux.command_output)
+            said = list(pymux.answer.output)
         finally:
-            pymux.command_output = None
+            pymux.answer = None
 
         assert said[-1] == "DISPLAY MY_OWN"
 

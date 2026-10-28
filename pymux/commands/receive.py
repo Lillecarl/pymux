@@ -32,7 +32,7 @@ def receive(pymux: Pymux, args: argparse.Namespace):
     refuse_without_a_waiter(pymux, "wait")
     pane, connection = _sender(pymux)
 
-    caller = pymux.caller_context
+    caller = pymux.caller
     here = caller.cwd if caller is not None else None
     directory = Path(here or os.getcwd()) / (args.directory or "")
     if not directory.is_dir():

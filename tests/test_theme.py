@@ -37,6 +37,7 @@ from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 from session import Connection
 
+from pymux.answer import Answer
 from pymux.main import Pymux
 from pymux.nearest import NEAREST
 from pymux.options import ALL_CLIENT_OPTIONS, ALL_OPTIONS, SetOptionError
@@ -117,12 +118,12 @@ def _another_client(pymux, ttyname="/dev/pts/9"):
 
 def _said(pymux, command: str) -> str:
     "What a command answers on the command line."
-    pymux.command_output = []
+    pymux.answer = Answer()
     try:
         pymux.handle_command(command)
-        return "\n".join(pymux.command_output)
+        return "\n".join(pymux.answer.output)
     finally:
-        pymux.command_output = None
+        pymux.answer = None
 
 
 # ----------------------------------------------------------------------

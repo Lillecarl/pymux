@@ -28,6 +28,7 @@ import sys
 import pytest
 from prompt_toolkit.data_structures import Size
 
+from pymux.answer import Answer
 from pymux.commands import call_command_handler
 from pymux.entry_points.run_pymux import _axis_of
 from pymux.main import Pymux
@@ -60,13 +61,13 @@ ENDS_AT_ONCE = "%s -c pass" % (sys.executable,)
 
 
 async def new_session(mux, *arguments) -> None:
-    mux.command_output = []
+    mux.answer = Answer()
     try:
         answer = call_command_handler("new-session", mux, ["-d", *arguments, ENDS_AT_ONCE])
         if answer is not None:
             await answer
     finally:
-        mux.command_output = None
+        mux.answer = None
 
 
 def one_pane(mux):

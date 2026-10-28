@@ -19,7 +19,7 @@ def refresh_client(pymux: Pymux, args: argparse.Namespace) -> None:
     writes over it; this writes every cell. The other clients keep the
     frames they have. Lillecarl/pymux#301.
     """
-    if pymux.command_output is not None:
+    if pymux.answer is not None:
         return  # The command line drew nothing and has nothing to draw.
     pymux.redraw(pymux.get_client_state())
 

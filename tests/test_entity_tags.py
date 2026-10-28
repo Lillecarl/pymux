@@ -15,6 +15,7 @@ from __future__ import annotations
 from prompt_toolkit.application.current import set_app
 from session import create_session
 
+from pymux.answer import Answer
 from pymux.commands import handle_command
 from pymux.query import ask
 
@@ -23,15 +24,15 @@ async def say(pymux, state, line: str) -> tuple[list[str], list[str]]:
     "What one command line printed, and the errors it gave."
     errors: list[str] = []
     pymux.add_command_error = errors.append
-    pymux.command_output = []
+    pymux.answer = Answer()
     try:
         with set_app(state.app):
             answer = handle_command(pymux, line)
             if answer is not None:
                 await answer
-        return list(pymux.command_output), errors
+        return list(pymux.answer.output), errors
     finally:
-        pymux.command_output = None
+        pymux.answer = None
 
 
 def active(pymux, state):

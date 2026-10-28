@@ -57,6 +57,7 @@ from pyte.page import RowMark
 
 from . import hacks_and_lies, introspect, kernels, log
 from .actions import ActionLog, Kind, Origin, awaited_as, note, note_keys, started_by
+from .answer import Answer, current_answer
 from .arrangement import Arrangement, Pane, Window
 from .audio import AudioServer
 from .browsers import Browsers
@@ -1164,28 +1165,10 @@ def _open_question(url: str, forward: dict | None) -> str:
     )
 
 
-#: Where the command that this task is running writes its answer, and
-#: `None` for a command that was typed at a client.
-#:
-#: **Context variables, not attributes of the server.** A handler may
-#: await, so two commands of two clients can be in flight at once, and
-#: one list on the server would hand each of them the other's output.
-#: A task copies the context that started it, so the two lists a
-#: `run-command` packet makes belong to that packet alone.
-#: Lillecarl/pymux#87.
 def _browser_shim() -> str | None:
     "`pymux-browser` of this build, beside its Python; None where it is not."
     found = os.path.join(os.path.dirname(sys.executable), "pymux-browser")
     return found if os.access(found, os.X_OK) else shutil.which("pymux-browser")
-
-
-_command_output: contextvars.ContextVar[list | None] = contextvars.ContextVar("pymux-command-output", default=None)
-_command_error: contextvars.ContextVar[list | None] = contextvars.ContextVar("pymux-command-error", default=None)
-_command_warnings: contextvars.ContextVar[list | None] = contextvars.ContextVar("pymux-command-warnings", default=None)
-_command_exit_code: contextvars.ContextVar[int | None] = contextvars.ContextVar("pymux-command-exit-code", default=None)
-_caller_context: contextvars.ContextVar[CallerContext | None] = contextvars.ContextVar(
-    "pymux-caller-context", default=None
-)
 
 
 class Pymux:
@@ -1387,10 +1370,6 @@ class Pymux:
         #: An `anyio.Event` may be made before a loop runs, which is
         #: what a server started by `daemonize` does.
         self.done = anyio.Event()
-
-        # `command_output` and `command_error` are properties over the
-        # two context variables below. They read `None` here, which is
-        # what a command entered interactively answers with.
 
         # The lines of the configuration file that failed, until a
         # client is there to be told about them.
@@ -4404,93 +4383,40 @@ exec pymux notify -u "$urgency" -- "$@"
             client_state.message = message
 
     @property
-    def command_output(self) -> list | None:
-        """
-        Where the command this task runs writes what it says.
+    def answer(self) -> Answer | None:
+        "The answer of the command this task runs; `pymux.answer` says."
+        return current_answer.get()
 
-        A list while a `run-command` packet is answered, and `None`
-        for a command a person typed at a client. The commands read it
-        both ways round: a listing goes here when there is a list, and
-        to the screen of the client when there is not.
-        """
-        return _command_output.get()
-
-    @command_output.setter
-    def command_output(self, lines: list | None) -> None:
-        _command_output.set(lines)
+    @answer.setter
+    def answer(self, answer: Answer | None) -> None:
+        current_answer.set(answer)
 
     @property
-    def command_error(self) -> list | None:
-        "The same, for what a command says went wrong."
-        return _command_error.get()
-
-    @command_error.setter
-    def command_error(self, lines: list | None) -> None:
-        _command_error.set(lines)
-
-    @property
-    def command_warnings(self) -> list | None:
-        "What the caller should know, on stderr, with no change to the exit code."
-        return _command_warnings.get()
-
-    @command_warnings.setter
-    def command_warnings(self, lines: list | None) -> None:
-        _command_warnings.set(lines)
+    def caller(self) -> CallerContext | None:
+        "Who sent the command this task runs; None when nobody waits for it."
+        answer = self.answer
+        return answer.caller if answer is not None else None
 
     def warn_caller(self, message: str) -> None:
         "Say `message` once to whoever sent this command over the socket."
-        warnings = self.command_warnings
-        if warnings is not None and message not in warnings:
-            warnings.append(message)
-
-    @property
-    def command_exit_code(self) -> int | None:
-        """
-        The exit code the client reads, when a command names one.
-
-        Most commands answer boolean: errors or not, and the socket
-        route sends 1 or 0. A command that reports another program's
-        ending -- `tail` with the job's exit, 124 past its timeout --
-        sets this instead, and the route sends it as is.
-        """
-        return _command_exit_code.get()
-
-    @command_exit_code.setter
-    def command_exit_code(self, code: int | None) -> None:
-        _command_exit_code.set(code)
-
-    @property
-    def caller_context(self) -> CallerContext | None:
-        """
-        Who sent the command this task runs, and from where.
-
-        Set while a `run-command` packet is answered, and `None` for
-        anything else: a key binding, the command bar, a configuration
-        file. The job commands read it -- `run` stamps the session and
-        inherits the directory and the environment, the lookups prefer
-        the session -- and every other command ignores it.
-        """
-        return _caller_context.get()
-
-    @caller_context.setter
-    def caller_context(self, caller: CallerContext | None) -> None:
-        _caller_context.set(caller)
+        if self.answer is not None:
+            self.answer.warn(message)
 
     def print_command_line(self, text: str) -> None:
         """
         Print the output of a command that was entered from the command line.
-        (When `command_output` is set, this goes back to the client that sent
+        (When there is an answer, this goes back to the client that sent
         the run-command packet.)
         """
-        if self.command_output is not None:
-            self.command_output.append(text)
+        if self.answer is not None:
+            self.answer.output.append(text)
 
     def add_command_error(self, message: str) -> None:
         """
         Record an error for a command that failed.
 
         A command that came over the command line answers the client
-        that sent it, and `command_error` is that answer.
+        that sent it, and the errors of its answer are that answer.
 
         A command that came from a configuration file has nobody to
         answer. `startup()` runs it while the first application is still
@@ -4502,8 +4428,8 @@ exec pymux notify -u "$urgency" -- "$@"
             message = "%s: %s" % (self.sourcing, message)
 
         self.message_log.append(message)
-        if self.command_error is not None:
-            self.command_error.append(message)
+        if self.answer is not None:
+            self.answer.errors.append(message)
         elif not self._startup_done or self.sourcing is not None:
             logger.warning("%s", message)
             self.startup_errors.append(message)

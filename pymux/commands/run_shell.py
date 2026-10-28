@@ -66,10 +66,9 @@ def run_shell(pymux: Pymux, args: argparse.Namespace):
     if args.b:
         # tmux's `-b`: the caller is not waiting, so the answer cannot
         # go back on its channel. It goes to the view of the client
-        # that asked, which is what `command_output` of `None` means.
+        # that asked, which is what no answer means.
         async def background() -> None:
-            pymux.command_output = None
-            pymux.command_error = None
+            pymux.answer = None
             await job()
 
         pymux.spawn_command(background())

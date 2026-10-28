@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import pytest
 
+from pymux.answer import Answer
 from pymux.format import (
     FormatContext,
     Language,
@@ -190,12 +191,12 @@ async def test_a_template_in_a_format_flag_is_two_braces(pymux):
     "`-F '{{ session_name }}'` prints braces, because -F says tmux."
     from pymux.commands import handle_command
 
-    pymux.command_output = []
+    pymux.answer = Answer()
     try:
         handle_command(pymux, "list-sessions -F '{{ session_name }}'")
-        said = list(pymux.command_output)
+        said = list(pymux.answer.output)
     finally:
-        pymux.command_output = None
+        pymux.answer = None
 
     assert said == ["{{ session_name }}"]
 
@@ -204,12 +205,12 @@ async def test_a_listing_draws_a_template_when_it_is_asked_to(pymux):
     "`-J` is the same listing in the other language."
     from pymux.commands import handle_command
 
-    pymux.command_output = []
+    pymux.answer = Answer()
     try:
         handle_command(pymux, "list-sessions -J '{{ session_name | upper }}'")
-        said = list(pymux.command_output)
+        said = list(pymux.answer.output)
     finally:
-        pymux.command_output = None
+        pymux.answer = None
 
     assert said == [pymux.session_name.upper()]
 

@@ -17,6 +17,7 @@ import sys
 import pytest
 from run_commands import over_socket
 
+from pymux.answer import Answer
 from pymux.commands import call_command_handler
 from pymux.main import Pymux
 
@@ -40,13 +41,13 @@ async def pymux():
 
 
 async def new_session(mux, *arguments) -> None:
-    mux.command_output = []
+    mux.answer = Answer()
     try:
         answer = call_command_handler("new-session", mux, ["-d", *arguments, ENDS_AT_ONCE])
         if answer is not None:
             await answer
     finally:
-        mux.command_output = None
+        mux.answer = None
 
 
 async def test_a_session_with_no_window_has_no_current_window(pymux):

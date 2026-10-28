@@ -17,6 +17,7 @@ from prompt_toolkit.application.current import set_app
 from run_commands import run_as
 from session import create_session, once
 
+from pymux.answer import Answer
 from pymux.commands import call_command_handler
 from pymux.enums import Chooser
 from pymux.jobs import JobFeed
@@ -25,11 +26,11 @@ from pymux.main import Pymux
 
 async def _run_answering(pymux, state, command) -> None:
     "Run a command a client waits for: `run -w` refuses without one."
-    pymux.command_output = []
+    pymux.answer = Answer()
     try:
         await run_as(pymux, state, command)
     finally:
-        pymux.command_output = None
+        pymux.answer = None
 
 
 async def _shows(pane, text: str, seconds: float = 5) -> None:
@@ -177,9 +178,9 @@ def test_choose_job_over_the_socket_says_nothing():
     errors = []
     mux.add_command_error = errors.append
     mux.show_message = lambda message: None
-    mux.command_output = []
+    mux.answer = Answer()
     try:
         call_command_handler("choose-job", mux, [])
     finally:
-        mux.command_output = None
+        mux.answer = None
     assert errors == []

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from html.parser import HTMLParser
 
+from pymux.answer import Answer
 from pymux.commands import call_command_handler
 
 COLUMNS = 20
@@ -38,17 +39,17 @@ def run(mux, command: str, *arguments) -> str:
     """
     What a command answers the client that asked.
 
-    `command_output` and not a patched `print_command_line`, because
+    the answer's output and not a patched `print_command_line`, because
     `show_listing` reads that field to know whether anybody is waiting
     for text: with no field it draws a popup, and a popup needs a client.
     The server sets it the same way and joins it the same way.
     """
-    mux.command_output = []
+    mux.answer = Answer()
     try:
         call_command_handler(command, mux, list(arguments))
-        return "\n".join(mux.command_output)
+        return "\n".join(mux.answer.output)
     finally:
-        mux.command_output = None
+        mux.answer = None
 
 
 def capture(mux, *arguments) -> str:

@@ -22,11 +22,12 @@ import anyio
 import pytest
 from libpymux.agentic import CallerContext
 from prompt_toolkit.application.current import set_app
-from run_commands import run_as
+from run_commands import answered, run_as
 from session import create_session
 
 import pymux.jobs as jobs_module
-from pymux.commands import CommandException, handle_command
+from pymux.answer import Answer
+from pymux.commands import CommandException
 from pymux.commands.kill_job import kill_job
 from pymux.commands.run import run_job
 from pymux.commands.show_job import show_job
@@ -35,15 +36,7 @@ from pymux.commands.wait_job import wait_job
 
 async def _run_answering(pymux, state, command) -> list:
     "Run a command a client waits for, and read what it answered."
-    pymux.command_output = []
-    try:
-        with set_app(state.app):
-            answer = handle_command(pymux, command)
-            if answer is not None:
-                await answer
-            return list(pymux.command_output)
-    finally:
-        pymux.command_output = None
+    return (await answered(pymux, state, command)).output
 
 
 async def test_run_answers_with_an_id_and_runs_behind():
@@ -93,7 +86,7 @@ async def test_run_wait_fails_on_a_nonzero_exit():
     # Through `handle_command` the failure would become a message;
     # the handler itself fails, so it is called directly.
     async with create_session() as (pymux, state):
-        pymux.command_output = []
+        pymux.answer = Answer()
         try:
             with set_app(state.app):
                 answer = run_job(
@@ -114,13 +107,13 @@ async def test_run_wait_fails_on_a_nonzero_exit():
                 with pytest.raises(CommandException, match="job 1 exited 3"):
                     await answer
         finally:
-            pymux.command_output = None
+            pymux.answer = None
 
 
 async def test_wait_job_reports_the_same_way():
     async with create_session() as (pymux, state):
         await run_as(pymux, state, "run sh -c 'exit 3'")
-        pymux.command_output = []
+        pymux.answer = Answer()
         try:
             with set_app(state.app):
                 answer = wait_job(pymux, argparse.Namespace(job=1, tags=[], session=None))
@@ -128,7 +121,7 @@ async def test_wait_job_reports_the_same_way():
                 with pytest.raises(CommandException, match="job 1 exited 3"):
                     await answer
         finally:
-            pymux.command_output = None
+            pymux.answer = None
 
 
 async def test_wait_job_without_a_waiter_refuses():
@@ -139,12 +132,12 @@ async def test_wait_job_without_a_waiter_refuses():
 
 async def test_wait_job_of_no_job_says_so():
     async with create_session() as (pymux, state):
-        pymux.command_output = []
+        pymux.answer = Answer()
         try:
             with pytest.raises(CommandException, match="no job 12"):
                 wait_job(pymux, argparse.Namespace(job=12, tags=[], session=None))
         finally:
-            pymux.command_output = None
+            pymux.answer = None
 
 
 async def test_list_jobs_shows_every_job_in_one_line_each():
@@ -169,11 +162,9 @@ async def test_list_jobs_sorts_the_callers_session_first():
         def ids(said) -> list:
             return [line.split()[0] for line in "\n".join(said).splitlines()]
 
-        pymux.caller_context = CallerContext(session_id="s1", environment={}, cwd=None)
-        try:
-            said = await _run_answering(pymux, state, "list-jobs")
-        finally:
-            pymux.caller_context = None
+        said = (
+            await answered(pymux, state, "list-jobs", CallerContext(session_id="s1", environment={}, cwd=None))
+        ).output
         assert ids(said) == ["2", "1", "3"]
 
         said = await _run_answering(pymux, state, "list-jobs")
@@ -201,13 +192,13 @@ async def test_show_job_reads_both_streams_of_a_running_job():
 
 async def test_show_job_of_no_job_says_so():
     async with create_session() as (pymux, state):
-        pymux.command_output = []
+        pymux.answer = Answer()
         try:
             with set_app(state.app):
                 with pytest.raises(CommandException, match="no job 12"):
                     show_job(pymux, argparse.Namespace(job=12, e=False, tags=[], session=None))
         finally:
-            pymux.command_output = None
+            pymux.answer = None
 
 
 async def test_kill_job_ends_a_running_job_and_refuses_a_done_one():
@@ -220,18 +211,18 @@ async def test_kill_job_ends_a_running_job_and_refuses_a_done_one():
             await pymux.jobs.wait(pymux.jobs.get(1))
         assert pymux.jobs.get(1).returncode == -15
 
-        pymux.command_output = []
+        pymux.answer = Answer()
         try:
             with set_app(state.app):
                 with pytest.raises(CommandException, match="already done"):
                     kill_job(pymux, argparse.Namespace(job=1, tags=[], session=None))
         finally:
-            pymux.command_output = None
+            pymux.answer = None
 
 
 async def test_a_job_that_never_starts_says_why():
     async with create_session() as (pymux, state):
-        pymux.command_output = []
+        pymux.answer = Answer()
         try:
             with set_app(state.app):
                 answer = run_job(
@@ -252,7 +243,7 @@ async def test_a_job_that_never_starts_says_why():
                 with pytest.raises(CommandException, match="job 1 never started"):
                     await answer
         finally:
-            pymux.command_output = None
+            pymux.answer = None
 
         job = pymux.jobs.get(1)
         assert job is not None and job.is_done and job.error is not None

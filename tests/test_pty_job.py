@@ -18,6 +18,7 @@ import pytest
 from prompt_toolkit.application.current import set_app
 from session import create_session
 
+from pymux.answer import Answer
 from pymux.commands import CommandException, handle_command
 from pymux.commands.run import run_job
 from pymux.query import ask
@@ -32,15 +33,15 @@ async def session():
 
 async def _run_answering(pymux, state, command) -> list:
     "Run a command a client waits for, and read what it answered."
-    pymux.command_output = []
+    pymux.answer = Answer()
     try:
         with set_app(state.app):
             answer = handle_command(pymux, command)
             if answer is not None:
                 await answer
-            return list(pymux.command_output)
+            return list(pymux.answer.output)
     finally:
-        pymux.command_output = None
+        pymux.answer = None
 
 
 async def test_a_pty_job_holds_a_terminal_on_every_stream(session):
@@ -53,7 +54,7 @@ async def test_a_pty_job_holds_a_terminal_on_every_stream(session):
 
 async def test_a_piped_job_holds_no_terminal(session):
     pymux, state = session
-    pymux.command_output = []
+    pymux.answer = Answer()
     try:
         with set_app(state.app):
             args = argparse.Namespace(
@@ -70,7 +71,7 @@ async def test_a_piped_job_holds_no_terminal(session):
             with pytest.raises(CommandException, match="exited 1"):
                 await run_job(pymux, args)
     finally:
-        pymux.command_output = None
+        pymux.answer = None
     job = pymux.jobs.get(1)
     assert job is not None and not job.pty and job.is_done and job.returncode == 1
 
@@ -91,7 +92,7 @@ async def test_a_pty_job_collects_into_stdout_with_stderr_empty(session):
 async def test_a_pty_job_in_a_directory_that_is_gone_never_starts(session):
     "The child would start where the server is, so it is refused first."
     pymux, state = session
-    pymux.command_output = []
+    pymux.answer = Answer()
     try:
         with set_app(state.app):
             args = argparse.Namespace(
@@ -108,7 +109,7 @@ async def test_a_pty_job_in_a_directory_that_is_gone_never_starts(session):
             with pytest.raises(CommandException, match="job 1 never started"):
                 await run_job(pymux, args)
     finally:
-        pymux.command_output = None
+        pymux.answer = None
     job = pymux.jobs.get(1)
     assert job is not None and job.is_done and "No such file" in (job.error or "")
 

@@ -28,6 +28,7 @@ import sys
 import anyio
 import pytest
 
+from pymux.answer import Answer
 from pymux.commands import call_command_handler
 from pymux.main import Pymux
 
@@ -70,13 +71,13 @@ def arrives(pane, data: str) -> None:
 
 def run(mux, command: str, *arguments) -> str:
     "A command that answers at once."
-    mux.command_output = []
+    mux.answer = Answer()
     try:
         answer = call_command_handler(command, mux, list(arguments))
         assert answer is None, "%s waits: use `waited` instead" % (command,)
-        return "\n".join(mux.command_output)
+        return "\n".join(mux.answer.output)
     finally:
-        mux.command_output = None
+        mux.answer = None
 
 
 async def waited(mux, command: str, *arguments) -> str:
@@ -87,14 +88,14 @@ async def waited(mux, command: str, *arguments) -> str:
     task awaits it (Lillecarl/pymux#87). A test that dropped it would
     leave the wait unrun and say nothing about it.
     """
-    mux.command_output = []
+    mux.answer = Answer()
     try:
         answer = call_command_handler(command, mux, list(arguments))
         if answer is not None:
             await answer
-        return "\n".join(mux.command_output)
+        return "\n".join(mux.answer.output)
     finally:
-        mux.command_output = None
+        mux.answer = None
 
 
 def revision_of(mux, pane) -> str:
@@ -223,7 +224,7 @@ async def test_a_pane_that_already_moved_answers_at_once(pymux):
 async def test_a_wait_ends_when_the_pane_changes(pymux):
     pane = the_pane(pymux)
     await settled(pane)
-    pymux.command_output = []
+    pymux.answer = Answer()
     try:
         waiting = call_command_handler(
             "wait-pane-change", pymux, ["-t", "%%%i" % pane.pane_id, "--since", str(pane.revision)]
@@ -239,9 +240,9 @@ async def test_a_wait_ends_when_the_pane_changes(pymux):
             await anyio.sleep(0.05)
             arrives(pane, "hello")
 
-        assert pymux.command_output == [str(pane.revision)]
+        assert pymux.answer.output == [str(pane.revision)]
     finally:
-        pymux.command_output = None
+        pymux.answer = None
 
 
 async def test_a_wait_that_runs_out_answers_the_same_revision(pymux):
@@ -303,7 +304,7 @@ async def test_a_wait_nobody_awaits_hooks_nothing(pymux):
     changed = pane.terminal.terminal_control.on_content_changed
     before = len(changed._handlers)
 
-    pymux.command_output = []
+    pymux.answer = Answer()
     try:
         answer = call_command_handler(
             "wait-pane-change",
@@ -311,7 +312,7 @@ async def test_a_wait_nobody_awaits_hooks_nothing(pymux):
             ["-t", "%%%i" % pane.pane_id, "--since", str(pane.revision)],
         )
     finally:
-        pymux.command_output = None
+        pymux.answer = None
 
     assert answer is not None
     assert len(changed._handlers) == before
@@ -329,7 +330,7 @@ async def test_a_wait_from_nobody_is_refused(pymux):
     pymux.add_command_error = errors.append
     pymux.show_message = lambda message: None
 
-    # No `command_output`, which is what says a client is reading.
+    # No answer, which is what says a client is reading.
     answer = call_command_handler("wait-pane-change", pymux, ["-t", "%%%i" % pane.pane_id])
 
     assert answer is None
@@ -349,10 +350,10 @@ async def test_what_cannot_be_read_is_refused(pymux, arguments, message):
     errors = []
     pymux.add_command_error = errors.append
     pymux.show_message = lambda message: None
-    pymux.command_output = []
+    pymux.answer = Answer()
     try:
         call_command_handler("wait-pane-change", pymux, ["-t", "%%%i" % pane.pane_id, *arguments])
     finally:
-        pymux.command_output = None
+        pymux.answer = None
 
     assert errors == ["pymux: %s" % (message,)]

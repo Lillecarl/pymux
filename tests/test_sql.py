@@ -19,6 +19,7 @@ import pytest
 from prompt_toolkit.application.current import create_app_session, set_app
 from session import create_session
 
+from pymux.answer import Answer
 from pymux.commands import CommandException, handle_command
 from pymux.commands.sql import DEFAULT_LIMIT, sql
 from pymux.query import is_read_only_query
@@ -26,15 +27,15 @@ from pymux.query import is_read_only_query
 
 async def _ask(pymux, state, command) -> list:
     "Ask `sql` the way the socket route does, and read what it answered."
-    pymux.command_output = []
+    pymux.answer = Answer()
     try:
         with set_app(state.app):
             answer = handle_command(pymux, command)
             if answer is not None:
                 await answer
-            return list(pymux.command_output)
+            return list(pymux.answer.output)
     finally:
-        pymux.command_output = None
+        pymux.answer = None
 
 
 def _ns(**over) -> argparse.Namespace:
@@ -57,15 +58,15 @@ def _ns(**over) -> argparse.Namespace:
 
 async def _run_handler(pymux, state, **over) -> list:
     "Run the handler the way a failure test does: raised, not messaged."
-    pymux.command_output = []
+    pymux.answer = Answer()
     try:
         with set_app(state.app):
             answer = sql(pymux, _ns(**over))
             if answer is not None:
                 await answer
-            return list(pymux.command_output)
+            return list(pymux.answer.output)
     finally:
-        pymux.command_output = None
+        pymux.answer = None
 
 
 def test_reads_run_and_writes_do_not():
@@ -142,14 +143,14 @@ async def test_questions_at_once_share_nothing_to_lock():
                 await anyio.sleep(0)
 
         # The answers themselves are not the question here.
-        pymux.command_output = []
+        pymux.answer = Answer()
         try:
             async with anyio.create_task_group() as tasks:
                 for _ in range(4):
                     tasks.start_soon(ask)
                 tasks.start_soon(write)
         finally:
-            pymux.command_output = None
+            pymux.answer = None
         assert failures == []
 
 

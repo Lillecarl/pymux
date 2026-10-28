@@ -23,7 +23,7 @@ def list_jobs(pymux: Pymux, args: argparse.Namespace):
     and its own jobs are the first lines it reads. `--tag` keeps the
     jobs carrying every tag it names.
     """
-    caller = pymux.caller_context
+    caller = pymux.caller
     hint = caller.session_id if caller is not None else None
     wanted = [parse_tag(word) for word in args.tags]
     jobs = sorted(

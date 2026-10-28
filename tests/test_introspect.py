@@ -28,6 +28,7 @@ from prompt_toolkit.output.vt100 import Vt100_Output
 from session import Connection
 
 from pymux import introspect, log
+from pymux.answer import Answer
 from pymux.commands import handle_command
 from pymux.enums import Woke
 from pymux.main import Pymux
@@ -143,14 +144,14 @@ async def test_command_writes_dump_and_says_where(create_server, tmp_path):
     # than in a task of its own: a list left here is a list every
     # later test writes its answers into, instead of to its client.
     # Lillecarl/pymux#87.
-    pymux.command_output = []
+    pymux.answer = Answer()
     try:
         with set_app(state.app):
             handle_command(pymux, "dump-stacks")
 
-        written = pymux.command_output
+        written = pymux.answer.output
     finally:
-        pymux.command_output = None
+        pymux.answer = None
 
     assert len(written) == 1
     assert written[0].startswith(str(tmp_path))

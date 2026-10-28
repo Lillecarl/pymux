@@ -19,20 +19,21 @@ import psutil
 from prompt_toolkit.application.current import set_app
 from session import create_session
 
+from pymux.answer import Answer
 from pymux.commands import handle_command
 from pymux.niceness import Target, as_a_person_runs, targets_of
 
 
 async def _run_answering(pymux, state, command) -> list[str]:
-    pymux.command_output = []
+    pymux.answer = Answer()
     try:
         with set_app(state.app):
             answer = handle_command(pymux, command)
             if answer is not None:
                 await answer
-            return [line.strip() for line in pymux.command_output]
+            return [line.strip() for line in pymux.answer.output]
     finally:
-        pymux.command_output = None
+        pymux.answer = None
 
 
 async def test_list_processes_names_the_server_and_no_pane():

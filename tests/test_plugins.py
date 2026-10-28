@@ -13,6 +13,7 @@ from session import create_session
 from test_a_session_on_a_pyte_screen import attached, pymux, shows  # noqa: F401 -- a fixture
 
 from pymux import commands, plugins
+from pymux.answer import Answer
 from pymux.commands import CommandParser, add_command, add_commands_to, handle_command
 from pymux.plugins.count_panes import count_panes
 
@@ -25,20 +26,20 @@ async def test_the_example_plugin_runs_as_a_command(pymux):
             for command in ("split-window", "new-window"):
                 if (rest := handle_command(pymux, command)) is not None:
                     await rest
-            pymux.command_output = []
+            pymux.answer = Answer()
             pymux.handle_command("count-panes")
 
-        counts = [line.rpartition(" ")[2] for line in "\n".join(pymux.command_output).splitlines()]
-        assert counts == ["2", "1"], pymux.command_output
+        counts = [line.rpartition(" ")[2] for line in "\n".join(pymux.answer.output).splitlines()]
+        assert counts == ["2", "1"], pymux.answer.output
 
 
 async def test_list_commands_names_the_plugin():
     async with create_session() as (pymux, state):
-        pymux.command_output = []
+        pymux.answer = Answer()
 
         pymux.handle_command("list-commands")
 
-        assert any(line.startswith("count-panes ") for line in "\n".join(pymux.command_output).splitlines())
+        assert any(line.startswith("count-panes ") for line in "\n".join(pymux.answer.output).splitlines())
 
 
 #: A plugin as a person writes one, in their own configuration.
@@ -77,11 +78,11 @@ async def test_a_plugin_in_the_configuration_directory_runs(tmp_path, monkeypatc
     monkeypatch.setattr(commands, "_parser_tree", None)
 
     async with create_session() as (pymux, state):
-        pymux.command_output = []
+        pymux.answer = Answer()
 
         pymux.handle_command("greet-from-home")
 
-        assert pymux.command_output == ["hello from home"]
+        assert pymux.answer.output == ["hello from home"]
 
 
 def test_a_broken_plugin_is_left_out_and_the_rest_load(tmp_path, caplog):

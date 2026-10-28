@@ -887,7 +887,7 @@ def find_job(pymux, job: int | None, words: list[str], session: str | None) -> J
         if found is None:
             raise CommandException("no job tagged %s in session %s" % (",".join(words), session))
         return found
-    caller = pymux.caller_context
+    caller = pymux.caller
     found = table.resolve(tags, hint=caller.session_id if caller else None)
     if found is None:
         raise CommandException("no job tagged %s" % ",".join(words))

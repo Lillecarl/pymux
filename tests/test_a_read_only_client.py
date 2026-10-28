@@ -25,6 +25,8 @@ from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from session import in_this_process, once, over_connection
 
+from pymux.answer import Answer
+
 SIZE = Size(rows=24, columns=80)
 
 #: One terminal with room, and one without. A person watching from the
@@ -327,13 +329,13 @@ async def test_the_flags_can_be_read_back():
         await pymux.create_window(WAITS)
         state, _ = await session.attach("watcher", SIZE, read_only=True)
 
-        pymux.command_output = []
+        pymux.answer = Answer()
         try:
             with set_app(state.app):
                 pymux.handle_command("list-clients -F '#{client_flags}'")
-            lines = list(pymux.command_output)
+            lines = list(pymux.answer.output)
         finally:
-            pymux.command_output = None
+            pymux.answer = None
 
         assert lines == ["read-only,ignore-size"]
 

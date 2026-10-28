@@ -20,6 +20,7 @@ from run_commands import said
 from session import create_session, once
 from test_command_mode import press
 
+from pymux.answer import Answer
 from pymux.commands import handle_command
 from pymux.main import Pymux
 
@@ -312,10 +313,10 @@ async def test_client_key_table_names_the_mode():
 
 async def listed(pymux, command):
     "Run a listing the way the command line runs it, and read it back."
-    pymux.command_output = []
+    pymux.answer = answer = Answer()
     await said(pymux, command)
-    out, pymux.command_output = "\n".join(pymux.command_output), None
-    return out
+    pymux.answer = None
+    return "\n".join(answer.output)
 
 
 async def test_list_keys_spells_the_table(pymux):

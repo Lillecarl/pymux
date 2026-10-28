@@ -12,6 +12,7 @@ from __future__ import annotations
 from prompt_toolkit.data_structures import Size
 from session import once, over_connection
 
+from pymux.answer import Answer
 from pymux.terminal_answers import SURVEY, TerminalAnswers, readable
 
 SIZE = Size(rows=24, columns=80)
@@ -72,9 +73,10 @@ async def test_show_terminal_lists_them():
         said = state.connection.terminal_said
         await once(lambda: sum(answer.count for answer in said) == 3, 5.0, "the replies were not kept")
 
-        pymux.command_output = []
+        pymux.answer = answer = Answer()
         pymux.handle_command("show-terminal")
-        out, pymux.command_output = "\n".join(pymux.command_output), None
+        pymux.answer = None
+        out = "\n".join(answer.output)
 
         assert "term xterm-256color" in out
         assert "\\e[>1;10;0c  x1" in out

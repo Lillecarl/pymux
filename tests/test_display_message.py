@@ -14,6 +14,8 @@ from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from session import create_session, over_connection
 
+from pymux.answer import Answer
+
 
 async def _run(pymux, state, command) -> None:
     with set_app(state.app):
@@ -59,12 +61,12 @@ async def test_a_message_reads_the_client_it_is_shown_to():
 async def test_printing_a_message_still_answers_on_the_command_line():
     "`-p` is the other half, and it formatted all along."
     async with create_session() as (pymux, state):
-        pymux.command_output = []
+        pymux.answer = Answer()
         try:
             await _run(pymux, state, "display-message -p '#{session_name}'")
-            said = list(pymux.command_output)
+            said = list(pymux.answer.output)
         finally:
-            pymux.command_output = None
+            pymux.answer = None
 
         assert said == [pymux.session_name]
         assert state.message is None, "a printed message was also shown"
@@ -83,13 +85,13 @@ async def test_a_named_client_answers_for_itself():
         desk, _ = await session.attach("desk", Size(rows=40, columns=342))
         phone, _ = await session.attach("phone", Size(rows=40, columns=60))
 
-        pymux.command_output = []
+        pymux.answer = Answer()
         try:
             for client in (desk, phone):
                 await _run(pymux, desk, "display-message -c %s -p '%s'" % (client.connection.name, by_width))
-            said = list(pymux.command_output)
+            said = list(pymux.answer.output)
         finally:
-            pymux.command_output = None
+            pymux.answer = None
         assert said == ["desk 342", "phone 60"]
 
         await _run(pymux, desk, "display-message -c %s 'for #{client_width}'" % phone.connection.name)

@@ -18,6 +18,7 @@ from contextlib import asynccontextmanager
 from prompt_toolkit.application.current import set_app
 from session import DEFAULT_SIZE, in_this_process
 
+from pymux.answer import Answer
 from pymux.main import Pymux
 
 #: A pane that stays up, so a window lives until a test closes it.
@@ -156,13 +157,13 @@ async def test_an_unlinked_window_keeps_its_index():
 
 def test_it_reads_back():
     pymux = Pymux()
-    pymux.command_output = []
+    pymux.answer = Answer()
     try:
         pymux.handle_command("set-option renumber-windows on")
         pymux.handle_command("show-options renumber-windows")
-        assert pymux.command_output == ["on"]
+        assert pymux.answer.output == ["on"]
     finally:
-        pymux.command_output = None
+        pymux.answer = None
 
 
 def test_a_word_it_does_not_know_is_refused():

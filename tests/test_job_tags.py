@@ -21,13 +21,18 @@ import os
 import pytest
 from libpymux.agentic import CallerContext
 from prompt_toolkit.application.current import set_app
+from run_commands import answered
 from session import create_session
 
+from pymux.answer import Answer
 from pymux.commands import CommandException, handle_command
 from pymux.commands.run import run_job
 from pymux.commands.show_job import show_job
 from pymux.jobs import find_job, parse_env
 from pymux.query import ask
+
+#: A caller that an agent harness named: its session is `s1`.
+AGENT = CallerContext(session_id="s1", environment={}, cwd=None)
 
 
 def test_env_parses_a_value_and_a_bare_key_sets_nothing():
@@ -59,26 +64,26 @@ def test_a_repeated_key_keeps_its_last_value():
 
 async def test_run_tags_a_job_end_to_end():
     async with create_session() as (pymux, state):
-        pymux.command_output = []
+        pymux.answer = Answer()
         try:
             with set_app(state.app):
                 answer = handle_command(pymux, "run --tag deploy --tag branch=main -w true")
                 if answer is not None:
                     await answer
         finally:
-            pymux.command_output = None
+            pymux.answer = None
         (job,) = pymux.jobs.listing()
         assert job.tags == {"deploy": None, "branch": "main"}
 
-        pymux.command_output = []
+        pymux.answer = Answer()
         try:
             with set_app(state.app):
                 answer = handle_command(pymux, "list-jobs")
                 if answer is not None:
                     await answer
-                said = list(pymux.command_output)
+                said = list(pymux.answer.output)
         finally:
-            pymux.command_output = None
+            pymux.answer = None
         assert "[deploy,branch=main]" in said[0]
 
 
@@ -95,28 +100,28 @@ async def test_a_tag_without_a_key_refuses():
             timeout=None,
             tail=10,
         )
-        pymux.command_output = []
+        pymux.answer = Answer()
         try:
             with set_app(state.app):
                 with pytest.raises(CommandException, match="names a key"):
                     await run_job(pymux, args)
         finally:
-            pymux.command_output = None
+            pymux.answer = None
 
 
 async def test_by_tag_finds_what_a_key_names():
     async with create_session() as (pymux, state):
         pymux.jobs.submit("echo tagged", None, [("deploy", None)])
         pymux.jobs.submit("echo plain", None)
-        pymux.command_output = []
+        pymux.answer = Answer()
         try:
             with set_app(state.app):
                 answer = handle_command(pymux, "sql --json --run by_tag --param tag=deploy")
                 if answer is not None:
                     await answer
-                said = list(pymux.command_output)
+                said = list(pymux.answer.output)
         finally:
-            pymux.command_output = None
+            pymux.answer = None
         assert json.loads(said[0])["rows"] == [{"id": 1, "command": "echo tagged"}]
 
 
@@ -144,33 +149,15 @@ async def test_jobs_default_to_no_session():
 
 async def test_run_stamps_the_callers_session():
     async with create_session() as (pymux, state):
-        pymux.caller_context = CallerContext(session_id="s1", environment={}, cwd=None)
-        pymux.command_output = []
-        try:
-            with set_app(state.app):
-                for command in ("run --tag a -w true", "run --tag b --session s2 -w true"):
-                    answer = handle_command(pymux, command)
-                    if answer is not None:
-                        await answer
-        finally:
-            pymux.command_output = None
-            pymux.caller_context = None
+        for command in ("run --tag a -w true", "run --tag b --session s2 -w true"):
+            await answered(pymux, state, command, AGENT)
         by_tag = {tag: job.session for job in pymux.jobs.listing() for tag in job.tags}
         assert by_tag == {"a": "s1", "b": "s2", "session": "s2"}
 
 
 async def test_a_hand_typed_session_tag_is_left_alone():
     async with create_session() as (pymux, state):
-        pymux.caller_context = CallerContext(session_id="s1", environment={}, cwd=None)
-        pymux.command_output = []
-        try:
-            with set_app(state.app):
-                answer = handle_command(pymux, "run --tag session=s9 -w true")
-                if answer is not None:
-                    await answer
-        finally:
-            pymux.command_output = None
-            pymux.caller_context = None
+        await answered(pymux, state, "run --tag session=s9 -w true", AGENT)
         (job,) = pymux.jobs.listing()
         assert job.session == "s9"
 
@@ -183,13 +170,13 @@ async def test_the_newest_tagged_job_wins():
         await pymux.jobs.supervise(second)
         assert pymux.jobs.resolve([("deploy", None)], scope="s1") is second
 
-        pymux.command_output = []
+        pymux.answer = Answer()
         try:
             with set_app(state.app):
                 show_job(pymux, argparse.Namespace(job=None, e=False, tags=["deploy"], session="s1"))
-                said = list(pymux.command_output)
+                said = list(pymux.answer.output)
         finally:
-            pymux.command_output = None
+            pymux.answer = None
         assert "second" in said[0] and "first" not in said[0]
 
 
@@ -221,33 +208,23 @@ async def test_find_job_prefers_the_caller_and_scopes_the_flag():
     async with create_session() as (pymux, state):
         pymux.jobs.submit("echo mine", None, [("deploy", None), ("session", "s1")])
         pymux.jobs.submit("echo theirs", None, [("deploy", None), ("session", "s2")])
-        pymux.caller_context = CallerContext(session_id="s1", environment={}, cwd=None)
+        pymux.answer = Answer(caller=AGENT)
         try:
             assert find_job(pymux, None, ["deploy"], None).command == "echo mine"
             assert find_job(pymux, None, ["deploy"], "s2").command == "echo theirs"
             with pytest.raises(CommandException, match="in session s3"):
                 find_job(pymux, None, ["deploy"], "s3")
         finally:
-            pymux.caller_context = None
+            pymux.answer = None
         with pytest.raises(CommandException, match="no job tagged missing"):
             find_job(pymux, None, ["missing"], None)
 
 
 async def test_run_inherits_the_callers_directory_and_environment():
     async with create_session() as (pymux, state):
-        pymux.caller_context = CallerContext(
-            session_id=None, environment={**dict(os.environ), "AGENT_MARKER": "here"}, cwd="/tmp"
-        )
-        pymux.command_output = []
-        try:
-            with set_app(state.app):
-                answer = handle_command(pymux, "run --tag x --env EXTRA=yes -w sh -c 'echo $AGENT_MARKER:$EXTRA; pwd'")
-                if answer is not None:
-                    await answer
-                said = list(pymux.command_output)
-        finally:
-            pymux.command_output = None
-            pymux.caller_context = None
+        caller = CallerContext(session_id=None, environment={**dict(os.environ), "AGENT_MARKER": "here"}, cwd="/tmp")
+        command = "run --tag x --env EXTRA=yes -w sh -c 'echo $AGENT_MARKER:$EXTRA; pwd'"
+        said = (await answered(pymux, state, command, caller)).output
         (job,) = pymux.jobs.listing()
         assert job.directory == "/tmp"
         assert job.env["AGENT_MARKER"] == "here"
@@ -259,14 +236,14 @@ async def test_run_without_a_caller_runs_where_the_server_stands():
     import os
 
     async with create_session() as (pymux, state):
-        pymux.command_output = []
+        pymux.answer = Answer()
         try:
             with set_app(state.app):
                 answer = handle_command(pymux, "run --tag x -w true")
                 if answer is not None:
                     await answer
         finally:
-            pymux.command_output = None
+            pymux.answer = None
         (job,) = pymux.jobs.listing()
         assert job.directory is None
         assert job.session is None

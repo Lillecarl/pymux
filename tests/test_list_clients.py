@@ -14,17 +14,19 @@ from __future__ import annotations
 from prompt_toolkit.data_structures import Size
 from session import OTHER_MACHINE, create_session, over_connection
 
+from pymux.answer import Answer
+
 SIZE = Size(rows=24, columns=80)
 
 
 async def _lines(session, command) -> list:
     "What a command printed on the command line."
-    session.pymux.command_output = []
+    session.pymux.answer = Answer()
     try:
         session.pymux.handle_command(command)
-        return list(session.pymux.command_output)
+        return list(session.pymux.answer.output)
     finally:
-        session.pymux.command_output = None
+        session.pymux.answer = None
 
 
 async def test_a_client_is_listed_by_the_machine_it_is_on():
@@ -75,14 +77,12 @@ async def test_a_target_session_narrows_the_listing():
         listed = await _lines(session, "list-clients -t %s -F '#{client_hostname}'" % (name,))
         assert listed == [OTHER_MACHINE]
 
-        pymux.command_output = []
-        pymux.command_error = []
+        pymux.answer = Answer()
         try:
             pymux.handle_command("list-clients -t nowhere")
-            errors = list(pymux.command_error)
+            errors = list(pymux.answer.errors)
         finally:
-            pymux.command_output = None
-            pymux.command_error = None
+            pymux.answer = None
 
         assert any("nowhere" in line for line in errors), errors
 
@@ -105,13 +105,13 @@ async def test_a_session_with_no_window_answers_with_an_error():
     async with create_session() as (pymux, state):
         arrangement = pymux.arrangement
         windows, arrangement.windows = arrangement.windows, []
-        pymux.command_error = []
+        pymux.answer = Answer()
         try:
             pymux.handle_command("list-clients -F '#{client_hostname}'")
-            said = list(pymux.command_error)
+            said = list(pymux.answer.errors)
         finally:
             arrangement.windows = windows
-            pymux.command_error = None
+            pymux.answer = None
 
         assert said == ["pymux: No active window to format for."]
 

@@ -19,6 +19,7 @@ from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from session import in_this_process, once, over_connection
 
+from pymux.answer import Answer
 from pymux.commands import handle_command
 from pymux.main import Pymux
 
@@ -179,10 +180,10 @@ async def test_list_sessions_names_every_session():
 
         await _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
 
-        pymux.command_output = []
+        pymux.answer = Answer()
         await _command(pymux, state, "list-sessions -F '#{session_id} #{session_name}'")
-        assert pymux.command_output == ["$0 0", "$1 work"]
-        pymux.command_output = None
+        assert pymux.answer.output == ["$0 0", "$1 work"]
+        pymux.answer = None
 
 
 async def test_a_question_leaves_the_keyboard_on_the_window_switched_to():
@@ -212,10 +213,10 @@ async def test_list_windows_t_names_a_session():
         (work,) = pymux.get_session("work").arrangement.windows
 
         for target in ("work", "work:", "$1"):
-            pymux.command_output = []
+            pymux.answer = Answer()
             await _command(pymux, state, "list-windows -t %s -F '#{window_id}'" % target)
-            assert pymux.command_output == ["@%d" % work.window_id], target
-        pymux.command_output = None
+            assert pymux.answer.output == ["@%d" % work.window_id], target
+        pymux.answer = None
 
 
 async def test_has_session_answers_for_every_session():

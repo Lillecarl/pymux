@@ -23,6 +23,7 @@ from prompt_toolkit.data_structures import Size
 from session import over_connection
 from test_the_link_comes_back import Terminal
 
+from pymux.answer import Answer
 from pymux.client.memory import MemoryClient
 from pymux.client.terminal import TerminalClient
 from pymux.commands import CommandException
@@ -43,12 +44,12 @@ CALLED_DESK = [["name", "desk"]]
 
 async def _lines(session, command) -> list:
     "What a command printed on the command line."
-    session.pymux.command_output = []
+    session.pymux.answer = Answer()
     try:
         session.pymux.handle_command(command)
-        return list(session.pymux.command_output)
+        return list(session.pymux.answer.output)
     finally:
-        session.pymux.command_output = None
+        session.pymux.answer = None
 
 
 # ----------------------------------------------------------------------

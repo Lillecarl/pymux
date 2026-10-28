@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 import anyio
 
 if TYPE_CHECKING:
+    from pymux.answer import Answer
     from pymux.main import Pymux
 
 
@@ -62,7 +63,7 @@ def run_job(pymux: Pymux, args: argparse.Namespace):
 
 
 async def _submit(pymux: Pymux, args: argparse.Namespace, shell_command: str) -> None:
-    caller = pymux.caller_context
+    caller = pymux.caller
     tags = parse_tags(args.tags)
     # An explicit session wins; the caller's stamps the rest, so its
     # later lookups prefer this job. A hand-typed session tag is left
@@ -96,8 +97,8 @@ async def _submit(pymux: Pymux, args: argparse.Namespace, shell_command: str) ->
         if args.timeout < 0:
             raise CommandException("a timeout counts seconds, so it cannot be negative.")
         if args.timeout > 0:
-            refuse_without_a_waiter(pymux, "wait")
-            await _run_and_follow(pymux, job, args.tail, args.timeout)
+            reply = refuse_without_a_waiter(pymux, "wait")
+            await _run_and_follow(pymux, reply, job, args.tail, args.timeout)
             return
 
     # `spawn_command` refuses outside `running`, where nothing would
@@ -112,7 +113,7 @@ async def _run_and_report(pymux: Pymux, job: Job) -> None:
     report_outcome(pymux, job)
 
 
-async def _run_and_follow(pymux: Pymux, job: Job, lines: int, timeout: float) -> None:
+async def _run_and_follow(pymux: Pymux, reply: Answer, job: Job, lines: int, timeout: float) -> None:
     """
     Run the job under this wait, streaming what it says.
 
@@ -124,7 +125,7 @@ async def _run_and_follow(pymux: Pymux, job: Job, lines: int, timeout: float) ->
     """
     if pymux.tasks is not None:
         pymux.spawn_command(pymux.jobs.supervise(job))
-        pymux.command_exit_code = await pymux.jobs.follow(job, lines, timeout, lambda text: answer(pymux, text))
+        reply.exit_code = await pymux.jobs.follow(job, lines, timeout, lambda text: answer(pymux, text))
         return
     async with anyio.create_task_group() as group:
 
@@ -132,7 +133,7 @@ async def _run_and_follow(pymux: Pymux, job: Job, lines: int, timeout: float) ->
             await pymux.jobs.supervise(job)
 
         group.start_soon(_supervised)
-        pymux.command_exit_code = await pymux.jobs.follow(job, lines, timeout, lambda text: answer(pymux, text))
+        reply.exit_code = await pymux.jobs.follow(job, lines, timeout, lambda text: answer(pymux, text))
 
 
 def report_outcome(pymux: Pymux, job: Job) -> None:

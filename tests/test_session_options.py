@@ -13,6 +13,7 @@ import sys
 import pytest
 
 from pymux.actions import Origin, started_by
+from pymux.answer import Answer
 from pymux.commands import call_command_handler
 from pymux.main import Pymux
 
@@ -34,14 +35,14 @@ async def run(mux, command, *arguments):
     errors = []
     mux.add_command_error = errors.append
     mux.show_message = lambda message: None
-    mux.command_output = []
+    mux.answer = Answer()
     try:
         answer = call_command_handler(command, mux, list(arguments))
         if answer is not None:
             await answer
-        said = list(mux.command_output)
+        said = list(mux.answer.output)
     finally:
-        mux.command_output = None
+        mux.answer = None
     assert errors == []
     return said
 

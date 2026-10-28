@@ -14,6 +14,8 @@ from prompt_toolkit.application.current import set_app
 from run_commands import run_as
 from session import create_session
 
+from pymux.answer import Answer
+
 
 async def test_hook_runs_when_command_its_named_for_runs():
     async with create_session() as (pymux, state):
@@ -60,8 +62,8 @@ async def test_show_hooks_lists_them():
         with set_app(state.app):
             await run_as(pymux, state, "set-hook after-select-pane 'display pane-was-selected'")
 
-            pymux.command_output = []
+            pymux.answer = Answer()
             await run_as(pymux, state, "show-hooks")
 
-        assert any("after-select-pane" in line and "display pane-was-selected" in line for line in pymux.command_output)
-        pymux.command_output = None
+        assert any("after-select-pane" in line and "display pane-was-selected" in line for line in pymux.answer.output)
+        pymux.answer = None

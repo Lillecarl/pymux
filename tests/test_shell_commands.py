@@ -23,6 +23,7 @@ from prompt_toolkit.application.current import set_app
 from run_commands import run_as
 from session import create_session
 
+from pymux.answer import Answer
 from pymux.commands import handle_command
 
 
@@ -36,24 +37,24 @@ async def test_run_shell_shows_what_command_said():
 
 async def test_run_shell_from_command_line_answers_on_it():
     async with create_session() as (pymux, state):
-        pymux.command_output = []
+        pymux.answer = Answer()
         try:
             await run_as(pymux, state, "run-shell echo straight-back")
-            said = pymux.command_output
+            said = pymux.answer.output
         finally:
-            pymux.command_output = None
+            pymux.answer = None
 
         assert any("straight-back" in line for line in said)
 
 
 async def test_run_shell_strips_a_leading_separator():
     async with create_session() as (pymux, state):
-        pymux.command_output = []
+        pymux.answer = Answer()
         try:
             await run_as(pymux, state, "run-shell -- echo stripped")
-            said = pymux.command_output
+            said = pymux.answer.output
         finally:
-            pymux.command_output = None
+            pymux.answer = None
 
         assert any("stripped" in line for line in said)
 
@@ -74,12 +75,12 @@ async def test_run_shell_says_why_a_shell_that_will_not_start_failed(monkeypatch
     monkeypatch.setattr(anyio, "run_process", refuse)
 
     async with create_session() as (pymux, state):
-        pymux.command_output = []
+        pymux.answer = Answer()
         try:
             await run_as(pymux, state, "run-shell echo never-runs")
-            answer = "\n".join(pymux.command_output)
+            answer = "\n".join(pymux.answer.output)
         finally:
-            pymux.command_output = None
+            pymux.answer = None
 
         assert "No such file or directory" in answer, answer
         assert "run-shell" in answer, answer

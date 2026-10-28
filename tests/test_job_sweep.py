@@ -16,6 +16,7 @@ from prompt_toolkit.application.current import set_app
 from run_commands import run_as
 from session import create_session
 
+from pymux.answer import Answer
 from pymux.commands import handle_command
 from pymux.jobs import JobTable
 from pymux.query import ask
@@ -23,15 +24,15 @@ from pymux.query import ask
 
 async def _run_answering(pymux, state, command) -> list:
     "Run a command a client waits for, and read what it answered."
-    pymux.command_output = []
+    pymux.answer = Answer()
     try:
         with set_app(state.app):
             answer = handle_command(pymux, command)
             if answer is not None:
                 await answer
-            return list(pymux.command_output)
+            return list(pymux.answer.output)
     finally:
-        pymux.command_output = None
+        pymux.answer = None
 
 
 async def _ids_of(pymux) -> list:

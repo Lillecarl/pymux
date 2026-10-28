@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from prompt_toolkit.application.current import set_app
 
+from pymux.answer import Answer
 from pymux.commands import call_command_handler, handle_command
 
 
@@ -24,6 +25,16 @@ async def run_as(pymux, state, command: str) -> None:
     "Run a command as the person at this client, and wait for it."
     with set_app(state.app):
         await run(pymux, command)
+
+
+async def answered(pymux, state, command: str, caller=None) -> Answer:
+    "Run a command the way a client that waits for it does, and give back its answer."
+    pymux.answer = answer = Answer(caller=caller)
+    try:
+        await run_as(pymux, state, command)
+    finally:
+        pymux.answer = None
+    return answer
 
 
 async def said(pymux, command: str) -> list:
@@ -52,11 +63,11 @@ async def over_socket(pymux, command: str, *arguments: str) -> list:
     errors: list = []
     pymux.add_command_error = errors.append
     pymux.show_message = lambda message: None
-    pymux.command_output = []
+    pymux.answer = Answer()
     try:
         answer = call_command_handler(command, pymux, list(arguments))
         if answer is not None:
             await answer
     finally:
-        pymux.command_output = None
+        pymux.answer = None
     return errors

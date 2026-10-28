@@ -24,6 +24,7 @@ from prompt_toolkit.data_structures import Size
 from session import once, over_connection
 from test_ssh_client import create_ssh_server, live_servers
 
+from pymux.answer import Answer
 from pymux.client import ssh as ssh_module
 from pymux.client.forwards import Forwards
 from pymux.client.ssh import SshClient
@@ -1400,12 +1401,12 @@ async def test_connecting_again_brings_the_forwards_back():
 
 async def _errors_of(session, command) -> list:
     "What a command complained about, as a person would read it."
-    session.pymux.command_error = []
+    session.pymux.answer = Answer()
     try:
         session.pymux.handle_command(command)
-        return list(session.pymux.command_error)
+        return list(session.pymux.answer.errors)
     finally:
-        session.pymux.command_error = None
+        session.pymux.answer = None
 
 
 def _forward_requests(seen: list) -> list:
@@ -1417,12 +1418,12 @@ def _forward_requests(seen: list) -> list:
 
 
 async def _listed(session, command) -> list:
-    session.pymux.command_output = []
+    session.pymux.answer = Answer()
     try:
         session.pymux.handle_command(command)
-        return list(session.pymux.command_output)
+        return list(session.pymux.answer.output)
     finally:
-        session.pymux.command_output = None
+        session.pymux.answer = None
 
 
 async def test_a_client_on_a_socket_cannot_forward():
@@ -1512,9 +1513,9 @@ async def test_the_listing_asks_for_a_fresh_table_and_shows_the_time_left():
         connection.forwards = [{**_URL_FORWARD, "port": 8080, "left": 900.0}]
         answering.append(connection)
 
-        session.pymux.command_output = []
+        session.pymux.answer = Answer()
         session.pymux.handle_command("list-forwards")
-        said = "\n".join(await once(lambda: session.pymux.command_output, 5.0, "Nothing was listed."))
+        said = "\n".join(await once(lambda: session.pymux.answer.output, 5.0, "Nothing was listed."))
 
     assert "-L localhost:8080 -> localhost:3000 (pymux, closes in 4m05s)" in said, said
     assert "-L localhost:8081 -> localhost:3000 (pymux, in use by 2)" in said, said
@@ -1528,9 +1529,9 @@ async def test_the_listing_draws_the_last_copy_when_nobody_answers(monkeypatch):
         connection.can_forward = connection.answers_forwards = True
         connection.forwards = [{**_URL_FORWARD, "port": 8080, "left": 12.0}]
 
-        session.pymux.command_output = []
+        session.pymux.answer = Answer()
         session.pymux.handle_command("list-forwards")
-        said = "\n".join(await once(lambda: session.pymux.command_output, 5.0, "Nothing was listed."))
+        said = "\n".join(await once(lambda: session.pymux.answer.output, 5.0, "Nothing was listed."))
 
     assert "-L localhost:8080 -> localhost:3000 (pymux, closes in 12s)" in said, said
 
@@ -1544,9 +1545,9 @@ async def test_a_listing_after_an_unanswered_one_asks_again(monkeypatch):
         connection.can_forward = connection.answers_forwards = True
 
         for _ in range(2):
-            session.pymux.command_output = []
+            session.pymux.answer = Answer()
             session.pymux.handle_command("list-forwards")
-            await once(lambda: session.pymux.command_output, 5.0, "Nothing was listed.")
+            await once(lambda: session.pymux.answer.output, 5.0, "Nothing was listed.")
 
         asks = [packet for packet in seen if packet.get("cmd") == "report-forwards"]
 

@@ -15,27 +15,20 @@ import anyio
 import pytest
 from libpymux.agentic import CallerContext
 from prompt_toolkit.application.current import set_app
-from run_commands import run_as
+from run_commands import answered, run_as
 from session import create_session
 
-from pymux.commands import CommandException, handle_command
+from pymux.answer import Answer
+from pymux.commands import CommandException
+
+#: A caller that an agent harness named: its session is `s1`.
+AGENT = CallerContext(session_id="s1", environment={}, cwd=None)
 
 
-async def _tail(pymux, state, command) -> tuple[list, list, int | None]:
+async def _tail(pymux, state, command, caller=None) -> tuple[list, list, int | None]:
     "Tail a job the way a waiting client does, and read the errors and the exit code."
-    pymux.command_output = []
-    pymux.command_error = []
-    pymux.command_exit_code = None
-    try:
-        with set_app(state.app):
-            answer = handle_command(pymux, command)
-            if answer is not None:
-                await answer
-            return list(pymux.command_output), list(pymux.command_error), pymux.command_exit_code
-    finally:
-        pymux.command_output = None
-        pymux.command_error = None
-        pymux.command_exit_code = None
+    answer = await answered(pymux, state, command, caller)
+    return answer.output, answer.errors, answer.exit_code
 
 
 async def test_tail_replays_and_follows_to_the_job_s_exit():
@@ -132,14 +125,12 @@ async def test_tail_of_no_job_is_a_4():
 async def test_tail_without_a_timeout_refuses_for_an_agent():
     async with create_session() as (pymux, state):
         await run_as(pymux, state, "run --tag boundless -- sleep 30")
-        pymux.caller_context = CallerContext(session_id="s1", environment={}, cwd=None)
         try:
-            said, errors, code = await _tail(pymux, state, "tail --tag boundless")
+            said, errors, code = await _tail(pymux, state, "tail --tag boundless", AGENT)
             assert said == []
             assert any("without --timeout" in line for line in errors)
             assert code is None
         finally:
-            pymux.caller_context = None
             pymux.jobs.kill(pymux.jobs.get(1))
             with anyio.fail_after(5):
                 await pymux.jobs.wait(pymux.jobs.get(1))
@@ -170,8 +161,7 @@ async def test_wait_job_refuses_for_an_agent():
 
     async with create_session() as (pymux, state):
         await run_as(pymux, state, "run --tag unwatched -- echo hi")
-        pymux.caller_context = CallerContext(session_id="s1", environment={}, cwd=None)
-        pymux.command_output = []
+        pymux.answer = Answer(caller=AGENT)
         try:
             with set_app(state.app):
                 import argparse
@@ -179,16 +169,14 @@ async def test_wait_job_refuses_for_an_agent():
                 with pytest.raises(CommandException, match="tail --timeout"):
                     wait_job(pymux, argparse.Namespace(job=None, tags=[("unwatched", None)], session=None))
         finally:
-            pymux.caller_context = None
-            pymux.command_output = None
+            pymux.answer = None
 
 
 async def test_run_wait_refuses_for_an_agent():
     from pymux.commands.run import run_job
 
     async with create_session() as (pymux, state):
-        pymux.caller_context = CallerContext(session_id="s1", environment={}, cwd=None)
-        pymux.command_output = []
+        pymux.answer = Answer(caller=AGENT)
         try:
             with set_app(state.app):
                 import argparse
@@ -209,8 +197,7 @@ async def test_run_wait_refuses_for_an_agent():
                         ),
                     )
         finally:
-            pymux.caller_context = None
-            pymux.command_output = None
+            pymux.answer = None
 
 
 async def test_run_with_timeout_streams_and_reports():

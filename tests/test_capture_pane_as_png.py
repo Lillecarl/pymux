@@ -19,6 +19,7 @@ from PIL import Image
 from pyte.painted import Paint
 
 from pymux import screenshot
+from pymux.answer import Answer
 from pymux.commands import call_command_handler
 from pymux.graphics import DEFAULT_CELL_HEIGHT, DEFAULT_CELL_WIDTH
 from pymux.main import Pymux
@@ -57,15 +58,15 @@ def create_pane(mux, data: str):
 
 
 async def picture(mux, *arguments) -> Image.Image:
-    mux.command_output = []
+    mux.answer = Answer()
     try:
         fonts = [word for path in FONTS for word in ("--font", path)]
         answer = call_command_handler("capture-pane", mux, ["-p", "--png", *fonts, *arguments])
         assert answer is not None, "a picture is drawn later, so the handler answers an awaitable"
         await answer
-        (encoded,) = mux.command_output
+        (encoded,) = mux.answer.output
     finally:
-        mux.command_output = None
+        mux.answer = None
     return Image.open(io.BytesIO(base64.b64decode(encoded))).convert("RGB")
 
 

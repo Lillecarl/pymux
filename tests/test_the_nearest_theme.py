@@ -18,6 +18,7 @@ from prompt_toolkit.data_structures import Size
 from pyte.colors import parse_color
 from session import over_connection
 
+from pymux.answer import Answer
 from pymux.colors import DefaultColors
 from pymux.nearest import (
     NEAREST,
@@ -206,12 +207,12 @@ async def test_show_client_options_names_what_it_matched():
         state, _ = await session.attach("here", SIZE)
         _reply(state.connection, "11", roles_of("base16:gruvbox-dark-hard")["pane"])
 
-        session.pymux.command_output = []
+        session.pymux.answer = Answer()
         try:
             session.pymux.handle_command("show-client-options theme")
-            said = list(session.pymux.command_output)
+            said = list(session.pymux.answer.output)
         finally:
-            session.pymux.command_output = None
+            session.pymux.answer = None
 
         assert said == ["%s (%s)" % (NEAREST, state.matched)]
 

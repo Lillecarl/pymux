@@ -23,7 +23,7 @@ def choose_buffer(pymux: Pymux, args: argparse.Namespace) -> None:
     The command line has no view to open a chooser on, so an asker
     that reads stdout gets nothing. Lillecarl/pymux#272.
     """
-    if pymux.command_output is not None:
+    if pymux.answer is not None:
         return
     pymux.get_client_state().layout_manager.display_box_chooser(Chooser.BUFFER)
 

@@ -34,6 +34,7 @@ from pyte.placeholders import PLACEHOLDER, blanked
 from pymux.commands.common import find_pane
 
 from .actions import Origin, started_by
+from .answer import Answer
 from .audio import AudioLink
 from .colors import ColorDetection, DefaultColors
 from .commands import handle_command
@@ -1343,15 +1344,11 @@ class ServerConnection:
                     await self.pymux.startup()
 
         pymux = self.pymux
-        pymux.command_output = []
-        pymux.command_error = []
-        pymux.command_warnings = []
-        pymux.command_exit_code = None
         # Who sent this, and from where: the client resolves both fresh
         # on every invocation and says them in the packet, because the
         # server's own environment names nothing about the caller.
         # `libpymux/agentic.py` holds the names.
-        pymux.caller_context = caller_context(packet.get(Field.ENVIRONMENT), packet.get(Field.CWD))
+        pymux.answer = reply = Answer(caller=caller_context(packet.get(Field.ENVIRONMENT), packet.get(Field.CWD)))
 
         client_state = self.client_state
         if client_state is None:
@@ -1373,24 +1370,17 @@ class ServerConnection:
             finally:
                 # Send the output of the command back to the client, and
                 # close the connection.
-                output = pymux.command_output
-                errors = pymux.command_error
-                warnings = pymux.command_warnings or []
-                exit_code = pymux.command_exit_code
-                pymux.command_output = None
-                pymux.command_error = None
-                pymux.command_warnings = None
-                pymux.command_exit_code = None
-                pymux.caller_context = None
+                pymux.answer = None
 
                 try:
-                    if output:
-                        await self._write_packet({Field.CMD: Packet.OUT, Field.DATA: "\n".join(output) + "\n"})
-                    if errors or warnings:
-                        said = [*warnings, *(errors or [])]
+                    if reply.output:
+                        await self._write_packet({Field.CMD: Packet.OUT, Field.DATA: "\n".join(reply.output) + "\n"})
+                    if reply.errors or reply.warnings:
+                        said = [*reply.warnings, *reply.errors]
                         await self._write_packet({Field.CMD: Packet.ERR, Field.DATA: "\n".join(said) + "\n"})
+                    exit_code = reply.exit_code
                     if exit_code is None:
-                        exit_code = 1 if errors else 0
+                        exit_code = 1 if reply.errors else 0
                     await self._write_packet({Field.CMD: Packet.EXIT, Field.CODE: exit_code})
                 except BrokenPipeError:
                     pass

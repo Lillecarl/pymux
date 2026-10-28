@@ -20,6 +20,7 @@ import pytest
 from run_commands import run_as
 from session import create_session
 
+from pymux.answer import Answer
 from pymux.commands import CommandException
 from pymux.commands.view_job import view_job
 from pymux.jobs import JobFeed
@@ -27,11 +28,11 @@ from pymux.jobs import JobFeed
 
 async def _run_answering(pymux, state, command) -> None:
     "Run a command a client waits for: `run -w` refuses without one."
-    pymux.command_output = []
+    pymux.answer = Answer()
     try:
         await run_as(pymux, state, command)
     finally:
-        pymux.command_output = None
+        pymux.answer = None
 
 
 async def _shows(pane, text: str, seconds: float = 5) -> None:

@@ -28,7 +28,7 @@ def choose_window(pymux: Pymux, args: argparse.Namespace) -> None:
     that reads stdout gets nothing -- the same shape as the pop-ups.
     Lillecarl/pymux#272.
     """
-    if pymux.command_output is not None:
+    if pymux.answer is not None:
         return
     pymux.get_client_state().layout_manager.display_chooser(template=args.command)
 

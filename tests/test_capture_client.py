@@ -15,6 +15,7 @@ from PIL import Image
 from test_a_session_on_a_pyte_screen import COLUMNS, ROWS, attached, pymux, settled, shows  # noqa: F401
 from test_capture_pane_as_png import FALLBACK, FONTS, KITTY_RED, RED, pytestmark  # noqa: F401
 
+from pymux.answer import Answer
 from pymux.commands import call_command_handler
 
 CELL = (9, 18)
@@ -25,14 +26,14 @@ async def run(mux, *arguments) -> tuple[str, list[str]]:
     errors: list[str] = []
     mux.add_command_error = errors.append
     mux.show_message = lambda _message: None
-    mux.command_output = []
+    mux.answer = Answer()
     try:
         answer = call_command_handler("capture-client", mux, ["-p", *arguments])
         if answer is not None:
             await answer
-        return "\n".join(mux.command_output), errors
+        return "\n".join(mux.answer.output), errors
     finally:
-        mux.command_output = None
+        mux.answer = None
 
 
 async def picture(mux, *arguments) -> Image.Image:

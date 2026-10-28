@@ -25,6 +25,7 @@ from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from session import create_session, over_connection
 
+from pymux.answer import Answer
 from pymux.commands import handle_command
 
 SIZE = Size(rows=24, columns=80)
@@ -39,8 +40,7 @@ def _ask(pymux, state, command):
     says somebody is waiting for the answer -- which a wait needs. A
     test is one task, so what this sets stays in it.
     """
-    pymux.command_output = []
-    pymux.command_error = []
+    pymux.answer = Answer()
     with set_app(state.app):
         return handle_command(pymux, command)
 
@@ -152,7 +152,7 @@ async def test_unlocking_a_channel_nobody_locked_is_an_error():
     async with create_session() as (pymux, state):
         _ask(pymux, state, "wait-for -U never")
 
-        said = pymux.command_error
+        said = pymux.answer.errors
         assert any("not locked" in line for line in said), said
         assert "never" not in pymux.wait_channels
 

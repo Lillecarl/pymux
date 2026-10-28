@@ -28,11 +28,11 @@ def tail_job(pymux: Pymux, args: argparse.Namespace):
     job still running, 4 when no job answers. A timeout leaves the
     job running -- tail it again.
     """
-    refuse_without_a_waiter(pymux, "wait")
+    reply = refuse_without_a_waiter(pymux, "wait")
     try:
         job = find_job(pymux, args.job, args.tags, args.session)
     except CommandException:
-        pymux.command_exit_code = 4
+        reply.exit_code = 4
         raise
     timeout = args.timeout
     if timeout is None:
@@ -43,7 +43,7 @@ def tail_job(pymux: Pymux, args: argparse.Namespace):
         raise CommandException("a timeout counts seconds, so it cannot be negative.")
 
     async def until_it_ends() -> None:
-        pymux.command_exit_code = await pymux.jobs.follow(job, args.lines, timeout, lambda text: answer(pymux, text))
+        reply.exit_code = await pymux.jobs.follow(job, args.lines, timeout, lambda text: answer(pymux, text))
 
     return until_it_ends()
 

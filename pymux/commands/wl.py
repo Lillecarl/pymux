@@ -33,7 +33,7 @@ def wl(pymux: Pymux, args: argparse.Namespace):
     if pymux.wayland.compositor is None:
         raise CommandException("no Wayland compositor runs: wayland-server is off, or pysmithay is not here")
     pane = the_pane(pymux, args.target_pane)
-    caller = pymux.caller_context
+    caller = pymux.caller
     env = dict(caller.environment) if caller is not None else dict(os.environ)
     cwd = (caller.cwd if caller is not None else None) or pane.current_directory
     return _run(pymux, pane, argv, cwd, env)
@@ -45,13 +45,13 @@ async def _run(pymux: Pymux, pane, argv: list[str], cwd: str | None, env: dict[s
     except OSError as e:
         raise CommandException("%s: %s" % (argv[0], e.strerror or e))
     # A key binding has nobody to tell, and must not hold a task open.
-    if pymux.command_output is None:
+    if pymux.answer is None:
         return
     await _opened_or_exited(launch)
     if launch.adopted is None and launch.exited.is_set():
         if launch.tail:
             answer(pymux, launch.tail.decode("utf-8", "replace").rstrip("\n"))
-        pymux.command_exit_code = launch.returncode or 0
+        pymux.answer.exit_code = launch.returncode or 0
 
 
 async def _opened_or_exited(launch: Launch) -> None:

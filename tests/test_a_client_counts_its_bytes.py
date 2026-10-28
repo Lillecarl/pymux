@@ -18,6 +18,7 @@ from libpymux.wire import encode_json
 from prompt_toolkit.data_structures import Size
 from session import over_connection
 
+from pymux.answer import Answer
 from pymux.introspect import traffic
 from pymux.pipes.memory import connect_in_memory
 from pymux.pipes.posix import PosixSocketConnection
@@ -78,12 +79,12 @@ async def test_a_socket_counts_what_the_wire_carried(pair):
 
 
 async def _lines(session, command) -> list[str]:
-    session.pymux.command_output = []
+    session.pymux.answer = Answer()
     try:
         session.pymux.handle_command(command)
-        return list(session.pymux.command_output)
+        return list(session.pymux.answer.output)
     finally:
-        session.pymux.command_output = None
+        session.pymux.answer = None
 
 
 async def test_each_client_reads_its_own_counts():

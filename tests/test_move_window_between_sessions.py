@@ -15,6 +15,7 @@ import sys
 import pytest
 from run_commands import over_socket
 
+from pymux.answer import Answer
 from pymux.commands import call_command_handler
 from pymux.main import Pymux
 
@@ -41,13 +42,13 @@ async def pymux():
 
 
 async def new_session(mux, name) -> None:
-    mux.command_output = []
+    mux.answer = Answer()
     try:
         answer = call_command_handler("new-session", mux, ["-d", "-s", name, ENDS_AT_ONCE])
         if answer is not None:
             await answer
     finally:
-        mux.command_output = None
+        mux.answer = None
 
 
 def indices(mux, session):

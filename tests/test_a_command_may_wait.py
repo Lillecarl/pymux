@@ -32,6 +32,8 @@ import anyio
 import pytest
 from prompt_toolkit.data_structures import Size
 
+from pymux.answer import Answer
+
 sys.path.insert(0, str(Path(__file__).parent))
 
 from session import create_session, over_connection
@@ -148,11 +150,11 @@ async def test_the_order_of_a_line_holds_across_a_wait():
 
 async def test_what_a_handler_raises_after_the_wait_is_a_command_error():
     async with create_session() as (pymux, _state):
-        pymux.command_error = []
+        pymux.answer = Answer()
 
         await handle_command(pymux, "test-fails-late")
 
-        assert pymux.command_error == ["pymux: it went wrong after the wait"]
+        assert pymux.answer.errors == ["pymux: it went wrong after the wait"]
 
 
 # ----------------------------------------------------------------------
