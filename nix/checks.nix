@@ -64,6 +64,10 @@
   # The fonts pymux-mcp bundles, which `capture-pane --png` is judged with.
   nerd-fonts,
   unifont,
+  # The icons and emoji a picture falls back to; `fallback-fonts.nix`.
+  font-awesome,
+  noto-fonts-monochrome-emoji,
+  lib,
   # The CJK glyphs DejaVu does not have, so a wide character draws as
   # itself and not as a box. Lillecarl/pymux#548.
   wqy_microhei,
@@ -441,8 +445,16 @@ let
     fontDirectories = [
       dejavu_fonts
       wqy_microhei
+      # The icons and emoji of `fallback-fonts.nix`, so a terminal and
+      # pymux's own picture of it draw from the same fonts.
+      nerd-fonts.symbols-only
+      font-awesome
+      noto-fonts-monochrome-emoji
     ];
   };
+
+  # What `capture-pane --png` falls back to after the face.
+  fallbackFonts = callPackage ./fallback-fonts.nix { };
 
   # What every seat needs: a display server, a terminal emulator and the
   # tools that find a window and photograph it. Two checks take pictures,
@@ -490,7 +502,7 @@ let
     # The same faces for the picture pymux draws itself, with Pillow:
     # `capture-pane --png` beside each photograph, for the eye.
     export PYMUX_PICTURE_FONTS=${dejavu_fonts}/share/fonts/truetype/DejaVuSansMono.ttf:${dejavu_fonts}/share/fonts/truetype/DejaVuSansMono-Bold.ttf:${dejavu_fonts}/share/fonts/truetype/DejaVuSansMono-Oblique.ttf:${dejavu_fonts}/share/fonts/truetype/DejaVuSansMono-BoldOblique.ttf
-    export PYMUX_PICTURE_FALLBACKS=${wqy_microhei}/share/fonts/truetype/wqy-microhei.ttc
+    export PYMUX_PICTURE_FALLBACKS=${lib.escapeShellArg (lib.concatStringsSep ":" ([ "${wqy_microhei}/share/fonts/truetype/wqy-microhei.ttc" ] ++ fallbackFonts))}
     export LIBGL_ALWAYS_SOFTWARE=1
     export LIBGL_DRIVERS_PATH=${mesa}/lib/dri
     export __EGL_VENDOR_LIBRARY_DIRS=${mesa}/share/glvnd/egl_vendor.d

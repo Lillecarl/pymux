@@ -16,26 +16,27 @@
   # draws. Its faces go in `pymux_mcp/fonts.json`, written into the
   # output, never beside the source.
   nerdFont,
-  # The fallbacks for every glyph the font lacks, always handed over:
-  # GNU Unifont, whose two files cover the whole of Unicode once each,
-  # the multilingual plane and the planes above it. Its other files are
-  # variants of the same glyphs and stay out.
-  unifont,
+  # The files for every glyph the font lacks, in order, always handed
+  # over: `../nix/fallback-fonts.nix` says which and why.
+  fallbackFonts,
 }:
 (mkProject {
   root = ./.;
   inherit python;
   extra = rendered: {
-    postInstall = ''
-      faces=${nerdFont}/share/fonts/truetype/NerdFonts/JetBrainsMono/JetBrainsMonoNerdFontMono
-      fallbacks=${unifont}/share/fonts/opentype/unifont
-      for file in "$faces"-{Regular,Bold,Italic,BoldItalic}.ttf "$fallbacks"/unifont{,_upper}.otf; do
-        test -f "$file"
-      done
-      printf '{"faces": ["%s", "%s", "%s", "%s"], "fallbacks": ["%s", "%s"]}\n' \
-        "$faces"-{Regular,Bold,Italic,BoldItalic}.ttf "$fallbacks"/unifont{,_upper}.otf \
-        > "$out/${python.sitePackages}/pymux_mcp/fonts.json"
-    '';
+    postInstall =
+      let
+        fonts = {
+          faces = map (
+            face: "${nerdFont}/share/fonts/truetype/NerdFonts/JetBrainsMono/JetBrainsMonoNerdFontMono-${face}.ttf"
+          ) [ "Regular" "Bold" "Italic" "BoldItalic" ];
+          fallbacks = fallbackFonts;
+        };
+      in
+      ''
+        ${lib.concatMapStrings (file: "test -f ${lib.escapeShellArg file}\n") (fonts.faces ++ fonts.fallbacks)}
+        echo ${lib.escapeShellArg (builtins.toJSON fonts)} > "$out/${python.sitePackages}/pymux_mcp/fonts.json"
+      '';
     meta = rendered.meta // {
       description = "Drive a pymux server from an agent, over MCP";
       homepage = "https://github.com/Lillecarl/pymux";

@@ -3,8 +3,9 @@ The fonts this package carries for a PNG of a pane.
 
 pymux draws with the system's monospace font when fontconfig names one;
 `Fonts.faces` is for a server that finds none, a Nerd Font's four
-faces. `Fonts.fallbacks` go with every picture: GNU Unifont, for each
-glyph the font lacks. The Nix build writes the paths into `fonts.json`
+faces. `Fonts.fallbacks` go with every picture, for each glyph the font
+lacks: icon fonts, emoji, and GNU Unifont last
+(`pymux/nix/fallback-fonts.nix`). The Nix build writes the paths into `fonts.json`
 in the installed package. A checkout run from source has no such file,
 and no bundled font.
 """
