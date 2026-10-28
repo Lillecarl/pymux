@@ -14,8 +14,10 @@ import shlex
 import subprocess
 import sys
 
+import anyio
 import pytest
 from prompt_toolkit.document import Document
+from session import in_this_process
 
 from pymux.commands import call_command_handler, completer, parser_tree
 from pymux.commands.completer import create_command_completer
@@ -322,13 +324,12 @@ def test_alias_says_what_command_it_names_does():
 # The shell: what `pymux <TAB>` answers.
 
 
-def _shell_completes(line: str) -> set:
-    """
-    Drive the entry point the way the generated script of argcomplete
-    does, and read what it answers on file descriptor 8.
-    """
-    bootstrap = "from pymux.entry_points.run_pymux import run; run()"
-    environment = {key: value for key, value in os.environ.items() if key not in ("PYMUX", "PYTHONPATH")} | {
+BOOTSTRAP = "from pymux.entry_points.run_pymux import run; run()"
+
+
+def _completion_environment(line: str) -> dict[str, str]:
+    "The environment argcomplete's generated script gives the entry point."
+    return {key: value for key, value in os.environ.items() if key not in ("PYMUX", "PYTHONPATH")} | {
         "_ARGCOMPLETE": "1",
         "_ARGCOMPLETE_IFS": "\013",
         "_ARGCOMPLETE_SHELL": "bash",
@@ -337,13 +338,20 @@ def _shell_completes(line: str) -> set:
         "COMP_TYPE": "9",
         "_ARGCOMPLETE_COMP_WORDBREAKS": " \t\n\"'><=;|&(:",
     }
+
+
+def _shell_completes(line: str) -> set:
+    """
+    Drive the entry point the way the generated script of argcomplete
+    does, and read what it answers on file descriptor 8.
+    """
     done = subprocess.run(
         [
             "bash",
             "-c",
-            "exec %s -c %s 8>&1 1>/dev/null" % (sys.executable, shlex.quote(bootstrap)),
+            "exec %s -c %s 8>&1 1>/dev/null" % (sys.executable, shlex.quote(BOOTSTRAP)),
         ],
-        env=environment,
+        env=_completion_environment(line),
         capture_output=True,
         text=True,
         check=False,
@@ -368,6 +376,33 @@ def _shell_completes(line: str) -> set:
 def test_shell_answers_from_tree(line, wanted):
     offered = _shell_completes(line)
     assert wanted <= offered, (line, wanted, offered)
+
+
+async def test_shell_asks_the_server_for_values(tmp_path):
+    """
+    A value only the server knows completes from a shell as it does in
+    the command bar: the shell asks `complete-value` over the socket.
+    """
+    socket_name = str(tmp_path / "pymux.sock")
+
+    async def completes(line: str) -> set:
+        done = await anyio.run_process(
+            ["bash", "-c", "exec %s -c %s 8>&1 1>/dev/null" % (sys.executable, shlex.quote(BOOTSTRAP))],
+            env=_completion_environment(line),
+            check=False,
+        )
+        assert done.returncode == 0, done.stderr.decode()
+        return {c.rstrip() for c in done.stdout.decode().split("\013") if c}
+
+    # Before the server runs: it serves the sockets it listens on as it starts.
+    pymux = Pymux()
+    pymux.listen_on_socket(socket_name)
+    async with in_this_process(pymux):
+        with anyio.fail_after(30):
+            layouts = await completes("pymux -S %s select-layout even-" % socket_name)
+            options = await completes("pymux -S %s set-option -g status-ju" % socket_name)
+    assert layouts == {"even-horizontal", "even-vertical"}
+    assert options == {"status-justify"}
 
 
 def test_shell_answers_entry_point_options():

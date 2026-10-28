@@ -43,7 +43,7 @@ from pymux.query import register, tables_of
 if TYPE_CHECKING:
     from pymux.main import Pymux
 
-__all__ = ["create_command_completer", "stop_shlex_comments"]
+__all__ = ["completes_from_the_server", "create_command_completer", "stop_shlex_comments", "values_for"]
 
 
 def stop_shlex_comments() -> None:
@@ -410,6 +410,36 @@ class FuzzyFinder(argcomplete.ExclusiveCompletionFinder):
 
 _finder: FuzzyFinder | None = None
 _completion_tree: tuple[CommandParser, argparse._SubParsersAction[CommandParser]] | None = None
+
+
+def completes_from_the_server(name: str, action: argparse.Action) -> bool:
+    "Whether the server knows the values of this argument of this command."
+    return (name, action.dest) in _VALUE_COMPLETERS or str(action.metavar) in TARGET_COMPLETERS
+
+
+def values_for(pymux: Pymux, name: str, dest: str, prefix: str, given: dict[str, Any]) -> dict[str, str]:
+    """
+    What the command bar offers for one argument of a command, each word
+    with what it says, for a completion asked from a shell. `given` holds
+    the arguments the shell parsed so far, which some completers read:
+    `set-option -w` names other options than `set-option`.
+    """
+    global _completion_tree
+    if _completion_tree is None:
+        _completion_tree = build_parser_tree()
+    command_parser = _completion_tree[1].choices.get(name)
+    if command_parser is None:
+        return {}
+    action = next((a for a in command_parser._actions if a.dest == dest), None)
+    if action is None:
+        return {}
+    fn = _VALUE_COMPLETERS.get((name, dest)) or TARGET_COMPLETERS.get(str(action.metavar))
+    if fn is None:
+        return {}
+    parsed = argparse.Namespace(**{a.dest: a.default for a in command_parser._actions})
+    for key, value in given.items():
+        setattr(parsed, key, value)
+    return fn(Questions(pymux), prefix=prefix, parsed_args=parsed, action=action)
 
 
 def create_command_completer(pymux: Pymux):

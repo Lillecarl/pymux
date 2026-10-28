@@ -59,6 +59,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import getpass
+import json
 import logging
 import os
 import shlex
@@ -68,6 +69,7 @@ import tempfile
 import time
 from dataclasses import dataclass
 from enum import StrEnum
+from functools import partial
 from typing import NoReturn, assert_never
 
 from pymux import __version__, log
@@ -458,10 +460,65 @@ def _completion_parser() -> argparse.ArgumentParser:
             mode_parser.add_argument("-w", "--width", type=int, help="The columns an image covers.")
             mode_parser.add_argument("files", nargs="+", help="The images to show; - reads standard input.")
     add_commands_to(modes)
+    from pymux.commands.completer import completes_from_the_server
+
+    for name, command_parser in modes.choices.items():
+        for action in command_parser._actions:
+            if completes_from_the_server(name, action):
+                action.completer = partial(_server_values, name, action.dest)  # pyrefly: ignore[missing-attribute]
     for action in modes.choices["receive"]._actions:
         if action.dest == "paths":
             action.completer = _person_paths  # pyrefly: ignore[missing-attribute]
     return parser
+
+
+#: How long a Tab waits for a server that took the connection. A server
+#: answers a value in a quarter of a second (`QUESTION_BUDGET`); this
+#: is for a peer that never answers.
+ASK_SECONDS = 1.0
+
+
+def _ask_server(words: list[str], socket_name: str | None = None, timeout: float = ASK_SECONDS) -> list[str]:
+    """
+    The lines a command prints, run on the server `-S` names or the
+    one of this pane. Nothing when there is none, when it is another
+    machine's (a Tab does not wait for SSH), or when the command fails.
+    """
+    import io
+
+    from pymux.client.command import CommandClient
+
+    pane_socket, _, pane_id = os.environ.get("PYMUX", "").rpartition(",")
+    socket_name = socket_name or pane_socket
+    if not socket_name or is_ssh_url(socket_name):
+        return []
+    printed = io.StringIO()
+    try:
+        client = CommandClient(socket_name)
+        with contextlib.redirect_stdout(printed), contextlib.redirect_stderr(io.StringIO()):
+            code = client.run_command(shlex.join(words), pane_id or None, timeout=timeout)
+    except OSError:
+        return []
+    if code != 0:
+        return []
+    return printed.getvalue().splitlines()
+
+
+def _server_values(name: str, dest: str, prefix: str, parsed_args: argparse.Namespace, **_) -> dict[str, str]:
+    """
+    The values the server offers for this argument, each with what it
+    says: the command bar's own completion, asked over the socket.
+    """
+    given = {
+        key: value
+        for key, value in vars(parsed_args).items()
+        if not key.startswith("_") and key != "socket" and isinstance(value, str | bool | int | list)
+    }
+    lines = _ask_server(
+        ["complete-value", "--", name, dest, prefix, json.dumps(given)],
+        getattr(parsed_args, "socket", None),
+    )
+    return dict(line.partition("\t")[::2] for line in lines if line)
 
 
 def _person_paths(prefix: str, **_) -> list[str]:
@@ -471,25 +528,13 @@ def _person_paths(prefix: str, **_) -> list[str]:
     the prefix names. Nothing, outside a pane or when the client says
     nothing. Lillecarl/pymux#748.
     """
-    import io
-
-    from pymux.client.command import CommandClient
     from pymux.uploads import LIST_SECONDS
 
-    socket_name, _, pane_id = os.environ.get("PYMUX", "").rpartition(",")
-    if not socket_name:
+    if not os.environ.get("PYMUX"):
         return []
     head = prefix[: prefix.rfind("/") + 1]
-    printed = io.StringIO()
-    try:
-        client = CommandClient(socket_name)
-        with contextlib.redirect_stdout(printed), contextlib.redirect_stderr(io.StringIO()):
-            code = client.run_command(shlex.join(["list-person-files", head or "~"]), pane_id, timeout=LIST_SECONDS + 1)
-    except OSError:
-        return []
-    if code != 0:
-        return []
-    return [head + name for name in printed.getvalue().splitlines() if name]
+    lines = _ask_server(["list-person-files", head or "~"], timeout=LIST_SECONDS + 1)
+    return [head + name for name in lines if name]
 
 
 def _answer_completion() -> None:

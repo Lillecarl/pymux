@@ -76,6 +76,7 @@ MODULES = [
     "confirm_before",
     "open_url",
     "receive",
+    "complete_value",
     "compose_key",
     "command_prompt",
     "send_prefix",
