@@ -35,6 +35,7 @@ from prompt_toolkit.layout.mouse_handlers import MouseHandlers
 from prompt_toolkit.layout.screen import Screen, WritePosition
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
+from pyte.modes import PrivateMode
 from session import Connection
 from test_server_tasks import FakePipe
 
@@ -226,6 +227,44 @@ async def test_focus_in_uses_client():
         connection._handle_kitty_reply(FOCUS_IN)
         assert plane(pymux).columns == BIG.columns
         connection._close_connection()
+
+
+async def test_pane_that_asks_hears_its_terminal_focus():
+    """
+    A pane with DEC 1004 set learns when the terminal it shows on gains
+    and loses the focus, once each and not once per client.
+    Lillecarl/pymux#795.
+    """
+    async with two_clients() as (pymux, big, small):
+        (pane,) = window(pymux).panes
+        pane.screen.set_mode(PrivateMode.FOCUS_EVENTS, private=True)
+        heard = []
+        pane.process.write_input = heard.append
+        big.state.terminal_focused = small.state.terminal_focused = False
+        pymux.sync_pane_focus()
+        heard.clear()
+
+        big.state.terminal_focused = True
+        pymux.sync_pane_focus()
+        small.state.terminal_focused = True
+        pymux.sync_pane_focus()
+        assert heard == [FOCUS_IN]
+
+        big.state.terminal_focused = small.state.terminal_focused = False
+        pymux.sync_pane_focus()
+        assert heard == [FOCUS_IN, FOCUS_OUT]
+
+
+async def test_pane_that_never_asked_hears_no_focus():
+    async with two_clients() as (pymux, big, small):
+        (pane,) = window(pymux).panes
+        heard = []
+        pane.process.write_input = heard.append
+        big.state.terminal_focused = small.state.terminal_focused = False
+        pymux.sync_pane_focus()
+        big.state.terminal_focused = True
+        pymux.sync_pane_focus()
+        assert heard == []
 
 
 async def test_manual_size_follows_no_client():

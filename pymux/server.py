@@ -734,12 +734,13 @@ class ServerConnection:
         one pane.
         """
         # Not kept: one arrives at every switch between windows.
-        if data == FOCUS_IN:
+        if data in (FOCUS_IN, FOCUS_OUT):
             if self.client_state is not None:
-                self.pymux.client_was_used(self.client_state)
-                self.pymux.invalidate(Woke.CLIENT_FOCUSED)
-            return
-        if data == FOCUS_OUT:
+                self.client_state.terminal_focused = data == FOCUS_IN
+                self.pymux.sync_pane_focus()
+                if data == FOCUS_IN:
+                    self.pymux.client_was_used(self.client_state)
+                    self.pymux.invalidate(Woke.CLIENT_FOCUSED)
             return
         # The terminal switched between light and dark. The report says
         # which, not the colours: those are asked again, and their

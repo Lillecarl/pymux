@@ -95,6 +95,7 @@ from .inline_images import as_png, cells_of
 from .jobs import JOB_SWEEP_EVERY, Job, JobFeed, JobTable, describe
 from .key_bindings import PymuxKeyBindings
 from .key_spelling import why_pane_cannot_read
+from .keys import FOCUS_IN, FOCUS_OUT
 from .layout import LayoutManager, change_pane_size
 from .log import logger
 from .nearest import NEAREST
@@ -139,7 +140,7 @@ from .shims import Shims
 from .style import DEFAULT_THEME, theme
 from .terminals import Terminals
 from .wayland import WaylandServer
-from .window_pane import WindowScreen, WindowWidget, is_window_pane
+from .window_pane import WindowProcess, WindowScreen, WindowWidget, is_window_pane
 
 if TYPE_CHECKING:
     from prompt_toolkit.input import Input
@@ -343,6 +344,7 @@ class ClientState:
         "previous_session": Keep.SAVED,
         "options": Keep.SAVED,
         "last_used": Keep.SAVED,
+        "terminal_focused": Keep.DROPPED,
         "read_only": Keep.SAVED,
         "watched_clipboard": Keep.DROPPED,
         "ignore_size": Keep.SAVED,
@@ -564,6 +566,11 @@ class ClientState:
         #: When a person last used this client, as a turn of
         #: `Pymux.client_was_used`. `window-size latest` reads it.
         self.last_used = 0
+
+        #: Whether this client's terminal window has the focus, as its
+        #: DEC 1004 reports say. A terminal that never reports has it.
+        #: Lillecarl/pymux#795.
+        self.terminal_focused = True
 
         #: True for the fake CLI that runs a command that arrived over
         #: a socket: it draws nothing, nobody uses it, and it is gone
@@ -985,6 +992,7 @@ class ClientState:
         """
         with set_app(self.app):
             self._sync_focus()
+        self.pymux.sync_pane_focus()
 
     def modes(self) -> dict[str, Any]:
         """
@@ -1262,6 +1270,8 @@ class Pymux:
         "hanging_up": Keep.DROPPED,  # an upgrade kills them before it goes
         "refusing_commands": Keep.DROPPED,  # the new image takes them again
         "_client_states": Keep.REBUILT,  # from the client records, as clients reconnect
+        # Told again at the first focus sync, which a program reads as one more focus-in.
+        "_focused_panes": Keep.DROPPED,
         "shims": Keep.REBUILT,
         "options": Keep.SAVED,
         "session_defaults": Keep.SAVED,
@@ -1290,6 +1300,8 @@ class Pymux:
         size_with_no_client: Size | None = None,
     ):
         self._client_states = {}  # connection -> client_state
+        #: The ids of the panes that have the focus. Lillecarl/pymux#795.
+        self._focused_panes: set[PaneId] = set()
 
         #: How many times a client has been used, over the session.
         #: `client_was_used` bumps it and stamps the client, and
@@ -2345,6 +2357,37 @@ class Pymux:
         self._uses += 1
         client_state.last_used = self._uses
         client_state.session.last_used = self._uses
+
+    def sync_pane_focus(self) -> None:
+        """
+        Send focus-in and focus-out to the panes that asked (DEC 1004).
+
+        A pane has the focus while it is the active pane of a client
+        whose terminal window has it. Several clients can give several
+        panes the focus at once; tmux has one client and one focus.
+        Lillecarl/pymux#795.
+        """
+        focused = set()
+        for client_state in self._client_states.values():
+            if client_state.terminal_focused and not client_state.temporary:
+                pane = client_state.session.arrangement.get_active_pane_for(client_state.app)
+                if pane is not None:
+                    focused.add(pane.pane_id)
+        if focused == self._focused_panes:
+            return
+        for pane_id, report in [(one, FOCUS_IN) for one in focused - self._focused_panes] + [
+            (one, FOCUS_OUT) for one in self._focused_panes - focused
+        ]:
+            pane = self.panes_by_id.get(pane_id)
+            if pane is None:
+                continue
+            # A window pane has no program to read the report.
+            screen, process = pane.screen, pane.process
+            if isinstance(screen, WindowScreen) or isinstance(process, WindowProcess):
+                continue
+            if screen.reports_focus and not process.is_terminated:
+                process.write_input(report)
+        self._focused_panes = focused
 
     def clients_watching(self, window: Window | None = None) -> list[ClientState]:
         """
@@ -4548,6 +4591,7 @@ class Pymux:
             self.counters.client_left(connection.pipe_connection)
         if gone is not None:
             self.browsers.client_gone(gone)
+            self.sync_pane_focus()
         # One client fewer can mean that the rest speak more.
         self.terminals.sync_keyboard_source_flags()
         # And the client that spoke for the panes may be the one gone.

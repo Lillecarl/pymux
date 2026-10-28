@@ -45,6 +45,8 @@ class FakeClientState:
     #: reports nothing. Lillecarl/pymux#420.
     temporary = False
 
+    terminal_focused = True
+
     def __init__(self, session):
         self.session = session
 
