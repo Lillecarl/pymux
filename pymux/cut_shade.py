@@ -131,7 +131,7 @@ def shade(
     across = _band(left, right, hidden.left > 0, hidden.right > 0, fade)
     down = _band(top, bottom, hidden.top > 0, hidden.bottom > 0, fade)
 
-    shaded = getattr(screen, _SHADED, None)
+    shaded: dict[tuple[str, float], str] | None = getattr(screen, _SHADED, None)
     if shaded is None:
         shaded = {}
         setattr(screen, _SHADED, shaded)

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import os
 import shlex
+from collections.abc import Mapping
 
 from pymux.commands.aliases import ALIASES
 
@@ -28,7 +29,7 @@ __all__ = [
 SET_CLIENT_OPTION = "set-client-option"
 
 
-def config_paths(environ=None) -> list[str]:
+def config_paths(environ: Mapping[str, str] | None = None) -> list[str]:
     """
     Where pymux looks for a configuration file, best first.
 
@@ -49,12 +50,12 @@ def config_paths(environ=None) -> list[str]:
     ]
 
 
-def plugin_dir(environ=None) -> str:
+def plugin_dir(environ: Mapping[str, str] | None = None) -> str:
     "Where a person's own plugins are: `$XDG_CONFIG_HOME/pymux/plugins`."
     return os.path.join(_config_home(environ), "pymux", "plugins")
 
 
-def _config_home(environ=None) -> str:
+def _config_home(environ: Mapping[str, str] | None = None) -> str:
     if environ is None:
         environ = os.environ
 
@@ -64,7 +65,7 @@ def _config_home(environ=None) -> str:
     return config_home
 
 
-def find_config(environ=None) -> str | None:
+def find_config(environ: Mapping[str, str] | None = None) -> str | None:
     """
     The first configuration file that is there, or `None`.
 

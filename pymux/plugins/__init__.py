@@ -19,6 +19,7 @@ import argparse
 import importlib.util
 import pkgutil
 import sys
+from collections.abc import Mapping
 from types import ModuleType
 from typing import TYPE_CHECKING
 
@@ -29,7 +30,7 @@ if TYPE_CHECKING:
     from pymux.commands import CommandParser
 
 
-def register(subparsers: argparse._SubParsersAction[CommandParser], environ=None) -> None:
+def register(subparsers: argparse._SubParsersAction[CommandParser], environ: Mapping[str, str] | None = None) -> None:
     """
     Mount every plugin on the tree.
 

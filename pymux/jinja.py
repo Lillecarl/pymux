@@ -77,7 +77,7 @@ class _Compiled(NamedTuple):
     "A template, and the names it asks for."
 
     template: Template
-    names: frozenset
+    names: frozenset[str]
 
 
 #: A sandbox, because a program in a pane can send commands, and

@@ -80,7 +80,7 @@ def rows_of(pymux: Pymux, records: list[Notification], text: str = "") -> list[H
     otherwise the messages that do; a window with none left goes.
     """
     groups: dict[int | None, list[Notification]] = {}
-    places: dict[int | None, tuple] = {}
+    places: dict[int | None, tuple[Session | None, Window | None, Pane | None]] = {}
     for record in reversed(records):
         found = pymux.window_of_pane(record.pane_id)
         key = None if found is None else id(found[1])

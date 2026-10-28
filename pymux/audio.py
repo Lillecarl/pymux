@@ -39,7 +39,7 @@ import tempfile
 from collections import deque
 from importlib import resources
 from subprocess import DEVNULL, PIPE
-from typing import TYPE_CHECKING, Any
+from typing import IO, TYPE_CHECKING, Any
 
 import anyio
 import anyio.abc
@@ -60,6 +60,8 @@ from pymux.jitter import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
     from opuslib import Encoder
 
     from pymux.main import Pymux
@@ -276,7 +278,7 @@ wireplumber.profiles = {
 """
 
 
-def write_config(config: dict[str, Any], out) -> None:
+def write_config(config: dict[str, Any], out: IO[str]) -> None:
     """
     A PipeWire config, as JSON, which SPA-JSON reads.
 
@@ -338,7 +340,7 @@ class AudioLink:
     def __init__(self, connection: ServerConnection) -> None:
         self.connection = connection
         self.client_id = connection.client_id
-        self._queue: deque[dict] = deque(maxlen=SEND_QUEUE)
+        self._queue: deque[Message] = deque(maxlen=SEND_QUEUE)
         self._ready = anyio.Event()
         #: The client's `audio-frame`: the frames both ways are this long.
         self.frame_ms: float = DEFAULT_FRAME_MS
@@ -782,7 +784,9 @@ class AudioServer:
         raise RuntimeError("%s ended with %s" % (name, code))
 
     @contextlib.asynccontextmanager
-    async def _program(self, argv: list[str], environment: dict[str, str], stdin=DEVNULL, stdout=DEVNULL):
+    async def _program(
+        self, argv: list[str], environment: dict[str, str], stdin: int = DEVNULL, stdout: int = DEVNULL
+    ) -> AsyncIterator[anyio.abc.Process]:
         "A program of sound's, ended with the block. `pause` can end it sooner."
         process = await anyio.open_process(
             dies_with_this_process(argv), env=environment, stdin=stdin, stdout=stdout, stderr=None

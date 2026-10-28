@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from prompt_toolkit.data_structures import Point, Size
 
 from . import arrangement
-from .plane import GROUND, Line, Pane, Plan, Rect, View
+from .plane import GROUND, Line, Pane, Plan, Rect, Slot, View
 from .tiling import Gaps, lay_out
 
 __all__ = ["Divided"]
@@ -84,7 +84,7 @@ class Divided:
         bars above and below a gap are drawn, and seen when they are
         off.
         """
-        rects: list[tuple] = []
+        rects: list[tuple[Slot, Rect]] = []
         lines: list[Line] = []
 
         lay_out(

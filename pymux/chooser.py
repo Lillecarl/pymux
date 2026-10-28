@@ -11,7 +11,7 @@ import argparse
 import os
 import time
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from prompt_toolkit.application import get_app
 from prompt_toolkit.clipboard import ClipboardData
@@ -38,12 +38,16 @@ from .format import marks_of, window_marks
 if TYPE_CHECKING:
     from prompt_toolkit.layout.controls import BufferControl, NotImplementedOrNone
 
+    from pymux.ids import PaneId
+    from pymux.main import Pymux
+    from pymux.session import Session
+
     from .layout import LayoutManager
 
 __all__ = ["ChooserView"]
 
 
-def option_value_of(pymux, name: str) -> str:
+def option_value_of(pymux: Pymux, name: str) -> str:
     """
     What one option holds, spelled the way set-option with no value
     reads it back. A window option reads the window that is active, a
@@ -212,7 +216,7 @@ class ChooserView:
         width = max(1, width - self._chooser_label_width())
         room = width
 
-        sessions: list = []
+        sessions: list[Session | None] = []
         if self._chooser_grouped():
             sessions = [self.pymux.session_of_window(window) for window in self.chooser_matches()]
 
@@ -239,7 +243,7 @@ class ChooserView:
         sessions = {self.pymux.session_of_window(window) for window in self.chooser_matches()}
         return max((len(self._session_label(session)) for session in sessions if session), default=0) + 1
 
-    def _session_label(self, session) -> str:
+    def _session_label(self, session: Session) -> str:
         """
         A session's name, and the marks its windows carry, so a line
         says which session wants attention. Lillecarl/pymux#767.
@@ -322,7 +326,7 @@ class ChooserView:
 
         self.show_window(matches[state.choose_window_index])
 
-    def show_window(self, window) -> None:
+    def show_window(self, window: arrangement.Window) -> None:
         "Move this client onto a window, wherever that window is."
         session = self.pymux.session_of_window(window)
         if session is None:
@@ -384,7 +388,7 @@ class ChooserView:
         "Whether a chooser of the box kind shows, and not the bar."
         return self.client_state.chooser not in (None, Chooser.WINDOW)
 
-    def chooser_matches(self) -> list:
+    def chooser_matches(self) -> list[Any]:
         """
         The rows the chooser lists. The search narrows them: a row
         stays when what was typed is in its name or in its index,
@@ -448,7 +452,7 @@ class ChooserView:
                 case _:
                     self.choose_pointed_window()
 
-    def _session_name_of(self, window) -> str:
+    def _session_name_of(self, window: arrangement.Window) -> str:
         "The name of the session that holds a window, or nothing."
         session = self.pymux.session_of_window(window)
         return session.name if session is not None else ""
@@ -841,7 +845,7 @@ class ChooserView:
             tokens.append((style, "\n", handler))
         return tokens
 
-    def _where_pane_is(self, pane_id) -> str:
+    def _where_pane_is(self, pane_id: PaneId | None) -> str:
         """
         The directory the shell of that pane reported, with the home
         directory as `~`, or nothing. Lillecarl/pymux#498.
