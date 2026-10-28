@@ -88,6 +88,7 @@ in it:
 
     $out/<terminal>/<fixture>/bare.png
     $out/<terminal>/<fixture>/pymux.png
+    $out/<terminal>/<fixture>/pillow.png
     $out/<terminal>/<fixture>/difference.png
 
 Run with:
@@ -120,6 +121,7 @@ import base64
 import json
 import os
 import shutil
+import subprocess
 import sys
 import time
 from functools import partial
@@ -963,6 +965,29 @@ def every_log(room, seat=None):
     return "\n".join(logs)
 
 
+def pillow_of(socket_path, into):
+    """
+    The pane as pymux draws it itself, with Pillow: `capture-pane --png`,
+    in the terminal's own font and cell, beside the two photographs.
+
+    Nothing judges it. Each terminal draws its glyphs its own way and
+    Pillow another, so no pixel count would mean anything; it is there
+    for a person to compare by eye.
+    """
+    fonts = [one for one in os.environ.get("PYMUX_PICTURE_FONTS", "").split(":") if one]
+    fallbacks = [one for one in os.environ.get("PYMUX_PICTURE_FALLBACKS", "").split(":") if one]
+    flags = [*(("--font", one) for one in fonts), *(("--fallback", one) for one in fallbacks)]
+    done = subprocess.run(
+        [sys.executable, "-m", "pymux", "-S", str(socket_path), "capture-pane", "-p", "--png"]
+        + [word for pair in flags for word in pair],
+        capture_output=True,
+        timeout=60,
+    )
+    if done.returncode != 0:
+        raise RuntimeError("capture-pane --png failed: %s" % done.stderr.decode("utf-8", "replace").strip())
+    into.write_bytes(base64.b64decode(done.stdout))
+
+
 def compare_one(terminal, seat, name, work, out):
     "Run one fixture both ways, and say how many pixels differ."
     room = out / terminal.name / name
@@ -977,13 +1002,15 @@ def compare_one(terminal, seat, name, work, out):
     config_path = work / "full-screen.conf"
     config_path.write_text(PICTURE_CONFIG)
 
+    # The name of the terminal is in it: every terminal runs every
+    # fixture, and a socket that a run before left behind is a socket
+    # that this one cannot bind.
+    socket_path = work / ("%s-%s.sock" % (terminal.name, name))
+
     def through_pymux(viewer):
         return pymux_command(
             viewer,
-            # The name of the terminal is in it: every terminal runs
-            # every fixture, and a socket that a run before left behind
-            # is a socket that this one cannot bind.
-            work / ("%s-%s.sock" % (terminal.name, name)),
+            socket_path,
             config_path,
             room / "pymux-server.log",
             room / "pymux-stderr.log",
@@ -995,6 +1022,7 @@ def compare_one(terminal, seat, name, work, out):
     def director(twins):
         twins.until_it_ends()
         twins.photograph((bare, through))
+        pillow_of(socket_path, room / "pillow.png")
 
     try:
         seat.twins(

@@ -487,6 +487,10 @@ let
     # bindings.
     export PYTERM_WAYLAND_PROTOCOLS=${waylandProtocols}
     export FONTCONFIG_FILE=${fontsConf}
+    # The same faces for the picture pymux draws itself, with Pillow:
+    # `capture-pane --png` beside each photograph, for the eye.
+    export PYMUX_PICTURE_FONTS=${dejavu_fonts}/share/fonts/truetype/DejaVuSansMono.ttf:${dejavu_fonts}/share/fonts/truetype/DejaVuSansMono-Bold.ttf:${dejavu_fonts}/share/fonts/truetype/DejaVuSansMono-Oblique.ttf:${dejavu_fonts}/share/fonts/truetype/DejaVuSansMono-BoldOblique.ttf
+    export PYMUX_PICTURE_FALLBACKS=${wqy_microhei}/share/fonts/truetype/wqy-microhei.ttc
     export LIBGL_ALWAYS_SOFTWARE=1
     export LIBGL_DRIVERS_PATH=${mesa}/lib/dri
     export __EGL_VENDOR_LIBRARY_DIRS=${mesa}/share/glvnd/egl_vendor.d
