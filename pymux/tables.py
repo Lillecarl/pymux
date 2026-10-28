@@ -321,6 +321,9 @@ class PaneRow:
     command_zone: str | None
     last_exit_status: int | None
     bell: int = 0
+    current_user: str | None = None
+    shell: str | None = None
+    shell_integration_version: str | None = None
     shown_name: str | None = shown()
     title: str | None = shown()
     current_command: str | None = shown()

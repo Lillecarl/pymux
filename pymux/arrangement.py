@@ -94,6 +94,9 @@ class Pane:
         "tags": Keep.SAVED,
         "current_directory": Keep.SAVED,
         "current_host": Keep.SAVED,
+        "current_user": Keep.SAVED,
+        "shell": Keep.SAVED,
+        "shell_integration_version": Keep.SAVED,
         "command_zone": Keep.SAVED,
         "last_exit_status": Keep.SAVED,
         "bell": Keep.SAVED,
@@ -149,8 +152,16 @@ class Pane:
 
         #: The machine the directory sits on, from the host of the
         #: "OSC 7" file URL. `None` is the machine here or a report
-        #: that named no host.
+        #: that named no host. "OSC 1337 ; RemoteHost" sets it too.
         self.current_host: str | None = None
+
+        #: The user the shell runs as there, from "OSC 1337 ; RemoteHost".
+        self.current_user: str | None = None
+
+        #: The shell and the version of its iTerm2 integration, from
+        #: "OSC 1337 ; ShellIntegrationVersion". Lillecarl/pymux#784.
+        self.shell: str | None = None
+        self.shell_integration_version: str | None = None
 
         #: What the shell published about itself, from "OSC 1337 ;
         #: SetUserVar". iTerm2 reads these for badges and triggers and

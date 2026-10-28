@@ -219,6 +219,9 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     pane.clock_mode = True
     pane.current_directory = "/srv"
     pane.current_host = "far"
+    pane.current_user = "deploy"
+    pane.shell = "fish"
+    pane.shell_integration_version = "14"
     pane.command_zone = "C"
     pane.last_exit_status = 2
     pane.bell = True

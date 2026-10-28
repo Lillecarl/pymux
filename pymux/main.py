@@ -120,8 +120,10 @@ from .osc import (
     file_url_dir_of,
     ftcs_of,
     open_url_of,
+    remote_host_of,
     request_attention_of,
     set_user_var_of,
+    shell_integration_of,
     simple_notification_of,
 )
 from .pipes import bind_and_listen_on_socket, connect_in_memory
@@ -3596,6 +3598,20 @@ class Pymux:
             if directory is None:
                 return False
             pane.current_directory = directory
+            return True
+
+        if key == "RemoteHost":
+            remote = remote_host_of(rest)
+            if remote is None:
+                return False
+            pane.current_user, pane.current_host = remote
+            return True
+
+        if key == "ShellIntegrationVersion":
+            integration = shell_integration_of(rest)
+            if integration is None:
+                return False
+            pane.shell_integration_version, pane.shell = integration
             return True
 
         if key == "SetMark":

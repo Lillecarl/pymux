@@ -132,6 +132,14 @@ async def test_the_current_path_is_where_the_pane_says_it_is(pymux):
     assert format_pymux_string(pymux, "#{pane_current_path}") == "/reported"
 
 
+async def test_where_the_shell_runs_is_what_it_said(pymux):
+    "OSC 7 and iTerm2's RemoteHost and ShellIntegrationVersion. Lillecarl/pymux#784."
+    assert format_pymux_string(pymux, "#{pane_current_host}|#{pane_current_user}|#{pane_shell}") == "||"
+    pane = _context(pymux).pane
+    pane.current_host, pane.current_user, pane.shell = "far", "deploy", "fish"
+    assert format_pymux_string(pymux, "#{pane_current_host}|#{pane_current_user}|#{pane_shell}") == "far|deploy|fish"
+
+
 @pytest.mark.parametrize(
     ("path", "compact"),
     [

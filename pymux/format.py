@@ -827,6 +827,11 @@ tmux_variables: dict[str, Callable[[FormatContext], str]] = {
     "pane_current_path": _pane_current_path,
     "pane_current_path_compact": _pane_current_path_compact,
     "pane_start_path": _pane_current_path,
+    # What the shell says of where it runs: OSC 7 and iTerm2's RemoteHost
+    # and ShellIntegrationVersion. Lillecarl/pymux#784.
+    "pane_current_host": lambda c: c.pane.current_host or "",
+    "pane_current_user": lambda c: c.pane.current_user or "",
+    "pane_shell": lambda c: c.pane.shell or "",
     "pane_dead": lambda c: "1" if c.pane.process.is_terminated else "0",
     # Read off the mode, and not off copy mode alone: tmux counts the
     # whole stack (`format_cb_pane_in_mode`), so a pane showing the

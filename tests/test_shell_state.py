@@ -72,6 +72,9 @@ class FakePane:
         self.screen = FakeScreen(cursor_y)
         self.current_directory = None
         self.current_host = None
+        self.current_user = None
+        self.shell = None
+        self.shell_integration_version = None
         self.user_vars = {}
         self.command_zone = None
         self.last_exit_status = None
@@ -277,6 +280,27 @@ def test_current_dir_updates_directory_and_keeps_host():
     assert (pane.current_host, pane.current_directory) == ("host", "/home/me")
     for connection in connections:
         assert connection.written == [sequence("1337", "CurrentDir=/home/me")]
+
+
+def test_remote_host_names_the_user_and_the_host():
+    "Lillecarl/pymux#784."
+    pymux, connections = make_pymux()
+    pane = FakePane()
+    pymux.forward_osc(pane, "1337", "RemoteHost=carl@dynhetz")
+    assert (pane.current_user, pane.current_host) == ("carl", "dynhetz")
+    pymux.forward_osc(pane, "1337", "RemoteHost=")
+    assert (pane.current_user, pane.current_host) == ("carl", "dynhetz")
+    for connection in connections:
+        assert connection.written == [sequence("1337", "RemoteHost=carl@dynhetz")]
+
+
+def test_shell_integration_names_the_shell_and_its_version():
+    pymux, _connections = make_pymux()
+    pane = FakePane()
+    pymux.forward_osc(pane, "1337", "ShellIntegrationVersion=14;shell=fish")
+    assert (pane.shell_integration_version, pane.shell) == ("14", "fish")
+    pymux.forward_osc(pane, "1337", "ShellIntegrationVersion=5")
+    assert (pane.shell_integration_version, pane.shell) == ("5", None)
 
 
 def test_current_dir_with_nothing_in_it_is_dropped():

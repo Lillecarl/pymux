@@ -724,6 +724,9 @@ def _pane_rows(pane: Pane, window: Window | None, parent: _Split | None, place: 
         command_zone=pane.command_zone,
         last_exit_status=pane.last_exit_status,
         bell=pane.bell,
+        current_user=pane.current_user,
+        shell=pane.shell,
+        shell_integration_version=pane.shell_integration_version,
         shown_name=pane.name,
         title=_title_of(pane),
         current_command=os.path.basename(pane.process.get_name() or "") or None,
@@ -1074,6 +1077,9 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
         pane.clock_mode = bool(row.clock_mode)
         pane.current_directory = row.pane_current_path
         pane.current_host = row.current_host
+        pane.current_user = row.current_user
+        pane.shell = row.shell
+        pane.shell_integration_version = row.shell_integration_version
         pane.command_zone = row.command_zone
         pane.last_exit_status = row.last_exit_status
         pane.bell = bool(row.bell)

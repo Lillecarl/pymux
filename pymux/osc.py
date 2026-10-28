@@ -35,9 +35,11 @@ __all__ = [
     "file_url_dir_of",
     "ftcs_of",
     "open_url_of",
+    "remote_host_of",
     "request_attention_of",
     "set_user_var",
     "set_user_var_of",
+    "shell_integration_of",
     "simple_notification_of",
 ]
 
@@ -198,6 +200,25 @@ def current_dir_of(rest: str) -> str | None:
     if not rest or not _is_plain_text(rest):
         return None
     return rest
+
+
+def remote_host_of(rest: str) -> tuple[str | None, str] | None:
+    "The user and the host of `RemoteHost=user@host`, or None. The user may be missing."
+    if not rest or not _is_plain_text(rest):
+        return None
+    user, _at, host = rest.rpartition("@")
+    if not host:
+        return None
+    return user or None, host
+
+
+def shell_integration_of(rest: str) -> tuple[str, str | None] | None:
+    "The version and the shell of `ShellIntegrationVersion=n;shell`, or None."
+    if not rest or not _is_plain_text(rest):
+        return None
+    version, _semicolon, shell = rest.partition(";")
+    shell = shell.removeprefix("shell=")
+    return version, shell or None
 
 
 def file_url_dir_of(param: str) -> tuple[str | None, str] | None:
