@@ -19,7 +19,7 @@ from collections.abc import Awaitable, Callable, Generator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, NamedTuple
 
-from .connection import CommandResult
+from .connection import CommandResult, checked
 
 __all__ = [
     "PANE_FIELDS",
@@ -34,6 +34,7 @@ __all__ = [
     "SqlRow",
     "Tags",
     "Tail",
+    "Waited",
     "drive",
     "format_string",
     "rows",
@@ -347,6 +348,47 @@ def wait_for_change(pane_id: str, since: int | None, timeout: float | None) -> O
     if timeout is not None:
         arguments += ["--timeout", str(timeout)]
     return as_int((yield Ask(arguments)).stdout.strip(), -1)
+
+
+#: The exit code of `wait-pane` when the wait ran out.
+WAIT_TIMED_OUT = 124
+
+
+class Waited(NamedTuple):
+    "What `wait-pane` answered."
+
+    #: False when the wait ran out.
+    met: bool
+    #: The line that matched, empty for a quiet or an exit; the visible
+    #: screen when the wait ran out.
+    text: str
+
+
+def wait_until(
+    pane_id: str,
+    quiet: float | None,
+    text: str | None,
+    next_text: str | None,
+    exit: bool,
+    timeout: float | None,
+) -> Operation[Waited]:
+    conditions = [
+        ["--quiet", str(quiet)] if quiet is not None else None,
+        ["--text", text] if text is not None else None,
+        ["--next-text", next_text] if next_text is not None else None,
+        ["--exit"] if exit else None,
+    ]
+    given = [condition for condition in conditions if condition is not None]
+    if len(given) != 1:
+        raise ValueError("a wait takes one condition: quiet, text, next_text or exit")
+    arguments = ["wait-pane", "-t", pane_id, *given[0]]
+    if timeout is not None:
+        arguments += ["--timeout", str(timeout)]
+    result = yield Ask(arguments, check=False)
+    if result.exit_code == WAIT_TIMED_OUT:
+        return Waited(False, result.stdout.removesuffix("\n"))
+    checked(" ".join(arguments), result, True)
+    return Waited(True, result.stdout.removesuffix("\n"))
 
 
 def clear_history(pane_id: str) -> Operation[None]:

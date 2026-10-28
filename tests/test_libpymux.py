@@ -29,7 +29,7 @@ from libpymux import (
     quote,
 )
 from libpymux.connection import CommandResult, Reply, command_packet
-from libpymux.operations import PANE_FIELDS, SEPARATOR, JobRecord, format_string
+from libpymux.operations import PANE_FIELDS, SEPARATOR, JobRecord, Waited, format_string
 from libpymux.protocol import Framer
 
 # ----------------------------------------------------------------------
@@ -357,6 +357,28 @@ async def test_waiting_for_a_change_names_what_it_saw(fake):
     pane = Pane(Server(server.path), {"pane_id": "%5"})
     assert await pane.wait_for_change(since=3, timeout=1.5) == 100
     assert server.asked == ["wait-pane-change -t %5 --since 3 --timeout 1.5"]
+
+
+async def test_a_wait_until_answers_the_line_that_matched(fake):
+    server = fake([("all done\n", "", 0)])
+    pane = Pane(Server(server.path), {"pane_id": "%5"})
+    assert await pane.wait_until(next_text="done", timeout=2) == Waited(True, "all done")
+    assert server.asked == ["wait-pane -t %5 --next-text done --timeout 2"]
+
+
+async def test_a_wait_until_that_runs_out_answers_the_screen(fake):
+    "124 is the timeout, and not a failure: the screen says why."
+    server = fake([("still compiling\n", "", 124)])
+    pane = Pane(Server(server.path), {"pane_id": "%5"})
+    assert await pane.wait_until(quiet=1, timeout=2) == Waited(False, "still compiling")
+
+
+async def test_a_wait_until_takes_one_condition(fake):
+    server = fake([])
+    pane = Pane(Server(server.path), {"pane_id": "%5"})
+    with pytest.raises(ValueError, match="one condition"):
+        await pane.wait_until(quiet=1, exit=True)
+    assert server.asked == []
 
 
 async def test_capture_html_asks_for_the_html_of_a_pane(fake):

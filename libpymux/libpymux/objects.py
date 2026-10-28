@@ -161,6 +161,28 @@ class Pane(PaneFields):
         """
         return await self.server.run(operations.wait_for_change(self.id, since, timeout))
 
+    async def wait_until(
+        self,
+        *,
+        quiet: float | None = None,
+        text: str | None = None,
+        next_text: str | None = None,
+        exit: bool = False,
+        timeout: float | None = None,
+    ) -> operations.Waited:
+        """
+        Hold until this pane meets one condition, or `timeout` passes.
+
+        `quiet` is seconds with no change. `text` is a regular expression
+        a visible line matches; `next_text` one that a line written after
+        the wait began matches, so start it before sending the keys it
+        waits on. `exit` waits for the program to end.
+
+        `Waited.met` is False when the wait ran out, and `Waited.text`
+        is then the screen it ran out on. Lillecarl/pymux#388.
+        """
+        return await self.server.run(operations.wait_until(self.id, quiet, text, next_text, exit, timeout))
+
     def stream(self, writable: bool = False) -> PaneStream:
         """
         A stream of the rows of this pane that change.
