@@ -7,7 +7,7 @@ from __future__ import annotations
 import weakref
 from collections.abc import Callable
 from functools import partial
-from typing import TYPE_CHECKING, cast, override
+from typing import TYPE_CHECKING, Any, cast, override
 
 from prompt_toolkit.application import Application, get_app
 from prompt_toolkit.data_structures import Point, Size
@@ -18,7 +18,7 @@ from prompt_toolkit.filters import (
     has_focus,
     is_done,
 )
-from prompt_toolkit.formatted_text import HTML, FormattedText, StyleAndTextTuples
+from prompt_toolkit.formatted_text import HTML, AnyFormattedText, FormattedText, StyleAndTextTuples
 from prompt_toolkit.key_binding.vi_state import InputMode
 from prompt_toolkit.layout import screen as screen_module
 from prompt_toolkit.layout.containers import (
@@ -50,6 +50,7 @@ from prompt_toolkit.layout.processors import (
 from prompt_toolkit.layout.screen import Char, Screen
 from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
 from prompt_toolkit.widgets import Dialog, SearchToolbar, TextArea
+from ptterm import Terminal
 
 from pymux import arrangement
 
@@ -65,7 +66,7 @@ from .format import format_pymux_string
 from .log import logger
 from .menu import Menu
 from .plan_container import PlanContainer
-from .plane import Plan, Side, View, bounding_box
+from .plane import Plan, Rect, Side, View, bounding_box
 from .status_line import StatusLine
 from .strip import Strip
 from .tiling import BORDER_WIDTH, Gaps
@@ -74,9 +75,10 @@ from .window_pane import WindowWidget
 from .zoomed import Zoomed
 
 if TYPE_CHECKING:
+    from prompt_toolkit.filters import Filter
     from prompt_toolkit.layout.controls import BufferControl
 
-    from pymux.main import Pymux
+    from pymux.main import ClientState, Pymux
 
 __all__ = ["LayoutManager"]
 
@@ -152,9 +154,9 @@ class Z_INDEX:
 _PANE_POSITIONS = "pymux_pane_write_positions"
 
 
-def pane_write_positions(screen) -> dict:
+def pane_write_positions(screen: Screen) -> dict[arrangement.Pane, WritePosition]:
     "Where each pane was drawn on this screen."
-    positions = getattr(screen, _PANE_POSITIONS, None)
+    positions: dict[arrangement.Pane, WritePosition] | None = getattr(screen, _PANE_POSITIONS, None)
     if positions is None:
         positions = {}
         setattr(screen, _PANE_POSITIONS, positions)
@@ -200,7 +202,7 @@ class Background(Container):
     client here disagrees. Lillecarl/pymux#273.
     """
 
-    def __init__(self, painted=lambda: False) -> None:
+    def __init__(self, painted: Callable[[], bool] = lambda: False) -> None:
         self._painted = painted
 
     @override
@@ -327,7 +329,9 @@ _numbers = list(
 )
 
 
-def _draw_number(screen, x_offset, y_offset, number, style="class:clock", transparent=False):
+def _draw_number(
+    screen: Screen, x_offset: int, y_offset: int, number: int, style: str = "class:clock", transparent: bool = False
+) -> None:
     "Write number at position."
     fg = Char(" ", "class:clock")
     bg = Char(" ", "")
@@ -495,7 +499,7 @@ class UrlLabels(Container):
     Lillecarl/pymux#608.
     """
 
-    def __init__(self, client_state) -> None:
+    def __init__(self, client_state: ClientState) -> None:
         self.client_state = client_state
 
     @override
@@ -524,9 +528,13 @@ class UrlLabels(Container):
         if mode is None:
             return
 
+        terminal = mode.pane.terminal
+        if not isinstance(terminal, Terminal):
+            return
+
         def draw_func() -> None:
             for target in mode.waiting():
-                place = mode.pane.terminal.where_shown(target.link.row, target.link.column)
+                place = terminal.where_shown(target.link.row, target.link.column)
                 if place is None:
                     continue
                 y, x = place
@@ -572,14 +580,14 @@ class MessageToolbar(Window):
     it is short.
     """
 
-    def __init__(self, client_state):
-        def get_message():
+    def __init__(self, client_state: ClientState) -> None:
+        def get_message() -> str:
             # If there is a message to be shown for this client, show that.
             if client_state.message:
                 return client_state.message
             return ""
 
-        def get_tokens():
+        def get_tokens() -> AnyFormattedText:
             message = get_message()
             if message:
                 return FormattedText([("class:message", message + " ")])
@@ -601,7 +609,7 @@ class LayoutManager:
     The main layout class, that contains the whole Pymux layout.
     """
 
-    def __init__(self, pymux: Pymux, client_state) -> None:
+    def __init__(self, pymux: Pymux, client_state: ClientState) -> None:
         self.pymux = pymux
         self.client_state = client_state
 
@@ -669,13 +677,13 @@ class LayoutManager:
 
         self.layout = self._create_layout()
 
-    def frame_started(self, app: Application) -> None:
+    def frame_started(self, app: Application[Any]) -> None:
         "A render of this client starts: the arrangement holds still until it ends."
         self._body.frame_started()
         self.frame_plans = {}
         self.status.frame_changed()
 
-    def frame_ended(self, app: Application) -> None:
+    def frame_ended(self, app: Application[Any]) -> None:
         self._body.frame_ended()
         self.frame_plans = None
         self.status.frame_changed()
@@ -823,7 +831,9 @@ class LayoutManager:
             parts += [text for _, text, *_ in self.status.window_list()]
 
         window = self.client_state.session.arrangement.get_active_window()
-        for pane in self._panes_in_view():
+        if window is None:
+            return tuple(parts)
+        for pane in window.panes:
             if pane.clock_mode:
                 parts.append(pymux.displayed_now().strftime(CLOCK_FORMAT))
             elif pymux.show_pane_status:
@@ -839,11 +849,6 @@ class LayoutManager:
                 )
 
         return tuple(parts)
-
-    def _panes_in_view(self) -> list:
-        "The panes of the window this client looks at, or none."
-        window = self.client_state.session.arrangement.get_active_window()
-        return [] if window is None else list(window.panes)
 
     def _vi_mode_tokens(self) -> StyleAndTextTuples:
         """
@@ -1028,7 +1033,7 @@ class LayoutManager:
         self._palette = self._box(lambda: " Command ", self._command_line_window())
         return self._palette
 
-    def _box(self, title, window: Container) -> Container:
+    def _box(self, title: Callable[[], str], window: Container) -> Container:
         """
         A box in the middle of the screen: a title, a line to type in,
         and the completions filling what is left.
@@ -1194,7 +1199,7 @@ class LayoutManager:
             filter=has_completions & ~is_done,
         )
 
-    def _floats_above_the_status_line(self, waits_for_confirmation, which_key_shows) -> list[Float]:
+    def _floats_above_the_status_line(self, waits_for_confirmation: Filter, which_key_shows: Filter) -> list[Float]:
         "The floats placed from the bottom of the body, which is the top of the status line."
         return [
             Float(
@@ -1509,7 +1514,7 @@ class ConfirmationToolbar(FormattedTextControl):
     Window that displays the yes/no confirmation dialog.
     """
 
-    def __init__(self, pymux, client_state):
+    def __init__(self, pymux: Pymux, client_state: ClientState) -> None:
         def get_tokens() -> StyleAndTextTuples:
             return [
                 ("class:question", " "),
@@ -1542,7 +1547,7 @@ class DynamicBody(Container):
         # here is that client's and needs no key. Lillecarl/pymux#712.
 
         #: The arrangement's hash the body was built for, and the body.
-        self._body: tuple[tuple, Container] | None = None
+        self._body: tuple[tuple[object, ...], Container] | None = None
 
         #: The container that draws the panes. It holds the plan of the
         #: frame it drew, and everything drawn inside that frame reads
@@ -1569,7 +1574,7 @@ class DynamicBody(Container):
         #: so the hash is kept from `frame_started` to `frame_ended` and
         #: never across them.
         self._framing = False
-        self._frame_hash: tuple | None = None
+        self._frame_hash: tuple[object, ...] | None = None
 
     def frame_started(self) -> None:
         self._framing = True
@@ -1611,7 +1616,7 @@ class DynamicBody(Container):
         self._get_body()
         return self._panes
 
-    def view_of(self, window) -> View:
+    def view_of(self, window: arrangement.Window) -> View:
         """
         Where this client looks at that window's plane.
 
@@ -1629,11 +1634,10 @@ class DynamicBody(Container):
         "Rebuild a new Container object and return that."
         logger.debug("Rebuilding layout.")
 
-        if not self.pymux.arrangement.windows:
+        window = self.pymux.arrangement.get_active_window()
+        if window is None:
             # No Pymux windows in the arrangement.
             return Window()
-
-        window = self.pymux.arrangement.get_active_window()
 
         # Every layout draws the same way: it says where the panes are
         # and one container puts them there. Zoom included, which is a
@@ -1697,7 +1701,7 @@ class DynamicBody(Container):
         return [body]
 
 
-def _create_panes(pymux: Pymux, window, view: View) -> PlanContainer:
+def _create_panes(pymux: Pymux, window: arrangement.Window, view: View) -> PlanContainer:
     """
     The container that draws every pane of a window.
 
@@ -1724,7 +1728,7 @@ def _create_panes(pymux: Pymux, window, view: View) -> PlanContainer:
     """
     containers = {pane: _create_container_for_process(pymux, window, pane) for pane in window.panes}
 
-    def tell_its_size(pane: arrangement.Pane, rect) -> None:
+    def tell_its_size(pane: arrangement.Pane, rect: Rect) -> None:
         if isinstance(pane.terminal, WindowWidget) and holds_window_panes(pymux, window):
             return
         _tell_pane_its_size(pane, rect)
@@ -1741,7 +1745,7 @@ def _create_panes(pymux: Pymux, window, view: View) -> PlanContainer:
     )
 
 
-def _tell_pane_its_size(pane: arrangement.Pane, rect) -> None:
+def _tell_pane_its_size(pane: arrangement.Pane, rect: Rect) -> None:
     """
     Give a pane the size of its rectangle.
 
@@ -1756,7 +1760,7 @@ def _tell_pane_its_size(pane: arrangement.Pane, rect) -> None:
     pane.terminal.set_size(rect.width, rect.height)
 
 
-def layout_of(pymux: Pymux, window):
+def layout_of(pymux: Pymux, window: arrangement.Window) -> Divided | Strip | Zoomed:
     """
     What says where the panes of this window are.
 
@@ -1789,7 +1793,7 @@ def layout_of(pymux: Pymux, window):
     return inner
 
 
-def _bar_below_is_drawn(pymux: Pymux, window) -> bool:
+def _bar_below_is_drawn(pymux: Pymux, window: arrangement.Window) -> bool:
     """
     Whether every pane of this window keeps a row under it.
 
@@ -1815,12 +1819,12 @@ def _bar_below_is_drawn(pymux: Pymux, window) -> bool:
     return pymux.show_pane_status and not window.zoom and window.has_stack()
 
 
-def _the_plane_keeps_a_bar_below(pymux: Pymux, window) -> bool:
+def _the_plane_keeps_a_bar_below(pymux: Pymux, window: arrangement.Window) -> bool:
     "The same rows, asked of every client watching. Lillecarl/pymux#471."
     return pymux.any_watcher_shows_pane_status(window) and not window.zoom and window.has_stack()
 
 
-def gaps_of(pymux: Pymux, window) -> Gaps:
+def gaps_of(pymux: Pymux, window: arrangement.Window) -> Gaps:
     """
     The cells this window leaves between the things in it.
 
@@ -1838,7 +1842,7 @@ def gaps_of(pymux: Pymux, window) -> Gaps:
     )
 
 
-def room_for_panes(pymux: Pymux, window) -> Size:
+def room_for_panes(pymux: Pymux, window: arrangement.Window) -> Size:
     """
     How much of the plane the panes get.
 
@@ -1868,7 +1872,7 @@ def room_for_panes(pymux: Pymux, window) -> Size:
     return Size(rows=max(1, rows), columns=size.columns)
 
 
-def plan_of(pymux: Pymux, window) -> Plan:
+def plan_of(pymux: Pymux, window: arrangement.Window) -> Plan:
     """
     Where the panes of this window are, in cells.
 
@@ -1906,7 +1910,7 @@ def plan_of(pymux: Pymux, window) -> Plan:
     return plan
 
 
-def size_the_panes_of(pymux: Pymux, window) -> None:
+def size_the_panes_of(pymux: Pymux, window: arrangement.Window) -> None:
     """
     Give every pane of this window the size the plan gives it.
 
@@ -1987,7 +1991,7 @@ def cut_backdrop(pymux: Pymux) -> str | None:
     return hex_of(get_app().renderer.style.get_attrs_for_style_str("class:painted").bgcolor or "")
 
 
-def _frame_plan(manager, window, size: Size) -> Plan | None:
+def _frame_plan(manager: LayoutManager, window: arrangement.Window, size: Size) -> Plan | None:
     """
     The plan the container of this frame measured, when it is still the
     answer.
@@ -2017,7 +2021,7 @@ def _frame_plan(manager, window, size: Size) -> Plan | None:
     return container.plan
 
 
-def write_sizes_into_weights(pymux: Pymux, window) -> None:
+def write_sizes_into_weights(pymux: Pymux, window: arrangement.Window) -> None:
     """
     Write the size each thing has now into the weight that decides it.
 
@@ -2050,7 +2054,15 @@ def write_sizes_into_weights(pymux: Pymux, window) -> None:
             split.set_weight(child, box.width if sideways else box.height)
 
 
-def change_pane_size(pymux: Pymux, window, pane: arrangement.Pane, up=0, right=0, down=0, left=0) -> None:
+def change_pane_size(
+    pymux: Pymux,
+    window: arrangement.Window,
+    pane: arrangement.Pane,
+    up: int = 0,
+    right: int = 0,
+    down: int = 0,
+    left: int = 0,
+) -> None:
     """
     Make one pane bigger or smaller, by that many cells on each side.
 
@@ -2063,7 +2075,9 @@ def change_pane_size(pymux: Pymux, window, pane: arrangement.Pane, up=0, right=0
     window.change_size_for_pane(pane, up=up, right=right, down=down, left=left)
 
 
-def pane_beside(pymux: Pymux, window, pane: arrangement.Pane, side: Side) -> arrangement.Pane | None:
+def pane_beside(
+    pymux: Pymux, window: arrangement.Window, pane: arrangement.Pane, side: Side
+) -> arrangement.Pane | None:
     """
     The pane on one side of this one. **One answer, for one window.**
 
@@ -2449,15 +2463,15 @@ class _PaneMark(_ContainerProxy):
 
     def __init__(
         self,
-        content,
-        window,
-        pane,
+        content: Container,
+        window: arrangement.Window,
+        pane: arrangement.Pane,
         style: Callable[[], str],
-        has_bar_below,
+        has_bar_below: Callable[[], bool],
         hidden: Callable[[], Hidden | None] = lambda: None,
         backdrop: Callable[[], str | None] = lambda: None,
         fade: Callable[[], list[float]] = list,
-    ):
+    ) -> None:
         super().__init__(content)
         self.window = window
         self.pane = pane
@@ -2567,7 +2581,7 @@ class _PaneMark(_ContainerProxy):
 class TracePaneWritePosition(_ContainerProxy):  # XXX: replace with SizedBox
     "Trace the write position of this pane."
 
-    def __init__(self, pymux: Pymux, arrangement_pane: arrangement.Pane, content) -> None:
+    def __init__(self, pymux: Pymux, arrangement_pane: arrangement.Pane, content: AnyContainer) -> None:
         content = to_container(content)
         _ContainerProxy.__init__(self, content)
 

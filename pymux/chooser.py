@@ -745,7 +745,8 @@ class ChooserView:
 
     def _chooser_title(self) -> str:
         "What the box of the chooser says it is."
-        return _BOX_TITLES.get(self.client_state.chooser, "")
+        chooser = self.client_state.chooser
+        return "" if chooser is None else _BOX_TITLES.get(chooser, "")
 
     def _chooser_tokens(self) -> StyleAndTextTuples:
         """

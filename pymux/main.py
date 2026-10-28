@@ -517,7 +517,7 @@ class ClientState:
         #: this client to the window it points at, so a person reads
         #: the real thing. Leaving it has to undo that.
         #: Lillecarl/pymux#327.
-        self.chooser_return_to: tuple[Session, Window] | None = None
+        self.chooser_return_to: tuple[Session, Window | None] | None = None
         self.choose_window_filter = Buffer(
             name=CHOOSE,
             multiline=False,
@@ -987,7 +987,9 @@ class ClientState:
             "choose_window_command": self.choose_window_command,
             "choose_window_filter": self.choose_window_filter.text,
             "chooser_return_to": (
-                [going_back[0].session_id, going_back[1].window_id] if going_back is not None else None
+                [going_back[0].session_id, going_back[1].window_id]
+                if going_back is not None and going_back[1] is not None
+                else None
             ),
             "copying": self._copy_modes(),
         }
