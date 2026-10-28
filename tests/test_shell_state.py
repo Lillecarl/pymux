@@ -385,8 +385,10 @@ def test_zones_track_prompt_command_output():
     # A prompt and the start of the output mark their rows, as tmux's
     # `input_osc_133` does; the command typed at the prompt does not.
     assert pane.screen.marks == [RowMark.PROMPT, RowMark.OUTPUT]
+    # They name the pane's rows, and iTerm2 leaves the alternate screen
+    # on a prompt start: no client is told.
     for connection in connections:
-        assert connection.written == [sequence("133", letter) for letter in "ABC"]
+        assert connection.written == []
 
 
 def test_zone_end_records_exit_status():
@@ -408,13 +410,13 @@ def test_zone_abort_clears_zone_and_status():
     assert pane.last_exit_status is None
 
 
-def test_zone_garbage_stores_nothing_but_travels_on():
+def test_zone_garbage_stores_nothing_and_stays_inside():
     pymux, connections = make_pymux()
     pane = FakePane()
     pymux.forward_osc(pane, "133", "E")
     assert (pane.command_zone, pane.last_exit_status) == (None, None)
     for connection in connections:
-        assert connection.written == [sequence("133", "E")]
+        assert connection.written == []
 
 
 # ----------------------------------------------------------------------

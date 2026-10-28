@@ -3456,10 +3456,14 @@ class Pymux:
 
             if code == Osc.SHELL_INTEGRATION:
                 # The prompt, the command and the exit status it
-                # finished with. Same answer as above: the outer
-                # terminal reads zones of its own, and the pane keeps
-                # these.
+                # finished with, which the pane keeps. **They stay
+                # inside**, as tmux keeps them: they name rows of one
+                # pane, not of the client's screen, and iTerm2 reads a
+                # prompt start as the end of the alternate screen
+                # (`softAlternateScreenMode = NO`), so every frame after
+                # one drew on its main screen, a row off.
                 self._read_shell_integration(pane, param)
+                return
 
             if code == Osc.CLIPBOARD:
                 # **Only "on" lets a program in a pane near the
