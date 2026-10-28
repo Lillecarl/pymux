@@ -14,7 +14,8 @@ from typing import Annotated, Any, Final, Literal
 
 import anyio
 from libpymux import CommandError, Job, Pane, Server, Session, Window
-from pydantic import Field
+from libpymux.operations import WaitFor
+from pydantic import BaseModel, ConfigDict, Field
 
 from .fonts import bundled
 from .registry import Registry
@@ -289,6 +290,24 @@ async def capture_client(
     return await server.capture_client(client)
 
 
+class SendWait(BaseModel):
+    "What `pane.send` waits for after its last key: one condition, and a timeout."
+
+    model_config = ConfigDict(extra="forbid")
+
+    timeout: Annotated[float, Field(gt=0, description="How long to wait, in seconds.")]
+    quiet: Annotated[float | None, Field(gt=0, description="Until nothing changed for this many seconds.")] = None
+    text: Annotated[str | None, Field(description="Until a visible line matches this regular expression.")] = None
+    next_text: Annotated[
+        str | None,
+        Field(description="Until a line written after the send matches; the echo of the keys counts, so anchor it."),
+    ] = None
+    exit: Annotated[bool, Field(description="Until the program in the pane ends.")] = False
+
+    def condition(self) -> WaitFor:
+        return WaitFor(self.quiet, self.text, self.next_text, self.exit, self.timeout)
+
+
 @operation("pane.send")
 async def send(
     server: Server,
@@ -305,23 +324,41 @@ async def send(
             )
         ),
     ] = False,
-) -> None:
+    wait: Annotated[
+        SendWait | None,
+        Field(description="Hold after the last key until this holds, armed before that key goes out."),
+    ] = None,
+) -> Json | None:
     """
     Type into a pane: text, then named keys, then Return when asked.
 
     The text arrives in one burst, which some programs read as a paste,
     and a Return in the same burst then joins the paste. `no_paste`
     sends the Return apart from it.
+
+    With `wait` it answers what `pane.wait_until` answers, and nothing
+    the program writes in between is lost: send and wait in one call
+    instead of sleeping.
     """
     target = Pane(server, {"pane_id": pane})
-    if text:
-        await target.send_keys(text, enter=False)
-    for key in keys or []:
-        await target.send_key(key)
+    # Each word, and whether it is text rather than a key name.
+    words = ([(text, True)] if text else []) + [(key, False) for key in keys or []]
     if enter:
-        if no_paste:
+        words.append(("Enter", False))
+    if wait is not None and not words:
+        raise ValueError("a wait after a send needs something to send: text, keys or enter")
+    for index, (word, literal) in enumerate(words):
+        last = index == len(words) - 1
+        if last and enter and no_paste:
             await anyio.sleep(NO_PASTE_DELAY)
-        await target.send_key("Enter")
+        if last and wait is not None:
+            waited = await target.send_and_wait(word, wait.condition(), literal=literal)
+            return {"met": waited.met, "text": waited.text}
+        if literal:
+            await target.send_keys(word, enter=False)
+        else:
+            await target.send_key(word)
+    return None
 
 
 @operation("pane.wait")

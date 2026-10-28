@@ -117,6 +117,23 @@ async def test_no_paste_sends_return_apart_from_the_text(monkeypatch, no_paste):
     assert events == ["send-keys -t %5 -l hi", *pause, "send-keys -t %5 Enter"]
 
 
+async def test_a_send_with_a_wait_arms_it_on_the_last_key():
+    "Earlier words go out plainly; the last carries the wait, so its output is not lost."
+    events = []
+    answer = await OPERATIONS.call(
+        RecordingServer(events),
+        "pane.send",
+        {"pane": "%5", "text": "make", "enter": True, "wait": {"quiet": 1, "timeout": 30}},
+    )
+    assert events == ["send-keys -t %5 -l make", "send-keys -t %5 --wait-quiet 1.0 --wait-timeout 30.0 Enter"]
+    assert answer == {"met": True, "text": ""}
+
+
+async def test_a_send_with_a_wait_and_nothing_to_send_is_refused():
+    with pytest.raises(ValueError, match="needs something to send"):
+        await OPERATIONS.call(RecordingServer([]), "pane.send", {"pane": "%5", "wait": {"exit": True, "timeout": 5}})
+
+
 def test_the_openapi_document_has_one_path_per_operation():
     found = document("0.1")
     assert found["openapi"] == "3.1.0"
