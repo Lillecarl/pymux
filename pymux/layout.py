@@ -10,7 +10,6 @@ from functools import partial
 from typing import TYPE_CHECKING, cast, override
 
 from prompt_toolkit.application import Application, get_app
-from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Point, Size
 from prompt_toolkit.enums import EditingMode
 from prompt_toolkit.filters import (
@@ -50,7 +49,6 @@ from prompt_toolkit.layout.processors import (
 )
 from prompt_toolkit.layout.screen import Char, Screen
 from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
-from prompt_toolkit.utils import get_cwidth
 from prompt_toolkit.widgets import Dialog, SearchToolbar, TextArea
 
 from pymux import arrangement
@@ -61,12 +59,13 @@ from .boxes import BOX_BOTTOM, BOX_SIDE, BOX_TOP, PALETTE_HEADER
 from .chooser import ChooserView
 from .cut_shade import Hidden, hex_of, hidden_of, lifts, shade
 from .divided import Divided
-from .enums import Chooser, EditingKeys, Justify, Woke
+from .enums import Chooser, EditingKeys, Woke
 from .filters import WaitsForConfirmation
 from .format import format_pymux_string
 from .log import logger
 from .plan_container import PlanContainer
 from .plane import Plan, Side, View, bounding_box
+from .status_line import StatusLine
 from .strip import Strip
 from .tiling import BORDER_WIDTH, Gaps
 from .titlebar import PaneTitleBar
@@ -103,12 +102,6 @@ BELOW_MARK = "▾"
 #: What `clock-mode` draws inside a pane, as text. `BigClock` paints the
 #: hour and the minute in big numbers, and nothing else of it moves.
 CLOCK_FORMAT = "%H:%M"
-
-#: Before `status-right` while passthrough holds every key: a person
-#: who wonders why the prefix does nothing reads the answer by the
-#: clock. In code and not in the default format, so a person's own
-#: `status-right` gets it too. Lillecarl/pymux#530.
-PASSTHROUGH_MARK = " PASSTHROUGH "
 
 
 class Z_INDEX:
@@ -672,12 +665,8 @@ class LayoutManager:
         #: handler may change what it measures.
         self.frame_plans: dict[arrangement.Window, Plan] | None = None
 
-        #: `_status_lines`'s answer, while this client renders. The
-        #: room for the body asks it for every float and the plane
-        #: asks it again, and each answer formats every window.
-        self._frame_status_lines: list[StyleAndTextTuples] | None = None
-
         self.chooser = ChooserView(self)
+        self.status = StatusLine(self)
 
         self.layout = self._create_layout()
 
@@ -685,12 +674,12 @@ class LayoutManager:
         "A render of this client starts: the arrangement holds still until it ends."
         self._body.frame_started()
         self.frame_plans = {}
-        self._frame_status_lines = None
+        self.status.frame_changed()
 
     def frame_ended(self, app: Application) -> None:
         self._body.frame_ended()
         self.frame_plans = None
-        self._frame_status_lines = None
+        self.status.frame_changed()
 
     @property
     def pane_write_positions(self) -> dict[arrangement.Pane, WritePosition]:
@@ -721,7 +710,7 @@ class LayoutManager:
         how much of the plane fits -- reads this one.
         """
         size = self.client_state.app.output.get_size()
-        return Size(rows=max(1, size.rows - self.status_rows()), columns=size.columns)
+        return Size(rows=max(1, size.rows - self.status.rows()), columns=size.columns)
 
     def room_for_body(self) -> Size:
         """
@@ -904,167 +893,6 @@ class LayoutManager:
         )
         return self._menu
 
-    def _create_select_window_handler(self, window: arrangement.Window) -> Callable[[MouseEvent], NotImplementedOrNone]:
-        "Return a mouse handler that selects the given window when clicking."
-
-        def handler(mouse_event: MouseEvent) -> NotImplementedOrNone:
-            if mouse_event.event_type == MouseEventType.MOUSE_DOWN:
-                self.client_state.session.arrangement.set_active_window(window)
-                self.pymux.invalidate(Woke.CLICK_CHOSE_A_WINDOW)
-                with started_by(Origin.MOUSE):
-                    note(self.pymux, Kind.CLICK, "select-window")
-                return None
-            return NotImplemented  # Event not handled here.
-
-        return handler
-
-    def _get_status_tokens(self) -> StyleAndTextTuples:
-        "The tokens for the status bar: the window list, a line per row."
-        result: StyleAndTextTuples = []
-        for row, line in enumerate(self._status_lines()):
-            if row > 0:
-                result.append(("", "\n"))
-            for i, entry in enumerate(line):
-                if i > 0:
-                    result.append(("", " "))
-                result.append(entry)
-        return result
-
-    def _status_entries(self) -> StyleAndTextTuples:
-        "Each thing the window list shows, one fragment each."
-        result: StyleAndTextTuples = []
-
-        recording = self.client_state.connection.recording
-        if recording is not None:
-            result.append(("class:recording", " ● REC %s " % recording.name))
-
-        for w in self.client_state.session.arrangement.windows:
-            if w == self.client_state.session.arrangement.get_active_window():
-                style = "class:window.current"
-                format_str = self.client_state.session.options.window_status_current_format
-
-            else:
-                if w.bell or w.notified:
-                    style = "class:window.bell"
-                elif w.activity or w.silence:
-                    style = "class:window.activity"
-                else:
-                    style = "class:window"
-                format_str = self.client_state.session.options.window_status_format
-
-            result.append(
-                (
-                    style,
-                    format_pymux_string(
-                        self.pymux,
-                        format_str,
-                        window=w,
-                        session=self.client_state.session,
-                        client=self.client_state,
-                    ),
-                    self._create_select_window_handler(w),
-                )
-            )
-
-        return result
-
-    def _status_lines(self) -> list[StyleAndTextTuples]:
-        """
-        The window list, broken into the rows it takes.
-
-        An entry moves to the next row whole, and never breaks across
-        two. From `status-max-rows` on, the rest go on the last row and
-        are cut where it ends. Lillecarl/pymux#723.
-
-        **Under this client's application, whoever asks.** The plane
-        asks it of every watcher while one of them renders, and which
-        window is current -- the `*` of `#F`, and so the width of an
-        entry -- is a question each client answers for itself.
-        """
-        if self.frame_plans is not None and self._frame_status_lines is not None:
-            return self._frame_status_lines
-
-        with set_app(self.client_state.app):
-            room = self._room_for_window_list()
-            lines: list[StyleAndTextTuples] = [[]]
-            used = 0
-            for entry in self._status_entries():
-                width = get_cwidth(entry[1])
-                wanted = used + 1 + width if lines[-1] else width
-                if lines[-1] and wanted > room and len(lines) < self.client_state.session.options.status_max_rows:
-                    lines.append([entry])
-                    used = width
-                else:
-                    lines[-1].append(entry)
-                    used = wanted
-
-        if self.frame_plans is not None:
-            self._frame_status_lines = lines
-        return lines
-
-    def _room_for_window_list(self) -> int:
-        """
-        The columns between `status-left` and `status-right`.
-
-        The same arithmetic the `VSplit` of the status line does: each
-        side is as wide as its text, up to its `-length` option.
-        """
-        columns = self.client_state.app.output.get_size().columns
-        left = min(get_cwidth(self._get_status_left_tokens()), self.client_state.session.options.status_left_length)
-        right = min(get_cwidth(self._get_status_right_tokens()), self._status_right_length())
-        return max(1, columns - left - right)
-
-    def status_rows(self) -> int:
-        """
-        How many rows this client's status line takes off its terminal.
-
-        **Asked of this client, and not of the one rendering.** The
-        plane asks it of every watcher, so it reads this client's own
-        `full-screen` rather than `Pymux.show_status`.
-        """
-        if not self.client_state.session.options.status or self.client_state.options.full_screen:
-            return 0
-        return len(self._status_lines())
-
-    def _get_status_left_tokens(self) -> str:
-        return self._format_status(self.client_state.session.options.status_left)
-
-    def _get_status_right_tokens(self) -> str:
-        text = self._format_status(self.client_state.session.options.status_right)
-        if self._in_passthrough():
-            text = PASSTHROUGH_MARK + text
-        return text
-
-    def _in_passthrough(self) -> bool:
-        tables = self.client_state.key_tables
-        return bool(tables) and tables[-1] == "passthrough"
-
-    def _status_right_length(self) -> int:
-        """
-        The most `status-right` may take, and the room for what pymux
-        puts beside it: the passthrough mark.
-        """
-        length = self.client_state.session.options.status_right_length
-        if self._in_passthrough():
-            length += len(PASSTHROUGH_MARK)
-        return length
-
-    def _format_status(self, string: str) -> str:
-        """
-        A status string, or nothing when the session holds no window to
-        format it for. A session is empty before its first window and
-        after its last, and a client draws through both.
-        Lillecarl/pymux#581.
-        """
-        if self.client_state.session.arrangement.get_active_window() is None:
-            return ""
-        return format_pymux_string(
-            self.pymux,
-            string,
-            session=self.client_state.session,
-            client=self.client_state,
-        )
-
     def what_time_moves(self) -> tuple[str, ...]:
         """
         Every string on this client's screen that changes on its own.
@@ -1087,7 +915,7 @@ class LayoutManager:
         window reads eight windows of titles each time any pane of a
         session of eight writes.
 
-        Narrowing it loses nothing, because `_get_status_tokens` above
+        Narrowing it loses nothing, because `StatusLine.window_list`
         already formats `window-status-format` for every window. So
         whatever this client draws *about* another window -- its name,
         its flags, and `#T` if a person put it in that format -- is
@@ -1099,9 +927,9 @@ class LayoutManager:
         parts: list[str] = []
 
         if pymux.show_status:
-            parts.append(self._get_status_left_tokens())
-            parts.append(self._get_status_right_tokens())
-            parts += [text for _, text, *_ in self._get_status_tokens()]
+            parts.append(self.status.left())
+            parts.append(self.status.right())
+            parts += [text for _, text, *_ in self.status.window_list()]
 
         window = self.client_state.session.arrangement.get_active_window()
         for pane in self._panes_in_view():
@@ -1125,13 +953,6 @@ class LayoutManager:
         "The panes of the window this client looks at, or none."
         window = self.client_state.session.arrangement.get_active_window()
         return [] if window is None else list(window.panes)
-
-    def _get_align(self) -> WindowAlign:
-        if self.client_state.session.options.status_justify == Justify.RIGHT:
-            return WindowAlign.RIGHT
-        if self.client_state.session.options.status_justify == Justify.CENTER:
-            return WindowAlign.CENTER
-        return WindowAlign.LEFT
 
     def _vi_mode_tokens(self) -> StyleAndTextTuples:
         """
@@ -1576,22 +1397,22 @@ class LayoutManager:
                                     height=1,
                                     width=(lambda: D(max=self.client_state.session.options.status_left_length)),
                                     dont_extend_width=True,
-                                    content=FormattedTextControl(self._get_status_left_tokens),
+                                    content=FormattedTextControl(self.status.left),
                                 ),
                                 # List of windows in the middle.
                                 Window(
-                                    height=lambda: D.exact(max(1, self.status_rows())),
+                                    height=lambda: D.exact(max(1, self.status.rows())),
                                     char=" ",
-                                    align=self._get_align,
-                                    content=FormattedTextControl(self._get_status_tokens),
+                                    align=self.status.align,
+                                    content=FormattedTextControl(self.status.window_list),
                                 ),
                                 # Right.
                                 Window(
                                     height=1,
-                                    width=lambda: D(max=self._status_right_length()),
+                                    width=lambda: D(max=self.status.right_length()),
                                     dont_extend_width=True,
                                     align=WindowAlign.RIGHT,
-                                    content=FormattedTextControl(self._get_status_right_tokens),
+                                    content=FormattedTextControl(self.status.right),
                                 ),
                             ],
                             z_index=Z_INDEX.STATUS_BAR,

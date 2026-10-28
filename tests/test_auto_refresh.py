@@ -216,7 +216,7 @@ async def test_title_in_window_out_of_view_is_not_read(session):
     """
     The titlebars this client draws are its own window's. Another
     window reaches its screen through `window-status-format`, which
-    `_get_status_tokens` already formats.
+    `StatusLine.window_list` already formats.
     """
     pymux, state, frames = session
     other = out_of_view(pymux, state)

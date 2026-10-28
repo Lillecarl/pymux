@@ -21,7 +21,7 @@ from pymux.osc import PASSTHROUGH_VARIABLE, set_user_var, set_user_var_of
 
 def status_right(state) -> str:
     with set_app(state.app):
-        return state.layout_manager._get_status_right_tokens()
+        return state.layout_manager.status.right()
 
 
 async def test_f12_enters_and_f12_leaves():

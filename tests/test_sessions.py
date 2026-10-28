@@ -143,8 +143,8 @@ async def test_two_clients_watch_two_sessions_at_once():
 
         # Drawn for one client while the other is the current one.
         with set_app(here.app):
-            assert there.layout_manager._get_status_left_tokens() == "[work] "
-            assert here.layout_manager._get_status_left_tokens() == "[0] "
+            assert there.layout_manager.status.left() == "[work] "
+            assert here.layout_manager.status.left() == "[0] "
 
 
 async def test_switch_client_c_moves_another_client_to_a_window():

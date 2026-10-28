@@ -1726,7 +1726,7 @@ class Pymux:
         terminal's.** Every reader of this draws, and a frame is drawn
         under the application of the client it is for, so the client
         asking is the client the answer is about. The plane asks every
-        watcher's `LayoutManager.status_rows` instead, and
+        watcher's `StatusLine.rows` instead, and
         `any_watcher_shows_pane_status`, which are not this one.
         Lillecarl/pymux#471.
         """
@@ -2213,7 +2213,7 @@ class Pymux:
         # one decides: a phone whose window list wraps to three rows
         # takes three off everybody's plane, and the others draw
         # background there. Lillecarl/pymux#723.
-        status_rows = max(one.layout_manager.status_rows() for one in watchers)
+        status_rows = max(one.layout_manager.status.rows() for one in watchers)
         return Size(rows=size.rows - status_rows, columns=size.columns)
 
     def size_with_no_client(self, session: Session | None) -> Size:

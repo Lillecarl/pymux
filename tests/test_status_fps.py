@@ -33,7 +33,7 @@ async def test_a_template_shows_the_frame_rates_where_it_says():
                 "set-option -g status-right"
                 " '{{ client_fps }}{% if client_window_fps %} / {{ client_window_fps }} wl{% endif %}'"
             )
-            right = connection.client_state.layout_manager._get_status_right_tokens
+            right = connection.client_state.layout_manager.status.right
             # A count read two seconds ago, before any read now keeps one.
             connection.rate_window_frames.read(0, time.monotonic() - 2)
             assert re.fullmatch(r"\d+\.?\d* fps", right())
@@ -58,4 +58,4 @@ async def test_a_template_tells_clients_apart_by_width(columns, drawn):
         client, _ = await session.attach("only", Size(rows=40, columns=columns))
         with set_app(client.app):
             session.pymux.handle_command("set-option -g status-right '%s'" % BY_WIDTH)
-            assert client.layout_manager._get_status_right_tokens() == drawn
+            assert client.layout_manager.status.right() == drawn
