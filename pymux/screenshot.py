@@ -86,8 +86,11 @@ class Faces:
 
 @cache
 def _characters(path: str) -> frozenset[int]:
-    "Every code point a font file has a glyph for."
-    with TTFont(path, lazy=True) as font:
+    """
+    Every code point a font file has a glyph for. Of a collection, its
+    first font: the one Pillow draws with.
+    """
+    with TTFont(path, lazy=True, fontNumber=0) as font:
         return frozenset(font.getBestCmap() or ())
 
 

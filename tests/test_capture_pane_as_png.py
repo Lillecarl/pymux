@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from fontTools.ttLib import TTCollection, TTFont
 from PIL import Image
 from pyte.painted import Paint
 
@@ -139,6 +140,19 @@ async def test_a_glyph_the_font_lacks_comes_from_the_fallback(pymux):
 def test_a_fallback_is_known_by_what_it_holds():
     assert 0x23BF in screenshot._characters(FALLBACK)
     assert 0x23BF not in screenshot._characters(FONTS[0])
+
+
+async def test_a_fallback_may_be_a_collection(pymux, tmp_path):
+    "A .ttc holds several fonts, and WenQuanYi ships as one; its first one draws."
+    collection = TTCollection()
+    collection.fonts.append(TTFont(FALLBACK))
+    path = tmp_path / "fallback.ttc"
+    collection.save(str(path))
+    assert 0x23BF in screenshot._characters(str(path))
+    create_pane(pymux, "\x1b[?25l⎿ \U0010fffd")
+    helped = await picture(pymux, "--cell", "9x18", "--fallback", str(path))
+    corner, missing = (helped.crop((column * 9, 0, (column + 1) * 9, 18)).tobytes() for column in (0, 2))
+    assert corner != missing
 
 
 RED = (255, 0, 0)
