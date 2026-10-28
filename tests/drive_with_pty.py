@@ -72,6 +72,7 @@ from pyte.sequences import (
 )
 from pyte.sixel import decode_sixel
 from pyte.streams import Stream
+from pyterm_pytest.deadline import Deadline, pids_naming
 
 from pymux.blocks import LOWER_HALF, UPPER_HALF
 from pymux.colors import TRUECOLOR_PROBE
@@ -500,6 +501,10 @@ class Attached:
     passed = 0
     passed_keys = 0
 
+    #: The processes a wait is waiting on, besides this one: a wait
+    #: forgives the time they sat ready with no CPU (`Deadline`).
+    pids: list[int] = []
+
     def wait_for(self, pattern, timeout=15.0, since=None):
         """
         Wait for `pattern`, past everything an earlier wait already took.
@@ -514,15 +519,15 @@ class Attached:
         that an earlier wait already stepped past, which is the bug this
         mark is here to stop.
         """
-        deadline = time.time() + timeout
+        deadline = Deadline(timeout, self.pids)
         while True:
             start = self.passed if since is None else since
             found = self.seen.find(pattern, start)
             if found >= 0:
                 self.passed = max(self.passed, found + len(pattern))
                 return
-            if time.time() > deadline:
-                raise Failed("Timeout waiting for %r. Got: %r" % (pattern, self.seen[start:][:2000]))
+            if deadline.passed():
+                raise Failed("Timeout of %s waiting for %r. Got: %r" % (deadline, pattern, self.seen[start:][:2000]))
             self.read_once()
 
     def wait_for_input(self, keys, timeout=15.0):
@@ -531,16 +536,17 @@ class Attached:
 
         `keys_read` says why this is not `wait_for` with a blob.
         """
-        deadline = time.time() + timeout
+        deadline = Deadline(timeout, self.pids)
         while True:
             read = keys_read(self.seen)
             found = read.find(keys, self.passed_keys)
             if found >= 0:
                 self.passed_keys = found + len(keys)
                 return
-            if time.time() > deadline:
+            if deadline.passed():
                 raise Failed(
-                    "Timeout waiting for the pane to read %r. It read: %r" % (keys, read[self.passed_keys :][:400])
+                    "Timeout of %s waiting for the pane to read %r. It read: %r"
+                    % (deadline, keys, read[self.passed_keys :][:400])
                 )
             self.read_once()
 
@@ -712,6 +718,7 @@ class SecondClient(Attached):
         self.arrivals = []
         self.passed = 0
         self.passed_keys = 0
+        self.pids = [self.client.pid, *pids_naming(str(sock_path))]
 
     def close(self):
         "Leave. The server stays: the first client owns it."
@@ -816,6 +823,9 @@ class Terminal(Attached):
         self.arrivals = []
         self.passed = 0
         self.passed_keys = 0
+        # The client, and on the socket route the server it started in
+        # the background, which only its socket path names.
+        self.pids = [self.client.pid, *pids_naming(str(self.sock_path))]
 
     def close(self):
         run_cli(self.sock_path, ["kill-server"])

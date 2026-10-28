@@ -19,7 +19,6 @@ import os
 import sys
 import termios
 import threading
-import time
 import traceback
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
@@ -27,6 +26,7 @@ from pathlib import Path
 import anyio
 import pytest
 from libpymux.protocol import Field, Packet
+from pyterm_pytest.deadline import Deadline
 from test_ssh_client import create_key
 
 from pymux.client import reconnect as reconnect_module
@@ -478,8 +478,10 @@ class Attached:
         def described() -> str:
             return says() if callable(says) else says
 
-        ends_at = time.monotonic() + seconds
-        while time.monotonic() < ends_at:
+        # Server, sshd and client are all this process, so it is the
+        # one whose time with no CPU a wait forgives.
+        deadline = Deadline(seconds)
+        while not deadline.passed():
             if what():
                 return
             if self.attach_finished.is_set():
@@ -487,12 +489,15 @@ class Attached:
                     raise self.attach_error["error"]
                 raise AssertionError("The attach ended, waiting for %s." % (described(),))
             await anyio.sleep(0.05)
-        raise AssertionError("Waited %ss for %s." % (seconds, described()))
+        raise AssertionError("Waited %s for %s." % (deadline, described()))
 
     async def wait_for_attach(self, seconds: float = 10.0) -> None:
         "Wait for the attach to end, raising what ended it."
-        with anyio.fail_after(seconds):
-            await self.attach_finished.wait()
+        deadline = Deadline(seconds)
+        while not self.attach_finished.is_set():
+            if deadline.passed():
+                raise TimeoutError("The attach did not end in %s." % (deadline,))
+            await anyio.sleep(0.05)
         if self.attach_error["error"] is not None:
             raise self.attach_error["error"]
 

@@ -68,6 +68,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from pyterm_pytest.deadline import Deadline
+
 from tests.drive_with_pty import Terminal, run_cli
 
 #: How long the wire has to stay quiet before `settle` stops reading,
@@ -227,15 +229,16 @@ class Pane:
         program, and each of them acts when it is next scheduled.
         """
         found = ""
-        deadline = time.monotonic() + SIZE_TIMEOUT
-        while time.monotonic() < deadline:
+        assert self.terminal is not None
+        deadline = Deadline(SIZE_TIMEOUT, self.terminal.pids)
+        while not deadline.passed():
             found = self.size_file.read_text().split()
             if [int(one) for one in found] == [self.rows, self.columns]:
                 return
             self.settle()
         raise AssertionError(
-            "the pane is %s and the suite asks about %d rows by %d columns"
-            % (" by ".join(found) or "not saying", self.rows, self.columns)
+            "the pane is %s and the suite asks about %d rows by %d columns, after %s"
+            % (" by ".join(found) or "not saying", self.rows, self.columns, deadline)
         )
 
     @property
