@@ -20,9 +20,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, NamedTuple
 
 from ptterm import Terminal
-from pyte.links import Link, links_in
+from pyte.links import Link, LinkRule, links_in
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from .arrangement import Pane
 
 __all__ = ["LABEL_LETTERS", "Target", "UrlMode", "labels"]
@@ -66,14 +68,17 @@ class UrlMode:
         self.typed = ""
 
     @classmethod
-    def over(cls, pane: Pane) -> UrlMode:
-        "The links `pane` shows now, labelled. A window pane shows none that pymux can read."
+    def over(cls, pane: Pane, rules: Sequence[LinkRule] = ()) -> UrlMode:
+        """
+        The links `pane` shows now, labelled, and the text `rules` makes
+        links of. A window pane shows none that pymux can read.
+        """
         terminal = pane.terminal
         links = []
         if isinstance(terminal, Terminal):
             shown = terminal.shown_rows()
             page = terminal.screen.page
-            links = links_in(page, *shown) if shown is not None and page is not None else []
+            links = links_in(page, *shown, rules) if shown is not None and page is not None else []
         given: dict[str, str] = {}
         names = iter(labels(len({link.url for link in links})))
         targets = []

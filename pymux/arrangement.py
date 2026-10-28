@@ -232,6 +232,21 @@ class Pane:
 
         return ""
 
+    def current_path(self) -> str:
+        """
+        Where the pane says it is, else where its process is.
+
+        The same order a new pane starts in (`_directory_to_start_in`), so
+        `split-window -c "#{pane_current_path}"` and a bare `split-window`
+        agree. Over ssh the process table sees only the local ssh.
+        """
+        if self.current_directory:
+            return self.current_directory
+        try:
+            return self.process.get_cwd() or ""
+        except Exception:
+            return ""
+
     def enter_copy_mode(self) -> None:
         "Open copy mode on this pane, for the client that runs now."
         self.terminal.enter_copy_mode()
