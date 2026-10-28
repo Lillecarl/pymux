@@ -361,8 +361,8 @@ async def wait_until(
         str | None,
         Field(
             description=(
-                "Until a line written after the wait began matches this regular expression. The echo of a "
-                "command line is on the screen already, so it does not match; start this before sending keys."
+                "Until a line written after the wait began matches this regular expression; what the screen "
+                "held before does not. The echo of keys typed afterwards is new too, so anchor the pattern."
             )
         ),
     ] = None,
