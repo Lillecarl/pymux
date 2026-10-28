@@ -51,7 +51,7 @@ class Gaps(NamedTuple):
 
 
 def lay_out(
-    item: arrangement.Pane | arrangement.HSplit | arrangement.VSplit,
+    item: arrangement.Node,
     rect: Rect,
     gaps: Gaps,
     into: list[tuple[Slot, Rect]],

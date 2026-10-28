@@ -15,7 +15,7 @@ import os
 import time
 from collections.abc import Iterable
 from enum import Enum
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 from weakref import WeakKeyDictionary, ref
 
 from prompt_toolkit.application import Application, DummyApplication, get_app, get_app_or_none, set_app
@@ -204,7 +204,7 @@ class Pane:
         """
         return self.terminal.is_copying
 
-    def is_copying_for(self, app: Application | None) -> bool:
+    def is_copying_for(self, app: Application[Any] | None) -> bool:
         "Is the client of `app` reading the history of this pane?"
         return self.terminal.copy_views.of(app) is not None
 
@@ -265,14 +265,14 @@ class Pane:
 NodeKey = tuple[str, int]
 
 
-def node_key(item) -> NodeKey:
+def node_key(item: Node) -> NodeKey:
     "The key of a pane or a split."
     if isinstance(item, Pane):
         return ("pane", item.pane_id)
     return ("split", item.split_id)
 
 
-class _Split(list):
+class _Split(list["Node"]):
     """
     Base class for horizontal and vertical splits. (This is a higher level
     split than prompt_toolkit.layout.HSplit.)
@@ -285,8 +285,8 @@ class _Split(list):
         "weights": Keep.SAVED,
     }
 
-    def __init__(self, *a, **kw):
-        list.__init__(self, *a, **kw)
+    def __init__(self, children: Iterable[Node] = ()) -> None:
+        list.__init__(self, children)
 
         _Split._split_counter += 1
         self.split_id = _Split._split_counter
@@ -296,14 +296,14 @@ class _Split(list):
         #: a pane that comes back finds the weight it had.
         self.weights: dict[NodeKey, int] = {}
 
-    def weight_of(self, child) -> int:
+    def weight_of(self, child: Node) -> int:
         "This child's share of the split."
         return self.weights.get(node_key(child), 1)
 
-    def set_weight(self, child, weight: int) -> None:
+    def set_weight(self, child: Node, weight: int) -> None:
         self.weights[node_key(child)] = weight
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "%s(%s)" % (self.__class__.__name__, list.__repr__(self))
 
 
@@ -315,7 +315,11 @@ class VSplit(_Split):
     """Panes side by side, so this is the split that has a left and a right."""
 
 
-def _shape_of(split: _Split) -> tuple:
+#: What a split holds: a pane, or a split of the other way.
+type Node = Pane | _Split
+
+
+def _shape_of(split: _Split) -> tuple[bool, tuple[object, ...]]:
     "The kind of `split` and what it holds: pane ids, and the shape of each split inside."
     return (
         type(split) is HSplit,
@@ -337,7 +341,7 @@ def _place_of(split: _Split, item: object) -> int:
     raise ValueError("%r is not in %r" % (item, split))
 
 
-def panes_of(item) -> list[Pane]:
+def panes_of(item: Node) -> list[Pane]:
     "Every pane under this item, in the order they are drawn."
     if isinstance(item, Pane):
         return [item]
@@ -458,11 +462,11 @@ class Window:
         if self.options.strip and not isinstance(self.root, VSplit):
             self.root = VSplit([self.root]) if len(self.root) else VSplit()
 
-    def column_width(self, column) -> float:
+    def column_width(self, column: Node) -> float:
         "How wide one column of the strip is, as a fraction of the window."
         return self.column_widths.get(node_key(column), DEFAULT_COLUMN_WIDTH)
 
-    def set_column_width(self, column, width: float) -> None:
+    def set_column_width(self, column: Node, width: float) -> None:
         self.column_widths[node_key(column)] = width
 
     def switch_column_width(self, pane: Pane, back: bool = False) -> None:
@@ -545,7 +549,7 @@ class Window:
             return self._expel(pane, column, step)
         return self._consume(pane, column, step)
 
-    def _expel(self, pane: Pane, column, step: int) -> bool:
+    def _expel(self, pane: Pane, column: Node, step: int) -> bool:
         "Take a pane out of the column it shares, into one of its own."
         where = _place_of(self.root, column)
 
@@ -557,7 +561,7 @@ class Window:
         self.root.insert(where if step < 0 else where + 1, pane)
         return True
 
-    def _consume(self, pane: Pane, column, step: int) -> bool:
+    def _consume(self, pane: Pane, column: Node, step: int) -> bool:
         "Put a pane that is alone in its column into the next column."
         there = _place_of(self.root, column) + step
 
@@ -579,7 +583,7 @@ class Window:
 
         return True
 
-    def invalidation_hash(self) -> tuple:
+    def invalidation_hash(self) -> tuple[object, ...]:
         """
         A value that changes when the layout has to be rebuilt.
         """
@@ -732,7 +736,7 @@ class Window:
 
             self._take_out(pane)
 
-    def _take_out(self, item) -> None:
+    def _take_out(self, item: Node) -> None:
         """
         Take one item out of the tree, and tidy up what it leaves.
 
@@ -790,11 +794,11 @@ class Window:
         return panes_of(self.root)
 
     @property
-    def splits(self) -> list[HSplit | VSplit]:
+    def splits(self) -> list[_Split]:
         "Return a list with all HSplit/VSplit instances."
-        result = []
+        result: list[_Split] = []
 
-        def collect(split):
+        def collect(split: _Split) -> None:
             result.append(split)
 
             for item in split:
@@ -804,7 +808,7 @@ class Window:
         collect(self.root)
         return result
 
-    def _get_parent(self, item):
+    def _get_parent(self, item: Node) -> _Split | None:
         "The HSplit/VSplit that contains the active pane."
         for s in self.splits:
             if item in s:
@@ -848,7 +852,7 @@ class Window:
         if p is not None:
             return p.process
 
-    def focus_next(self, count=1) -> None:
+    def focus_next(self, count: int = 1) -> None:
         "Focus the next pane."
         panes = self.panes
         if panes:
@@ -911,8 +915,9 @@ class Window:
 
         # When there is only one pane, always choose EVEN_HORIZONTAL,
         # Otherwise, we create VSplit/HSplit instances with an empty list of
-        # children.
-        if len(self.panes) == 1:
+        # children. With no active pane there is no main pane either.
+        active = self.active_pane
+        if len(self.panes) == 1 or active is None:
             layout_type = LayoutTypes.EVEN_HORIZONTAL
 
         # even-horizontal.
@@ -924,20 +929,20 @@ class Window:
             self.root = VSplit(self.panes)
 
         # main-horizontal.
-        elif layout_type == LayoutTypes.MAIN_HORIZONTAL:
+        elif layout_type == LayoutTypes.MAIN_HORIZONTAL and active is not None:
             self.root = HSplit(
                 [
-                    self.active_pane,
-                    VSplit([p for p in self.panes if p != self.active_pane]),
+                    active,
+                    VSplit([p for p in self.panes if p != active]),
                 ]
             )
 
         # main-vertical.
-        elif layout_type == LayoutTypes.MAIN_VERTICAL:
+        elif layout_type == LayoutTypes.MAIN_VERTICAL and active is not None:
             self.root = VSplit(
                 [
-                    self.active_pane,
-                    HSplit([p for p in self.panes if p != self.active_pane]),
+                    active,
+                    HSplit([p for p in self.panes if p != active]),
                 ]
             )
 
@@ -984,18 +989,18 @@ class Window:
         new_layout = all_layouts[(index + count) % len(all_layouts)]
         self.select_layout(new_layout)
 
-    def change_size_for_pane(self, pane: Pane, up=0, right=0, down=0, left=0):
+    def change_size_for_pane(self, pane: Pane, up: int = 0, right: int = 0, down: int = 0, left: int = 0) -> None:
         """
         Increase the size of the current pane in any of the four directions.
         Positive values indicate an increase, negative values a decrease.
         """
 
-        def find_split_and_child(split_cls, is_before):
+        def find_split_and_child(split_cls: type[_Split], is_before: bool) -> tuple[_Split | None, Node]:
             "Find the split for which we will have to update the weights."
             child = pane
             split = self._get_parent(child)
 
-            def found():
+            def found() -> bool:
                 # None past the root never matches.
                 if split is None:
                     return False
@@ -1011,7 +1016,7 @@ class Window:
 
             return split, child  # split can be None!
 
-        def handle_side(split_cls, is_before, amount, trying_other_side=False):
+        def handle_side(split_cls: type[_Split], is_before: bool, amount: int, trying_other_side: bool = False) -> None:
             "Increase weights on one side. (top/left/right/bottom)."
             if amount:
                 split, child = find_split_and_child(split_cls, is_before)
@@ -1117,18 +1122,18 @@ class Arrangement:
         # open. It says what the next one starts as.
         self.window_defaults: dict[str, object] = {}
 
-        self._active_window_for_cli: WeakKeyDictionary[Application, Window] = WeakKeyDictionary()
+        self._active_window_for_cli: WeakKeyDictionary[Application[Any], Window] = WeakKeyDictionary()
         # The windows each client left, the newest last. Closing its
         # window returns it to the newest one still open, as tmux's
         # `session_last` does, and the next index only when there is
         # none. Lillecarl/pymux#658.
-        self._window_history_for_cli: WeakKeyDictionary[Application, list[Window]] = WeakKeyDictionary()
+        self._window_history_for_cli: WeakKeyDictionary[Application[Any], list[Window]] = WeakKeyDictionary()
 
         # The active window of the last CLI. Used as default when a new session
         # is attached.
         self._last_active_window: Window | None = None
 
-    def invalidation_hash(self) -> tuple:
+    def invalidation_hash(self) -> tuple[object, ...]:
         """
         When this changes, the layout needs to be rebuild.
         """
@@ -1145,7 +1150,7 @@ class Arrangement:
         """
         return self.get_active_window_for(get_app())
 
-    def get_active_window_for(self, app) -> Window | None:
+    def get_active_window_for(self, app: Application[Any]) -> Window | None:
         """
         The active :class:`.Window` of one client.
 
@@ -1204,7 +1209,7 @@ class Arrangement:
         self._last_active_window = window
         window.seen()
 
-    def ring(self, window: Window, pane: Pane, apps: Iterable[Application]) -> bool:
+    def ring(self, window: Window, pane: Pane, apps: Iterable[Application[Any]]) -> bool:
         """
         Raise the bell flags for a bell of `pane` that nobody saw ring.
         True when a flag went up, so a status line has something new.
@@ -1225,17 +1230,17 @@ class Arrangement:
             pane.bell = raised = True
         return raised
 
-    def _watched(self, window: Window, apps: Iterable[Application]) -> bool:
+    def _watched(self, window: Window, apps: Iterable[Application[Any]]) -> bool:
         return any(self._active_window_for_cli.get(app) is window for app in apps)
 
-    def notify(self, window: Window, apps: Iterable[Application]) -> bool:
+    def notify(self, window: Window, apps: Iterable[Application[Any]]) -> bool:
         "Mark a window a notification came from, unless a client looks at it. True when the mark went up."
         if not window.options.monitor_notification or window.notified or self._watched(window, apps):
             return False
         window.notified = True
         return True
 
-    def check_output(self, apps: Iterable[Application], now: float) -> bool:
+    def check_output(self, apps: Iterable[Application[Any]], now: float) -> bool:
         "`Window.check_output` for every window. True when a mark went up."
         raised = False
         for window in self.windows:
@@ -1255,7 +1260,7 @@ class Arrangement:
         "The previous active Window or None if unknown."
         return self.previous_window_for(get_app())
 
-    def previous_window_for(self, app) -> Window | None:
+    def previous_window_for(self, app: Application[Any]) -> Window | None:
         "The newest window that `app` left and that is still in the order."
         for window in reversed(self._window_history_for_cli.get(app, ())):
             if window in self.windows:
@@ -1495,7 +1500,7 @@ class Arrangement:
         """
         return self.get_active_pane_for(get_app())
 
-    def get_active_pane_for(self, app) -> Pane | None:
+    def get_active_pane_for(self, app: Application[Any]) -> Pane | None:
         "The active :class:`.Pane` of one client. See `get_active_window_for`."
         w = self.get_active_window_for(app)
         if w is not None:
