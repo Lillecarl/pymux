@@ -63,6 +63,14 @@ class PosixClient(TerminalClient):
         """
         Attach client user interface.
         """
+
+        def winch_handler(signum, frame):
+            self._send_size()
+
+        # Before `start-gui`, which carries the size: SIGWINCH is ignored
+        # until a handler takes it, so a resize between the two was lost
+        # for good, and the pane kept the old size. Lillecarl/pymux#611.
+        signal.signal(signal.SIGWINCH, winch_handler)
         self._start_gui(detach_other_clients, color_depth)
 
         with raw_mode(sys.stdin.fileno()):
@@ -71,11 +79,6 @@ class PosixClient(TerminalClient):
             stdin_fd = sys.stdin.fileno()
 
             try:
-
-                def winch_handler(signum, frame):
-                    self._send_size()
-
-                signal.signal(signal.SIGWINCH, winch_handler)
                 while True:
                     socket_fd = self.socket.fileno()
                     # A browser that ends says nothing on either fd, so

@@ -17,6 +17,7 @@ Lillecarl/pymux#411.
 from __future__ import annotations
 
 import os
+import signal
 import sys
 
 import pytest
@@ -215,3 +216,29 @@ async def test_integrated_client_resets_on_every_way_out(memory_client, error):
     assert raised == ([] if isinstance(error, ServerHungUp) else [True])
     assert client.resets == 1
     assert pushed == [True]
+
+
+def test_a_resize_is_heard_from_before_start_gui_reports_the_size():
+    """
+    `start-gui` carries the size, and SIGWINCH is ignored until a handler
+    takes it. A resize between the two was lost, and the pane kept the
+    old size under load. Lillecarl/pymux#611.
+    """
+    held = []
+
+    class Starting(PosixClient):
+        def __init__(self):
+            TerminalClient.__init__(self)
+            self.socket = FakeSocket()
+
+        def _start_gui(self, *_arguments):
+            held.append(signal.getsignal(signal.SIGWINCH))
+            raise RuntimeError("enough")
+
+    before = signal.getsignal(signal.SIGWINCH)
+    try:
+        with pytest.raises(RuntimeError, match="enough"):
+            Starting().attach()
+    finally:
+        signal.signal(signal.SIGWINCH, before)
+    assert callable(held[0]), held
