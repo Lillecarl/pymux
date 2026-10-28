@@ -198,10 +198,10 @@ artifacts = ["pymux/web/static/*"]
 anyio_mode = "auto"
 
 [tool.pyrefly]
-# Strict with boundaries: the default preset, plus the three strict
-# codes that find bugs or are mechanical. Annotation completeness
-# (`implicit-any-parameter` and friends) is Lillecarl/pymux#511 and
-# stays off until somebody annotates 750 sites.
+# The strict preset, which `checks.pymux-types` passes on the command
+# line: every parameter annotated, and no Any that nobody wrote
+# (Lillecarl/pymux#511). The three codes below are strict's already;
+# they stay named so the file says what a default-preset run misses.
 #
 # Third-party code is a boundary by construction: the check passes
 # only `pymux/`, so prompt-toolkit's bodies are never checked no

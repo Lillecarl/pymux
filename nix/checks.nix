@@ -734,7 +734,7 @@ in
         inputs = [ pyrefly ];
       }
       ''
-        pyrefly check --preset default \
+        pyrefly check --preset strict \
           --python-interpreter-path "${waylandTestEnv}/bin/python" \
           pymux
       '';
