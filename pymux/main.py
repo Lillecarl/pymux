@@ -121,6 +121,7 @@ from .osc import (
     ftcs_of,
     message_of,
     open_url_of,
+    progress_of,
     remote_host_of,
     request_attention_of,
     set_user_var_of,
@@ -1241,6 +1242,8 @@ class Pymux:
         "message_log": Keep.SAVED,
         "notifications": Keep.SAVED,
         "notification_center": Keep.SAVED,
+        # As the panes' progress it follows.
+        "progressing": Keep.DROPPED,
         "jobs": Keep.SAVED,
         # Bindings a person may have changed with `bind-key`.
         "key_bindings_manager": Keep.SAVED,
@@ -1339,6 +1342,12 @@ class Pymux:
         #: question, the hub lists everything.
         self.notification_center = NotificationCenter()
         self.notification_center.on_added = self._notified
+
+        #: The panes that say a progress (OSC 9 ; 4), so the window list
+        #: walks no panes while none does. A pane that goes stays until
+        #: it would have cleared it, which costs a walk and no wrong
+        #: answer. Lillecarl/pymux#788.
+        self.progressing: set[PaneId] = set()
 
         # When no panes are available.
         self.original_cwd = os.getcwd()
@@ -1914,6 +1923,7 @@ class Pymux:
 
         self.terminals.sync_kitty_flags()
         self.terminals.sync_pointer_shape()
+        self.terminals.sync_progress()
         self.terminals.sync_keyboard_source_flags()
 
     def server_starts(self) -> None:
@@ -3009,6 +3019,7 @@ class Pymux:
         # for a different pointer.
         self.terminals.sync_kitty_flags()
         self.terminals.sync_pointer_shape()
+        self.terminals.sync_progress()
         # "set-option synthesize-key-events" takes effect here.
         self.terminals.sync_keyboard_source_flags()
 
@@ -3483,8 +3494,19 @@ class Pymux:
 
             if code == Osc.MESSAGE:
                 text = message_of(param)
-                # ConEmu's numbered commands drive ConEmu itself.
+                # ConEmu's numbered commands drive ConEmu itself, but for
+                # the progress, which each client's terminal is given
+                # for the pane it looks at.
                 if text is None:
+                    progress = progress_of(param)
+                    if progress is not None and progress != pane.progress:
+                        pane.progress = progress
+                        if progress.state:
+                            self.progressing.add(pane.pane_id)
+                        else:
+                            self.progressing.discard(pane.pane_id)
+                        self.terminals.sync_progress()
+                        self.invalidate(Woke.PANE_PROGRESSED)
                     return
                 self.notification_center.add(text, pane_id=pane.pane_id, source=NotificationSource.OSC_9)
                 recorded = True

@@ -20,6 +20,7 @@ from pyte.keys import KeyboardFlag
 from .colors import theme_color_base
 from .enums import ExtendedKeys
 from .log import logger
+from .osc import NO_PROGRESS
 from .style import DEFAULT_THEME
 
 if TYPE_CHECKING:
@@ -91,6 +92,20 @@ class Terminals:
                 connection.set_pointer_shape(pointer_shape_of(self.pymux.focused_pane_of(client_state)))
         except Exception:
             logger.exception("Sending the shape of the pointer failed.")
+
+    def sync_progress(self) -> None:
+        """
+        Give every client the progress of the pane it looks at, as the
+        pointer's shape above. Lillecarl/pymux#788.
+        """
+        try:
+            for connection, client_state in self.pymux._client_states.items():
+                if connection is None:
+                    continue
+                pane = self.pymux.focused_pane_of(client_state)
+                connection.set_progress(pane.progress if pane is not None else NO_PROGRESS)
+        except Exception:
+            logger.exception("Sending the progress failed.")
 
     def keyboard_source_flags(self) -> int:
         """

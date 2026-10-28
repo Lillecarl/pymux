@@ -486,13 +486,29 @@ def _window_flags(context: FormatContext) -> str:
     arrangement = context.session.arrangement
     window = context.window
     marks = window_marks(context.session.options, window)
-    z = "Z" if window.zoom else ""
+    # The progress follows the flags, so tmux's `#I:#W#F` shows it: a
+    # conditional in the default format cost every frame 6% more parsing.
+    # Lillecarl/pymux#788.
+    progress = _window_progress(context)
+    z = ("Z" if window.zoom else "") + (" " + progress if progress else "")
 
     if window == arrangement.get_active_window():
         return marks + "*" + z
     if window == arrangement.get_previous_active_window():
         return marks + "-" + z
     return marks + z
+
+
+def _window_progress(context: FormatContext) -> str:
+    "The progress of the active pane, or else of the first pane that says one. Lillecarl/pymux#788."
+    # Every window of every frame asks; the walk waits for a pane to say one.
+    if not context.pymux.progressing:
+        return ""
+    window = context.window
+    for pane in [window.active_pane, *window.panes]:
+        if pane is not None and pane.progress.state:
+            return pane.progress.shown()
+    return ""
 
 
 def _window_bell_flag(context: FormatContext) -> str:
@@ -832,6 +848,7 @@ tmux_variables: dict[str, Callable[[FormatContext], str]] = {
     "pane_current_host": lambda c: c.pane.current_host or "",
     "pane_current_user": lambda c: c.pane.current_user or "",
     "pane_shell": lambda c: c.pane.shell or "",
+    "pane_progress": lambda c: c.pane.progress.shown(),
     "pane_dead": lambda c: "1" if c.pane.process.is_terminated else "0",
     # Read off the mode, and not off copy mode alone: tmux counts the
     # whole stack (`format_cb_pane_in_mode`), so a pane showing the
@@ -858,6 +875,7 @@ tmux_variables: dict[str, Callable[[FormatContext], str]] = {
     "window_name": _window_name,
     "window_active": _window_active,
     "window_flags": _window_flags,
+    "window_progress": _window_progress,
     "window_bell_flag": _window_bell_flag,
     "window_activity_flag": _window_activity_flag,
     "window_silence_flag": _window_silence_flag,

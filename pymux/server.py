@@ -40,13 +40,14 @@ from .audio import AudioLink
 from .colors import ColorDetection, DefaultColors
 from .commands import handle_command
 from .enums import ExtendedKeys, Woke
-from .graphics import CELL_SIZE_QUERY, ClientGraphics, draws_placeholders
+from .graphics import CELL_SIZE_QUERY, ClientGraphics, draws_placeholders, draws_progress
 from .ids import PaneId
 from .keys import KittyVt100Parser
 from .log import logger
 from .nearest import NEAREST, nearest_theme, wanted_from
 from .notifications import QUERY_IDENTIFIER, is_click, read_actions, read_identifier, split_payload
 from .options import Scope, SetOptionError
+from .osc import NO_PROGRESS, Progress
 from .packet_table import PacketTable
 from .pipes import BrokenPipeError
 from .rate import Rate
@@ -185,6 +186,7 @@ class ServerConnection:
         "_kitty_supported": Keep.REBUILT,
         "notification_actions": Keep.REBUILT,
         "_pointer_shape_sent": Keep.REBUILT,
+        "_progress_sent": Keep.REBUILT,
         "answers_ping": Keep.REBUILT,
         "paced": Keep.REBUILT,
         "can_forward": Keep.REBUILT,
@@ -450,6 +452,9 @@ class ServerConnection:
         # client that never saw one is not told to reset it.
         self._pointer_shape_sent = ""
 
+        # The progress this client's terminal was told, the same way.
+        self._progress_sent = NO_PROGRESS
+
         self.pymux.serve_connection(self)
 
     def _spawn(self, coro: Coroutine[Any, Any, object]) -> None:
@@ -654,6 +659,17 @@ class ServerConnection:
             return
         self._pointer_shape_sent = shape
         self.forward_osc("\x1b]22;%s\x1b\\" % shape)
+
+    def set_progress(self, progress: Progress) -> None:
+        """
+        Show this client's terminal the progress of the pane it looks
+        at, when it draws one: some terminals take any OSC 9 for a
+        notification. Only a change goes out. Lillecarl/pymux#788.
+        """
+        if progress == self._progress_sent or not draws_progress(self.graphics.terminal_version):
+            return
+        self._progress_sent = progress
+        self.forward_osc("\x1b]9;%s\x1b\\" % progress.sequence)
 
     def _apply_color_depth(self) -> None:
         """

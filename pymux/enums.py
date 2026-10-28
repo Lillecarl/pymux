@@ -257,6 +257,7 @@ class Woke(StrEnum):
     #: one. Lillecarl/pymux#478.
     PANE_WROTE_AN_OSC = "a pane wrote an escape for the terminal of a client"
     NOTIFICATION_SENT = "pymux sent a notification to the terminal of a client"
+    PANE_PROGRESSED = "a pane said how far along it is"
     #: A clipboard query goes behind a frame, after any copy queued
     #: before it, so a paste reads what was just copied.
     #: Lillecarl/pymux#383.

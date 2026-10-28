@@ -25,6 +25,7 @@ from pyte.keep import Keep
 
 from .downloads import DownloadReader
 from .ids import PaneId, PaneIndex, WindowId, WindowIndex
+from .osc import NO_PROGRESS
 from .session_options import SessionOptions
 from .window_options import WindowOptions
 
@@ -97,6 +98,8 @@ class Pane:
         "current_user": Keep.SAVED,
         "shell": Keep.SAVED,
         "shell_integration_version": Keep.SAVED,
+        # A program says its progress again as it moves.
+        "progress": Keep.DROPPED,
         "command_zone": Keep.SAVED,
         "last_exit_status": Keep.SAVED,
         "bell": Keep.SAVED,
@@ -162,6 +165,10 @@ class Pane:
         #: "OSC 1337 ; ShellIntegrationVersion". Lillecarl/pymux#784.
         self.shell: str | None = None
         self.shell_integration_version: str | None = None
+
+        #: What the program says of its progress, from "OSC 9 ; 4".
+        #: Lillecarl/pymux#788.
+        self.progress = NO_PROGRESS
 
         #: What the shell published about itself, from "OSC 1337 ;
         #: SetUserVar". iTerm2 reads these for badges and triggers and

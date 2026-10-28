@@ -18,14 +18,19 @@ from pyte.page import RowMark
 from session import create_session
 
 from pymux.enums import Clipboard
+from pymux.format import format_pymux_string
+from pymux.graphics import draws_progress
 from pymux.main import MAX_USER_VARS, Pymux
 from pymux.notifications import Urgency
 from pymux.osc import (
+    NO_PROGRESS,
+    Progress,
     copy_data_of,
     current_dir_of,
     extension_key_of,
     file_url_dir_of,
     ftcs_of,
+    progress_of,
     request_attention_of,
     set_user_var_of,
 )
@@ -44,6 +49,9 @@ class FakeConnection:
 
     def forward_osc(self, data):
         self.written.append(data)
+
+    def set_progress(self, progress):
+        pass
 
 
 class FakeScreen:
@@ -75,6 +83,7 @@ class FakePane:
         self.current_user = None
         self.shell = None
         self.shell_integration_version = None
+        self.progress = NO_PROGRESS
         self.user_vars = {}
         self.command_zone = None
         self.last_exit_status = None
@@ -486,6 +495,64 @@ def test_conemu_s_commands_under_osc_9_are_no_notice(param):
     assert pymux.notification_center.notifications() == []
     for connection in connections:
         assert connection.written == []
+
+
+# ----------------------------------------------------------------------
+# ConEmu's progress, OSC 9 ; 4. Lillecarl/pymux#788.
+
+
+@pytest.mark.parametrize(
+    ("param", "wanted"),
+    [
+        ("4;1;42", Progress(1, 42)),
+        ("4;2;250", Progress(2, 100)),
+        ("4;3", Progress(3, 0)),
+        ("4;0", NO_PROGRESS),
+        ("4;0;50", NO_PROGRESS),
+        ("4;5;10", None),
+        ("4", None),
+        ("9;/home/me", None),
+        ("Build done", None),
+    ],
+)
+def test_a_progress_reads_its_state_and_percent(param, wanted):
+    assert progress_of(param) == wanted
+
+
+def test_a_window_shows_each_state_in_ascii():
+    assert [Progress(state, 42).shown() for state in range(5)] == ["", "42%", "!42%", "~", "=42%"]
+    assert (Progress(1, 42).sequence, NO_PROGRESS.sequence) == ("4;1;42", "4;0")
+
+
+@pytest.mark.parametrize(
+    ("version", "draws"),
+    [
+        ("kitty(0.44.0)", True),
+        ("kitty(0.43.1)", False),
+        ("ghostty 1.2.3", True),
+        ("iTerm2 3.6.1", True),
+        ("WezTerm 20240203", False),
+        ("", False),
+    ],
+)
+def test_a_progress_goes_to_the_terminals_that_draw_one(version, draws):
+    assert draws_progress(version) is draws
+
+
+async def test_a_pane_s_progress_reaches_the_status_line_and_the_client():
+    async with create_session() as (pymux, state):
+        (connection,) = [each for each, value in pymux._client_states.items() if value is state]
+        with set_app(state.app):
+            pane = pymux.arrangement.get_active_pane()
+            pymux.forward_osc(pane, "9", "4;1;42")
+            assert pane.progress == Progress(1, 42)
+            assert connection.progress == Progress(1, 42)
+            assert format_pymux_string(pymux, "#{window_progress}") == "42%"
+
+            pymux.forward_osc(pane, "9", "4;0")
+            assert connection.progress == NO_PROGRESS
+            assert format_pymux_string(pymux, "#{window_progress}") == ""
+        assert pymux.notification_center.notifications() == []
 
 
 def test_copy_reaches_paste_buffer_and_clients():

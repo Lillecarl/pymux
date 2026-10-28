@@ -158,6 +158,10 @@ class Connection:
     def forward_osc(self, sequence):
         pass
 
+    def set_progress(self, progress):
+        "What `ServerConnection.set_progress` was given last."
+        self.progress = progress
+
     def _send_packet(self, packet):
         pass
 

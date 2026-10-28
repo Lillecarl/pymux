@@ -23,12 +23,15 @@ from __future__ import annotations
 import base64
 import re
 import string
+from typing import Final, NamedTuple
 from urllib.parse import unquote
 
 __all__ = [
     "MAX_OSC_LENGTH",
+    "NO_PROGRESS",
     "OPEN_URL_PREFIX",
     "PASSTHROUGH_VARIABLE",
+    "Progress",
     "build_osc",
     "copy_data_of",
     "current_dir_of",
@@ -37,6 +40,7 @@ __all__ = [
     "ftcs_of",
     "message_of",
     "open_url_of",
+    "progress_of",
     "remote_host_of",
     "request_attention_of",
     "set_user_var",
@@ -286,6 +290,36 @@ def simple_notification_of(param: str) -> tuple[str, str] | None:
 #: ConEmu's commands under OSC 9 start with a number: "4;1;50" is a
 #: progress bar, "9;path" a directory. iTerm2's message is any other text.
 _CONEMU_COMMAND = re.compile(r"^\d+(?:;|$)")
+
+
+class Progress(NamedTuple):
+    "ConEmu's progress: `state` 0 none, 1 normal, 2 error, 3 indeterminate, 4 paused, and a percent."
+
+    state: int
+    percent: int
+
+    def shown(self) -> str:
+        "How a window shows it, in ASCII as the marks are. Empty for none."
+        return {1: "{}%", 2: "!{}%", 3: "~", 4: "={}%"}.get(self.state, "").format(self.percent)
+
+    @property
+    def sequence(self) -> str:
+        "The payload of the OSC 9 that says it to a terminal."
+        return "4;%i;%i" % self if self.state else "4;0"
+
+
+#: No progress: what state 0 asks for, and what a pane holds at first.
+NO_PROGRESS: Final = Progress(0, 0)
+
+
+def progress_of(param: str) -> Progress | None:
+    "The progress of `OSC 9 ; 4 ; state ; percent`, or None for any other OSC 9. Lillecarl/pymux#788."
+    fields = param.split(";")
+    if fields[0] != "4" or len(fields) < 2 or not fields[1].isdigit() or int(fields[1]) > 4:
+        return None
+    state = int(fields[1])
+    percent = int(fields[2]) if state and len(fields) > 2 and fields[2].isdigit() else 0
+    return Progress(state, min(percent, 100))
 
 
 def message_of(param: str) -> str | None:
