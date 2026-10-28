@@ -8,11 +8,8 @@ import errno
 import fnmatch
 import os
 import shlex
-import shutil
 import signal
 import socket
-import sys
-import tempfile
 import time
 import weakref
 from collections import deque
@@ -85,7 +82,6 @@ from .enums import (
     ForwardMode,
     OpenUrlMode,
     OpenUrlTarget,
-    PaneBrowser,
     RenderMode,
     WindowSize,
     Woke,
@@ -127,6 +123,7 @@ from .server import ServerConnection
 from .server_options import ServerOptions
 from .session import DEFAULT_SIZE, OwnOptions, Session
 from .session_options import SessionOptions
+from .shims import Shims
 from .style import DEFAULT_THEME, theme
 from .terminals import Terminals
 from .wayland import WaylandServer
@@ -1164,12 +1161,6 @@ def _open_question(url: str, forward: dict | None) -> str:
     )
 
 
-def _browser_shim() -> str | None:
-    "`pymux-browser` of this build, beside its Python; None where it is not."
-    found = os.path.join(os.path.dirname(sys.executable), "pymux-browser")
-    return found if os.access(found, os.X_OK) else shutil.which("pymux-browser")
-
-
 class Pymux:
     """
     The main Pymux application class.
@@ -1240,8 +1231,7 @@ class Pymux:
         "hanging_up": Keep.DROPPED,  # an upgrade kills them before it goes
         "refusing_commands": Keep.DROPPED,  # the new image takes them again
         "_client_states": Keep.REBUILT,  # from the client records, as clients reconnect
-        "_notify_shim_dir": Keep.REBUILT,
-        "_open_url_shim_dir": Keep.REBUILT,
+        "shims": Keep.REBUILT,
         "options": Keep.SAVED,
         "session_defaults": Keep.SAVED,
         "terminals": Keep.REBUILT,
@@ -1283,9 +1273,7 @@ class Pymux:
         # `--log-level` told the logger before this server existed.
         self.options.hold("log_level", log.level())
 
-        self._open_url_shim_dir: str | None = None
-
-        self._notify_shim_dir: str | None = None
+        self.shims = Shims()
 
         # The paste buffer of the session. Copy mode writes it, a pane
         # that writes the clipboard of the user writes it too, and
@@ -2354,7 +2342,7 @@ class Pymux:
             # The shims, when they are on, reach the opener and the
             # notifier of this session before anything else on the PATH
             # of the pane, and name the opener for what reads $BROWSER.
-            self._shim_pane_environment(environment, options)
+            self.shims.put_on_path(environment, options)
 
             # Our compositor only where the session names no display:
             # a program started beside a desktop belongs on it.
@@ -2371,13 +2359,7 @@ class Pymux:
         # undoes exactly what that did.
         command_list = shlex.split(command) if command else [options.default_shell]
 
-        # The shim directory has to exist in this process, before the
-        # fork: a directory made in the child is made once per pane,
-        # and two panes starting together would race for it.
-        if options.open_url_shim:
-            self._ensure_open_url_shim()
-        if options.notify_shim:
-            self._ensure_notify_shim()
+        self.shims.make(options)
 
         if job is not None:
             pane = self._build_viewer(job)
@@ -3297,76 +3279,6 @@ class Pymux:
         """
         client_state.connection._send_packet(packet)
 
-    def _ensure_open_url_shim(self) -> None:
-        """
-        Make the directory that puts the opener of this session on the
-        PATH of a pane.
-
-        It holds one script, `pymux-open-url`, which asks this session
-        to open what it was given, and a link to it under the name
-        `xdg-open`. A program in a pane calls `xdg-open` without
-        knowing pymux, and what reads $BROWSER finds the script by
-        name too. Nothing answers for `open` on macOS: too much calls
-        it for files, and a name that opens files must not open URLs.
-
-        Only a pane that starts afterwards sees it: a running pane
-        keeps the PATH it was born with.
-        """
-        if self._open_url_shim_dir is not None:
-            return
-        self._open_url_shim_dir = tempfile.mkdtemp(prefix="pymux-open-url-")
-        script = os.path.join(self._open_url_shim_dir, "pymux-open-url")
-        with open(script, "w") as f:
-            f.write('#!/bin/sh\nexec pymux open-url -- "$@"\n')
-        os.chmod(script, 0o755)
-        os.symlink("pymux-open-url", os.path.join(self._open_url_shim_dir, "xdg-open"))
-
-    #: What the `notify-send` shim understands, as a script. The
-    #: summary and the body reach `pymux notify`, and `-u` picks the
-    #: urgency. Every other flag of `notify-send` is accepted and
-    #: ignored -- the hub keeps no icon, category or timeout -- but a
-    #: flag that takes a value still eats it, so it is never mistaken
-    #: for the summary. Hand-parsed, the way the shell parses: this
-    #: runs wherever a pane runs, and BSD `getopt` knows no long
-    #: flags.
-    NOTIFY_SHIM_SCRIPT = r"""#!/bin/sh
-urgency=normal
-while [ $# -gt 0 ]; do
-    case "$1" in
-    -u|--urgency) urgency="$2"; shift 2 ;;
-    --urgency=*) urgency="${1#*=}"; shift ;;
-    -t|-i|-c|-h|-a) shift 2 ;;
-    --expire-time|--icon|--category|--hint|--app-name) shift 2 ;;
-    --expire-time=*|--icon=*|--category=*|--hint=*|--app-name=*) shift ;;
-    -p|--print-id|-w|--wait|-\?|--help|-v|--version) shift ;;
-    --) shift; break ;;
-    *) break ;;
-    esac
-done
-exec pymux notify -u "$urgency" -- "$@"
-"""
-
-    def _ensure_notify_shim(self) -> None:
-        """
-        Make the directory that puts the notifier of this session on
-        the PATH of a pane.
-
-        It holds one script, `notify-send`, which records what it was
-        given in the notification hub. It shadows the notifier of the
-        desktop on purpose: inside a pane a notification belongs to
-        the session first.
-
-        Only a pane that starts afterwards sees it: a running pane
-        keeps the PATH it was born with.
-        """
-        if self._notify_shim_dir is not None:
-            return
-        self._notify_shim_dir = tempfile.mkdtemp(prefix="pymux-notify-")
-        script = os.path.join(self._notify_shim_dir, "notify-send")
-        with open(script, "w") as f:
-            f.write(self.NOTIFY_SHIM_SCRIPT)
-        os.chmod(script, 0o755)
-
     def pane_environment(self, base: dict[str, str] | None = None) -> dict[str, str]:
         """
         The environment a new pane runs under, merged: `base`, or the
@@ -3392,19 +3304,6 @@ exec pymux notify -u "$urgency" -- "$@"
             else:
                 merged[name] = value
         return merged
-
-    def _shim_pane_environment(self, environment: dict[str, str], options: OwnOptions) -> None:
-        "Put the shims on the PATH of a pane, and name the opener in $BROWSER."
-        if options.open_url_shim and self._open_url_shim_dir:
-            environment["PATH"] = self._open_url_shim_dir + os.pathsep + environment["PATH"]
-            environment["BROWSER"] = os.path.join(self._open_url_shim_dir, "pymux-open-url")
-        if options.notify_shim and self._notify_shim_dir:
-            environment["PATH"] = self._notify_shim_dir + os.pathsep + environment["PATH"]
-        shim = _browser_shim()
-        if shim is not None and options.pane_browser != PaneBrowser.OFF:
-            environment["PLAYWRIGHT_MCP_EXECUTABLE_PATH"] = shim
-            if options.pane_browser == PaneBrowser.ALL:
-                environment["PUPPETEER_EXECUTABLE_PATH"] = shim
 
     def forward_osc(self, pane, code: str, param: str) -> None:
         """

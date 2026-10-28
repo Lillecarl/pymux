@@ -477,9 +477,9 @@ async def test_shim_names_opener_of_session():
     async with in_this_process() as session:
         pymux = session.pymux
         pymux.session_defaults.open_url_shim = True
-        pymux._ensure_open_url_shim()
+        pymux.shims.make_open_url()
 
-        directory = pymux._open_url_shim_dir
+        directory = pymux.shims.open_url_dir
         script = os.path.join(directory, "pymux-open-url")
         assert os.access(script, os.X_OK)
         assert os.path.islink(os.path.join(directory, "xdg-open"))
@@ -487,21 +487,21 @@ async def test_shim_names_opener_of_session():
             assert f.read() == '#!/bin/sh\nexec pymux open-url -- "$@"\n'
 
         # A pane that starts again asks for nothing new.
-        pymux._ensure_open_url_shim()
-        assert pymux._open_url_shim_dir == directory
+        pymux.shims.make_open_url()
+        assert pymux.shims.open_url_dir == directory
 
 
 async def test_shim_rides_path_of_new_pane():
     async with in_this_process() as session:
         pymux = session.pymux
         pymux.session_defaults.open_url_shim = True
-        pymux._ensure_open_url_shim()
+        pymux.shims.make_open_url()
 
         environment = {"PATH": "/usr/bin"}
-        pymux._shim_pane_environment(environment, pymux.current_session.options)
+        pymux.shims.put_on_path(environment, pymux.current_session.options)
 
-        assert environment["PATH"].startswith(pymux._open_url_shim_dir + os.pathsep)
-        assert environment["BROWSER"] == os.path.join(pymux._open_url_shim_dir, "pymux-open-url")
+        assert environment["PATH"].startswith(pymux.shims.open_url_dir + os.pathsep)
+        assert environment["BROWSER"] == os.path.join(pymux.shims.open_url_dir, "pymux-open-url")
 
 
 async def test_pane_that_starts_with_shim_finds_opener():
@@ -548,7 +548,7 @@ async def test_shim_leaves_pane_alone_when_it_is_off():
         pymux.handle_command("set-option pane-browser off")
 
         environment = {"PATH": "/usr/bin"}
-        pymux._shim_pane_environment(environment, pymux.current_session.options)
+        pymux.shims.put_on_path(environment, pymux.current_session.options)
 
         assert environment == {"PATH": "/usr/bin"}
 

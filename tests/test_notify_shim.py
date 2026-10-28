@@ -18,33 +18,34 @@ from prompt_toolkit.application.current import set_app
 from session import create_session
 
 from pymux.main import Pymux
+from pymux.shims import NOTIFY_SHIM_SCRIPT
 
 
 def test_shim_holds_notify_send_script():
     pymux = Pymux()
     pymux.session_defaults.notify_shim = True
-    pymux._ensure_notify_shim()
+    pymux.shims.make_notify()
 
-    directory = pymux._notify_shim_dir
+    directory = pymux.shims.notify_dir
     script = os.path.join(directory, "notify-send")
     assert os.access(script, os.X_OK)
     with open(script) as f:
-        assert f.read() == Pymux.NOTIFY_SHIM_SCRIPT
+        assert f.read() == NOTIFY_SHIM_SCRIPT
 
     # A pane that starts again asks for nothing new.
-    pymux._ensure_notify_shim()
-    assert pymux._notify_shim_dir == directory
+    pymux.shims.make_notify()
+    assert pymux.shims.notify_dir == directory
 
 
 def test_shim_rides_path_of_new_pane():
     pymux = Pymux()
     pymux.session_defaults.notify_shim = True
-    pymux._ensure_notify_shim()
+    pymux.shims.make_notify()
 
     environment = {"PATH": "/usr/bin"}
-    pymux._shim_pane_environment(environment, pymux.current_session.options)
+    pymux.shims.put_on_path(environment, pymux.current_session.options)
 
-    assert environment["PATH"].startswith(pymux._notify_shim_dir + os.pathsep)
+    assert environment["PATH"].startswith(pymux.shims.notify_dir + os.pathsep)
 
 
 def test_shim_leaves_pane_alone_when_it_is_off():
@@ -53,7 +54,7 @@ def test_shim_leaves_pane_alone_when_it_is_off():
     pymux.handle_command("set-option pane-browser off")
 
     environment = {"PATH": "/usr/bin"}
-    pymux._shim_pane_environment(environment, pymux.current_session.options)
+    pymux.shims.put_on_path(environment, pymux.current_session.options)
 
     assert environment == {"PATH": "/usr/bin"}
 
@@ -94,7 +95,7 @@ def run_script(pymux, arguments, tmp_path, monkeypatch):
     fake, record = make_fake_pymux(tmp_path)
     monkeypatch.setenv("PATH", str(tmp_path) + os.pathsep + os.environ["PATH"])
     subprocess.run(
-        [os.path.join(pymux._notify_shim_dir, "notify-send"), *arguments],
+        [os.path.join(pymux.shims.notify_dir, "notify-send"), *arguments],
         check=False,
         capture_output=True,
     )
@@ -105,7 +106,7 @@ def run_script(pymux, arguments, tmp_path, monkeypatch):
 def test_summary_and_body_reach_notify(tmp_path, monkeypatch):
     pymux = Pymux()
     pymux.session_defaults.notify_shim = True
-    pymux._ensure_notify_shim()
+    pymux.shims.make_notify()
 
     assert run_script(pymux, ["Build done", "Three files"], tmp_path, monkeypatch) == [
         "notify -u normal -- Build done Three files"
@@ -115,7 +116,7 @@ def test_summary_and_body_reach_notify(tmp_path, monkeypatch):
 def test_short_urgency_flag_picks_urgency(tmp_path, monkeypatch):
     pymux = Pymux()
     pymux.session_defaults.notify_shim = True
-    pymux._ensure_notify_shim()
+    pymux.shims.make_notify()
 
     assert run_script(pymux, ["-u", "critical", "Fire", "Down"], tmp_path, monkeypatch) == [
         "notify -u critical -- Fire Down"
@@ -125,7 +126,7 @@ def test_short_urgency_flag_picks_urgency(tmp_path, monkeypatch):
 def test_long_urgency_flag_picks_urgency(tmp_path, monkeypatch):
     pymux = Pymux()
     pymux.session_defaults.notify_shim = True
-    pymux._ensure_notify_shim()
+    pymux.shims.make_notify()
 
     assert run_script(pymux, ["--urgency=low", "Note"], tmp_path, monkeypatch) == ["notify -u low -- Note"]
 
@@ -133,7 +134,7 @@ def test_long_urgency_flag_picks_urgency(tmp_path, monkeypatch):
 def test_other_flags_are_eaten_not_summaries(tmp_path, monkeypatch):
     pymux = Pymux()
     pymux.session_defaults.notify_shim = True
-    pymux._ensure_notify_shim()
+    pymux.shims.make_notify()
 
     assert run_script(
         pymux,
@@ -146,6 +147,6 @@ def test_other_flags_are_eaten_not_summaries(tmp_path, monkeypatch):
 def test_dashes_end_flags(tmp_path, monkeypatch):
     pymux = Pymux()
     pymux.session_defaults.notify_shim = True
-    pymux._ensure_notify_shim()
+    pymux.shims.make_notify()
 
     assert run_script(pymux, ["--", "-not-a-flag"], tmp_path, monkeypatch) == ["notify -u normal -- -not-a-flag"]

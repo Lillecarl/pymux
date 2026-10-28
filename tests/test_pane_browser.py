@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from pymux import main
+from pymux import shims
 from pymux.enums import PaneBrowser
 from pymux.main import Pymux
 
@@ -16,13 +16,13 @@ SHIM = "/nix/store/x-pymux/bin/pymux-browser"
 
 @pytest.fixture
 def pymux(monkeypatch):
-    monkeypatch.setattr(main, "_browser_shim", lambda: SHIM)
+    monkeypatch.setattr(shims, "browser_shim", lambda: SHIM)
     return Pymux()
 
 
 def environment_of(pymux) -> dict[str, str]:
     environment = {"PATH": "/usr/bin"}
-    pymux._shim_pane_environment(environment, pymux.current_session.options)
+    pymux.shims.put_on_path(environment, pymux.current_session.options)
     return environment
 
 
