@@ -20,14 +20,13 @@ import argparse
 import array
 import base64
 import fcntl
-import io
 import math
 import termios
+from pathlib import Path
 from typing import TYPE_CHECKING, BinaryIO, Final
 
-from PIL import Image, UnidentifiedImageError
-
 from pymux.graphics import DEFAULT_CELL_HEIGHT, DEFAULT_CELL_WIDTH
+from pymux.inline_images import as_png
 
 if TYPE_CHECKING:
     from typing import TextIO
@@ -39,9 +38,6 @@ CHUNK: Final = 4096
 
 #: What kitty's `f=` says the payload is.
 _PNG_FORMAT: Final = 100
-
-#: The modes Pillow writes as PNG; a CMYK JPEG, say, is converted first.
-_PNG_MODES: Final = frozenset({"1", "L", "LA", "P", "RGB", "RGBA", "I", "I;16"})
 
 
 def _terminal_of(out: BinaryIO) -> tuple[int, int, int] | None:
@@ -105,17 +101,18 @@ def imgcat(words: list[str], stdin: BinaryIO, out: BinaryIO, err: TextIO) -> int
     status = 0
     for path in arguments.files:
         try:
-            with Image.open(stdin if path == "-" else path) as image:
-                image.load()
-                pixels = image.size
-                encoded = io.BytesIO()
-                (image if image.mode in _PNG_MODES else image.convert("RGBA")).save(encoded, "PNG")
-        except (OSError, UnidentifiedImageError) as error:
+            found = as_png(stdin.read() if path == "-" else Path(path).read_bytes())
+        except OSError as error:
             err.write("pymux imgcat: %s: %s\n" % (path, error))
             status = 1
             continue
+        if found is None:
+            err.write("pymux imgcat: %s: not an image\n" % (path,))
+            status = 1
+            continue
+        png, pixels = found
         columns, rows = cells_for(pixels, cell, room, arguments.width)
-        out.writelines(sequences_of(encoded.getvalue(), columns, rows))
+        out.writelines(sequences_of(png, columns, rows))
         # The cursor stands after the image's last cell; the next one
         # starts on a line of its own.
         out.write(b"\r\n")

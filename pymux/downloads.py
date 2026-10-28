@@ -5,7 +5,8 @@ iTerm2 names two forms under "OSC 1337". `File=args:b64` carries the
 whole file in one sequence. `MultipartFile=args`, then `FilePart=b64`
 any number of times, then `FileEnd`, carries it in parts, so that no one
 sequence grows with the file. The argument `inline=1` makes the file an
-image to draw, which is not a download: this module leaves it alone.
+image to draw, which is not a download: this module reads it the same
+way and marks it, and the pane draws it (Lillecarl/pymux#789).
 
 `DownloadReader` reads the sequences of one pane and gives back each
 finished file. `Pymux.send_download` decides who saves it, and
@@ -23,7 +24,7 @@ import binascii
 import os
 import secrets
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import BinaryIO, Final, TextIO
 
@@ -114,6 +115,11 @@ class FinishedDownload:
     name: str
     data: bytes
     multipart: bool
+    #: `inline=1`: an image to draw in the pane, not a file to save.
+    #: Lillecarl/pymux#789.
+    inline: bool = False
+    #: Every argument the sender gave, which an image's size is read from.
+    arguments: dict[str, str] = field(default_factory=dict, compare=False)
 
 
 def _arguments_of(text: str) -> dict[str, str]:
@@ -170,9 +176,9 @@ class _Open:
 
     name: str
     parts: list[str]
+    arguments: dict[str, str] = field(default_factory=dict)
     length: int = 0
-    #: Read the rest of its parts and drop them: an image, or a file
-    #: that grew too large.
+    #: Read the rest of its parts and drop them: a file that grew too large.
     skipping: bool = False
 
 
@@ -214,21 +220,18 @@ class DownloadReader:
     def _read_file(self, rest: str) -> FinishedDownload | None:
         text, _colon, data = rest.partition(":")
         arguments = _arguments_of(text)
-        if arguments.get(FileArgument.INLINE) == _INLINE:
-            return None
         name = _name_of(arguments)
         _check_declared_size(name, arguments)
         if _decoded_length(len(data)) > MAX_DOWNLOAD_BYTES:
             raise _too_big(name)
-        return FinishedDownload(name, _decode(name, data), multipart=False)
+        inline = arguments.get(FileArgument.INLINE) == _INLINE
+        return FinishedDownload(name, _decode(name, data), multipart=False, inline=inline, arguments=arguments)
 
     def _begin(self, rest: str) -> None:
         arguments = _arguments_of(rest)
         name = _name_of(arguments)
         # A new file ends one that never sent its `FileEnd`.
-        self._open = _Open(name, [], skipping=arguments.get(FileArgument.INLINE) == _INLINE)
-        if self._open.skipping:
-            return
+        self._open = _Open(name, [], arguments=arguments)
         try:
             _check_declared_size(name, arguments)
         except DownloadRefused:
@@ -252,7 +255,13 @@ class DownloadReader:
             return None
         # A part need not be whole base64 on its own: only the joined
         # parts decode.
-        return FinishedDownload(held.name, _decode(held.name, "".join(held.parts)), multipart=True)
+        return FinishedDownload(
+            held.name,
+            _decode(held.name, "".join(held.parts)),
+            multipart=True,
+            inline=held.arguments.get(FileArgument.INLINE) == _INLINE,
+            arguments=held.arguments,
+        )
 
 
 def _arguments(name: str, size: int) -> str:

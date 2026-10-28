@@ -114,15 +114,20 @@ def test_parts_need_not_be_whole_base64():
 
 
 def test_an_inline_file_is_an_image_and_no_download():
+    "The pane draws it. Lillecarl/pymux#789."
     reader = DownloadReader()
-    assert reader.read("File", "name=%s;inline=1:%s" % (b64(NAME), b64(DATA))) is None
+    got = reader.read("File", "name=%s;inline=1;width=10:%s" % (b64(NAME), b64(DATA)))
+    assert got == FinishedDownload(NAME, DATA, multipart=False, inline=True)
+    assert got.arguments["width"] == "10"
 
 
-def test_the_parts_of_an_inline_multipart_file_are_no_download():
+def test_the_parts_of_an_inline_multipart_file_are_an_image_too():
     reader = DownloadReader()
-    assert reader.read("MultipartFile", "inline=1") is None
+    assert reader.read("MultipartFile", "inline=1;height=3") is None
     assert reader.read("FilePart", b64(DATA)) is None
-    assert reader.read("FileEnd", "") is None
+    got = reader.read("FileEnd", "")
+    assert got == FinishedDownload(DEFAULT_NAME, DATA, multipart=True, inline=True)
+    assert got.arguments["height"] == "3"
 
 
 def test_a_part_with_no_file_open_is_dropped():

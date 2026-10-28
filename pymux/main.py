@@ -91,6 +91,7 @@ from .forwarding import LOOPBACK_NAMES, loopback_port
 from .graphics import OuterImageIds, PaneView
 from .hooks import Hooks
 from .ids import PaneId, SessionId, WindowIndex
+from .inline_images import as_png, cells_of
 from .jobs import JOB_SWEEP_EVERY, Job, JobFeed, JobTable, describe
 from .key_bindings import PymuxKeyBindings
 from .key_spelling import why_pane_cannot_read
@@ -3728,8 +3729,30 @@ class Pymux:
             if client is not None:
                 client.message = str(refused)
             return
-        if finished is not None:
+        if finished is not None and finished.inline:
+            self._draw_inline_image(pane, finished)
+        elif finished is not None:
             self.send_download(pane, finished)
+
+    def _draw_inline_image(self, pane: Pane, finished: FinishedDownload) -> None:
+        """
+        Place an iTerm2 inline image at the pane's cursor, as pyte places
+        a kitty image. Something that is no image draws nothing. Lillecarl/pymux#789.
+        """
+        screen = pane.screen
+        if isinstance(screen, WindowScreen):
+            return
+        found = as_png(finished.data)
+        if found is None:
+            logger.warning("Dropped an inline image of pane %s that does not decode.", pane.pane_id)
+            return
+        png, pixels = found
+        columns, rows = cells_of(
+            finished.arguments, pixels, (screen.cell_width, screen.cell_height), (screen.columns, screen.lines)
+        )
+        screen.graphics.add_png(
+            png, columns, rows, screen, move_cursor=finished.arguments.get("doNotMoveCursor") != "1"
+        )
 
     def download_client(self, pane: Pane) -> ClientState | None:
         """
