@@ -105,10 +105,6 @@ KITTY_GRAPHICS = "\x1b_G"
 #: Take every image placement off the screen, quietly.
 DELETE_EVERY_IMAGE = b"\x1b_Ga=d,d=A,q=2\x1b\\"
 
-#: A server ends every command with its exit code. A peer that closes
-#: without one ran no command, or is not a pymux server. Lillecarl/pymux#606.
-NO_ANSWER = "pymux: %s closed the connection with no answer. Is a pymux server listening there?\n"
-
 #: What a client shows while the next server starts, when the server
 #: said no reason.
 RESTARTING = "pymux is restarting."

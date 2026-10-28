@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 __all__ = [
+    "command_client",
     "create_client",
     "is_ssh_url",
     "list_clients",
@@ -27,6 +28,21 @@ def create_client(socket_name):
     from .posix import PosixClient
 
     return PosixClient(socket_name)
+
+
+def command_client(socket_name):
+    """
+    A client to run one command on, which draws nothing and so imports
+    nothing that draws. Lillecarl/pymux#589.
+    """
+    if is_ssh_url(socket_name):
+        from .ssh import SshClient
+
+        return SshClient(socket_name)
+
+    from .command import CommandClient
+
+    return CommandClient(socket_name)
 
 
 def list_clients():

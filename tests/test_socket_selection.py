@@ -161,7 +161,7 @@ def test_the_lock_a_bind_takes_is_not_a_server(sockets, tmp_path):
 
 def test_a_peer_that_closes_with_no_answer_is_an_error(tmp_path, capsys):
     "A peer that is no pymux server reads the command and closes. Lillecarl/pymux#606."
-    from pymux.client.posix import PosixClient
+    from pymux.client.command import CommandClient
 
     path = str(tmp_path / "pymux.sock.someone.0")
     listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -176,7 +176,7 @@ def test_a_peer_that_closes_with_no_answer_is_an_error(tmp_path, capsys):
     peer_thread = threading.Thread(target=close_at_once)
     peer_thread.start()
     try:
-        assert PosixClient(path).run_command("list-sessions", timeout=5.0) == 1
+        assert CommandClient(path).run_command("list-sessions", timeout=5.0) == 1
     finally:
         peer_thread.join()
         listener.close()

@@ -118,11 +118,11 @@ def _socket_report(socket_name: str | None) -> dict:
     # client package is the detachable part of the entry, and a
     # diagnose that never reaches a server pays nothing for it.
     # Lillecarl/pymux#392.
-    from pymux.client import create_client
-    from pymux.client.posix import PosixClient
+    from pymux.client import command_client
+    from pymux.client.command import CommandClient
 
     try:
-        client = create_client(socket_name)
+        client = command_client(socket_name)
     except OSError as error:
         report["error"] = str(error)
         return report
@@ -132,7 +132,7 @@ def _socket_report(socket_name: str | None) -> dict:
     # daemon on a mistyped path -- must not hold the report hostage:
     # two seconds, and then it is called mute. Only the unix-socket
     # client takes a timeout; the others answer or fail on their own.
-    if isinstance(client, PosixClient):
+    if isinstance(client, CommandClient):
         answer = _io_capture(lambda: client.run_command("list-sessions", timeout=2.0))
     else:
         answer = _io_capture(lambda: client.run_command("list-sessions"))

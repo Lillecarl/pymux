@@ -71,7 +71,7 @@ from enum import StrEnum
 from typing import NoReturn, assert_never
 
 from pymux import __version__, log
-from pymux.client import create_client, is_ssh_url, list_clients
+from pymux.client import command_client, create_client, is_ssh_url, list_clients
 from pymux.config import find_config
 from pymux.scope import rerun_in_a_scope
 from pymux.utils import daemonize
@@ -473,7 +473,7 @@ def _person_paths(prefix: str, **_) -> list[str]:
     """
     import io
 
-    from pymux.client.posix import PosixClient
+    from pymux.client.command import CommandClient
     from pymux.uploads import LIST_SECONDS
 
     socket_name, _, pane_id = os.environ.get("PYMUX", "").rpartition(",")
@@ -482,7 +482,7 @@ def _person_paths(prefix: str, **_) -> list[str]:
     head = prefix[: prefix.rfind("/") + 1]
     printed = io.StringIO()
     try:
-        client = PosixClient(socket_name)
+        client = CommandClient(socket_name)
         with contextlib.redirect_stdout(printed), contextlib.redirect_stderr(io.StringIO()):
             code = client.run_command(shlex.join(["list-person-files", head or "~"]), pane_id, timeout=LIST_SECONDS + 1)
     except OSError:
@@ -1025,7 +1025,7 @@ def _send_command(socket_name: str | None, command: str, pane_id, attaching: Att
     if name in ("kill-session", "kill-server"):
         return _kill(socket_name, command)
     try:
-        client = create_client(socket_name)
+        client = command_client(socket_name)
     except OSError:
         _no_server_error(socket_name)
         return 1
@@ -1191,7 +1191,7 @@ def _new_session(socket_name: str | None, command: str, args: list[str], pane_id
         # Pass to the server. (Pymux has one session per server. This will
         # give a duplicate session error.)
         try:
-            client = create_client(socket_name)
+            client = command_client(socket_name)
         except OSError:
             _no_server_error(socket_name)
             return 1
@@ -1224,7 +1224,7 @@ def _new_session(socket_name: str | None, command: str, args: list[str], pane_id
 
     if print_info:
         # Ask the server to format the session information.
-        client = create_client(socket_name)
+        client = command_client(socket_name)
         query = "list-sessions -F %s" % shlex.quote(format_str or "#{session_id}")
         return client.run_command(query)
 
@@ -1243,7 +1243,7 @@ def _kill(socket_name: str, command: str) -> int:
         return 1
 
     try:
-        client = create_client(socket_name)
+        client = command_client(socket_name)
     except OSError:
         _no_server_error(socket_name)
         return 1

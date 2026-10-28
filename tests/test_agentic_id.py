@@ -18,7 +18,7 @@ import os
 from libpymux.agentic import AGENT_SESSION_VARS, PYMUX_AGENTIC_ID, caller_cwd, caller_environment
 from libpymux.protocol import Field, Packet
 
-from pymux.client.posix import PosixClient
+from pymux.client.command import CommandClient
 
 # ----------------------------------------------------------------------
 # The resolution.
@@ -87,7 +87,7 @@ def run_command_packet(monkeypatch, command="show-job", **env):
         monkeypatch.setenv(var, value)
 
     exit_packet = json.dumps({Field.CMD: Packet.EXIT, Field.CODE: 0}).encode() + b"\0"
-    client = PosixClient.__new__(PosixClient)
+    client = CommandClient.__new__(CommandClient)
     client.socket = StubSocket(exit_packet)
     assert client.run_command(command) == 0
     # Packets are `\0`-terminated on the wire; the first one is the command.

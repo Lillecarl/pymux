@@ -65,6 +65,7 @@ from pymux.forwarding import (
 from pymux.utils import nonblocking
 
 from .audio import AudioClient, sound_devices
+from .command import NO_ANSWER
 from .defaults import is_ssh_url as is_ssh_url
 from .forwards import Forwards
 from .reconnect import (
@@ -77,7 +78,7 @@ from .reconnect import (
     watch_internet,
     why,
 )
-from .terminal import DELETE_EVERY_IMAGE, NO_ANSWER, TerminalClient
+from .terminal import DELETE_EVERY_IMAGE, TerminalClient
 
 if TYPE_CHECKING:
     from asyncssh import SSHWriter

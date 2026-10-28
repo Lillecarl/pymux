@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import contextlib
-import json
 import os
 import signal
 import socket
@@ -11,8 +10,7 @@ import time
 from select import select
 from typing import override
 
-from libpymux.agentic import caller_fields
-from libpymux.protocol import READ_SIZE, Field, Framer, Packet
+from libpymux.protocol import READ_SIZE
 from libpymux.sockets import servers_newest_first
 from libpymux.wire import PacketReader
 from prompt_toolkit.input.vt100 import raw_mode
@@ -20,7 +18,7 @@ from prompt_toolkit.output.vt100 import Vt100_Output
 
 from .audio import AudioClient, sound_devices
 from .reconnect import draw
-from .terminal import DELETE_EVERY_IMAGE, NO_ANSWER, TerminalClient
+from .terminal import DELETE_EVERY_IMAGE, TerminalClient
 
 #: How often a client waiting for a restarted server tries the socket,
 #: in seconds.
@@ -59,71 +57,6 @@ class PosixClient(TerminalClient):
         #: Sound, where this machine can play it. Lillecarl/pymux#657.
         devices = sound_devices()
         self.audio = AudioClient(devices, self._send_packet) if devices is not None else None
-
-    @override
-    def run_command(self, command, pane_id=None, timeout=None) -> int:
-        """
-        Ask the server to run this command. Print the output that the server
-        sends back, and return the exit code of the command.
-
-        :param pane_id: Optional identifier of the current pane.
-        :param timeout: How long the answer may take, in seconds, when a
-            number is given. A server always closes the connection after
-            the answer, so the read ends with it; the number is for a
-            peer that never answers at all -- something else listens on
-            the path. `None`, the default, waits the way the attach
-            always has.
-        """
-        self._send_packet(
-            {
-                Field.CMD: Packet.RUN_COMMAND,
-                Field.DATA: command,
-                Field.PANE_ID: pane_id,
-                # Who and from where. The server cannot read the
-                # caller's context itself, so the client sends the
-                # whole environment -- resolved to one id under
-                # `PYMUX_AGENTIC_ID` beside it -- and the directory it
-                # stands in. `libpymux/agentic.py` holds the names.
-                **caller_fields(),
-            }
-        )
-        if timeout is not None:
-            # After the send, which asked for blocking again: the read
-            # is the side that needs the patience.
-            self.socket.settimeout(timeout)
-
-        # Read the answer of the server. Packets:
-        #   "out": output of the command. (stdout)
-        #   "err": errors. (stderr)
-        #   "exit": exit code of the command.
-        exit_code = None
-        framer = Framer()
-
-        while True:
-            try:
-                data = self.socket.recv(READ_SIZE)
-            except OSError:
-                break
-
-            if not data:
-                break  # Connection closed.
-
-            for packet_data in framer.feed(data):
-                packet = json.loads(packet_data.decode("utf-8"))
-
-                if packet[Field.CMD] == Packet.OUT:
-                    sys.stdout.write(packet[Field.DATA])
-                    sys.stdout.flush()
-                elif packet[Field.CMD] == Packet.ERR:
-                    sys.stderr.write(packet[Field.DATA])
-                    sys.stderr.flush()
-                elif packet[Field.CMD] == Packet.EXIT:
-                    exit_code = packet[Field.CODE]
-
-        if exit_code is None:
-            sys.stderr.write(NO_ANSWER % (self.socket_name,))
-            return 1
-        return exit_code
 
     @override
     def attach(self, detach_other_clients: bool = False, color_depth=None):

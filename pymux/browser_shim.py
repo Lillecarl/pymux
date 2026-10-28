@@ -54,9 +54,9 @@ def _value_of(argument: str, name: str) -> str | None:
 
 def _run(socket_name: str, command: str, pane_id: str | None) -> tuple[int, str]:
     "Run a command on the server: its exit code and what it printed."
-    from pymux.client import create_client
+    from pymux.client import command_client
 
-    client = create_client(socket_name)
+    client = command_client(socket_name)
     printed = io.StringIO()
     with contextlib.redirect_stdout(printed):
         code = client.run_command(command, pane_id)

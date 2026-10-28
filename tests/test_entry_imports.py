@@ -47,6 +47,17 @@ def test_diagnose_imports_no_toolkit():
     )
 
 
+def test_a_command_client_imports_no_toolkit():
+    """
+    A command over the socket, a completion on Tab among them, draws
+    nothing. Without deferimport, as the toolkit would load: anyio comes
+    with `libpymux`'s package and is lazy in the program. Lillecarl/pymux#589.
+    """
+    assert not [m for m in modules_after_import("import pymux.client.command;") if m.startswith("prompt_toolkit")], (
+        "the command client imported the TUI stack: every detached command pays it"
+    )
+
+
 def test_the_entry_still_imports():
     "The entry is importable at all, so the tests above can lie."
     assert "pymux.entry_points.run_pymux" in modules_after_import("import pymux.entry_points.run_pymux;")
