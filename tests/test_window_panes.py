@@ -580,6 +580,17 @@ async def test_a_terminal_that_reports_pixels_puts_the_pointer_on_the_pixel(tmp_
         assert motion == "motion %d %d" % (3.75 * width, 0.675 * height)
 
 
+async def test_a_terminal_that_can_never_report_pixels_keeps_the_mouse_in_cells(tmp_path):
+    "iTerm2 3.7 answers 1016 with 4, permanently reset: it knows the mode and never does it."
+    async with with_a_window(tmp_path, cell=(10, 20)) as (_pymux, state, _pane, _recorder, log, _probe):
+        await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
+        state.connection.graphics.terminal_version = "iTerm2 3.7.6"
+        state.connection._process({"cmd": "kitty-detect"})
+        state.connection._process({"cmd": "in", "data": "\x1b[?1016;4$y"})
+        state.connection._process({"cmd": "in", "data": "\x1b[0n"})
+        assert not state.connection.pixel_mouse
+
+
 async def test_a_terminal_that_keeps_its_cell_size_keeps_the_mouse_in_cells(tmp_path):
     "xterm answers 1016 and not the cell size query: a pixel would be read as a cell. Lillecarl/pymux#651."
     async with with_a_window(tmp_path) as (pymux, state, pane, _recorder, log, _probe):

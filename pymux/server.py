@@ -732,7 +732,9 @@ class ServerConnection:
             # Only with a cell to divide by. xterm reports pixels and, by
             # default, keeps its cell size to itself; its answer to that
             # query came before this one, or never. Lillecarl/pymux#651.
-            if pixel_mouse.group(1) in ("1", "2", "4") and self.graphics.cell_size_known:
+            # DECRPM: 1 set, 2 reset, 3 always set; 4 is always reset,
+            # which iTerm2 answers, and 0 a mode it does not know.
+            if pixel_mouse.group(1) in ("1", "2", "3") and self.graphics.cell_size_known:
                 self._turn_on_pixel_mouse()
             return
 
