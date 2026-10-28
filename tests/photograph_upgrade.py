@@ -251,13 +251,21 @@ def upgrade_in(terminal, seat, work, out):
         in_mode = answer(socket_path, "list-panes", "-a", "-F", "#{pane_id} #{pane_in_mode}")
         if " 1" not in in_mode:
             raise RuntimeError("no pane went into copy mode: %r" % in_mode)
+        # One look at each window first. A look clears a window's
+        # activity mark, so a pane that wrote after the client left its
+        # window marked it in the first picture of the round, the round
+        # cleared it, and the round after the upgrade had no mark to
+        # show. Each pane writes once and then sleeps, so none comes back.
+        listed = answer(socket_path, "list-windows", "-a", "-F", "#{session_name}:#{window_index} #{window_id}")
+        windows = dict(line.split() for line in listed.splitlines())
+        for window_id in windows.values():
+            answer(socket_path, "switch-client", "-c", client, "-t", window_id)
+        answer(socket_path, "switch-client", "-c", client, "-t", windows[START])
         before = every_view(socket_path, client, take_one, room, "before")
         options_before = answer(socket_path, "show-client-options", "-t", client)
 
         # Where the client is when the upgrade comes. Nothing moves it
         # after, so the new build has to put it back.
-        listed = answer(socket_path, "list-windows", "-a", "-F", "#{session_name}:#{window_index} #{window_id}")
-        windows = dict(line.split() for line in listed.splitlines())
         answer(socket_path, "switch-client", "-c", client, "-t", windows["test:2"])
         (room / LANDING).mkdir(exist_ok=True)
         before[LANDING] = steady(take_one, room / LANDING / "before.png")
