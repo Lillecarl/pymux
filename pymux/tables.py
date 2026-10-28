@@ -460,6 +460,8 @@ class NotificationRouteRow:
     pane_id: int
     identifier: str
     position: int = field(metadata=column(unique=True))
+    reports: bool = False
+    focuses: bool = True
 
 
 @dataclass(frozen=True, slots=True)

@@ -108,6 +108,7 @@ class FakeConnection:
     def __init__(self):
         self.written = []
         self._pointer_shape_sent = ""
+        self.notification_actions = frozenset()
 
     def forward_osc(self, data):
         self.written.append(data)
@@ -185,9 +186,10 @@ def test_notification_reaches_every_client():
     pymux, connections = make_pymux()
     pymux.forward_osc(FakePane(), "99", "i=mine;done")
     # The identifier is replaced by one that names the pane, so that
-    # the answer of the terminal finds its way back.
+    # the answer of the terminal finds its way back, and a click is
+    # asked for.
     for connection in connections:
-        assert connection.written == [sequence("99", "i=1;done")]
+        assert connection.written == [sequence("99", "i=1:a=report;done")]
 
 
 def test_notification_skips_client_with_no_connection():
@@ -196,7 +198,7 @@ def test_notification_skips_client_with_no_connection():
     pymux._client_states = {None: FakeClientState(), **pymux._client_states}
     pymux.forward_osc(FakePane(), "99", "i=mine;done")
     for connection in connections:
-        assert connection.written == [sequence("99", "i=1;done")]
+        assert connection.written == [sequence("99", "i=1:a=report;done")]
 
 
 def test_clipboard_write_skips_client_with_no_connection():
@@ -208,17 +210,18 @@ def test_clipboard_write_skips_client_with_no_connection():
         assert connection.written == [sequence("52", "c;aGVsbG8=")]
 
 
-def test_notification_without_identifier_is_not_touched():
+def test_notification_without_identifier_gets_one():
+    "So a click on it can be routed. Lillecarl/pymux#779."
     pymux, connections = make_pymux()
     pymux.forward_osc(FakePane(), "99", "d=0;half a message")
-    assert connections[0].written == [sequence("99", "d=0;half a message")]
+    assert connections[0].written == [sequence("99", "i=1:d=0:a=report;half a message")]
 
 
 def test_answer_finds_pane_that_asked():
     pymux, _connections = make_pymux()
     pymux.forward_osc(FakePane(pane_id=7), "99", "i=mine:a=report;done")
-    answer = pymux.notifications.incoming("i=1")
-    assert answer == (7, "i=mine")
+    route, param = pymux.notifications.incoming("i=1")
+    assert (route.pane_id, route.reports, param) == (7, True, "i=mine")
 
 
 # ----------------------------------------------------------------------
@@ -304,7 +307,7 @@ def test_clipboard_option_stops_clipboard_only(mode):
     assert connections[0].written == []
 
     pymux.forward_osc(FakePane(), "99", "i=1;done")
-    assert connections[0].written == [sequence("99", "i=1;done")]
+    assert connections[0].written == [sequence("99", "i=1:a=report;done")]
 
 
 def test_a_pane_reaches_the_clipboard_when_the_option_says_on():

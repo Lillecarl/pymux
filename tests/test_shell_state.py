@@ -38,8 +38,9 @@ def sequence(code, param):
 class FakeConnection:
     "A client connection that collects what pymux writes to it."
 
-    def __init__(self):
+    def __init__(self, notification_actions=frozenset()):
         self.written = []
+        self.notification_actions = notification_actions
 
     def forward_osc(self, data):
         self.written.append(data)

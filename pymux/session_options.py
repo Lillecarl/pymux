@@ -166,6 +166,13 @@ class SessionOptions(Options):
         factory=editor_keys,
         doc="Which keys copy mode takes, from $EDITOR like `status-keys`. Lillecarl/pymux#375.",
     )
+    notification_click_shows_pane: bool = option(
+        True,
+        doc=(
+            "A click on a desktop notification takes the clicked client to the pane it came from, "
+            "where the terminal reports clicks (OSC 99). Lillecarl/pymux#779."
+        ),
+    )
     copy_mode_wheel_lines: int = option(
         1,
         doc="How many lines one notch of the wheel scrolls copy mode. tmux binds five.",

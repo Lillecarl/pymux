@@ -315,7 +315,7 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     center.add_osc99(strip.panes[0].pane_id, "i=half:d=0:p=body;still coming")
     center._records = [record._replace(at=1000.0 + n) for n, record in enumerate(center._records)]
     pymux.notifications.outgoing(pane.pane_id, "i=one;first")
-    pymux.notifications.outgoing(strip.panes[0].pane_id, "i=two;second")
+    pymux.notifications.outgoing(strip.panes[0].pane_id, "i=two:a=report,-focus;second")
 
     client_state.options.name = "desk"
     client_state.options.full_screen = True

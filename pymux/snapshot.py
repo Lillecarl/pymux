@@ -55,7 +55,7 @@ from .client_options import ClientOptions
 from .commands.wait_for import WaitChannel
 from .ids import PaneId, SessionId, WindowId, WindowIndex
 from .jobs import Job, JobFeed, JobId, JobPipes
-from .notifications import Notification, NotificationSource
+from .notifications import Notification, NotificationSource, Route
 from .option_fields import Declared, Options
 from .pipes.posix import PosixSocketListener
 from .server_options import ServerOptions
@@ -607,8 +607,8 @@ def rows_of(pymux: Pymux) -> Iterator[Row]:
         yield ForgottenSeedRow(name)
     for name, channel in sorted(pymux.wait_channels.items()):
         yield WaitChannelRow(name, channel.woken, channel.locked)
-    for position, (ours, (pane_id, identifier)) in enumerate(pymux.notifications._incoming.items()):
-        yield NotificationRouteRow(ours, pane_id, identifier, position)
+    for position, (ours, route) in enumerate(pymux.notifications._incoming.items()):
+        yield NotificationRouteRow(ours, route.pane_id, route.identifier, position, route.reports, route.focuses)
     for name, value in (
         ("pane", Pane._pane_counter),
         ("window", Window._window_counter),
@@ -1006,9 +1006,11 @@ def _read_notifications(pymux: Pymux, db: apsw.Connection, counters: dict[str, i
     routes = pymux.notifications
     routes._next = counters["notification_route"]
     for row in select(db, NotificationRouteRow, "ORDER BY position"):
-        key = (PaneId(row.pane_id), row.identifier)
-        routes._outgoing[key] = row.ours
-        routes._incoming[row.ours] = key
+        route = Route(PaneId(row.pane_id), row.identifier, bool(row.reports), bool(row.focuses))
+        # A notification with no identifier has no way back in from its program.
+        if row.identifier:
+            routes._outgoing[route.pane_id, row.identifier] = row.ours
+        routes._incoming[row.ours] = route
 
 
 def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:

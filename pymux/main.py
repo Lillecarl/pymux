@@ -97,7 +97,14 @@ from .key_spelling import why_pane_cannot_read
 from .layout import LayoutManager, change_pane_size
 from .log import logger
 from .nearest import NEAREST
-from .notifications import Notification, NotificationCenter, NotificationRoutes, NotificationSource, Urgency
+from .notifications import (
+    Notification,
+    NotificationCenter,
+    NotificationRoutes,
+    NotificationSource,
+    Urgency,
+    osc99_of,
+)
 from .options import (
     ALL_CLIENT_OPTIONS,
     ALL_OPTIONS,
@@ -1992,9 +1999,52 @@ class Pymux:
         found = self.window_of_pane(record.pane_id)
         if found is None:
             return
-        session, window, _pane = found
+        session, window, pane = found
         if session.arrangement.notify(window, self.apps):
             self.invalidate(Woke.WINDOW_MARKED)
+        if record.source not in (NotificationSource.OSC_99, NotificationSource.UNKNOWN):
+            self._send_clickable(record, pane)
+
+    def _send_clickable(self, record: Notification, pane: Pane) -> None:
+        """
+        Send a notification pymux recorded, from OSC 777, `pymux notify`
+        or an attention request, as OSC 99 to each terminal that reports
+        a click, so the click shows `pane`. Lillecarl/pymux#779.
+        """
+        clickers = [
+            connection
+            for connection in self._client_states
+            if connection is not None and "report" in connection.notification_actions
+        ]
+        if not clickers:
+            return
+        ours = self.notifications.own(pane.pane_id)
+        sequences = [
+            build_osc(Osc.NOTIFICATION, param) for param in osc99_of(ours, record.title, record.body, record.urgency)
+        ]
+        for connection in clickers:
+            for sequence in sequences:
+                if sequence is not None:
+                    connection.forward_osc(sequence)
+        self.invalidate(Woke.NOTIFICATION_SENT)
+
+    def show_pane_on_click(self, client_state: ClientState, pane: Pane) -> None:
+        "Take this client to the pane a clicked notification came from, unless its session says no."
+        if not self.options_of_pane(pane).notification_click_shows_pane:
+            return
+        self.show_pane(client_state, pane)
+
+    def show_pane(self, client_state: ClientState, pane: Pane) -> bool:
+        "Move this client onto a pane, wherever it is. False when the pane is in no window."
+        found = self.window_of_pane(pane.pane_id)
+        if found is None:
+            return False
+        session, window, _pane = found
+        self.attach_client_to(client_state, session)
+        session.arrangement.set_active_window(window)
+        window.active_pane = pane
+        self.invalidate(Woke.CLICK_CHOSE_A_WINDOW)
+        return True
 
     async def _auto_refresh(self) -> None:
         """
@@ -3340,6 +3390,10 @@ class Pymux:
         sequence may not stop it.
         """
         try:
+            # A notification the hub recorded goes to a terminal that
+            # reports clicks as OSC 99 instead (`_notified`).
+            recorded = False
+
             if code == Osc.POINTER_SHAPE:
                 # The shape of the pointer is not a sequence to pass on
                 # as it arrives: it belongs to the pane, and the client
@@ -3357,6 +3411,7 @@ class Pymux:
                 # only naming a service.
                 if not self._read_terminal_extension(pane, param):
                     return
+                recorded = request_attention_of(param) not in (None, "no")
 
             if code == Osc.CURRENT_DIRECTORY:
                 # Where the program is, as a file URL. The outer
@@ -3401,6 +3456,7 @@ class Pymux:
                     return
                 title, body = notice
                 self.notification_center.add(title, body, pane_id=pane.pane_id, source=NotificationSource.OSC_777)
+                recorded = True
 
             sequence = build_osc(code, param)
             if sequence is None:
@@ -3413,7 +3469,7 @@ class Pymux:
             for connection in self._client_states:
                 # No connection is a socket command's temporary
                 # client: nothing to send to. Lillecarl/pymux#493.
-                if connection is None:
+                if connection is None or (recorded and "report" in connection.notification_actions):
                     continue
                 connection.forward_osc(sequence)
 

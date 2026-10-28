@@ -14,22 +14,25 @@ every notification an identifier of its own on the way out, and puts
 the identifier of the program back on the way in. kitty leaves room
 for this on purpose: every answer carries the identifier.
 
-An OSC 99 without an identifier is passed on untouched. The answer to
-one carries "i=0", which names nothing, so there is nothing to route.
+A notification with no identifier gets one too, and every notification
+asks the terminal to report a click (`a=report`): the click shows the
+pane it came from, on the client whose terminal was clicked. The
+program is told of the click only when it asked itself. Lillecarl/pymux#779.
 """
 
 from __future__ import annotations
 
+import base64
 import re
 import time
 from collections import OrderedDict
 from collections.abc import Callable
 from enum import StrEnum
-from typing import NamedTuple
+from typing import Final, NamedTuple
 
 from pymux.ids import PaneId
 
-__all__ = ["Notification", "NotificationCenter", "NotificationRoutes"]
+__all__ = ["QUERY", "QUERY_IDENTIFIER", "Notification", "NotificationCenter", "NotificationRoutes", "Route"]
 
 #: The characters that an identifier may hold. (The same set as kitty.)
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9_+.-]{1,64}$")
@@ -41,6 +44,16 @@ MAX_ROUTES = 256
 #: How many notifications the hub keeps. Same rule as the routes: a
 #: noisy pane must not grow the list without end.
 MAX_NOTIFICATIONS = 256
+
+#: The identifier of pymux's own question, what the terminal supports
+#: (`p=?`). The routes mint decimal identifiers, so no answer to a
+#: notification can be taken for the answer to this.
+QUERY_IDENTIFIER: Final = "pymux"
+QUERY: Final = "i=%s:p=?;" % QUERY_IDENTIFIER
+
+#: The payload types that ask the terminal something rather than show
+#: a notification: no click to report.
+_QUESTIONS: Final = frozenset({"?", "alive", "close"})
 
 
 class Urgency:
@@ -227,13 +240,83 @@ def read_identifier(metadata: str) -> str | None:
 
 
 def replace_identifier(metadata: str, identifier: str) -> str:
-    "The metadata with another value for its 'i' key."
-    fields = metadata.split(":")
+    "The metadata with this value for its 'i' key, which it gains if it had none."
+    fields = [field for field in metadata.split(":") if field]
     for index, field in enumerate(fields):
         key, sign, _value = field.partition("=")
         if key == "i" and sign:
             fields[index] = "i=" + identifier
-    return ":".join(fields)
+            return ":".join(fields)
+    return ":".join(["i=" + identifier, *fields])
+
+
+def osc99_of(identifier: str, title: str, body: str, urgency: int) -> list[str]:
+    """
+    The OSC 99 payloads of a notification pymux sends itself: a title
+    chunk, and a body chunk when there is a body. Base64 (`e=1`), so
+    no text a program wrote can end the sequence. kitty shows nothing
+    without a title, so a body alone stands in for one.
+    """
+    if not title:
+        title, body = body, ""
+    head = "i=%s:a=report:u=%i:e=1" % (identifier, urgency)
+    encoded = base64.b64encode(title.encode()).decode("ascii")
+    if not body:
+        return ["%s:p=title;%s" % (head, encoded)]
+    return [
+        "%s:d=0:p=title;%s" % (head, encoded),
+        "%s:p=body;%s" % (head, base64.b64encode(body.encode()).decode("ascii")),
+    ]
+
+
+def read_actions(metadata: str) -> list[str]:
+    "The values of the 'a' key: `focus`, `report`, or either with a minus to turn it off."
+    for field in metadata.split(":"):
+        key, sign, value = field.partition("=")
+        if key == "a" and sign:
+            return [action for action in value.split(",") if action]
+    return []
+
+
+def with_report(metadata: str) -> str:
+    "The metadata asking the terminal to report a click, beside the actions it named."
+    if "report" in read_actions(metadata):
+        return metadata
+    fields = [field for field in metadata.split(":") if field]
+    for index, field in enumerate(fields):
+        key, sign, value = field.partition("=")
+        if key == "a" and sign:
+            fields[index] = "a=" + ",".join([*read_actions(metadata), "report"])
+            return ":".join(fields)
+    return ":".join([*fields, "a=report"])
+
+
+def is_done(metadata: str) -> bool:
+    "Whether this chunk ends its notification: `d` missing or not zero."
+    for field in metadata.split(":"):
+        key, sign, value = field.partition("=")
+        if key == "d" and sign:
+            return value != "0"
+    return True
+
+
+def is_click(param: str) -> bool:
+    "Whether a terminal's answer reports a click: it names no payload type."
+    metadata, _semicolon, _text = split_payload(param)
+    return all(field.partition("=")[0] != "p" for field in metadata.split(":"))
+
+
+class Route(NamedTuple):
+    "Where the answer to one notification goes."
+
+    pane_id: PaneId
+    #: The program's own identifier; "" when it named none, which the
+    #: program is answered as "i=0".
+    identifier: str
+    #: The program asked for the click itself, so it is told of it.
+    reports: bool = False
+    #: A click shows the pane, unless the program said `a=-focus`.
+    focuses: bool = True
 
 
 class NotificationRoutes:
@@ -248,55 +331,94 @@ class NotificationRoutes:
     def __init__(self, limit: int = MAX_ROUTES) -> None:
         self.limit = limit
         self._next = 1
-        # (pane id, identifier of the program) -> our identifier.
+        # (pane id, identifier of the program) -> our identifier. An
+        # identifier of "" is the notification without one being sent.
         self._outgoing: OrderedDict[tuple[PaneId, str], str] = OrderedDict()
-        # Our identifier -> (pane id, identifier of the program).
-        self._incoming: OrderedDict[str, tuple[PaneId, str]] = OrderedDict()
+        # Our identifier -> where its answer goes.
+        self._incoming: OrderedDict[str, Route] = OrderedDict()
+        # Ours, while more chunks of the notification follow.
+        self._open: set[str] = set()
 
     def outgoing(self, pane_id: PaneId, param: str) -> str:
         """
         The payload to send to the terminal of the user, with an
-        identifier that names this pane.
+        identifier that names this pane, and asking for a click.
+
+        kitty joins chunks with no identifier while `d=0` says more
+        follow, so those keep one identifier until the last.
         """
         metadata, semicolon, text = split_payload(param)
         identifier = read_identifier(metadata)
+        question = read_payload_type(metadata) in _QUESTIONS
         if identifier is None:
-            return param  # Nothing to route an answer by.
+            if question:
+                return param  # Its answer says "i=0", which names nothing.
+            identifier = ""
 
         key = (pane_id, identifier)
         ours = self._outgoing.get(key)
         if ours is None:
-            ours = "%i" % self._next
-            self._next += 1
+            ours = self._mint()
             self._outgoing[key] = ours
-            self._incoming[ours] = key
-            self._forget_old()
+            route = Route(pane_id, identifier)
         else:
             self._outgoing.move_to_end(key)
             self._incoming.move_to_end(ours)
+            route = self._incoming[ours]
 
+        if not question:
+            actions = read_actions(metadata)
+            # A notification after one that ended starts afresh, as kitty's does.
+            base = route if ours in self._open else Route(pane_id, identifier)
+            route = base._replace(
+                reports=base.reports or "report" in actions,
+                focuses=base.focuses and "-focus" not in actions,
+            )
+            metadata = with_report(metadata)
+            if is_done(metadata):
+                self._open.discard(ours)
+                if not identifier:
+                    del self._outgoing[key]
+            else:
+                self._open.add(ours)
+
+        self._incoming[ours] = route
+        self._forget_old()
         return replace_identifier(metadata, ours) + semicolon + text
 
-    def incoming(self, param: str) -> tuple[PaneId, str] | None:
+    def own(self, pane_id: PaneId) -> str:
+        "An identifier for a notification pymux sends itself, about this pane."
+        ours = self._mint()
+        self._incoming[ours] = Route(pane_id, "")
+        self._forget_old()
+        return ours
+
+    def incoming(self, param: str) -> tuple[Route, str] | None:
         """
-        The pane that an answer belongs to, and the payload to give it,
-        with the identifier that the program chose. None when the
-        answer names no notification of ours.
+        Where an answer goes, and the payload to give the program, with
+        the identifier it chose. None when the answer names no
+        notification of ours.
         """
         metadata, semicolon, text = split_payload(param)
         identifier = read_identifier(metadata)
         if identifier is None:
             return None
 
-        known = self._incoming.get(identifier)
-        if known is None:
+        route = self._incoming.get(identifier)
+        if route is None:
             return None
 
-        pane_id, original = known
-        return (pane_id, replace_identifier(metadata, original) + semicolon + text)
+        return (route, replace_identifier(metadata, route.identifier or "0") + semicolon + text)
+
+    def _mint(self) -> str:
+        ours = "%i" % self._next
+        self._next += 1
+        return ours
 
     def _forget_old(self) -> None:
         "Drop the oldest notifications once the table is full."
         while len(self._incoming) > self.limit:
-            ours, key = self._incoming.popitem(last=False)
-            self._outgoing.pop(key, None)
+            ours, route = self._incoming.popitem(last=False)
+            self._open.discard(ours)
+            if self._outgoing.get((route.pane_id, route.identifier)) == ours:
+                del self._outgoing[route.pane_id, route.identifier]

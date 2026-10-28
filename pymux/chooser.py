@@ -529,14 +529,9 @@ class ChooserView:
         if row is None:
             return
         record = row.newest if isinstance(row, Heading) else row.record
-        found = self.pymux.window_of_pane(record.pane_id)
-        if found is None:
+        pane = self.pymux.panes_by_id.get(record.pane_id) if record.pane_id is not None else None
+        if pane is None or not self.pymux.show_pane(self.client_state, pane):
             self.client_state.message = "The pane the notification came from is gone."
-            return
-        _session, window, pane = found
-        self.show_window(window)
-        window.active_pane = pane
-        self.pymux.invalidate(Woke.CLICK_CHOSE_A_WINDOW)
 
     def pointed_job(self):
         """

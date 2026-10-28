@@ -12,6 +12,8 @@ not instead of it.
 from __future__ import annotations
 
 import os
+import re
+from types import SimpleNamespace
 
 from prompt_toolkit.application.current import set_app
 from run_commands import run_as
@@ -20,7 +22,7 @@ from session import create_session
 from pymux.enums import Chooser
 from pymux.hub import Heading, age
 from pymux.main import Pymux
-from pymux.notifications import NotificationCenter
+from pymux.notifications import NotificationCenter, NotificationRoutes, Route, is_click, osc99_of
 
 
 class FakePane:
@@ -255,6 +257,128 @@ async def test_enter_from_hub_jumps_to_the_pane():
         assert first.active_pane is not None
         assert first.active_pane.pane_id == pane_id
         assert state.chooser is not Chooser.NOTIFICATIONS
+
+
+# ----------------------------------------------------------------------
+# A click on a notification. Lillecarl/pymux#779.
+
+
+def test_a_notification_asks_for_the_click_once_and_keeps_its_actions():
+    routes = NotificationRoutes()
+    assert routes.outgoing(7, "i=a;Hi") == "i=1:a=report;Hi"
+    assert routes.outgoing(7, "i=b:a=-focus;Hi") == "i=2:a=-focus,report;Hi"
+    assert routes.outgoing(7, "i=c:a=report;Hi") == "i=3:a=report;Hi"
+
+
+def test_chunks_without_an_identifier_share_one_until_the_last():
+    "kitty joins them while `d=0` says more follow."
+    routes = NotificationRoutes()
+    assert routes.outgoing(7, "d=0:p=title;Build") == "i=1:d=0:p=title:a=report;Build"
+    assert routes.outgoing(7, "p=body;done") == "i=1:p=body:a=report;done"
+    assert routes.outgoing(7, "p=title;Next") == "i=2:p=title:a=report;Next"
+
+
+def test_a_question_asks_for_no_click():
+    routes = NotificationRoutes()
+    assert routes.outgoing(7, "p=?;") == "p=?;"
+    assert routes.outgoing(7, "i=q:p=?;") == "i=1:p=?;"
+
+
+def test_the_answer_says_what_the_program_asked():
+    routes = NotificationRoutes()
+    routes.outgoing(7, "i=a;Hi")
+    routes.outgoing(7, "i=b:a=report,-focus;Hi")
+    routes.outgoing(7, "Hi")
+    assert routes.incoming("i=1;") == (Route(7, "a", reports=False, focuses=True), "i=a;")
+    assert routes.incoming("i=2;") == (Route(7, "b", reports=True, focuses=False), "i=b;")
+    # The program named none, and kitty answers that one as "i=0".
+    assert routes.incoming("i=3;") == (Route(7, ""), "i=0;")
+    assert routes.incoming("i=9;") is None
+
+
+def test_an_update_after_the_last_chunk_starts_afresh():
+    routes = NotificationRoutes()
+    routes.outgoing(7, "i=a:a=report;One")
+    routes.outgoing(7, "i=a;Two")
+    route, _param = routes.incoming("i=1;")
+    assert not route.reports
+
+
+def test_a_click_is_only_an_answer_with_no_payload_type():
+    assert is_click("i=1;") and is_click("i=1;2")
+    assert not is_click("i=1:p=close;") and not is_click("i=1:p=?;a=report")
+
+
+def test_pymux_s_own_notification_is_base64_and_asks_for_the_click():
+    title, body = osc99_of("4", "Build", "done; 3 warnings", 2)
+    assert title == "i=4:a=report:u=2:e=1:d=0:p=title;QnVpbGQ="
+    assert body.startswith("i=4:a=report:u=2:e=1:p=body;")
+    assert osc99_of("4", "", "Only a body", 1) == ["i=4:a=report:u=1:e=1:p=title;T25seSBhIGJvZHk="]
+
+
+def _clicked(pymux, state, param):
+    "kitty's answer arriving on the connection of the client `state` is."
+    from pymux.server import ServerConnection
+
+    ServerConnection._route_notification(SimpleNamespace(pymux=pymux, client_state=state), param)
+
+
+async def test_a_click_on_a_notification_shows_its_pane():
+    async with create_session() as (pymux, state):
+        (connection,) = [each for each, value in pymux._client_states.items() if value is state]
+        connection.notification_actions = frozenset({"focus", "report"})
+        sent = []
+        connection.forward_osc = sent.append
+        with set_app(state.app):
+            first = pymux.current_session.arrangement.get_active_window()
+            pane = first.active_pane
+            await run_as(pymux, state, "notify Build Ready")
+            await run_as(pymux, state, "new-window")
+        assert pymux.current_session.arrangement.get_active_window() is not first
+        (ours,) = {re.search(r"i=(\d+)", each).group(1) for each in sent}
+
+        _clicked(pymux, state, "i=%s;" % ours)
+
+        assert pymux.current_session.arrangement.get_active_window() is first
+        assert first.active_pane is pane
+
+
+async def test_the_option_keeps_the_client_where_it_is():
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            first = pymux.current_session.arrangement.get_active_window()
+            pymux.forward_osc(first.active_pane, "99", "i=a;Built")
+            await run_as(pymux, state, "set-option notification-click-shows-pane off")
+            await run_as(pymux, state, "new-window")
+            second = pymux.current_session.arrangement.get_active_window()
+
+        _clicked(pymux, state, "i=1;")
+
+        assert pymux.current_session.arrangement.get_active_window() is second
+
+
+def test_the_query_answer_says_what_the_terminal_takes():
+    from pymux.server import ServerConnection
+
+    connection = SimpleNamespace(notification_actions=frozenset())
+    ServerConnection._route_notification(connection, "i=pymux:p=?;a=focus,report:o=always:u=0,1,2:p=title,body")
+    assert connection.notification_actions == {"focus", "report"}
+
+
+async def test_a_terminal_that_reports_clicks_gets_osc_777_as_osc_99():
+    "Only that one: a terminal that speaks OSC 777 alone gets it as it was (`test_shell_state`)."
+    async with create_session() as (pymux, state):
+        (connection,) = [each for each, value in pymux._client_states.items() if value is state]
+        connection.notification_actions = frozenset({"report"})
+        sent = []
+        connection.forward_osc = sent.append
+        with set_app(state.app):
+            pane = pymux.arrangement.get_active_pane()
+            pymux.forward_osc(pane, "777", "notify;Build;done")
+        assert [each.split(";")[1] for each in sent] == [
+            "i=1:a=report:u=1:e=1:d=0:p=title",
+            "i=1:a=report:u=1:e=1:p=body",
+        ]
 
 
 async def test_enter_on_a_gone_pane_says_so():

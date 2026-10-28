@@ -45,6 +45,7 @@ from .ids import PaneId
 from .keys import KittyVt100Parser
 from .log import logger
 from .nearest import NEAREST, nearest_theme, wanted_from
+from .notifications import QUERY_IDENTIFIER, is_click, read_actions, read_identifier, split_payload
 from .options import Scope, SetOptionError
 from .packet_table import PacketTable
 from .pipes import BrokenPipeError
@@ -182,6 +183,7 @@ class ServerConnection:
         "_clipboard_partial": Keep.REBUILT,
         "kitty_source_flags": Keep.REBUILT,
         "_kitty_supported": Keep.REBUILT,
+        "notification_actions": Keep.REBUILT,
         "_pointer_shape_sent": Keep.REBUILT,
         "answers_ping": Keep.REBUILT,
         "paced": Keep.REBUILT,
@@ -317,6 +319,12 @@ class ServerConnection:
         #: asks for every flag, so the reply says which ones the
         #: terminal took. Zero means the legacy encoding only.
         self.kitty_source_flags = 0
+
+        #: The click actions of desktop notifications (OSC 99) that the
+        #: outer terminal says it takes, from the detection's `p=?`.
+        #: With `report`, a notification pymux makes itself goes out as
+        #: OSC 99, so a click on it shows its pane. Lillecarl/pymux#779.
+        self.notification_actions: frozenset[str] = frozenset()
 
         # Kitty graphics protocol state of the outer terminal. The same
         # query answers this one: the reply of the graphics query
@@ -837,15 +845,30 @@ class ServerConnection:
 
         An answer that names no notification of a pane is dropped. It
         must not reach a pane as key presses.
+
+        A click shows this client the pane, and reaches the program only
+        when it asked for clicks itself. Lillecarl/pymux#779.
         """
+        metadata, _semicolon, text = split_payload(param)
+        if read_identifier(metadata) == QUERY_IDENTIFIER:
+            self.notification_actions = frozenset(read_actions(text))
+            return
+
         routed = self.pymux.notifications.incoming(param)
         if routed is None:
             return
 
-        pane_id, param = routed
-        pane = self.pymux.panes_by_id.get(pane_id)
-        # Gone, or a window pane, which sends no notification to answer.
-        if pane is None or not isinstance(pane.terminal, Terminal):
+        route, param = routed
+        pane = self.pymux.panes_by_id.get(route.pane_id)
+        if pane is None:
+            return
+        if is_click(param):
+            if route.focuses and self.client_state is not None:
+                self.pymux.show_pane_on_click(self.client_state, pane)
+            if not route.reports:
+                return
+        # A window pane sends no notification to answer.
+        if not isinstance(pane.terminal, Terminal):
             return
 
         try:
