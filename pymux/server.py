@@ -45,6 +45,7 @@ from .keys import KittyVt100Parser
 from .log import logger
 from .nearest import NEAREST, nearest_theme, wanted_from
 from .options import Scope, SetOptionError
+from .packet_table import PacketTable
 from .pipes import BrokenPipeError
 from .rate import Rate
 from .terminal_answers import SURVEY, TerminalAnswers
@@ -140,6 +141,10 @@ FRAME_ANSWER_SECONDS = 2.0
 def _without_left(forwards: list[dict]) -> list[dict]:
     "A forwarding table without the time each forward has left."
     return [{key: value for key, value in one.items() if key != "left"} for one in forwards]
+
+
+#: The method of `ServerConnection` that handles each kind of packet.
+_PACKETS: PacketTable[ServerConnection] = PacketTable()
 
 
 class ServerConnection:
@@ -879,248 +884,258 @@ class ServerConnection:
                 failures = 0
 
     def _process(self, packet: dict) -> None:
-        """
-        Process packet received from client.
-        """
-        # The client's writer turned to msgpack. The pipe's reader has
-        # turned with it already; there is nothing else to do.
-        if packet.get(Field.CMD) == Packet.WIRE:
-            return
+        "Hand a packet from the client to the method that handles its kind."
+        _PACKETS.handle(self, packet)
 
-        # Handle commands.
-        if packet[Field.CMD] == Packet.RUN_COMMAND:
-            # Handle this in a task. The command handler can produce output
-            # that has to be sent back to the client.
-            self._spawn(self._run_command(packet))
-            return
+    @_PACKETS.handles(Packet.WIRE)
+    def _on_wire(self, packet: dict) -> None:
+        "The client's writer turned to msgpack. The pipe's reader has turned with it already."
 
+    @_PACKETS.handles(Packet.RUN_COMMAND)
+    def _on_run_command(self, packet: dict) -> None:
+        # Handle this in a task. The command handler can produce output
+        # that has to be sent back to the client.
+        self._spawn(self._run_command(packet))
+
+    @_PACKETS.handles(Packet.STREAM_PANE)
+    def _on_stream_pane(self, packet: dict) -> None:
         # "Send me this pane as frames." A stream holds the connection
         # and writes many packets, so it is not a command that prints.
-        if packet[Field.CMD] == Packet.STREAM_PANE:
-            self._spawn(self._stream_pane(packet))
-            return
+        self._spawn(self._stream_pane(packet))
 
+    @_PACKETS.handles(Packet.SOUND, Packet.ECHO, Packet.MICROPHONE, Packet.BEHIND)
+    def _on_sound(self, packet: dict) -> None:
         # Sound from a client that plays it. Lillecarl/pymux#657.
-        if packet[Field.CMD] in (Packet.SOUND, Packet.ECHO, Packet.MICROPHONE, Packet.BEHIND):
-            if self._audio is not None:
-                self._audio.heard(packet)
-            return
+        if self._audio is not None:
+            self._audio.heard(packet)
 
+    @_PACKETS.handles(Packet.STREAM_IN)
+    def _on_stream_in(self, packet: dict) -> None:
         # One input message of a stream, which the stream itself reads:
         # a packet that arrives with no stream running has nowhere to go.
-        if packet[Field.CMD] == Packet.STREAM_IN:
-            if self._stream is None:
-                logger.warning("Input for a stream that is not running. Ignoring.")
-            else:
-                self._stream.take(packet.get(Field.DATA, ""))
+        if self._stream is None:
+            logger.warning("Input for a stream that is not running. Ignoring.")
+        else:
+            self._stream.take(packet.get(Field.DATA, ""))
 
-        # Handle stdin.
-        elif packet[Field.CMD] == Packet.IN:
-            if self.recording is not None:
-                self.recording.hear("in", packet[Field.DATA])
-            self._pipeinput.send_text(self._take_clipboard_answer(packet[Field.DATA]))
-            # Input newer than a scheduled redraw makes that frame
-            # stale: the renderer skips it and asks for another one
-            # instead, so this is handled first. Lillecarl/pymux#524.
-            if self.client_state is not None:
-                self.client_state.input_tick += 1
+    @_PACKETS.handles(Packet.IN)
+    def _on_input(self, packet: dict) -> None:
+        if self.recording is not None:
+            self.recording.hear("in", packet[Field.DATA])
+        self._pipeinput.send_text(self._take_clipboard_answer(packet[Field.DATA]))
+        # Input newer than a scheduled redraw makes that frame
+        # stale: the renderer skips it and asks for another one
+        # instead, so this is handled first. Lillecarl/pymux#524.
+        if self.client_state is not None:
+            self.client_state.input_tick += 1
 
+    @_PACKETS.handles(Packet.KITTY_DETECT)
+    def _on_kitty_detect(self, packet: dict) -> None:
         # The client queried its terminal for kitty keyboard protocol
         # support. (The replies come back as input on this connection.)
-        elif packet[Field.CMD] == Packet.KITTY_DETECT:
-            self._kitty_detection_pending = True
-            # The server asks this one itself, so a client of any age
-            # gets a pointer to the pixel. Lillecarl/pymux#648.
-            # And the survey, whose answers are only kept.
-            # Lillecarl/pymux#725.
-            self._write_output_raw(PIXEL_MOUSE_QUERY + EMOJI_WIDTH_PROBE + SURVEY)
+        self._kitty_detection_pending = True
+        # The server asks this one itself, so a client of any age
+        # gets a pointer to the pixel. Lillecarl/pymux#648.
+        # And the survey, whose answers are only kept.
+        # Lillecarl/pymux#725.
+        self._write_output_raw(PIXEL_MOUSE_QUERY + EMOJI_WIDTH_PROBE + SURVEY)
+        self._flush_output()
+
+    @_PACKETS.handles(Packet.SIZE)
+    def _on_size(self, packet: dict) -> None:
+        rows, columns = packet[Field.DATA]
+        if self.recording is not None and (rows, columns) != tuple(self.size):
+            self.recording.hear("size", "%dx%d" % (columns, rows))
+        self.size = Size(rows=rows, columns=columns)
+        self.pymux.invalidate(Woke.CLIENT_RESIZED)
+        # A SIGWINCH comes for pixels alone too: the terminal moved
+        # to a display of another density. Lillecarl/pymux#774.
+        if self.graphics.cell_size_known:
+            self._write_output_raw(CELL_SIZE_QUERY)
             self._flush_output()
 
-        # Set size. (The client reports the size.)
-        elif packet[Field.CMD] == Packet.SIZE:
-            rows, columns = packet[Field.DATA]
-            if self.recording is not None and (rows, columns) != tuple(self.size):
-                self.recording.hear("size", "%dx%d" % (columns, rows))
-            self.size = Size(rows=rows, columns=columns)
-            self.pymux.invalidate(Woke.CLIENT_RESIZED)
-            # A SIGWINCH comes for pixels alone too: the terminal moved
-            # to a display of another density. Lillecarl/pymux#774.
-            if self.graphics.cell_size_known:
-                self._write_output_raw(CELL_SIZE_QUERY)
-                self._flush_output()
+    @_PACKETS.handles(Packet.START_GUI)
+    def _on_start_gui(self, packet: dict) -> None:
+        if not self.may_attach:
+            self._spawn(self._refuse_the_attach())
+            return
 
-        # Start GUI. (Create CommandLineInterface front-end for pymux.)
-        elif packet[Field.CMD] == Packet.START_GUI:
-            if not self.may_attach:
-                self._spawn(self._refuse_the_attach())
-                return
+        # The client reads msgpack, perhaps inside zstd: say which
+        # in JSON, and write it from the next packet on.
+        # `libpymux.wire`.
+        wire = choose(packet.get(Field.WIRE), self.pipe_connection.can_compress)
+        if wire is not None and self._encode is encode_json:
+            self._send_packet(
+                {Field.CMD: Packet.WIRE, Field.WIRE: wire},
+                compress_after=wire == MSGPACK_ZSTD,
+            )
+            self._encode = encode_msgpack
 
-            # The client reads msgpack, perhaps inside zstd: say which
-            # in JSON, and write it from the next packet on.
-            # `libpymux.wire`.
-            wire = choose(packet.get(Field.WIRE), self.pipe_connection.can_compress)
-            if wire is not None and self._encode is encode_json:
-                self._send_packet(
-                    {Field.CMD: Packet.WIRE, Field.WIRE: wire},
-                    compress_after=wire == MSGPACK_ZSTD,
-                )
-                self._encode = encode_msgpack
+        # Window frames as raw pixels, which the client encodes for
+        # its own terminal. Only in msgpack, which carries bytes.
+        # Lillecarl/pymux#634.
+        if packet.get(Field.FRAMES) and self._encode is encode_msgpack:
+            self.graphics.send_frame = self._send_frame
+            # And the codecs it decodes, for `window-codec`.
+            # Lillecarl/pymux#639.
+            self.graphics.codecs = frozenset(packet.get(Field.CODECS) or ())
+            # A client that says when it wrote a frame gets the next
+            # one after that: the socket draining says only that the
+            # kernel took it, and over SSH megabytes of frames wait
+            # in the buffers past it, with every key's echo behind
+            # them. Lillecarl/pymux#641.
+            if packet.get(Field.SHOWS):
+                self.graphics.frame_room = self._frames_all_shown
 
-            # Window frames as raw pixels, which the client encodes for
-            # its own terminal. Only in msgpack, which carries bytes.
-            # Lillecarl/pymux#634.
-            if packet.get(Field.FRAMES) and self._encode is encode_msgpack:
-                self.graphics.send_frame = self._send_frame
-                # And the codecs it decodes, for `window-codec`.
-                # Lillecarl/pymux#639.
-                self.graphics.codecs = frozenset(packet.get(Field.CODECS) or ())
-                # A client that says when it wrote a frame gets the next
-                # one after that: the socket draining says only that the
-                # kernel took it, and over SSH megabytes of frames wait
-                # in the buffers past it, with every key's echo behind
-                # them. Lillecarl/pymux#641.
-                if packet.get(Field.SHOWS):
-                    self.graphics.frame_room = self._frames_all_shown
+        detach_other_clients = bool(packet[Field.DETACH_OTHERS])
+        # `attach -x`: the others leave, and the terminals they were
+        # in close. Lillecarl/pymux#347.
+        hang_up_others = bool(packet.get(Field.HANG_UP_OTHERS))
+        forced = packet[Field.COLOR_DEPTH]
+        term = packet[Field.TERM]
 
-            detach_other_clients = bool(packet[Field.DETACH_OTHERS])
-            # `attach -x`: the others leave, and the terminals they were
-            # in close. Lillecarl/pymux#347.
-            hang_up_others = bool(packet.get(Field.HANG_UP_OTHERS))
-            forced = packet[Field.COLOR_DEPTH]
-            term = packet[Field.TERM]
+        # The colour depth of the outer terminal. A flag of the
+        # client forces one; otherwise the environment gives the
+        # first answer and the probe can raise it later.
+        self.colors.forced = ColorDepth(forced) if forced else None
+        self.colors.term = term
+        self.colors.colorterm = packet.get(Field.COLORTERM, "")
+        self.hostname = packet.get(Field.HOSTNAME, "")
+        # Whether `forward-port` can reach this client at all. Only
+        # the SSH client says yes. Lillecarl/pymux#436.
+        self.can_forward = bool(packet.get(Field.FORWARDS))
+        self.answers_forwards = bool(packet.get(Field.REPORTS))
+        self.starts_browsers = bool(packet.get(Field.BROWSERS))
+        self.saves_files = bool(packet.get(Field.SAVES_FILES))
+        self.sends_files = bool(packet.get(Field.SENDS_FILES))
+        self.answers_ping = bool(packet.get(Field.PINGS))
+        self.paced = bool(packet.get(Field.PACED))
+        self.environment = packet.get(Field.ENVIRONMENT) or {}
+        self.ttyname = packet.get(Field.TTYNAME, "")
+        self.pid = packet.get(Field.PID) or 0
+        self.client_id = packet.get(Field.CLIENT_ID) or ""
 
-            # The colour depth of the outer terminal. A flag of the
-            # client forces one; otherwise the environment gives the
-            # first answer and the probe can raise it later.
-            self.colors.forced = ColorDepth(forced) if forced else None
-            self.colors.term = term
-            self.colors.colorterm = packet.get(Field.COLORTERM, "")
-            self.hostname = packet.get(Field.HOSTNAME, "")
-            # Whether `forward-port` can reach this client at all. Only
-            # the SSH client says yes. Lillecarl/pymux#436.
-            self.can_forward = bool(packet.get(Field.FORWARDS))
-            self.answers_forwards = bool(packet.get(Field.REPORTS))
-            self.starts_browsers = bool(packet.get(Field.BROWSERS))
-            self.saves_files = bool(packet.get(Field.SAVES_FILES))
-            self.sends_files = bool(packet.get(Field.SENDS_FILES))
-            self.answers_ping = bool(packet.get(Field.PINGS))
-            self.paced = bool(packet.get(Field.PACED))
-            self.environment = packet.get(Field.ENVIRONMENT) or {}
-            self.ttyname = packet.get(Field.TTYNAME, "")
-            self.pid = packet.get(Field.PID) or 0
-            self.client_id = packet.get(Field.CLIENT_ID) or ""
+        self._create_app(color_depth=self.colors.depth, term=term)
 
-            self._create_app(color_depth=self.colors.depth, term=term)
+        # `pymux attach -r`. The client state exists from
+        # `_create_app` on, and the flag has to be on it before the
+        # first key arrives. `attach-session -r` is the same two
+        # lines for a client that is already here.
+        # Lillecarl/pymux#467.
+        if packet.get(Field.READ_ONLY) and self.client_state is not None:
+            self.client_state.read_only = True
+            self.client_state.ignore_size = True
 
-            # `pymux attach -r`. The client state exists from
-            # `_create_app` on, and the flag has to be on it before the
-            # first key arrives. `attach-session -r` is the same two
-            # lines for a client that is already here.
-            # Lillecarl/pymux#467.
-            if packet.get(Field.READ_ONLY) and self.client_state is not None:
-                self.client_state.read_only = True
-                self.client_state.ignore_size = True
+        if detach_other_clients or hang_up_others:
+            self._detach_the_others(hang_up=hang_up_others)
 
-            if detach_other_clients or hang_up_others:
-                self._detach_the_others(hang_up=hang_up_others)
+        # What this client's own configuration file said about it.
+        # Applied before the first frame, so nothing draws with a
+        # theme the person did not choose and then change.
+        # Lillecarl/pymux#223.
+        self._take_client_options(packet.get(Field.CLIENT_OPTIONS) or [])
 
-            # What this client's own configuration file said about it.
-            # Applied before the first frame, so nothing draws with a
-            # theme the person did not choose and then change.
-            # Lillecarl/pymux#223.
-            self._take_client_options(packet.get(Field.CLIENT_OPTIONS) or [])
+        # After the options: what the client had set while it ran
+        # wins over what its file says. Lillecarl/pymux#409.
+        if self.client_state is not None:
+            self.pymux.welcome_back(self.client_state, self.client_id)
 
-            # After the options: what the client had set while it ran
-            # wins over what its file says. Lillecarl/pymux#409.
-            if self.client_state is not None:
-                self.pymux.welcome_back(self.client_state, self.client_id)
+        # The session this client landed on takes the names that
+        # follow a client: a display, an agent, a session bus.
+        # `attach_client_to` does it for every later move between
+        # sessions; this is the first attach, which does not go
+        # through it. Lillecarl/pymux#271.
+        if self.client_state is not None:
+            self.pymux.take_environment_from(self.client_state)
 
-            # The session this client landed on takes the names that
-            # follow a client: a display, an agent, a session bus.
-            # `attach_client_to` does it for every later move between
-            # sessions; this is the first attach, which does not go
-            # through it. Lillecarl/pymux#271.
-            if self.client_state is not None:
-                self.pymux.take_environment_from(self.client_state)
+        # Sound, on this connection, for a client that plays it.
+        # Lillecarl/pymux#657.
+        if packet.get(Field.AUDIO) and self._encode is encode_msgpack and self._audio is None:
+            self._spawn(self._carry_audio())
 
-            # Sound, on this connection, for a client that plays it.
-            # Lillecarl/pymux#657.
-            if packet.get(Field.AUDIO) and self._encode is encode_msgpack and self._audio is None:
-                self._spawn(self._carry_audio())
+        if self.answers_ping:
+            self._spawn(self._watch_the_client())
 
-            if self.answers_ping:
-                self._spawn(self._watch_the_client())
-
+    @_PACKETS.handles(Packet.BROWSER_STARTED)
+    def _on_browser_started(self, packet: dict) -> None:
         # A URL that the client of this connection could not open. The
         # request went out as a status line here, so the answer goes
         # there too, and it names the URL to copy.
-        elif packet[Field.CMD] == Packet.BROWSER_STARTED:
-            self.pymux.browsers.started(packet)
+        self.pymux.browsers.started(packet)
 
-        elif packet[Field.CMD] == Packet.BROWSER_ENDED:
-            self.pymux.browsers.ended(packet[Field.BROWSER])
+    @_PACKETS.handles(Packet.BROWSER_ENDED)
+    def _on_browser_ended(self, packet: dict) -> None:
+        self.pymux.browsers.ended(packet[Field.BROWSER])
 
+    @_PACKETS.handles(Packet.FILE_SAVED)
+    def _on_file_saved(self, packet: dict) -> None:
         # Where the client saved a pane's download, or why it did not.
         # Only the client knows the path. Lillecarl/pymux#743.
-        elif packet[Field.CMD] == Packet.FILE_SAVED:
-            if self.client_state is not None:
-                self.client_state.message = str(packet.get(Field.MESSAGE) or "")
-                self.client_state.app.invalidate()
+        if self.client_state is not None:
+            self.client_state.message = str(packet.get(Field.MESSAGE) or "")
+            self.client_state.app.invalidate()
 
+    @_PACKETS.handles(Packet.UPLOAD, Packet.UPLOAD_DONE)
+    def _on_upload(self, packet: dict) -> None:
         # A file `pymux receive` asked this client for, a part at a
         # time. Only the connection that was asked holds the request,
         # so another client cannot answer it. Lillecarl/pymux#743.
-        elif packet[Field.CMD] in (Packet.UPLOAD, Packet.UPLOAD_DONE):
-            upload = self.uploads.get(str(packet.get(Field.REQUEST)))
-            if upload is not None:
-                upload.take(packet)
+        upload = self.uploads.get(str(packet.get(Field.REQUEST)))
+        if upload is not None:
+            upload.take(packet)
 
-        elif packet[Field.CMD] == Packet.FILES_LISTED:
-            listed = self.listings.pop(str(packet.get(Field.REQUEST)), None)
-            if listed is not None:
-                listed.take(packet)
+    @_PACKETS.handles(Packet.FILES_LISTED)
+    def _on_files_listed(self, packet: dict) -> None:
+        listed = self.listings.pop(str(packet.get(Field.REQUEST)), None)
+        if listed is not None:
+            listed.take(packet)
 
+    @_PACKETS.handles(Packet.REDRAW)
+    def _on_redraw(self, packet: dict) -> None:
         # The client drew a question over the frame, and it is gone.
-        elif packet[Field.CMD] == Packet.REDRAW:
-            if self.client_state is not None:
-                self.pymux.redraw(self.client_state)
+        if self.client_state is not None:
+            self.pymux.redraw(self.client_state)
 
-        elif packet[Field.CMD] == Packet.OPEN_FAILED:
-            if self.client_state is not None:
-                self.client_state.message = "Could not open %s in a browser on this machine." % (packet[Field.DATA],)
+    @_PACKETS.handles(Packet.OPEN_FAILED)
+    def _on_open_failed(self, packet: dict) -> None:
+        if self.client_state is not None:
+            self.client_state.message = "Could not open %s in a browser on this machine." % (packet[Field.DATA],)
 
+    @_PACKETS.handles(Packet.PONG)
+    def _on_pong(self, packet: dict) -> None:
+        # The client is still there. Any answer clears the count, so a
+        # client that is merely slow keeps its place.
+        self._unanswered = 0
+
+    @_PACKETS.handles(Packet.FRAME_SHOWN)
+    def _on_frame_shown(self, packet: dict) -> None:
+        self._frame_answered()
+
+    @_PACKETS.handles(Packet.FORWARDS)
+    def _on_forwards(self, packet: dict) -> None:
         # What this client is forwarding, after it changed or after the
         # link came back. The server keeps a copy and never the truth:
         # it holds no SSH connection, so only the client can say whether
         # a listener is really open. Lillecarl/pymux#436.
-        # The client is still there. Any answer clears the count, so a
-        # client that is merely slow keeps its place.
-        elif packet[Field.CMD] == Packet.PONG:
-            self._unanswered = 0
+        reported = packet.get(Field.DATA) or []
+        said = packet.get(Field.MESSAGE)
+        arrived, self._next_forwards = self._next_forwards, None
 
-        elif packet[Field.CMD] == Packet.FRAME_SHOWN:
-            self._frame_answered()
+        if said and self.client_state is not None:
+            self.client_state.message = said
 
-        elif packet[Field.CMD] == Packet.FORWARDS:
-            reported = packet.get(Field.DATA) or []
-            said = packet.get(Field.MESSAGE)
-            arrived, self._next_forwards = self._next_forwards, None
-
-            if said and self.client_state is not None:
-                self.client_state.message = said
-
-            # Every SSH client reports once as it attaches, nearly
-            # always with nothing forwarded. A frame that draws the
-            # same screen again is a fault of its own
-            # (Lillecarl/pymux#117), so the unchanged case asks for
-            # none. The time left moves on every report and only a
-            # listing reads it, so it is no change.
-            changed = _without_left(reported) != _without_left(self.forwards)
-            self.forwards = reported
-            if changed or said:
-                self.pymux.invalidate(Woke.FORWARDS_CHANGED)
-            if arrived is not None:
-                arrived.set()
+        # Every SSH client reports once as it attaches, nearly
+        # always with nothing forwarded. A frame that draws the
+        # same screen again is a fault of its own
+        # (Lillecarl/pymux#117), so the unchanged case asks for
+        # none. The time left moves on every report and only a
+        # listing reads it, so it is no change.
+        changed = _without_left(reported) != _without_left(self.forwards)
+        self.forwards = reported
+        if changed or said:
+            self.pymux.invalidate(Woke.FORWARDS_CHANGED)
+        if arrived is not None:
+            arrived.set()
 
     async def fresh_forwards(self) -> None:
         """

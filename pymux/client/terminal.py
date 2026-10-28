@@ -44,6 +44,7 @@ from pymux.kitty_frames import Base64Carrier, Pictures, ShmCarrier, decoders, fr
 from pymux.osc import PASSTHROUGH_VARIABLE, set_user_var
 from pymux.utils import nonblocking
 
+from ..packet_table import PacketTable
 from . import browser
 from .base import Client
 from .downloads import save_whole
@@ -185,6 +186,10 @@ def _ttyname() -> str:
         return os.ttyname(sys.stdout.fileno())
     except OSError, ValueError, AttributeError:
         return ""
+
+
+#: The method of `TerminalClient` that handles each kind of packet.
+_PACKETS: PacketTable[TerminalClient] = PacketTable()
 
 
 class TerminalClient(Client):
@@ -600,140 +605,160 @@ class TerminalClient(Client):
             return None
         return decoded
 
-    def _process(self, packet: dict):
-        """
-        Handle incoming packet from server.
-        """
-        if packet[Field.CMD] == Packet.WIRE:
-            # The server writes msgpack from here on, and the reader has
-            # turned already. This side turns too, saying so first. Its
-            # packets are keystrokes, too small for zstd to win on.
-            self._send_packet({Field.CMD: Packet.WIRE, Field.WIRE: MSGPACK})
-            self._encode = encode_msgpack
+    def _process(self, packet: dict) -> None:
+        "Hand a packet from the server to the method that handles its kind."
+        _PACKETS.handle(self, packet)
 
-        elif packet[Field.CMD] == Packet.OUT:
-            data = packet[Field.DATA]
-            self._write_terminal(data.encode("utf-8"))
-            if KITTY_GRAPHICS in data:
-                self.placed_images = True
-            # The frame drew over the question.
+    @_PACKETS.handles(Packet.WIRE)
+    def _on_wire(self, packet: dict) -> None:
+        # The server writes msgpack from here on, and the reader has
+        # turned already. This side turns too, saying so first. Its
+        # packets are keystrokes, too small for zstd to win on.
+        self._send_packet({Field.CMD: Packet.WIRE, Field.WIRE: MSGPACK})
+        self._encode = encode_msgpack
+
+    @_PACKETS.handles(Packet.OUT)
+    def _on_output(self, packet: dict) -> None:
+        data = packet[Field.DATA]
+        self._write_terminal(data.encode("utf-8"))
+        if KITTY_GRAPHICS in data:
+            self.placed_images = True
+        # The frame drew over the question.
+        self._draw_question()
+
+    @_PACKETS.handles(Packet.WINDOW_FRAME)
+    def _on_window_frame(self, packet: dict) -> None:
+        answered = False
+        try:
+            answered = self._window_frame(packet)
+        finally:
+            # Whatever came of it, the server waits for an answer:
+            # the terminal's, or this one.
+            if packet.get(Field.LAST) and not answered:
+                self._send_packet({Field.CMD: Packet.FRAME_SHOWN})
+        if packet.get(Field.LAST):
             self._draw_question()
 
-        elif packet[Field.CMD] == Packet.WINDOW_FRAME:
-            answered = False
-            try:
-                answered = self._window_frame(packet)
-            finally:
-                # Whatever came of it, the server waits for an answer:
-                # the terminal's, or this one.
-                if packet.get(Field.LAST) and not answered:
-                    self._send_packet({Field.CMD: Packet.FRAME_SHOWN})
-            if packet.get(Field.LAST):
-                self._draw_question()
-
-        elif packet[Field.CMD] == Packet.SHM and self._shm is not None:
+    @_PACKETS.handles(Packet.SHM)
+    def _on_shm(self, packet: dict) -> None:
+        if self._shm is not None:
             self._carrier = self._shm
 
-        elif packet[Field.CMD] == Packet.EXIT:
-            # The server is about to close this connection, and says
-            # what this client leaves with. The read loop ends on the
-            # close itself.
-            self.exit_code = packet[Field.CODE]
-            # And whether to hang up the process that started this
-            # client on the way out, which is `attach -x`. The signal
-            # goes after the terminal is back, so it is remembered
-            # here and sent there. Lillecarl/pymux#347.
-            if packet.get(Field.HANG_UP):
-                self.hang_up_asked = True
+    @_PACKETS.handles(Packet.EXIT)
+    def _on_exit(self, packet: dict) -> None:
+        # The server is about to close this connection, and says
+        # what this client leaves with. The read loop ends on the
+        # close itself.
+        self.exit_code = packet[Field.CODE]
+        # And whether to hang up the process that started this
+        # client on the way out, which is `attach -x`. The signal
+        # goes after the terminal is back, so it is remembered
+        # here and sent there. Lillecarl/pymux#347.
+        if packet.get(Field.HANG_UP):
+            self.hang_up_asked = True
 
-        elif packet[Field.CMD] == Packet.RESTARTING:
-            self.restart_wait = float(packet[Field.WAIT])
-            # An older server says no reason.
-            self.restart_why = str(packet.get(Field.MESSAGE) or RESTARTING)
+    @_PACKETS.handles(Packet.RESTARTING)
+    def _on_restarting(self, packet: dict) -> None:
+        self.restart_wait = float(packet[Field.WAIT])
+        # An older server says no reason.
+        self.restart_why = str(packet.get(Field.MESSAGE) or RESTARTING)
 
-        elif packet[Field.CMD] == Packet.ECHO:
-            # The server measures the round trip that sizes the sound
-            # buffers: the answer goes at once, before anything else.
-            # Lillecarl/pymux#657.
-            self._send_packet({Field.CMD: Packet.ECHO, Field.TIME: packet.get(Field.TIME)})
+    @_PACKETS.handles(Packet.ECHO)
+    def _on_echo(self, packet: dict) -> None:
+        # The server measures the round trip that sizes the sound
+        # buffers: the answer goes at once, before anything else.
+        # Lillecarl/pymux#657.
+        self._send_packet({Field.CMD: Packet.ECHO, Field.TIME: packet.get(Field.TIME)})
 
-        elif packet[Field.CMD] in (Packet.SOUND, Packet.AUDIO, Packet.LATENCY, Packet.MICROPHONE):
-            if self.audio is not None:
-                self.audio.heard(packet)
+    @_PACKETS.handles(Packet.SOUND, Packet.AUDIO, Packet.LATENCY, Packet.MICROPHONE)
+    def _on_sound(self, packet: dict) -> None:
+        if self.audio is not None:
+            self.audio.heard(packet)
 
-        elif packet[Field.CMD] == Packet.PING:
-            # The server is asking whether anybody is still here. An
-            # answer costs one packet and keeps this client's place;
-            # silence is what tells the server the person is gone.
-            # Lillecarl/pymux#446.
-            self._send_packet({Field.CMD: Packet.PONG})
+    @_PACKETS.handles(Packet.PING)
+    def _on_ping(self, packet: dict) -> None:
+        # The server is asking whether anybody is still here. An
+        # answer costs one packet and keeps this client's place;
+        # silence is what tells the server the person is gone.
+        # Lillecarl/pymux#446.
+        self._send_packet({Field.CMD: Packet.PONG})
 
-        elif packet[Field.CMD] == Packet.SUSPEND:
-            # Suspend client process to background.
-            os.kill(os.getpid(), signal.SIGTSTP)
+    @_PACKETS.handles(Packet.SUSPEND)
+    def _on_suspend(self, packet: dict) -> None:
+        # Suspend client process to background.
+        os.kill(os.getpid(), signal.SIGTSTP)
 
-        elif packet[Field.CMD] == Packet.OPEN:
-            # The server asks this machine, not the machine of the
-            # server, to open the URL. A machine with no browser says
-            # so back, where the request was made visible.
-            url = packet[Field.DATA]
-            if not self._open_url(url):
-                self._send_packet({Field.CMD: Packet.OPEN_FAILED, Field.DATA: url})
+    @_PACKETS.handles(Packet.OPEN)
+    def _on_open(self, packet: dict) -> None:
+        # The server asks this machine, not the machine of the
+        # server, to open the URL. A machine with no browser says
+        # so back, where the request was made visible.
+        url = packet[Field.DATA]
+        if not self._open_url(url):
+            self._send_packet({Field.CMD: Packet.OPEN_FAILED, Field.DATA: url})
 
-        elif packet[Field.CMD] == Packet.BROWSER:
-            self._start_browser(packet)
+    @_PACKETS.handles(Packet.BROWSER)
+    def _on_browser(self, packet: dict) -> None:
+        self._start_browser(packet)
 
-        elif packet[Field.CMD] == Packet.FILE:
-            # A pane's download, saved on this machine. The server
-            # shows where it went: only this side knows the path.
-            arrived = self.downloads.receive(packet)
-            if isinstance(arrived, Whole):
-                self._save(arrived)
-            elif arrived is not None:
-                self._send_packet({Field.CMD: Packet.FILE_SAVED, Field.MESSAGE: arrived})
+    @_PACKETS.handles(Packet.FILE)
+    def _on_file(self, packet: dict) -> None:
+        # A pane's download, saved on this machine. The server
+        # shows where it went: only this side knows the path.
+        arrived = self.downloads.receive(packet)
+        if isinstance(arrived, Whole):
+            self._save(arrived)
+        elif arrived is not None:
+            self._send_packet({Field.CMD: Packet.FILE_SAVED, Field.MESSAGE: arrived})
 
-        elif packet[Field.CMD] == Packet.SEND_FILES:
-            self._files_asked(packet)
+    @_PACKETS.handles(Packet.SEND_FILES)
+    def _on_send_files(self, packet: dict) -> None:
+        self._files_asked(packet)
 
-        elif packet[Field.CMD] == Packet.FILES_WITHDRAWN:
-            self._files_withdrawn(str(packet.get(Field.REQUEST) or ""))
+    @_PACKETS.handles(Packet.FILES_WITHDRAWN)
+    def _on_files_withdrawn(self, packet: dict) -> None:
+        self._files_withdrawn(str(packet.get(Field.REQUEST) or ""))
 
-        elif packet[Field.CMD] == Packet.LIST_FILES:
-            self._listing_asked(packet)
+    @_PACKETS.handles(Packet.LIST_FILES)
+    def _on_list_files(self, packet: dict) -> None:
+        self._listing_asked(packet)
 
-        elif packet[Field.CMD] == Packet.BROWSER_STOP:
-            self.stop_browser(packet[Field.BROWSER])
+    @_PACKETS.handles(Packet.BROWSER_STOP)
+    def _on_browser_stop(self, packet: dict) -> None:
+        self.stop_browser(packet[Field.BROWSER])
 
-        elif packet[Field.CMD] == Packet.KITTY_KEYBOARD:
-            # Kitty keyboard protocol instructions for the outer
-            # terminal.
-            data = packet[Field.DATA]
-            if "supported" in data:
-                self._kitty_supported = data["supported"]
-            if "flags" in data:
-                # A question takes plain keys; the flags wait for it.
-                if self._asking is not None:
-                    self._asking.flags_after = data["flags"]
-                else:
-                    self._set_kitty_flags(data["flags"])
+    @_PACKETS.handles(Packet.KITTY_KEYBOARD)
+    def _on_kitty_keyboard(self, packet: dict) -> None:
+        # Kitty keyboard protocol instructions for the outer
+        # terminal.
+        data = packet[Field.DATA]
+        if "supported" in data:
+            self._kitty_supported = data["supported"]
+        if "flags" in data:
+            # A question takes plain keys; the flags wait for it.
+            if self._asking is not None:
+                self._asking.flags_after = data["flags"]
+            else:
+                self._set_kitty_flags(data["flags"])
 
-        elif packet[Field.CMD] == Packet.MODE:
-            # Set terminal to raw/cooked.
-            action = packet[Field.DATA]
+    @_PACKETS.handles(Packet.MODE)
+    def _on_mode(self, packet: dict) -> None:
+        # Set terminal to raw/cooked.
+        action = packet[Field.DATA]
 
-            if action == Mode.RAW:
-                cm = raw_mode(sys.stdin.fileno())
-                cm.__enter__()
-                self._mode_context_managers.append(cm)
+        if action == Mode.RAW:
+            cm = raw_mode(sys.stdin.fileno())
+            cm.__enter__()
+            self._mode_context_managers.append(cm)
 
-            elif action == Mode.COOKED:
-                cm = cooked_mode(sys.stdin.fileno())
-                cm.__enter__()
-                self._mode_context_managers.append(cm)
+        elif action == Mode.COOKED:
+            cm = cooked_mode(sys.stdin.fileno())
+            cm.__enter__()
+            self._mode_context_managers.append(cm)
 
-            elif action == Mode.RESTORE and self._mode_context_managers:
-                cm = self._mode_context_managers.pop()
-                cm.__exit__()
+        elif action == Mode.RESTORE and self._mode_context_managers:
+            cm = self._mode_context_managers.pop()
+            cm.__exit__()
 
     def _set_kitty_flags(self, flags: int) -> None:
         """
