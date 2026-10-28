@@ -42,7 +42,7 @@ from .commands import handle_command
 from .enums import ExtendedKeys, Woke
 from .graphics import CELL_SIZE_QUERY, ClientGraphics, draws_placeholders, draws_progress
 from .ids import PaneId
-from .keys import KittyVt100Parser
+from .keys import FOCUS_IN, FOCUS_OUT, KittyVt100Parser
 from .log import logger
 from .nearest import NEAREST, nearest_theme, wanted_from
 from .notifications import QUERY as NOTIFICATION_QUERY
@@ -86,6 +86,8 @@ _EMOJI_WIDTH_REPLY_RE = re.compile(r"^\x1b\[2;(\d+)R$")
 PIXEL_MOUSE_QUERY = "\x1b[?1016$p"
 PIXEL_MOUSE_ON = "\x1b[?1016h"
 PIXEL_MOUSE_OFF = "\x1b[?1016l"
+FOCUS_REPORTS_ON = "\x1b[?1004h"
+FOCUS_REPORTS_OFF = "\x1b[?1004l"
 _PIXEL_MOUSE_REPLY_RE = re.compile(r"^\x1b\[\?1016;(\d+)\$y$")
 
 #: A status report and its answer: 0 is ready, 3 a malfunction, and
@@ -721,6 +723,15 @@ class ServerConnection:
         arrive at any time, long after the detection, and it belongs to
         one pane.
         """
+        # Not kept: one arrives at every switch between windows.
+        if data == FOCUS_IN:
+            if self.client_state is not None:
+                self.pymux.client_was_used(self.client_state)
+                self.pymux.invalidate(Woke.CLIENT_FOCUSED)
+            return
+        if data == FOCUS_OUT:
+            return
+
         # Every reply is kept, whatever is done with it below.
         # Lillecarl/pymux#725.
         self.terminal_said.heard(data)
@@ -1968,6 +1979,20 @@ class _FrameOutput(Vt100_Output):
         # Always: a terminal left in pixel mode gives the next program
         # pixels where it expects cells.
         self.write_raw(PIXEL_MOUSE_OFF)
+
+    # Focus reports go with the alternate screen: on at the first frame
+    # and at a redraw, off at a detach. A window that gains the focus
+    # with a click iTerm2 keeps to itself is still a client in use.
+    # Lillecarl/pymux#794.
+    @override
+    def enter_alternate_screen(self) -> None:
+        super().enter_alternate_screen()
+        self.write_raw(FOCUS_REPORTS_ON)
+
+    @override
+    def quit_alternate_screen(self) -> None:
+        self.write_raw(FOCUS_REPORTS_OFF)
+        super().quit_alternate_screen()
 
     def write_after_frame(self, data: str) -> None:
         self._after_frame.append(data)

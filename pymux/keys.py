@@ -385,6 +385,14 @@ _MODE_REPLY = object()
 # Lillecarl/pymux#259.
 _STATUS_REPLY = object()
 
+#: What a terminal in DEC mode 1004 sends when its window gains and
+#: loses the focus. Lillecarl/pymux#794.
+FOCUS_IN = "\x1b[I"
+FOCUS_OUT = "\x1b[O"
+
+# Sentinel for either of them.
+_FOCUS_REPORT = object()
+
 #: An SGR mouse report: button, x, y, and press or release.
 _SGR_MOUSE_RE = re.compile(r"^\x1b\[<(\d+);(\d+);(\d+)([Mm])$")
 
@@ -708,6 +716,8 @@ def _reply(prefix: str) -> object | None:
         return _STATUS_REPLY
     if _STRING_RE.match(prefix):
         return _STRING_REPLY
+    if prefix in (FOCUS_IN, FOCUS_OUT):
+        return _FOCUS_REPORT
     return None
 
 
@@ -989,6 +999,7 @@ class KittyVt100Parser(Vt100Parser):
             _CELL_SIZE_REPLY,
             _MODE_REPLY,
             _STATUS_REPLY,
+            _FOCUS_REPORT,
             Keys.CPRResponse,
         ):
             if self.reply_callback is not None:

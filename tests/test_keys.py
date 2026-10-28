@@ -16,6 +16,8 @@ from prompt_toolkit.key_binding.key_processor import _Flush
 from prompt_toolkit.keys import Keys
 
 from pymux.keys import (
+    FOCUS_IN,
+    FOCUS_OUT,
     KittyVt100Parser,
     Unnamed,
     UnnamedReason,
@@ -248,6 +250,16 @@ def test_da1_reply_goes_to_reply_callback():
     parser.feed_and_flush("\x1b[?62;1;6c")
     assert pressed == []
     assert replies == ["\x1b[?62;1;6c"]
+
+
+def test_focus_reports_go_to_reply_callback():
+    "A window gaining or losing the focus is no key press. Lillecarl/pymux#794."
+    pressed = []
+    replies = []
+    parser = KittyVt100Parser(pressed.append, reply_callback=replies.append)
+    parser.feed_and_flush(FOCUS_IN + "a" + FOCUS_OUT)
+    assert [kp.key for kp in pressed] == ["a"]
+    assert replies == [FOCUS_IN, FOCUS_OUT]
 
 
 def test_replies_are_consumed_without_callback():

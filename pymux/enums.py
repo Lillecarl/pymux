@@ -232,6 +232,7 @@ class Woke(StrEnum):
     SESSION_CLOSED = "a session closed"
     SESSION_CHANGED = "a client moved to another session"
     CLIENT_RESIZED = "a client reported its size"
+    CLIENT_FOCUSED = "the window of a client gained the focus"
     PANE_ENDED = "a pane ended"
     PANE_WAS_RESPAWNED = "a pane was respawned"
     PANE_RESIZED = "a program in a pane asked for a size"

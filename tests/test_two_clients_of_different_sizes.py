@@ -36,11 +36,14 @@ from prompt_toolkit.layout.screen import Screen, WritePosition
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 from session import Connection
+from test_server_tasks import FakePipe
 
 from pymux.commands import handle_command
 from pymux.enums import WindowSize
+from pymux.keys import FOCUS_IN, FOCUS_OUT
 from pymux.main import Pymux
 from pymux.plan_container import PlanContainer
+from pymux.server import ServerConnection
 
 #: One client with room, and one without. The columns differ by enough
 #: that a pane of the big plane cannot fit in the small client.
@@ -206,6 +209,23 @@ async def test_key_press_is_what_uses_client():
         assert big.state.last_used > before
         assert big.state.last_used > small.state.last_used
         assert plane(pymux).columns == BIG.columns
+
+
+async def test_focus_in_uses_client():
+    """
+    A terminal whose window gains the focus says so, and that counts as
+    using it: iTerm2 keeps the click that focuses its window, so no key
+    arrives until a person types. Lillecarl/pymux#794.
+    """
+    async with two_clients(["set-window-option window-size latest"]) as (pymux, big, _small):
+        connection = ServerConnection(pymux, FakePipe())
+        connection.client_state = big.state
+        connection._handle_kitty_reply(FOCUS_OUT)
+        assert plane(pymux).columns == SMALL.columns
+
+        connection._handle_kitty_reply(FOCUS_IN)
+        assert plane(pymux).columns == BIG.columns
+        connection._close_connection()
 
 
 async def test_manual_size_follows_no_client():
