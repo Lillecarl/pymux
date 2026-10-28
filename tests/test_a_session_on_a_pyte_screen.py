@@ -532,6 +532,30 @@ async def test_redraw_writes_what_the_terminal_lost(pymux):
         assert not found, "\n".join([*found, "", *rows_of(session)])
 
 
+async def test_redraw_brings_back_the_alternate_screen_the_terminal_left(pymux):
+    """
+    iTerm2 3.7 leaves the alternate screen on a prompt start it reads
+    (Lillecarl/pymux#791): every frame after drew on its main screen,
+    and a redraw that kept writing there left the old frames around it.
+    A redraw enters the alternate screen again, which costs nothing on
+    a terminal that never left it.
+    """
+    async with pymux.running(), attached(pymux) as session:
+        await shows(session, "$")
+        client_state = pymux.connections[-1].client_state
+        assert session.screen.in_alternate_screen
+        session._stream.feed("\x1b[?1049l")
+        assert not session.screen.in_alternate_screen
+
+        with set_app(client_state.app):
+            pymux.handle_command("redraw")
+        await settled(session)
+
+        assert session.screen.in_alternate_screen
+        found = await wire_differs(session, client_state)
+        assert not found, "\n".join([*found, "", *rows_of(session)])
+
+
 async def test_which_key_leaves_nothing_behind(pymux):
     """
     The popup the prefix opens covers the pane, and when it goes the

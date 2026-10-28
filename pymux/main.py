@@ -2989,8 +2989,20 @@ class Pymux:
         the next frame homes the cursor, erases the screen and writes
         every cell. Not `Renderer.clear`, which leaves the alternate
         screen and asks the terminal where its cursor is.
+
+        It enters the alternate screen again, which a terminal can have
+        left behind pymux's back: iTerm2 leaves it on a prompt start it
+        reads, and the frames after went to its main screen. On a
+        terminal that never left, it clears a screen this redraws
+        anyway. Lillecarl/pymux#791.
         """
-        client_state.app.renderer.reset(leave_alternate_screen=False)
+        renderer = client_state.app.renderer
+        renderer.reset(leave_alternate_screen=False)
+        if renderer.full_screen:
+            # The switch clears in the colours set last; a frame's are not.
+            renderer.output.reset_attributes()
+            renderer.output.enter_alternate_screen()
+            renderer.output.flush()
         client_state.app.invalidate()
 
     def invalidate(self, reason: str = Woke.APPLICATION):
