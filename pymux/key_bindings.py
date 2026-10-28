@@ -532,19 +532,19 @@ class PymuxKeyBindings:
         @kb.add("enter", filter=menu_displayed, eager=True)
         def _menu_enter(event: E) -> None:
             "The entry whose key is Enter, when there is one."
-            self.pymux.get_client_state().layout_manager.menu_key_pressed(event.key_sequence[-1].key)
+            self.pymux.get_client_state().layout_manager.menu.key_pressed(event.key_sequence[-1].key)
 
         @kb.add("escape", filter=menu_displayed, eager=True)
         @kb.add("c-c", filter=menu_displayed, eager=True)
         @_noted(self.pymux, "leave-menu")
         def _quit_menu(event: E) -> None:
             "Leave the menu without taking anything."
-            self.pymux.get_client_state().layout_manager.close_menu()
+            self.pymux.get_client_state().layout_manager.menu.close()
 
         @kb.add(Keys.Any, filter=menu_displayed, eager=True)
         def _menu_key(event: E) -> None:
             "The entry whose key this is, or nothing: the menu stays."
-            self.pymux.get_client_state().layout_manager.menu_key_pressed(event.key_sequence[-1].key, event.data)
+            self.pymux.get_client_state().layout_manager.menu.key_pressed(event.key_sequence[-1].key, event.data)
 
         @kb.add(Keys.KeyRelease, eager=True)
         @kb.add(Keys.UnnamedKey, eager=True)

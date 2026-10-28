@@ -1044,7 +1044,7 @@ class ClientState:
                 layout.display_popup(*modes["popup"])
             if modes["menu"] is not None:
                 title, entries = modes["menu"]
-                layout.display_menu([tuple(entry) for entry in entries], title)
+                layout.menu.show([tuple(entry) for entry in entries], title)
 
             chooser = modes["chooser"]
             if chooser is not None:

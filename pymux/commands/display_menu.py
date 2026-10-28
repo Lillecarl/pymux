@@ -39,7 +39,7 @@ def display_menu(pymux: Pymux, args: argparse.Namespace) -> None:
     except ValueError:
         return  # A command from the command line: nobody to show it to.
 
-    state.layout_manager.display_menu(entries, args.T or "")
+    state.layout_manager.menu.show(entries, args.T or "")
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):

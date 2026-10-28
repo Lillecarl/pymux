@@ -63,6 +63,7 @@ from .enums import Chooser, EditingKeys, Woke
 from .filters import WaitsForConfirmation
 from .format import format_pymux_string
 from .log import logger
+from .menu import Menu
 from .plan_container import PlanContainer
 from .plane import Plan, Side, View, bounding_box
 from .status_line import StatusLine
@@ -73,7 +74,7 @@ from .window_pane import WindowWidget
 from .zoomed import Zoomed
 
 if TYPE_CHECKING:
-    from prompt_toolkit.layout.controls import BufferControl, NotImplementedOrNone
+    from prompt_toolkit.layout.controls import BufferControl
 
     from pymux.main import Pymux
 
@@ -645,9 +646,6 @@ class LayoutManager:
         # the same rule keeps the box one object. Lillecarl/pymux#29.
         self._which_key: Container | None = None
 
-        self._menu: Container | None = None
-        self._menu_rows: Window | None = None
-
         # And the same two for the prompt: the line a person answers a
         # question on, and the box that holds it when the question
         # knows its answers. Lillecarl/pymux#220.
@@ -667,6 +665,7 @@ class LayoutManager:
 
         self.chooser = ChooserView(self)
         self.status = StatusLine(self)
+        self.menu = Menu(self)
 
         self.layout = self._create_layout()
 
@@ -784,114 +783,6 @@ class LayoutManager:
         self._popup_textarea.text = content
         self.client_state.display_popup = True
         get_app().layout.focus(self._popup_textarea)
-
-    def display_menu(self, entries: list, title: str = "") -> None:
-        """
-        The menu of `display-menu`: a line per entry, with the key
-        that runs it beside the name. The box draws where the other
-        boxes draw; tmux takes a position, and -x and -y are accepted
-        for it and change nothing. Lillecarl/pymux#297.
-        """
-        self.client_state.display_popup = False
-        self.client_state.chooser = None
-        self.client_state.menu_entries = entries
-        self.client_state.menu_title = title
-        self._menu_box()
-        assert self._menu_rows is not None
-        get_app().layout.focus(self._menu_rows)
-
-    def close_menu(self) -> None:
-        "The menu goes, without running anything."
-        self.client_state.menu_entries = []
-
-    def menu_key_pressed(self, key, data=None) -> None:
-        """
-        A key while the menu shows: the entry whose key it is runs,
-        and a key that is nobody's stays in the menu, which is modal.
-        The spelling of a named key is tmux's -- Enter, Space, Tab.
-        """
-        if isinstance(key, str) and key in ("<enter>", "<space>", "<tab>"):
-            spelling = {"<enter>": "Enter", "<space>": "Space", "<tab>": "Tab"}[key]
-        elif data:
-            spelling = data
-        else:
-            spelling = key if isinstance(key, str) else str(key)
-
-        for entry in self.client_state.menu_entries:
-            if entry[0].lower() == spelling.lower():
-                self._run_menu_entry(entry)
-                return
-
-    def _run_menu_entry(self, entry) -> None:
-        _key, _name, command = entry
-        self.close_menu()
-        with started_by(Origin.MENU):
-            self.pymux.handle_command(command)
-
-    def _create_menu_click_handler(self, entry) -> Callable[[MouseEvent], NotImplementedOrNone]:
-        "Return a mouse handler that runs the entry when clicking."
-
-        def handler(mouse_event: MouseEvent) -> NotImplementedOrNone:
-            if mouse_event.event_type == MouseEventType.MOUSE_DOWN:
-                with started_by(Origin.MOUSE):
-                    self._run_menu_entry(entry)
-                return None
-            return NotImplemented  # Event not handled here.
-
-        return handler
-
-    def _menu_tokens(self) -> StyleAndTextTuples:
-        """
-        The entries of the menu, one row each: the key that runs it,
-        and its name. A row answers a click the way a chooser's row
-        does. Lillecarl/pymux#297.
-        """
-        result: StyleAndTextTuples = []
-        for key, name, _command in self.client_state.menu_entries:
-            handler = self._create_menu_click_handler((key, name, _command))
-            result.append(("class:chooser.hint", " %s " % (key or " "), handler))
-            result.append(("", "%s\n" % name, handler))
-        return result
-
-    def _menu_box(self) -> Container:
-        """
-        The menu, in a box. Built once, for the reason
-        `_command_line_window` gives; the title is asked each frame,
-        because the command that opened the menu names it.
-        Lillecarl/pymux#297.
-        """
-        if self._menu is not None:
-            return self._menu
-
-        self._menu_rows = Window(
-            content=FormattedTextControl(
-                self._menu_tokens,
-                focusable=True,
-                show_cursor=False,
-            ),
-            style="class:commandpalette",
-        )
-
-        def get_title() -> StyleAndTextTuples:
-            return [
-                (
-                    "class:commandpalette.title",
-                    " %s " % (self.client_state.menu_title or "Menu"),
-                )
-            ]
-
-        self._menu = HSplit(
-            [
-                Window(
-                    height=1,
-                    align=WindowAlign.CENTER,
-                    content=FormattedTextControl(get_title),
-                    style="class:commandpalette.titlebar",
-                ),
-                self._menu_rows,
-            ],
-        )
-        return self._menu
 
     def what_time_moves(self) -> tuple[str, ...]:
         """
@@ -1563,7 +1454,7 @@ class LayoutManager:
                 # the height of what is in it. Lillecarl/pymux#297.
                 Float(
                     content=ConditionalContainer(
-                        content=DynamicContainer(self._menu_box),
+                        content=DynamicContainer(self.menu.box),
                         filter=Condition(lambda: bool(self.client_state.menu_entries)),
                     ),
                     left=BOX_SIDE,
