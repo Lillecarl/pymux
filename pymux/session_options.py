@@ -166,6 +166,13 @@ class SessionOptions(Options):
         factory=editor_keys,
         doc="Which keys copy mode takes, from $EDITOR like `status-keys`. Lillecarl/pymux#375.",
     )
+    steal_focus: bool = option(
+        False,
+        doc=(
+            "Whether a program's OSC 1337 StealFocus takes each client on the session to its pane. Off, "
+            "because a program that moves people at will is a nuisance. Lillecarl/pymux#785."
+        ),
+    )
     notification_click_shows_pane: bool = option(
         True,
         doc=(

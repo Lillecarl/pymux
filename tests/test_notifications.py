@@ -399,6 +399,23 @@ async def test_the_option_keeps_the_client_where_it_is():
         assert pymux.current_session.arrangement.get_active_window() is second
 
 
+async def test_steal_focus_shows_the_pane_when_the_session_allows_it():
+    "OSC 1337 ; StealFocus uses the same move. Lillecarl/pymux#785."
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            first = pymux.current_session.arrangement.get_active_window()
+            pane = first.active_pane
+            await run_as(pymux, state, "new-window")
+            second = pymux.current_session.arrangement.get_active_window()
+
+            pymux.forward_osc(pane, "1337", "StealFocus")
+            assert pymux.current_session.arrangement.get_active_window() is second
+
+            await run_as(pymux, state, "set-option steal-focus on")
+            pymux.forward_osc(pane, "1337", "StealFocus")
+            assert pymux.current_session.arrangement.get_active_window() is first
+
+
 def test_the_query_answer_says_what_the_terminal_takes():
     from pymux.server import ServerConnection
 

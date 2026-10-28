@@ -2043,7 +2043,10 @@ class Pymux:
             return False
         session, window, _pane = found
         self.attach_client_to(client_state, session)
-        session.arrangement.set_active_window(window)
+        # The active window is kept per application, and a caller off
+        # this client's input has another one current.
+        with set_app(client_state.app):
+            session.arrangement.set_active_window(window)
         window.active_pane = pane
         self.invalidate(Woke.CLICK_CHOSE_A_WINDOW)
         return True
@@ -3598,6 +3601,16 @@ class Pymux:
             if directory is None:
                 return False
             pane.current_directory = directory
+            return True
+
+        if key == "StealFocus":
+            if rest or not self.options_of_pane(pane).steal_focus:
+                return False
+            session = self.session_holding(pane)
+            for client_state in list(self._client_states.values()):
+                if client_state.session is session and not client_state.temporary:
+                    self.show_pane(client_state, pane)
+            # And the terminal of the user raises its own window.
             return True
 
         if key == "RemoteHost":
