@@ -4,7 +4,7 @@ import base64
 import json
 import re
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
 from contextlib import AbstractContextManager, suppress
 from typing import (
     TYPE_CHECKING,
@@ -53,8 +53,11 @@ from .terminal_answers import SURVEY, TerminalAnswers
 from .uploads import LIST_SECONDS, Listing, Upload
 
 if TYPE_CHECKING:
+    from pymux.introspect import Counters
     from pymux.main import ClientState, Pymux
+    from pymux.pipes import PipeConnection
     from pymux.recording import Recording
+    from pymux.session import Session
     from pymux.web.stream import PaneStream
 
 __all__ = ["ServerConnection"]
@@ -139,7 +142,7 @@ CANNOT_ATTACH = (
 FRAME_ANSWER_SECONDS = 2.0
 
 
-def _without_left(forwards: list[dict]) -> list[dict]:
+def _without_left(forwards: list[dict[str, Any]]) -> list[dict[str, Any]]:
     "A forwarding table without the time each forward has left."
     return [{key: value for key, value in one.items() if key != "left"} for one in forwards]
 
@@ -229,7 +232,7 @@ class ServerConnection:
         "rate_window_frames": Keep.DROPPED,
     }
 
-    def __init__(self, pymux: Pymux, pipe_connection, may_attach: bool = True) -> None:
+    def __init__(self, pymux: Pymux, pipe_connection: PipeConnection, may_attach: bool = True) -> None:
         self.pymux = pymux
 
         self.pipe_connection = pipe_connection
@@ -372,7 +375,7 @@ class ServerConnection:
         #: connection, so the list here is a copy to draw and never the
         #: truth. Lillecarl/pymux#436.
         self.can_forward = False
-        self.forwards: list[dict] = []
+        self.forwards: list[dict[str, Any]] = []
         #: Whether it sends its table again when asked, and what the
         #: next table that arrives sets. Lillecarl/pymux#487.
         self.answers_forwards = False
@@ -441,7 +444,7 @@ class ServerConnection:
 
         self.pymux.serve_connection(self)
 
-    def _spawn(self, coro) -> None:
+    def _spawn(self, coro: Coroutine[Any, Any, object]) -> None:
         """
         Run a coroutine in the background of this connection.
 
@@ -460,7 +463,7 @@ class ServerConnection:
             return
         self._tasks.start_soon(self._run_task, coro)
 
-    async def _run_task(self, coro) -> None:
+    async def _run_task(self, coro: Coroutine[Any, Any, object]) -> None:
         """
         Run one spawned coroutine, and say what it raised.
 
@@ -1201,7 +1204,7 @@ class ServerConnection:
         self.client_state.matched = found
         self.pymux.invalidate(Woke.THEME_WAS_CHOSEN)
 
-    def _take_client_options(self, announced) -> None:
+    def _take_client_options(self, announced: list[Any]) -> None:
         """
         Set on this client what its own configuration file named.
 
@@ -1477,7 +1480,7 @@ class ServerConnection:
         logger.info("The terminal of client %s reads window frames from shared memory.", self.client_id or "?")
         self._send_packet({Field.CMD: Packet.SHM})
 
-    async def _send_frame(self, parts: list[dict]) -> None:
+    async def _send_frame(self, parts: list[Message]) -> None:
         """
         Write a window pane's frame, one part at a time.
 
@@ -1595,7 +1598,7 @@ class ServerConnection:
         color_depth: ColorDepth = ColorDepth.DEPTH_8_BIT,
         term: str = "xterm",
         start: bool = True,
-        session=None,
+        session: Session | None = None,
     ) -> None:
         """
         Create CommandLineInterface for this client.
@@ -1633,8 +1636,8 @@ class ServerConnection:
             session=session,
         )
         self.client_state = client_state
-        client_state.app.before_render += lambda _: output.frame_begins()
-        client_state.app.after_render += lambda _: output.frame_ends()
+        client_state.app.before_render += lambda _app: output.frame_begins()
+        client_state.app.after_render += lambda _app: output.frame_ends()
 
         if start:
 
@@ -1824,8 +1827,8 @@ class _SocketStdout:
 
     def __init__(
         self,
-        send_packet: Callable,
-        counters=None,
+        send_packet: Callable[[Message], None],
+        counters: Counters | None = None,
         frame_went_out: Callable[[], None] | None = None,
         after_frame: Callable[[], str] | None = None,
     ) -> None:
@@ -1887,7 +1890,7 @@ class _FrameOutput(Vt100_Output):
     cell: the renderer writes cell by cell. Lillecarl/pymux#600.
     """
 
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._after_frame: list[str] = []
         self._in_frame = False
@@ -1968,10 +1971,10 @@ class _ClientInput:
 
     def __init__(
         self,
-        send_packet: Callable,
-        kitty_reply_callback=None,
-        speaks_protocol=None,
-        pixel_cell=None,
+        send_packet: Callable[[Message], None],
+        kitty_reply_callback: Callable[[str], None] | None = None,
+        speaks_protocol: Callable[[], bool | None] | None = None,
+        pixel_cell: Callable[[], tuple[int, int, int] | None] | None = None,
     ) -> None:
         self.send_packet = send_packet
         # Keep a reference to the context manager for the whole lifetime of

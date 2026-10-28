@@ -28,6 +28,8 @@ import select
 import sys
 import termios
 import time
+from collections.abc import Callable
+from typing import Any
 
 __all__ = ["as_json", "diagnose", "human"]
 
@@ -35,11 +37,11 @@ __all__ = ["as_json", "diagnose", "human"]
 REPLY_TIMEOUT = 0.4
 
 
-def diagnose(socket_name: str | None, config_file: str | None) -> dict:
+def diagnose(socket_name: str | None, config_file: str | None) -> dict[str, Any]:
     """
     The facts, as one dict of plain values.
     """
-    report: dict = {
+    report: dict[str, Any] = {
         "pymux": {
             "version": _pymux_version(),
             "python": sys.version.split()[0],
@@ -78,7 +80,7 @@ def _has_terminfo_entry(term: str) -> bool:
         return False
 
 
-def _locale_report() -> dict:
+def _locale_report() -> dict[str, Any]:
     "What the locale machinery answers, and what a pane would encode with."
     names = {name: os.environ.get(name) or "" for name in ("LC_ALL", "LC_CTYPE", "LANG") if os.environ.get(name)}
     try:
@@ -88,7 +90,7 @@ def _locale_report() -> dict:
     return {"env": names, "preferred_encoding": preferred}
 
 
-def _socket_report(socket_name: str | None) -> dict:
+def _socket_report(socket_name: str | None) -> dict[str, Any]:
     """
     Where the socket is, and whether a server is listening on it.
 
@@ -98,7 +100,7 @@ def _socket_report(socket_name: str | None) -> dict:
     """
     from libpymux.sockets import socket_directory
 
-    report: dict = {
+    report: dict[str, Any] = {
         "name": socket_name or "",
         "directory": socket_directory(),
         "exists": False,
@@ -141,7 +143,7 @@ def _socket_report(socket_name: str | None) -> dict:
     return report
 
 
-def _io_capture(run) -> str:
+def _io_capture(run: Callable[[], object]) -> str:
     "What `run` printed to stdout, as a string."
     import io
 
@@ -154,7 +156,7 @@ def _io_capture(run) -> str:
         sys.stdout = was
 
 
-def _terminal_report() -> dict:
+def _terminal_report() -> dict[str, Any]:
     """
     Whether the outer terminal answers a query, and which.
 
@@ -189,7 +191,7 @@ def _terminal_report() -> dict:
         deadline = time.monotonic() + REPLY_TIMEOUT
         seen = b""
         while time.monotonic() < deadline:
-            left, _, _ = select.select([stdin], [], [], 0.05)
+            left, _, _ = select.select([stdin], (), (), 0.05)
             if left:
                 seen += os.read(stdin, 4096)
 
@@ -207,13 +209,13 @@ def _terminal_report() -> dict:
     return report
 
 
-def human(report: dict) -> str:
+def human(report: dict[str, Any]) -> str:
     """
     The report as the lines a person reads.
     """
-    lines = []
+    lines: list[str] = []
 
-    def say(label: str, value) -> None:
+    def say(label: str, value: object) -> None:
         if isinstance(value, dict):
             lines.append("%s:" % label)
             for name, inner in value.items():
@@ -229,6 +231,6 @@ def human(report: dict) -> str:
     return "\n".join(lines)
 
 
-def as_json(report: dict) -> str:
+def as_json(report: dict[str, Any]) -> str:
     "The report as JSON, for a script or an agent."
     return json.dumps(report, indent=2)

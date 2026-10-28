@@ -70,13 +70,17 @@ import time
 from dataclasses import dataclass
 from enum import StrEnum
 from functools import partial
-from typing import NoReturn, assert_never
+from typing import TYPE_CHECKING, NoReturn, assert_never
 
 from pymux import __version__, log
 from pymux.client import command_client, create_client, is_ssh_url, list_clients
 from pymux.config import find_config
 from pymux.scope import rerun_in_a_scope
 from pymux.utils import daemonize
+
+if TYPE_CHECKING:
+    from pymux.client.terminal import TerminalClient
+    from pymux.main import Pymux
 
 __all__ = ["run"]
 
@@ -340,7 +344,7 @@ def parse_arguments(
     """
     a = _build_parser().parse_args(argv)
 
-    rest = a.args
+    rest: list[str] = a.args
     command = None
     mode: Mode | None = _mode_of(rest[0]) if rest else None
 
@@ -381,16 +385,19 @@ def parse_arguments(
         if mode is Mode.SEND_FILE:
             # The paths, before the fallthrough below sends them to a
             # server as a command.
-            a.send_paths, rest = rest, []
+            a.send_paths = rest
+            rest = []
 
         if mode is Mode.IMGCAT:
             # Its files and flags, which `pymux.imgcat` reads.
-            a.imgcat_words, rest = rest, []
+            a.imgcat_words = rest
+            rest = []
 
         if mode in (Mode.CHECK_SNAPSHOT, Mode.RESUME_SERVER):
             # What an upgrading server runs, never a person: the words
             # are `pymux.upgrade`'s to read.
-            a.upgrade_words, rest = rest, []
+            a.upgrade_words = rest
+            rest = []
 
     if mode is Mode.INTEGRATED:
         # The command of the first pane, rather than a pymux command
@@ -512,7 +519,7 @@ def _server_values(name: str, dest: str, prefix: str, parsed_args: argparse.Name
     given = {
         key: value
         for key, value in vars(parsed_args).items()
-        if not key.startswith("_") and key != "socket" and isinstance(value, str | bool | int | list)
+        if not key.startswith("_") and key != "socket" and isinstance(value, (str, bool, int, list))
     }
     lines = _ask_server(
         ["complete-value", "--", name, dest, prefix, json.dumps(given)],
@@ -838,7 +845,12 @@ def _start_and_attach(socket_name: str | None, filename: str | None, attaching: 
     attaching.attach(create_client(socket_name))
 
 
-def _new_pymux(source_file, startup_command=None, session_name=None, size_with_no_client=None):
+def _new_pymux(
+    source_file: str | None,
+    startup_command: str | None = None,
+    session_name: str | None = None,
+    size_with_no_client: tuple[int, int] | None = None,
+) -> Pymux:
     """
     Build the thing that runs a server.
 
@@ -895,7 +907,7 @@ def _axis_of(values: dict[str, str], flag: str, standing: int) -> int:
     return wanted
 
 
-def _web(socket_name: str | None, a) -> int:
+def _web(socket_name: str | None, a: argparse.Namespace) -> int:
     """
     `pymux web`: serve panes of a running server in a browser.
 
@@ -1008,7 +1020,7 @@ class Attaching:
     ansi_colors_only: bool = False
     true_color: bool = False
 
-    def attach(self, client) -> NoReturn:
+    def attach(self, client: TerminalClient) -> NoReturn:
         """
         Attach `client` as asked, then end this process the way the
         attachment ended. The code it leaves with is the server's to name:
@@ -1029,7 +1041,7 @@ class Attaching:
         _leave(client)
 
 
-def _leave(client) -> NoReturn:
+def _leave(client: TerminalClient) -> NoReturn:
     """
     End this process the way the attachment ended.
 
@@ -1050,7 +1062,7 @@ def _no_server_error(socket_name: str | None) -> None:
     )
 
 
-def _send_command(socket_name: str | None, command: str, pane_id, attaching: Attaching) -> int:
+def _send_command(socket_name: str | None, command: str, pane_id: str | None, attaching: Attaching) -> int:
     """
     Send a command to the server, print the answer and return the exit code.
 
@@ -1184,7 +1196,9 @@ def _wait_for_server(socket_name: str, timeout: float = 5.0) -> bool:
     return False
 
 
-def _new_session(socket_name: str | None, command: str, args: list[str], pane_id, attaching: Attaching) -> int:
+def _new_session(
+    socket_name: str | None, command: str, args: list[str], pane_id: str | None, attaching: Attaching
+) -> int:
     """
     Handle `new-session`. Start a new server when there is no server yet.
     Otherwise, pass the command to the running server. (Which will report
