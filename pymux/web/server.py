@@ -23,10 +23,15 @@ import json
 import secrets
 from collections.abc import Callable
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from libpymux import PaneStream, Server, StreamRefused
 
 from pymux.log import logger
+
+if TYPE_CHECKING:
+    from websockets.asyncio.server import ServerConnection
+    from websockets.http11 import Request, Response
 
 __all__ = ["MISSING", "a_token", "serve"]
 
@@ -120,7 +125,7 @@ async def serve(
     except ImportError as missing:
         raise RuntimeError(MISSING) from missing
 
-    def check(connection, request):
+    def check(connection: ServerConnection, request: Request) -> Response | None:
         """
         Answer anything that is not a websocket upgrade, and refuse an
         upgrade that carries no token.
@@ -160,7 +165,9 @@ async def serve(
 
         return None
 
-    async def handle(connection) -> None:
+    async def handle(connection: ServerConnection) -> None:
+        # A handler runs after the handshake, which is what sets the request.
+        assert connection.request is not None
         path, _, query = connection.request.path.partition("?")
         if path == SESSION:
             await _serve_a_session(socket_path, connection, query, writable)
@@ -195,7 +202,7 @@ async def serve(
         await anyio.sleep_forever()
 
 
-async def _relay(stream: PaneStream, connection) -> None:
+async def _relay(stream: PaneStream, connection: ServerConnection) -> None:
     """
     Copy frames one way and messages the other, until either end stops.
 
@@ -224,7 +231,7 @@ async def _relay(stream: PaneStream, connection) -> None:
         both.start_soon(to_the_pane)
 
 
-async def _serve_a_session(socket_path: str, connection, query: str, writable: bool) -> None:
+async def _serve_a_session(socket_path: str, connection: ServerConnection, query: str, writable: bool) -> None:
     """
     One viewer as one client of the session, with everything a client
     draws. `rows` and `columns` in the query are the element's first size;
@@ -248,7 +255,7 @@ async def _serve_a_session(socket_path: str, connection, query: str, writable: b
         await connection.close(1008, str(refused)[:120])
         return
 
-    async def to_viewer(frame) -> None:
+    async def to_viewer(frame: dict[str, Any]) -> None:
         await connection.send(json.dumps(frame))
 
     try:

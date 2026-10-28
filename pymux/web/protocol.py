@@ -38,7 +38,7 @@ from __future__ import annotations
 
 import base64
 import functools
-from typing import Any, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 import anyio
 from pyte.html import CSS, href_of, runs_of_row, style_of, theme_css
@@ -46,6 +46,13 @@ from pyte.images import PixelFormat
 from pyte.png import encode_png
 
 from pymux import graphics, sixel
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from pyte.cells import Appearance
+    from pyte.page import Row
+    from pyte.screen import Screen
 
 __all__ = [
     "FRAME",
@@ -120,7 +127,7 @@ class PaneView:
 
     # -- what to send --------------------------------------------------
 
-    def welcome(self, screen, revision: int, writable: bool) -> dict[str, Any]:
+    def welcome(self, screen: Screen, revision: int, writable: bool) -> dict[str, Any]:
         """
         The message that goes before any frame.
 
@@ -142,7 +149,7 @@ class PaneView:
             "size": {"columns": screen.columns, "rows": screen.lines},
         }
 
-    def frame(self, screen, revision: int) -> dict[str, Any] | None:
+    def frame(self, screen: Screen, revision: int) -> dict[str, Any] | None:
         """
         What this viewer has not seen, or None when it has seen it all.
 
@@ -165,7 +172,9 @@ class PaneView:
             self._reverse_video = reverse_video
             self._palette = palette
 
-        data_buffer = screen.page.data_buffer
+        page = screen.page
+        assert page is not None
+        data_buffer = page.data_buffer
         written_at = screen.written_at
         # A row with no count of its own carries the one that
         # `touch_everything` last set, so a page swap or a reflow moves
@@ -229,7 +238,7 @@ class PaneView:
 
     def _runs(
         self,
-        row,
+        row: Row | None,
         columns: int,
         reverse_video: bool,
         styles: dict[str, dict[str, str]],
@@ -249,7 +258,7 @@ class PaneView:
             answer.append([self._style_number(appearance, reverse_video, styles), text])
         return answer
 
-    def _style_number(self, appearance, reverse_video: bool, styles: dict[str, dict[str, str]]) -> int:
+    def _style_number(self, appearance: Appearance, reverse_video: bool, styles: dict[str, dict[str, str]]) -> int:
         "The number this way of drawing goes out as, naming it if it is new."
         drawn = style_of(appearance, reverse_video)
         key = (drawn.classes, drawn.style, href_of(appearance.hyperlink))
@@ -279,7 +288,7 @@ class PaneView:
         styles[str(held)] = entry
         return held
 
-    def _pictures(self, screen) -> tuple[dict[str, str], list[list[int]]]:
+    def _pictures(self, screen: Screen) -> tuple[dict[str, str], list[list[int]]]:
         """
         The images this viewer has not been sent, and every placement the
         screen shows as `[image, row, column, rows, columns, x, y, width,
@@ -314,7 +323,7 @@ class PaneView:
         self._images = held
         return sent, placements
 
-    def unsent(self, screen) -> list[Any]:
+    def unsent(self, screen: Screen) -> list[Any]:
         "The images the screen places that this viewer has not been sent."
         return [
             image
@@ -322,7 +331,7 @@ class PaneView:
             if not any(known is image and data is image.data for known, data in self._images.values())
         ]
 
-    def _cursor_of(self, screen) -> tuple[int, int]:
+    def _cursor_of(self, screen: Screen) -> tuple[int, int]:
         """
         Where the cursor is, in rows of the screen.
 
@@ -337,7 +346,7 @@ class PaneView:
         return (row, position.x)
 
 
-def _placed(screen):
+def _placed(screen: Screen) -> Iterator[graphics.Placed]:
     view = graphics.PaneView(
         pane_id=0,
         x=0,
@@ -372,7 +381,7 @@ def base64_png(format: int, width: int, height: int, data: bytes) -> str | None:
     return base64.b64encode(png).decode("ascii")
 
 
-async def encode_unsent(view: PaneView, screen) -> None:
+async def encode_unsent(view: PaneView, screen: Screen) -> None:
     """
     Encode in a thread the images `view.frame` would send, so the frame
     finds them in `base64_png`'s cache.

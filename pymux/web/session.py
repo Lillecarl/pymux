@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import json
 import time
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterable, Awaitable, Callable
 from typing import Any
 
 import anyio
@@ -142,7 +142,7 @@ class SessionScreen:
         await encode_unsent(self._view, self.screen)
         return self._view.frame(self.screen, self.screen.writes)
 
-    def take(self, data: str) -> str | None:
+    def take(self, data: str | bytes) -> str | None:
         """
         Read one message from the viewer, and answer why not if refused.
 
@@ -215,7 +215,7 @@ class SessionScreen:
 async def run_session(
     stream: anyio.abc.ByteStream,
     to_viewer: Callable[[dict[str, Any]], Awaitable[None]],
-    from_viewer: AsyncIterator[str],
+    from_viewer: AsyncIterable[str | bytes],
     rows: int,
     columns: int,
     read_only: bool = False,

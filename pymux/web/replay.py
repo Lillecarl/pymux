@@ -49,7 +49,7 @@ def limit_idle_time(times: list[float], limit: float | None) -> list[float]:
     return answer
 
 
-def replay_of(recording: dict, idle_time_limit: float | None = None) -> dict[str, Any]:
+def replay_of(recording: dict[str, Any], idle_time_limit: float | None = None) -> dict[str, Any]:
     """
     The replay of `recording`, which is what a `.session.json` holds.
 

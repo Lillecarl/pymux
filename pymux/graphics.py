@@ -35,14 +35,14 @@ import base64
 import random
 import re
 import zlib
-from collections.abc import Awaitable, Callable, Coroutine, Iterable
+from collections.abc import Awaitable, Callable, Coroutine, Iterable, Iterator
 from typing import Any, NamedTuple
 
 import anyio
-from libpymux.protocol import Codec, Field, Packet
+from libpymux.protocol import Codec, Field, Message, Packet
 from prompt_toolkit.output import ColorDepth
 from pyte import escape
-from pyte.images import PixelFormat
+from pyte.images import GraphicsImage, GraphicsPlacement, PixelFormat
 from pyte.sequences import Csi, csi, esc
 from pyte.sixel import stored_payload
 from pyte.terminfo import DeviceExtension
@@ -241,27 +241,43 @@ FrameRects = tuple[int, bool, int, int, list[tuple[int, int, int, int, bytes]]]
 #: encoded frame, and the rectangles that changed as `(x, y, w, h)`.
 VideoFrame = tuple[int, bool, int, int, bytes, list[tuple[int, int, int, int]]]
 
+#: The pixels of an image that a placement shows: x, y, width, height.
+type Source = tuple[int, int, int, int]
+
+#: One image a pane shows, as `pane_placements` yields it: the
+#: placement, the image, its size in cells, its top left cell on the
+#: screen, and the pixels of the image it shows, or None for all of it.
+type Placed = tuple[GraphicsPlacement, GraphicsImage, int, int, int, int, Source | None]
+
+#: What the cell cache keys an encoded placement by: the image and
+#: whatever about the placement changes the encoding.
+type CellKey = tuple[object, ...]
+
+#: One frame of a way of drawing whose pixels are the cells: the
+#: commands by pane, image and slot, and the cache keys they used.
+type Collected = tuple[dict[tuple[int, int, int], str], set[CellKey]]
+
 #: The most pixel bytes one `window-frame` packet carries. A key queued
 #: behind a part waits for at most this much on the link.
 FRAME_PART_BYTES = 64 * 1024
 
 
-def frame_parts(image_id: int, frame: FrameRects, after: str) -> list[dict]:
+def frame_parts(image_id: int, frame: FrameRects, after: str) -> list[Message]:
     """
     A frame as `window-frame` packets of at most `FRAME_PART_BYTES` of
     pixels each: every rectangle cut into bands of whole rows, which the
     client puts back together. Lillecarl/pymux#634.
     """
     _serial, whole, width, height, rects = frame
-    head = {
+    head: Message = {
         Field.CMD: Packet.WINDOW_FRAME,
         Field.IMAGE: image_id,
         Field.WHOLE: whole,
         Field.WIDTH: width,
         Field.HEIGHT: height,
     }
-    parts: list[dict] = []
-    bands: list[list] = []
+    parts: list[Message] = []
+    bands: list[list[int | bytes]] = []
     size = 0
     for x, y, w, h, pixels in rects:
         row = w * 3
@@ -270,21 +286,22 @@ def frame_parts(image_id: int, frame: FrameRects, after: str) -> list[dict]:
             count = min(rows, h - top)
             if bands and size + count * row > FRAME_PART_BYTES:
                 parts.append({**head, Field.RECTS: bands})
-                bands, size = [], 0
+                bands = []
+                size = 0
             bands.append([x, y + top, w, count, pixels[top * row : (top + count) * row]])
             size += count * row
     parts.append({**head, Field.RECTS: bands, Field.LAST: True, Field.AFTER: after})
     return parts
 
 
-def video_parts(image_id: int, codec: Codec, frame: VideoFrame, after: str) -> list[dict]:
+def video_parts(image_id: int, codec: Codec, frame: VideoFrame, after: str) -> list[Message]:
     """
     An encoded frame as `window-frame` packets of at most
     `FRAME_PART_BYTES` each. The last part says what changed, which the
     client takes from the frame it decodes. Lillecarl/pymux#639.
     """
     _serial, keyframe, width, height, data, rects = frame
-    head: dict = {
+    head: Message = {
         Field.CMD: Packet.WINDOW_FRAME,
         Field.IMAGE: image_id,
         Field.CODEC: codec,
@@ -413,7 +430,7 @@ class ClientGraphics:
         #: Writes a window pane's frame as `window-frame` packets, for a
         #: client that encodes the pixels for its terminal itself; None
         #: when the frame goes as kitty commands. Lillecarl/pymux#634.
-        self.send_frame: Callable[[list[dict]], Awaitable[None]] | None = None
+        self.send_frame: Callable[[list[Message]], Awaitable[None]] | None = None
 
         #: Waits until the client answered the window frames it was
         #: sent, for a client that answers; a window pane's next frame
@@ -454,7 +471,7 @@ class ClientGraphics:
         self._reads_placeholders = reads_placeholders
 
         # (pane id, pane image id) -> (pane image, outer image id)
-        self._images: dict[tuple[int, int], tuple[Any, int]] = {}
+        self._images: dict[tuple[int, int], tuple[GraphicsImage, int]] = {}
         self._transmitted_bytes = 0
         #: (pane id, pane image id) -> the pane image a worker thread
         #: prepares the transmission of.
@@ -469,10 +486,10 @@ class ClientGraphics:
         # cached, because cropping means encoding again and a scrolling
         # image would otherwise pay for the encoder on every frame.
         self._cell_placements: dict[tuple[int, int, int], str] = {}
-        self._cell_cache: dict[tuple, tuple[Any, Any]] = {}
+        self._cell_cache: dict[CellKey, tuple[GraphicsImage, Any]] = {}
         self._cell_redraw = False
         #: Cache keys a worker thread is encoding.
-        self._cell_pending: set[tuple] = set()
+        self._cell_pending: set[CellKey] = set()
 
         #: Pane id -> what this client holds of that window pane.
         self._windows: dict[int, _ShownWindow] = {}
@@ -764,7 +781,7 @@ class ClientGraphics:
 
     async def _send_window_frame(
         self,
-        send_frame: Callable[[list[dict]], Awaitable[None]],
+        send_frame: Callable[[list[Message]], Awaitable[None]],
         view: WindowView,
         outer_id: int,
         since: int | None,
@@ -795,7 +812,7 @@ class ClientGraphics:
 
     async def _send_video_frame(
         self,
-        send_frame: Callable[[list[dict]], Awaitable[None]],
+        send_frame: Callable[[list[Message]], Awaitable[None]],
         view: WindowView,
         outer_id: int,
         generation: int,
@@ -821,7 +838,7 @@ class ClientGraphics:
             await send_frame(self._answered(video_parts(outer_id, Codec.VP9, frame, after)))
         view.shown(bool(data))
 
-    def _answered(self, parts: list[dict]) -> list[dict]:
+    def _answered(self, parts: list[Message]) -> list[Message]:
         "Ask a client that answers frames to let its terminal answer this one. Lillecarl/pymux#643."
         if self.frame_room is not None:
             parts[-1][Field.ANSWER] = True
@@ -858,7 +875,9 @@ class ClientGraphics:
         self._write_raw(SAVE_CURSOR + "".join(commands) + RESTORE_CURSOR)
         self._flush()
 
-    def draws_at_its_own_size(self, placement, image, source, columns: int, rows: int) -> bool:
+    def draws_at_its_own_size(
+        self, placement: GraphicsPlacement, image: GraphicsImage, source: Source | None, columns: int, rows: int
+    ) -> bool:
         """
         Whether this placement should be drawn at the size of its own
         pixels, rather than fitted to the cells it covers.
@@ -982,13 +1001,13 @@ class ClientGraphics:
                 "\x1b_Ga=p,U=1,i=%i,p=%i,c=%i,r=%i,q=2\x1b\\" % (outer_id, slot, placement.columns, placement.rows),
             )
 
-    def _pane_placements(self, view: PaneView):
+    def _pane_placements(self, view: PaneView) -> Iterator[Placed]:
         return pane_placements(view, self.cell_width, self.cell_height)
 
     # ------------------------------------------------------------------
     # Image transmission.
 
-    def _outer_image_id(self, pane_id, placement, image) -> int | None:
+    def _outer_image_id(self, pane_id: int, placement: GraphicsPlacement, image: GraphicsImage) -> int | None:
         """
         The id of `image` on the outer terminal. Transmits the image the
         first time it is needed. Returns None when it cannot be sent,
@@ -1036,7 +1055,7 @@ class ClientGraphics:
         self._send_image(key, image, outer_id, commands)
         return outer_id
 
-    async def _transmit_in_thread(self, key: tuple[int, int], image, outer_id: int) -> None:
+    async def _transmit_in_thread(self, key: tuple[int, int], image: GraphicsImage, outer_id: int) -> None:
         """
         Prepare one transmission in a worker thread, and send it.
         Lillecarl/pymux#576.
@@ -1059,14 +1078,14 @@ class ClientGraphics:
         if self._repaint is not None:
             self._repaint()
 
-    def _send_image(self, key: tuple[int, int], image, outer_id: int, commands: list[str]) -> None:
+    def _send_image(self, key: tuple[int, int], image: GraphicsImage, outer_id: int, commands: list[str]) -> None:
         for command in commands:
             self._write_raw(command)
             self._flush()
         self._transmitted_bytes += len(image.data)
         self._images[key] = (image, outer_id)
 
-    def _forget_unused_images(self, live_keys) -> None:
+    def _forget_unused_images(self, live_keys: set[tuple[int, int]]) -> None:
         "Free the images that no pane holds anymore."
         for key, (image, outer_id) in list(self._images.items()):
             if key not in live_keys:
@@ -1106,7 +1125,7 @@ class ClientGraphics:
         """
         self._render_cells(self._collect_blocks, views)
 
-    def _render_cells(self, collect, views: Iterable[PaneView]) -> None:
+    def _render_cells(self, collect: Callable[[Iterable[PaneView]], Collected], views: Iterable[PaneView]) -> None:
         """
         Draw one frame of a way whose pixels are the cells.
 
@@ -1144,10 +1163,10 @@ class ClientGraphics:
         self._write_raw(SAVE_CURSOR + "".join(desired[key] for key in sorted(desired)) + RESTORE_CURSOR)
         self._flush()
 
-    def _collect_sixel(self, views: Iterable[PaneView]) -> tuple[dict[tuple[int, int, int], str], set]:
+    def _collect_sixel(self, views: Iterable[PaneView]) -> Collected:
         "The sixel commands of one frame, and the cache keys they used."
         desired: dict[tuple[int, int, int], str] = {}
-        live: set[tuple] = set()
+        live: set[CellKey] = set()
 
         for view in views:
             slots: dict[int, int] = {}
@@ -1192,10 +1211,10 @@ class ClientGraphics:
 
         return desired, live
 
-    def _collect_blocks(self, views: Iterable[PaneView]) -> tuple[dict[tuple[int, int, int], str], set]:
+    def _collect_blocks(self, views: Iterable[PaneView]) -> Collected:
         "The half block rows of one frame, and the cache keys they used."
         desired: dict[tuple[int, int, int], str] = {}
-        live = set()
+        live: set[CellKey] = set()
         depth = self.color_depth
 
         for view in views:
@@ -1228,16 +1247,26 @@ class ClientGraphics:
 
         return desired, live
 
-    def _blocks_for(self, key: tuple, image, source, columns: int, rows: int, depth) -> list[str] | None:
+    def _blocks_for(
+        self, key: CellKey, image: GraphicsImage, source: Source | None, columns: int, rows: int, depth: ColorDepth
+    ) -> list[str] | None:
         "The half block rows of one placement. (Cached by geometry.)"
         return self._cell_entry(key, image, _encode_blocks, image, source, columns, rows, depth)
 
-    def _sixel_for(self, key: tuple, image, source, columns: int, rows: int, own_size: bool = False) -> str | None:
+    def _sixel_for(
+        self,
+        key: CellKey,
+        image: GraphicsImage,
+        source: Source | None,
+        columns: int,
+        rows: int,
+        own_size: bool = False,
+    ) -> str | None:
         "The sixel sequence of one placement. (Cached by geometry.)"
         target = None if own_size else (max(1, columns * self.cell_width), max(1, rows * self.cell_height))
         return self._cell_entry(key, image, _encode_sixel, image, source, target)
 
-    def _as_sent(self, key: tuple, image) -> str | None:
+    def _as_sent(self, key: CellKey, image: GraphicsImage) -> str | None:
         """
         The program's own sixel sequence, for an image drawn whole at its
         own size. Encoding it again changes the palette, so a gradient
@@ -1254,7 +1283,7 @@ class ClientGraphics:
         self._cell_cache[key] = (image, sent)
         return sent
 
-    def _cell_entry(self, key: tuple, image, work: Callable, *args):
+    def _cell_entry(self, key: CellKey, image: GraphicsImage, work: Callable[..., Any], *args: object) -> Any:
         """
         What `work(*args)` gives for one placement, from the cache.
 
@@ -1277,7 +1306,9 @@ class ClientGraphics:
             self._spawn(self._work_in_thread(key, image, work, args))
         return None
 
-    async def _work_in_thread(self, key: tuple, image, work: Callable, args: tuple) -> None:
+    async def _work_in_thread(
+        self, key: CellKey, image: GraphicsImage, work: Callable[..., Any], args: tuple[object, ...]
+    ) -> None:
         "Run one `_cell_entry` miss in a thread, and keep the answer."
         try:
             result = await anyio.to_thread.run_sync(work, *args)
@@ -1329,7 +1360,7 @@ class ClientGraphics:
         self._flush()
 
 
-def _transmission(outer_id: int, image) -> list[str]:
+def _transmission(outer_id: int, image: GraphicsImage) -> list[str]:
     "The commands that send one image to the outer terminal. It runs in a worker thread."
     if image.format == PixelFormat.PNG:
         keys = "f=%i" % PixelFormat.PNG
@@ -1356,7 +1387,7 @@ def _transmission(outer_id: int, image) -> list[str]:
     return commands
 
 
-def source_rgba(image, source) -> tuple[bytes, int, int] | None:
+def source_rgba(image: GraphicsImage, source: Source | None) -> tuple[bytes, int, int] | None:
     "The RGBA pixels a placement shows, and their size."
     pixels = sixel.to_rgba(image.format, image.width, image.height, image.data)
     if pixels is None:
@@ -1369,7 +1400,9 @@ def source_rgba(image, source) -> tuple[bytes, int, int] | None:
     return pixels, source[2], source[3]
 
 
-def _encode_blocks(image, source, columns: int, rows: int, depth) -> list[str]:
+def _encode_blocks(
+    image: GraphicsImage, source: Source | None, columns: int, rows: int, depth: ColorDepth
+) -> list[str]:
     "The half block rows of one placement. It runs in a worker thread."
     found = source_rgba(image, source)
     if found is None:
@@ -1380,7 +1413,7 @@ def _encode_blocks(image, source, columns: int, rows: int, depth) -> list[str]:
     return blocks_for(pixels, columns, rows, depth)
 
 
-def _encode_sixel(image, source, target: tuple[int, int] | None) -> str | None:
+def _encode_sixel(image: GraphicsImage, source: Source | None, target: tuple[int, int] | None) -> str | None:
     """
     The sixel sequence of one placement, scaled to `target` pixels, or
     at its own size for None. It runs in a worker thread.
@@ -1398,7 +1431,7 @@ def _encode_sixel(image, source, target: tuple[int, int] | None) -> str | None:
     return sixel.encode_sixel(width, height, pixels)
 
 
-def _drawn_size(image, source: tuple[int, int, int, int] | None) -> tuple[int, int]:
+def _drawn_size(image: GraphicsImage, source: Source | None) -> tuple[int, int]:
     "The pixels a placement shows: the image, or the crop out of it."
     if source is not None:
         return (source[2], source[3])
@@ -1420,7 +1453,7 @@ def _crop_rgba(pixels: bytes, width: int, height: int, source: tuple[int, int, i
     return bytes(out)
 
 
-def pane_placements(view: PaneView, cell_width: int, cell_height: int):
+def pane_placements(view: PaneView, cell_width: int, cell_height: int) -> Iterator[Placed]:
     """
     Everything of one pane that the client should draw: the plain
     placements, and the images that the unicode placeholders in the
@@ -1430,7 +1463,7 @@ def pane_placements(view: PaneView, cell_width: int, cell_height: int):
     yield from placeholder_placements(view, cell_width, cell_height)
 
 
-def placeholder_placements(view: PaneView, cell_width: int, cell_height: int):
+def placeholder_placements(view: PaneView, cell_width: int, cell_height: int) -> Iterator[Placed]:
     """
     Yield the images that the unicode placeholders of one pane
     point at.
@@ -1487,7 +1520,7 @@ def placeholder_placements(view: PaneView, cell_width: int, cell_height: int):
         )
 
 
-def visible_placements(view: PaneView):
+def visible_placements(view: PaneView) -> Iterator[Placed]:
     """
     Yield the placements of one pane that the client can see, with
     their position on the screen and their cropping.
@@ -1546,7 +1579,16 @@ def visible_placements(view: PaneView):
         )
 
 
-def _placeholder_source(image, placement, image_column, image_row, columns, rows, cell_width, cell_height):
+def _placeholder_source(
+    image: GraphicsImage,
+    placement: GraphicsPlacement,
+    image_column: int,
+    image_row: int,
+    columns: int,
+    rows: int,
+    cell_width: int,
+    cell_height: int,
+) -> Source | None:
     """
     The rectangle of `image`, in pixels, that a run of placeholder
     cells shows. None when the run falls outside the image.
