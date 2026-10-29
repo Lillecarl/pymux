@@ -9,9 +9,9 @@ terminal everything after the cluster stands in the wrong place.
 
 wcwidth carries what ucs-detect measured on each terminal, by name.
 XTVERSION gives the name: TERM cannot, as iTerm2 and WezTerm both send
-xterm-256color. A terminal wcwidth has no table for is measured the way
+xterm-256color. Better still, the terminal is measured the way
 ucs-detect measures, by writing one cluster of each kind and reading
-the cursor back. Lillecarl/pymux#801.
+the cursor back, and its answers outrank its table. Lillecarl/pymux#801.
 
 A cluster the terminal draws narrower is padded with blanks, and one it
 draws wider goes out as its first character.
@@ -97,6 +97,10 @@ class Drawn(NamedTuple):
         "With the cursor report of `row` read: the cursor stands after the cluster."
         kind, _ = PROBES[row]
         return self._replace(**{kind: column - 1})
+
+    def heard(self) -> bool:
+        "Whether the terminal answered for any kind."
+        return any(drawn is not None for drawn in self)
 
     def differs(self) -> bool:
         "Whether any cluster this terminal answered for is not two columns."

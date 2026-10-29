@@ -1058,18 +1058,20 @@ class ServerConnection:
 
     def cluster_fit(self) -> str | Drawn | None:
         """
-        How this client's terminal draws a grapheme cluster: by the name
-        of its table in wcwidth, or else by what it answered the probe.
+        How this client's terminal draws a grapheme cluster: by what it
+        answered the probe, or else by the name of its table in wcwidth.
         None where it draws each as a pane holds it.
+
+        The answer goes first: WezTerm 20240203 draws a flag two
+        columns wide, where wcwidth's table for it says one.
         """
-        named = term_program_of(self.graphics.terminal_version, self.colors.term)
-        if named is not None:
-            return named
-        return self.clusters_drawn if self.clusters_drawn.differs() else None
+        if self.clusters_drawn.heard():
+            return self.clusters_drawn if self.clusters_drawn.differs() else None
+        return term_program_of(self.graphics.terminal_version, self.colors.term)
 
     def _compare_with_the_table(self, row: int) -> None:
-        # A named terminal is fitted by its table; a probe that says
-        # otherwise is worth knowing about, a font or a version later.
+        # A table that disagrees with the terminal it is named for is
+        # worth knowing about: wcwidth's, or a font of the terminal's.
         named = term_program_of(self.graphics.terminal_version, self.colors.term)
         if named is None:
             return
