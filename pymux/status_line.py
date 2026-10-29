@@ -36,6 +36,20 @@ __all__ = ["PASSTHROUGH_MARK", "StatusLine"]
 PASSTHROUGH_MARK = " PASSTHROUGH "
 
 
+def _tab_style(window: arrangement.Window) -> str:
+    """
+    The tab colour of the window's active pane, "OSC 6", as a style to
+    add, with black or white over it, whichever reads. Lillecarl/pymux#786.
+    """
+    pane = window.active_pane
+    color = pane.screen.tab_color if pane is not None else None
+    if color is None:
+        return ""
+    red, green, blue = color
+    ink = "#000000" if 299 * red + 587 * green + 114 * blue > 128_000 else "#ffffff"
+    return " bg:#%02x%02x%02x fg:%s" % (red, green, blue, ink)
+
+
 class StatusLine:
     "What the status line of one client shows."
 
@@ -103,7 +117,7 @@ class StatusLine:
 
             result.append(
                 (
-                    style,
+                    style + _tab_style(w),
                     format_pymux_string(
                         self.pymux,
                         format_str,

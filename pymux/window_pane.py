@@ -174,6 +174,8 @@ class _PointerShapes:
 class WindowScreen:
     "What a window pane answers where a terminal pane's screen would."
 
+    tab_color: tuple[int, int, int] | None = None
+
     def __init__(self) -> None:
         self.titles = _Titles()
         self.graphics = _Graphics()
