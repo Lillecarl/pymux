@@ -1655,6 +1655,12 @@ class ServerConnection:
         sent meanwhile -- a key's echo, a line of text -- takes the write
         lock between two parts, and never waits behind the whole frame.
         What the terminal was sent before goes first. Lillecarl/pymux#634.
+
+        **The checkpoint is what makes that true.** A write to a socket
+        with room never suspends, so without it the parts of a frame go
+        out in one turn of the loop: on a zstd stream, about 7 ms of
+        compression for a 1600x880 frame, and every other task waits.
+        Lillecarl/pymux#632.
         """
         self._flush_output()
         self.window_frames_sent += 1
@@ -1666,6 +1672,7 @@ class ServerConnection:
             if self._closed:
                 return
             await self._write(self._encode(part))
+            await anyio.lowlevel.checkpoint()
 
     def _pixel_cell(self) -> tuple[int, int, int] | None:
         "The cell size mouse reports are divided by, while they come in pixels, and their first pixel's number."
