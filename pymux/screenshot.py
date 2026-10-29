@@ -36,6 +36,7 @@ Lillecarl/pymux#763.
 from __future__ import annotations
 
 import io
+import math
 import shutil
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -408,6 +409,30 @@ def _paste(picture: Image.Image, images: list[Shown], width: int, height: int) -
         picture.paste(drawn, (shown.column * width, shown.row * height), drawn)
 
 
+def _squeeze(
+    image: Image.Image,
+    glyph: str,
+    font: ImageFont.FreeTypeFont,
+    top: int,
+    at: tuple[int, int],
+    sizes: tuple[int, int, int],
+    foreground: str,
+) -> None:
+    """
+    A glyph wider than its cells, scaled down to their width and centred
+    in their height, as kitty fits one. Drawn at its own width it covered
+    the next cell: an emoji in a cell of one column, a conjunct from a
+    fallback font. Lillecarl/pymux#803.
+    """
+    wide, room, height = sizes
+    mask = Image.new("L", (wide, height))
+    ImageDraw.Draw(mask).text((0, top), glyph, font=font, fill=255)
+    tall = max(1, height * room // wide)
+    mask = mask.resize((room, tall), Image.Resampling.LANCZOS)
+    left, upper = at
+    image.paste(foreground, (left, upper + (height - tall) // 2), mask)
+
+
 def draw(grid: Grid, faces: Faces, width: int, height: int) -> bytes:
     "The grid as a PNG, `width` by `height` pixels to a cell."
     image = Image.new("RGB", (grid.columns * width, max(1, len(grid.rows)) * height), grid.background)
@@ -437,7 +462,12 @@ def draw(grid: Grid, faces: Faces, width: int, height: int) -> bytes:
             elif glyph.strip() and not look.hidden:
                 face = ("bold" if look.bold else "") + ("italic" if look.italic else "")
                 font, top = pens.font_for(glyph, face or "regular")
-                pen.text((left, upper + top), glyph, font=font, fill=foreground)
+                room = span * width
+                wide = 0 if glyph.isascii() else math.ceil(font.getlength(glyph))
+                if wide > room:
+                    _squeeze(image, glyph, font, top, (left, upper), (wide, room, height), foreground)
+                else:
+                    pen.text((left, upper + top), glyph, font=font, fill=foreground)
             if look.underline:
                 pen.line((left, lower - 1, right, lower - 1), fill=foreground)
             if look.strike:

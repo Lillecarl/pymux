@@ -171,6 +171,19 @@ def test_a_cell_of_several_characters_takes_a_font_that_has_them_all():
     assert font.path == FONTS[0]
 
 
+async def test_a_glyph_wider_than_its_cells_stays_in_them(pymux):
+    """
+    Unifont draws the conjunct ksha with its vowel sign about three cells
+    wide, and the screen gives it two: the third stays blank. Lillecarl/pymux#803.
+    """
+    pane = create_pane(pymux, "\x1b[?25l\u0915\u094d\u0937\u093f ")
+    assert pane.screen.page.data_buffer[0][2].char == " "
+    paint = Paint.of(pane.screen.colors)
+    image = await picture(pymux, "--cell", "9x18", "--fallback", FALLBACK)
+    assert len(_cell(image, 0, 0, 9, 18) | _cell(image, 1, 0, 9, 18)) > 1
+    assert _cell(image, 2, 0, 9, 18) == {_rgb(paint.background)}
+
+
 def test_a_fallback_is_known_by_what_it_holds():
     assert 0x23BF in screenshot._characters(FALLBACK)
     assert 0x23BF not in screenshot._characters(FONTS[0])
