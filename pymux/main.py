@@ -106,6 +106,7 @@ from .notifications import (
     NotificationSource,
     Urgency,
     close_of,
+    is_question,
     osc99_of,
 )
 from .options import (
@@ -246,12 +247,6 @@ BEHIND_INTERVAL = 0.1
 #: How often the windows are checked for output and for quiet, in
 #: seconds: a mark goes up within this of what raised it.
 WINDOW_OUTPUT_INTERVAL = 1.0
-
-#: How old a desktop notification must be before a look at its window
-#: closes it, in seconds. The focus syncs on the same turn a pane's
-#: notification goes out, and with nothing between them a person
-#: watching the window would never see it. Lillecarl/pymux#799.
-NOTIFICATION_SEEN_AFTER = 2.0
 
 #: What a client refreshes in the session it attaches to, by default.
 #: tmux's own list, which is every name that points at something on
@@ -2049,7 +2044,7 @@ class Pymux:
             for connection in self._client_states
             if connection is not None and "report" in connection.notification_actions
         ]
-        if not clickers:
+        if not clickers or pane.pane_id in self._panes_in_sight():
             return
         ours = self.notifications.own(pane.pane_id)
         sequences = [
@@ -2397,6 +2392,16 @@ class Pymux:
                 process.write_input(report)
         self._focused_panes = focused
 
+    def _panes_in_sight(self) -> set[PaneId]:
+        "The panes of every window a client shows on a terminal that has the focus."
+        shown: set[PaneId] = set()
+        for client_state in self._client_states.values():
+            if client_state.terminal_focused and not client_state.temporary:
+                window = client_state.session.arrangement.get_active_window_for(client_state.app)
+                if window is not None:
+                    shown.update(pane.pane_id for pane in window.panes)
+        return shown
+
     def _close_seen_notifications(self) -> None:
         """
         Take the desktop notifications of a window off each terminal that
@@ -2405,13 +2410,7 @@ class Pymux:
         """
         if not self.notifications.any_shown:
             return
-        shown: set[PaneId] = set()
-        for client_state in self._client_states.values():
-            if client_state.terminal_focused and not client_state.temporary:
-                window = client_state.session.arrangement.get_active_window_for(client_state.app)
-                if window is not None:
-                    shown.update(pane.pane_id for pane in window.panes)
-        closed = self.notifications.seen(shown, sent_before=time.time() - NOTIFICATION_SEEN_AFTER)
+        closed = self.notifications.seen(self._panes_in_sight())
         if not closed:
             return
         for connection in self._client_states:
@@ -3600,6 +3599,13 @@ class Pymux:
                     return
                 self.notification_center.add(text, pane_id=pane.pane_id, source=NotificationSource.OSC_9)
                 recorded = True
+
+            # A person looking at the window already sees what the
+            # notification says: it stays in the hub, seen. A terminal
+            # without the focus is no look. Lillecarl/pymux#799.
+            notice = recorded or (code == Osc.NOTIFICATION and not is_question(param))
+            if notice and pane.pane_id in self._panes_in_sight():
+                return
 
             sequence = build_osc(code, param)
             if sequence is None:

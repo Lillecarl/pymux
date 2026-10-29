@@ -161,7 +161,7 @@ OSC_NOTIFICATION_RE = rb"\x1b\]99;i=(\d+):a=report;done\x1b\\"
 # program again.
 OSC_NOTIFICATION_ANSWER = osc(Osc.NOTIFICATION, "i=mine")
 OSC_POINTER = osc(Osc.POINTER_SHAPE, "pointer")
-PANE_OSC = OSC_CLIPBOARD + OSC_CLIPBOARD_QUERY + OSC_NOTIFICATION + OSC_POINTER
+PANE_OSC = OSC_CLIPBOARD + OSC_CLIPBOARD_QUERY + OSC_POINTER
 
 # A hyperlink belongs to the cells that carry it, so it does not travel
 # as a sequence. The pane draws it, the cells hold the target, and the
@@ -209,6 +209,11 @@ while True:
         # The one at the start was refused, and a pane cannot be told.
         sys.stdout.write(%r)
         sys.stdout.flush()
+    if b"N" in data:
+        # A notification, sent when the check has looked away: one of
+        # the window a person looks at stays inside pymux.
+        sys.stdout.write(%r)
+        sys.stdout.flush()
     # A line of its own: a long echo must not wrap, or the check for
     # it reads the wrapping as part of the text.
     sys.stdout.write("\\r\\n<<%%s>>" %% data.hex())
@@ -220,6 +225,7 @@ while True:
     PANE_HYPERLINK,
     PANE_UNDERLINE,
     OSC_CLIPBOARD,
+    OSC_NOTIFICATION,
 )
 
 
@@ -844,10 +850,15 @@ class Terminal(Attached):
 # ----------------------------------------------------------------------
 
 
-def check_osc_sequences(terminal, tail):
+def check_osc_sequences(terminal, mark):
     """
     The OSC sequences of the pane that reach the terminal, and the two
     that do not.
+
+    **The notification waits until the terminal loses the focus.** One
+    from the window a person looks at stays inside pymux, and a terminal
+    is taken to have the focus until it says otherwise. So the check
+    looks away first, and the pane writes it on "N". Lillecarl/pymux#799.
 
     **The clipboard write is one of the two.** `set-clipboard` ships as
     tmux ships it, "external", where a copy the person makes goes out
@@ -856,11 +867,16 @@ def check_osc_sequences(terminal, tail):
     `check_a_pane_reaches_the_clipboard_when_told_to` turns it on.
     Lillecarl/pymux#378.
     """
+    tail = terminal.since(mark)
     assert OSC_POINTER.encode() in tail, "the pointer shape did not arrive"
     assert OSC_CLIPBOARD.encode() not in tail, "a pane wrote the clipboard of the user with the shipped option"
     assert OSC_CLIPBOARD_QUERY.encode() not in tail, "the pane read the clipboard of the user"
 
-    found = re.search(OSC_NOTIFICATION_RE, tail)
+    away = terminal.mark()
+    terminal.write(b"\x1b[O")
+    terminal.write(b"N")
+    terminal.wait_for(b"\x1b]99;i=", since=away)
+    found = re.search(OSC_NOTIFICATION_RE, terminal.since(away))
     assert found, "the notification did not arrive"
     return found.group(1)
 
@@ -1011,7 +1027,7 @@ def check_kitty_terminal(tmp):
         #    it starts, so the wait is from the mark that this check
         #    reads them out of, and not from the step above.
         terminal.wait_for(OSC_POINTER.encode(), since=mark)
-        identifier = check_osc_sequences(terminal, terminal.since(mark))
+        identifier = check_osc_sequences(terminal, mark)
 
         #    And the clipboard reaches it once the option says a pane
         #    may. The pane writes it again on "C", because a pane is
@@ -1148,7 +1164,7 @@ def check_plain_terminal(tmp):
         tail = terminal.since(mark)
         # Passing an OSC sequence on asks nothing of the terminal, so a
         # terminal that answers no query still receives them.
-        check_osc_sequences(terminal, tail)
+        check_osc_sequences(terminal, mark)
         assert b"\x1b_G" not in tail, "images without support"
         assert b"\x1bP" not in tail, "sixel without support"
         assert b"\x1b[=" not in tail, "keyboard flags without support"

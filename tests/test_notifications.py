@@ -371,6 +371,8 @@ async def test_a_click_on_a_notification_shows_its_pane():
         connection.notification_actions = frozenset({"focus", "report"})
         sent = []
         connection.forward_osc = sent.append
+        # Out of sight, so the notification goes out. Lillecarl/pymux#799.
+        state.terminal_focused = False
         with set_app(state.app):
             first = pymux.current_session.arrangement.get_active_window()
             pane = first.active_pane
@@ -431,6 +433,7 @@ async def test_a_terminal_that_reports_clicks_gets_osc_777_as_osc_99():
         connection.notification_actions = frozenset({"report"})
         sent = []
         connection.forward_osc = sent.append
+        state.terminal_focused = False
         with set_app(state.app):
             pane = pymux.arrangement.get_active_pane()
             pymux.forward_osc(pane, "777", "notify;Build;done")
@@ -457,19 +460,15 @@ def test_a_shown_notification_is_closed_once_when_its_pane_is_seen():
     routes.outgoing(7, "i=b:d=0;Half")
     ours = routes.own(8)
 
-    assert routes.seen({8}, sent_before=0) == []
-    assert routes.seen({8}, sent_before=float("inf")) == [ours]
-    assert routes.seen({8}, sent_before=float("inf")) == []
+    assert routes.seen({9}) == []
+    assert routes.seen({8}) == [ours]
+    assert routes.seen({8}) == []
     # The unfinished one was never shown.
-    assert routes.seen({7}, sent_before=float("inf")) == ["1"]
+    assert routes.seen({7}) == ["1"]
 
 
-async def test_a_look_at_the_window_closes_its_notification_on_the_terminal(monkeypatch):
-    """
-    Once a client whose terminal has the focus shows the window, and not
-    on the turn the notification went out. Lillecarl/pymux#799.
-    """
-    monkeypatch.setattr("pymux.main.NOTIFICATION_SEEN_AFTER", 0.0)
+async def test_a_look_at_the_window_closes_its_notification_on_the_terminal():
+    "Once a client whose terminal has the focus shows the window. Lillecarl/pymux#799."
     async with create_session() as (pymux, state):
         (connection,) = [each for each, value in pymux._client_states.items() if value is state]
         connection.notification_actions = frozenset({"report"})
@@ -488,6 +487,31 @@ async def test_a_look_at_the_window_closes_its_notification_on_the_terminal(monk
             state.terminal_focused = True
             pymux.sync_pane_focus()
         assert [each for each in sent if "p=close" in each] == ["\x1b]99;i=1:p=close;\x1b\\"]
+
+
+async def test_a_window_in_sight_sends_no_notification_out():
+    """
+    The person sees the window already. A terminal without the focus
+    is no look, and gets it. Lillecarl/pymux#799.
+    """
+    async with create_session() as (pymux, state):
+        (connection,) = [each for each, value in pymux._client_states.items() if value is state]
+        sent = []
+        connection.forward_osc = sent.append
+        with set_app(state.app):
+            pane = pymux.arrangement.get_active_pane()
+            pymux.forward_osc(pane, "99", "i=a;Built")
+            pymux.forward_osc(pane, "777", "notify;Build;done")
+            pymux.forward_osc(pane, "9", "Built")
+            assert sent == []
+            # A question is not a notification.
+            pymux.forward_osc(pane, "99", "i=q:p=?;")
+            assert len(sent) == 1
+
+            state.terminal_focused = False
+            pymux.forward_osc(pane, "9", "Built")
+            assert len(sent) == 2
+        assert pymux.notification_center.notifications()[-1].title == "Built"
 
 
 async def test_enter_on_a_gone_pane_says_so():

@@ -295,6 +295,12 @@ def read_actions(metadata: str) -> list[str]:
     return []
 
 
+def is_question(param: str) -> bool:
+    "Whether an OSC 99 payload asks the terminal something rather than shows a notification."
+    metadata, _semicolon, _text = split_payload(param)
+    return read_payload_type(metadata) in _QUESTIONS
+
+
 def reports_close(answer: str) -> bool:
     "Whether a `p=?` answer says the terminal can close a notification: `c=1`."
     return "c=1" in answer.split(":")
@@ -365,9 +371,9 @@ class NotificationRoutes:
         self._incoming: OrderedDict[str, Route] = OrderedDict()
         # Ours, while more chunks of the notification follow.
         self._open: set[str] = set()
-        # Ours, shown on the terminals and not yet seen in pymux: the
-        # pane, and when it went out. Lillecarl/pymux#799.
-        self._shown: dict[str, tuple[PaneId, float]] = {}
+        # Ours, shown on the terminals and not yet seen in pymux, and
+        # their panes. Lillecarl/pymux#799.
+        self._shown: dict[str, PaneId] = {}
 
     def outgoing(self, pane_id: PaneId, param: str) -> str:
         """
@@ -407,7 +413,7 @@ class NotificationRoutes:
             metadata = with_report(metadata)
             if is_done(metadata):
                 self._open.discard(ours)
-                self._shown[ours] = (pane_id, time.time())
+                self._shown[ours] = pane_id
                 if not identifier:
                     del self._outgoing[key]
             else:
@@ -421,7 +427,7 @@ class NotificationRoutes:
         "An identifier for a notification pymux sends itself, about this pane."
         ours = self._mint()
         self._incoming[ours] = Route(pane_id, "")
-        self._shown[ours] = (pane_id, time.time())
+        self._shown[ours] = pane_id
         self._forget_old()
         return ours
 
@@ -429,13 +435,9 @@ class NotificationRoutes:
     def any_shown(self) -> bool:
         return bool(self._shown)
 
-    def seen(self, pane_ids: Container[PaneId], sent_before: float) -> list[str]:
-        """
-        Ours that a person has now seen the pane of, for the terminals
-        to close. Each is given once, and only one sent before
-        `sent_before`.
-        """
-        closed = [ours for ours, (pane_id, at) in self._shown.items() if pane_id in pane_ids and at < sent_before]
+    def seen(self, pane_ids: Container[PaneId]) -> list[str]:
+        "Ours that a person has now seen the pane of, for the terminals to close. Each is given once."
+        closed = [ours for ours, pane_id in self._shown.items() if pane_id in pane_ids]
         for ours in closed:
             del self._shown[ours]
         return closed

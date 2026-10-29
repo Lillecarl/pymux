@@ -131,6 +131,9 @@ class FakeSession:
 class FakeClientState:
     app = None
     session = FakeSession()
+    temporary = False
+    # Out of sight, so a notification goes out. Lillecarl/pymux#799.
+    terminal_focused = False
 
 
 class FakeScreen:

@@ -211,6 +211,10 @@ class Pane:
         self.size_file = size
 
         self.terminal.wait_for_queries()
+        # The fence is a notification, and one from the window a person
+        # looks at stays inside pymux. A terminal has the focus until it
+        # says otherwise, so this one looks away. Lillecarl/pymux#799.
+        self.terminal.write(b"\x1b[O")
         self.terminal.drain(0.5)
         self.wait_for_size()
 

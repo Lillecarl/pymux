@@ -12,6 +12,8 @@ clipboard write ("Copy") follows the clipboard option.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 from prompt_toolkit.application.current import set_app
 from pyte.page import RowMark
@@ -93,7 +95,10 @@ def make_pymux(clipboard=Clipboard.ON):
     pymux = Pymux()
     pymux.options.set_clipboard = clipboard
     connections = [FakeConnection(), FakeConnection()]
-    pymux._client_states = {connection: object() for connection in connections}
+    # Clients out of sight, so a notification goes out. Lillecarl/pymux#799.
+    pymux._client_states = {
+        connection: SimpleNamespace(terminal_focused=False, temporary=False) for connection in connections
+    }
     return pymux, connections
 
 
