@@ -105,6 +105,7 @@ from .notifications import (
     NotificationRoutes,
     NotificationSource,
     Urgency,
+    close_of,
     osc99_of,
 )
 from .options import (
@@ -245,6 +246,12 @@ BEHIND_INTERVAL = 0.1
 #: How often the windows are checked for output and for quiet, in
 #: seconds: a mark goes up within this of what raised it.
 WINDOW_OUTPUT_INTERVAL = 1.0
+
+#: How old a desktop notification must be before a look at its window
+#: closes it, in seconds. The focus syncs on the same turn a pane's
+#: notification goes out, and with nothing between them a person
+#: watching the window would never see it. Lillecarl/pymux#799.
+NOTIFICATION_SEEN_AFTER = 2.0
 
 #: What a client refreshes in the session it attaches to, by default.
 #: tmux's own list, which is every name that points at something on
@@ -2367,6 +2374,7 @@ class Pymux:
         panes the focus at once; tmux has one client and one focus.
         Lillecarl/pymux#795.
         """
+        self._close_seen_notifications()
         focused = set()
         for client_state in self._client_states.values():
             if client_state.terminal_focused and not client_state.temporary:
@@ -2388,6 +2396,28 @@ class Pymux:
             if screen.reports_focus and not process.is_terminated:
                 process.write_input(report)
         self._focused_panes = focused
+
+    def _close_seen_notifications(self) -> None:
+        """
+        Take the desktop notifications of a window off each terminal that
+        can close one, once a client whose terminal has the focus shows
+        that window. Lillecarl/pymux#799.
+        """
+        if not self.notifications.any_shown:
+            return
+        shown: set[PaneId] = set()
+        for client_state in self._client_states.values():
+            if client_state.terminal_focused and not client_state.temporary:
+                window = client_state.session.arrangement.get_active_window_for(client_state.app)
+                if window is not None:
+                    shown.update(pane.pane_id for pane in window.panes)
+        closed = self.notifications.seen(shown, sent_before=time.time() - NOTIFICATION_SEEN_AFTER)
+        if not closed:
+            return
+        for connection in self._client_states:
+            if connection is not None and connection.notification_closes:
+                for ours in closed:
+                    connection.forward_osc(build_osc(Osc.NOTIFICATION, close_of(ours)))
 
     def clients_watching(self, window: Window | None = None) -> list[ClientState]:
         """

@@ -46,7 +46,14 @@ from .keys import FOCUS_IN, FOCUS_OUT, KittyVt100Parser
 from .log import logger
 from .nearest import NEAREST, nearest_theme, wanted_from
 from .notifications import QUERY as NOTIFICATION_QUERY
-from .notifications import QUERY_IDENTIFIER, is_click, read_actions, read_identifier, split_payload
+from .notifications import (
+    QUERY_IDENTIFIER,
+    is_click,
+    read_actions,
+    read_identifier,
+    reports_close,
+    split_payload,
+)
 from .options import Scope, SetOptionError
 from .osc import NO_PROGRESS, Progress
 from .packet_table import PacketTable
@@ -194,6 +201,7 @@ class ServerConnection:
         "kitty_source_flags": Keep.REBUILT,
         "_kitty_supported": Keep.REBUILT,
         "notification_actions": Keep.REBUILT,
+        "notification_closes": Keep.REBUILT,
         "_pointer_shape_sent": Keep.REBUILT,
         "_progress_sent": Keep.REBUILT,
         "answers_ping": Keep.REBUILT,
@@ -340,6 +348,10 @@ class ServerConnection:
         #: With `report`, a notification pymux makes itself goes out as
         #: OSC 99, so a click on it shows its pane. Lillecarl/pymux#779.
         self.notification_actions: frozenset[str] = frozenset()
+        #: Whether the outer terminal can take a notification back off
+        #: its screen (`c=1`), which pymux does once one is seen.
+        #: Lillecarl/pymux#799.
+        self.notification_closes = False
 
         # Kitty graphics protocol state of the outer terminal. The same
         # query answers this one: the reply of the graphics query
@@ -913,6 +925,7 @@ class ServerConnection:
         metadata, _semicolon, text = split_payload(param)
         if read_identifier(metadata) == QUERY_IDENTIFIER:
             self.notification_actions = frozenset(read_actions(text))
+            self.notification_closes = reports_close(text)
             return
 
         routed = self.pymux.notifications.incoming(param)

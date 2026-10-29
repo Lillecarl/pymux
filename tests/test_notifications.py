@@ -440,6 +440,56 @@ async def test_a_terminal_that_reports_clicks_gets_osc_777_as_osc_99():
         ]
 
 
+def test_the_query_answer_says_whether_the_terminal_closes():
+    "Lillecarl/pymux#799."
+    from pymux.server import ServerConnection
+
+    connection = SimpleNamespace(notification_actions=frozenset(), notification_closes=False)
+    ServerConnection._route_notification(connection, "i=pymux:p=?;a=focus,report:c=1:o=always")
+    assert connection.notification_closes
+    ServerConnection._route_notification(connection, "i=pymux:p=?;a=focus,report:o=always")
+    assert not connection.notification_closes
+
+
+def test_a_shown_notification_is_closed_once_when_its_pane_is_seen():
+    routes = NotificationRoutes()
+    routes.outgoing(7, "i=a;Hi")
+    routes.outgoing(7, "i=b:d=0;Half")
+    ours = routes.own(8)
+
+    assert routes.seen({8}, sent_before=0) == []
+    assert routes.seen({8}, sent_before=float("inf")) == [ours]
+    assert routes.seen({8}, sent_before=float("inf")) == []
+    # The unfinished one was never shown.
+    assert routes.seen({7}, sent_before=float("inf")) == ["1"]
+
+
+async def test_a_look_at_the_window_closes_its_notification_on_the_terminal(monkeypatch):
+    """
+    Once a client whose terminal has the focus shows the window, and not
+    on the turn the notification went out. Lillecarl/pymux#799.
+    """
+    monkeypatch.setattr("pymux.main.NOTIFICATION_SEEN_AFTER", 0.0)
+    async with create_session() as (pymux, state):
+        (connection,) = [each for each, value in pymux._client_states.items() if value is state]
+        connection.notification_actions = frozenset({"report"})
+        connection.notification_closes = True
+        sent = []
+        connection.forward_osc = sent.append
+        with set_app(state.app):
+            first = pymux.current_session.arrangement.get_active_window()
+            await run_as(pymux, state, "new-window")
+            pymux.forward_osc(first.active_pane, "99", "i=a;Built")
+            state.terminal_focused = False
+            pymux.current_session.arrangement.set_active_window(first)
+            pymux.sync_pane_focus()
+            assert not [each for each in sent if "p=close" in each]
+
+            state.terminal_focused = True
+            pymux.sync_pane_focus()
+        assert [each for each in sent if "p=close" in each] == ["\x1b]99;i=1:p=close;\x1b\\"]
+
+
 async def test_enter_on_a_gone_pane_says_so():
     async with create_session() as (pymux, state):
         with set_app(state.app):

@@ -26,7 +26,7 @@ import base64
 import re
 import time
 from collections import OrderedDict
-from collections.abc import Callable
+from collections.abc import Callable, Container
 from enum import StrEnum
 from typing import Final, NamedTuple
 
@@ -295,6 +295,16 @@ def read_actions(metadata: str) -> list[str]:
     return []
 
 
+def reports_close(answer: str) -> bool:
+    "Whether a `p=?` answer says the terminal can close a notification: `c=1`."
+    return "c=1" in answer.split(":")
+
+
+def close_of(identifier: str) -> str:
+    "The payload that takes a notification off the terminal's screen."
+    return "i=%s:p=close;" % identifier
+
+
 def with_report(metadata: str) -> str:
     "The metadata asking the terminal to report a click, beside the actions it named."
     if "report" in read_actions(metadata):
@@ -355,6 +365,9 @@ class NotificationRoutes:
         self._incoming: OrderedDict[str, Route] = OrderedDict()
         # Ours, while more chunks of the notification follow.
         self._open: set[str] = set()
+        # Ours, shown on the terminals and not yet seen in pymux: the
+        # pane, and when it went out. Lillecarl/pymux#799.
+        self._shown: dict[str, tuple[PaneId, float]] = {}
 
     def outgoing(self, pane_id: PaneId, param: str) -> str:
         """
@@ -394,6 +407,7 @@ class NotificationRoutes:
             metadata = with_report(metadata)
             if is_done(metadata):
                 self._open.discard(ours)
+                self._shown[ours] = (pane_id, time.time())
                 if not identifier:
                     del self._outgoing[key]
             else:
@@ -407,8 +421,24 @@ class NotificationRoutes:
         "An identifier for a notification pymux sends itself, about this pane."
         ours = self._mint()
         self._incoming[ours] = Route(pane_id, "")
+        self._shown[ours] = (pane_id, time.time())
         self._forget_old()
         return ours
+
+    @property
+    def any_shown(self) -> bool:
+        return bool(self._shown)
+
+    def seen(self, pane_ids: Container[PaneId], sent_before: float) -> list[str]:
+        """
+        Ours that a person has now seen the pane of, for the terminals
+        to close. Each is given once, and only one sent before
+        `sent_before`.
+        """
+        closed = [ours for ours, (pane_id, at) in self._shown.items() if pane_id in pane_ids and at < sent_before]
+        for ours in closed:
+            del self._shown[ours]
+        return closed
 
     def incoming(self, param: str) -> tuple[Route, str] | None:
         """
@@ -437,5 +467,6 @@ class NotificationRoutes:
         while len(self._incoming) > self.limit:
             ours, route = self._incoming.popitem(last=False)
             self._open.discard(ours)
+            self._shown.pop(ours, None)
             if self._outgoing.get((route.pane_id, route.identifier)) == ours:
                 del self._outgoing[route.pane_id, route.identifier]
