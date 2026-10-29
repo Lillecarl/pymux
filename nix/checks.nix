@@ -32,6 +32,8 @@
   # seat started, xclip on the X server it started.
   wl-clipboard,
   xclip,
+  # A real browser in a window pane.
+  firefox,
   waylandProtocols,
   callPackage,
   xorg-server,
@@ -189,6 +191,8 @@ let
   # A whole run starts seventeen servers, and hunting a check that is
   # red by luck means running that one check many times.
   ptyChecks = builtins.getEnv "PYMUX_PTY_CHECKS";
+
+  firefoxTests = builtins.getEnv "PYMUX_FIREFOX_TESTS";
 
   # A pytest `-k` expression for the openssh suite, for instance
   # `PYMUX_OPENSSH_TESTS=narrows nix build --file . checks.pymux-openssh`.
@@ -695,6 +699,24 @@ in
         ${waylandTestEnv}/bin/python -m pytest -q -p no:cacheprovider \
           -o faulthandler_timeout=60 \
           tests/test_wayland_server.py tests/test_wayland_absent.py tests/test_window_panes.py
+      '';
+
+  # A real Firefox in a window pane: it paints only what changed, which
+  # the probe window does not reproduce. Lillecarl/pymux#753.
+  # `PYMUX_FIREFOX_TESTS` is a pytest `-k` expression, for instance
+  # `PYMUX_FIREFOX_TESTS="still and late" nix build --file . checks.pymux-firefox`.
+  firefox =
+    runInSandbox
+      {
+        name = "pymux-firefox";
+        inputs = [ firefox ];
+      }
+      ''
+        export FONTCONFIG_FILE=${makeFontsConf { fontDirectories = [ dejavu_fonts ]; }}
+        ${waylandTestEnv}/bin/python -m pytest -q -p no:cacheprovider \
+          -o faulthandler_timeout=120 \
+          ${lib.optionalString (firefoxTests != "") "-k ${lib.escapeShellArg firefoxTests}"} \
+          tests/test_firefox_in_a_window_pane.py
       '';
 
   # Sound between panes and a client, through a real PipeWire and a
