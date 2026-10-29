@@ -25,6 +25,7 @@ import termios
 from pathlib import Path
 from typing import TYPE_CHECKING, BinaryIO, Final
 
+import magic
 import resvg_py
 
 from pymux.graphics import DEFAULT_CELL_HEIGHT, DEFAULT_CELL_WIDTH
@@ -37,6 +38,8 @@ __all__ = ["cells_for", "imgcat", "sequences_of"]
 
 #: The base64 a kitty graphics chunk may carry, by the protocol.
 CHUNK: Final = 4096
+
+_SVG: Final = "image/svg+xml"
 
 #: What kitty's `f=` says the payload is.
 _PNG_FORMAT: Final = 100
@@ -98,26 +101,28 @@ def _svg_pixels(svg: str) -> tuple[int, int] | None:
     return found[1] if found else None
 
 
-def _shown(source: bytes, cell: tuple[int, int], room: int | None, width: int | None) -> tuple[bytes, int, int] | None:
+def _shown(source: bytes, cell: tuple[int, int], room: int | None, width: int | None) -> tuple[bytes, int, int] | str:
     """
-    An image file as PNG over the cells it covers; None for no image.
+    An image file as PNG over the cells it covers, or the MIME type of
+    a file that is no image pymux reads.
 
-    An SVG is drawn at the pixels of those cells, so it is as sharp as
-    the terminal's cell allows. Lillecarl/pymux#805.
+    libmagic names the type. An SVG is drawn at the pixels of those
+    cells, so it is as sharp as the terminal's cell allows.
+    Lillecarl/pymux#805.
     """
-    found = as_png(source)
-    if found is not None:
-        png, pixels = found
-        return png, *cells_for(pixels, cell, room, width)
-    try:
-        svg = source.decode()
-    except UnicodeDecodeError:
-        return None
-    pixels = _svg_pixels(svg)
-    if pixels is None:
-        return None
-    columns, rows = cells_for(pixels, cell, room, width)
-    return resvg_py.svg_to_bytes(svg_string=svg, width=columns * cell[0]), columns, rows
+    kind = magic.from_buffer(source, mime=True)
+    if kind == _SVG:
+        svg = source.decode(errors="replace")
+        pixels = _svg_pixels(svg)
+        if pixels is None:
+            return kind
+        columns, rows = cells_for(pixels, cell, room, width)
+        return resvg_py.svg_to_bytes(svg_string=svg, width=columns * cell[0]), columns, rows
+    found = as_png(source) if kind.startswith("image/") else None
+    if found is None:
+        return kind
+    png, pixels = found
+    return png, *cells_for(pixels, cell, room, width)
 
 
 def imgcat(words: list[str], stdin: BinaryIO, out: BinaryIO, err: TextIO) -> int:
@@ -139,8 +144,8 @@ def imgcat(words: list[str], stdin: BinaryIO, out: BinaryIO, err: TextIO) -> int
             err.write("pymux imgcat: %s: %s\n" % (path, error))
             status = 1
             continue
-        if found is None:
-            err.write("pymux imgcat: %s: not an image\n" % (path,))
+        if isinstance(found, str):
+            err.write("pymux imgcat: %s: not an image pymux reads (%s)\n" % (path, found))
             status = 1
             continue
         png, columns, rows = found

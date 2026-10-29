@@ -95,7 +95,7 @@ def test_a_file_that_is_no_image_says_so_and_the_rest_still_show(tmp_path):
     good.write_bytes(_png(10, 10))
     out, err = io.BytesIO(), io.StringIO()
     assert imgcat([str(bad), str(good)], io.BytesIO(), out, err) == 1
-    assert "notes.txt" in err.getvalue()
+    assert "notes.txt: not an image pymux reads (text/plain)" in err.getvalue()
     assert out.getvalue().count(b"a=T") == 1
 
 
