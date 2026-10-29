@@ -1392,6 +1392,27 @@ in
         ''
       );
 
+  # What each real terminal holds while a client is attached and after
+  # it detaches, asked with DECRQM: `tests/ask_the_terminal.py`.
+  # `PYMUX_STATE_TERMINALS=kitty` narrows it to one. Lillecarl/pymux#800.
+  terminalState =
+    runInSandbox
+      {
+        name = "pymux-terminal-state";
+        inputs = seatInputs;
+        env = {
+          stateTerminals = builtins.getEnv "PYMUX_STATE_TERMINALS";
+        };
+      }
+      (
+        seatSetup
+        + ''
+          export PYMUX_STATE_TERMINALS="$stateTerminals"
+          export PYMUX_STATE_OUT="$out"
+          python tests/ask_the_terminal.py
+        ''
+      );
+
   # It is not a gate, and it judges nothing. A picture of chrome has no
   # bare side to subtract, because the chrome is the thing pymux adds.
   # Judging it needs a recorded image, and recording one before

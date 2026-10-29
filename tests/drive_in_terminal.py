@@ -59,6 +59,16 @@ counted from the fence rather than from the clock: the first bytes a
 program writes are its questions to the terminal, and a key pressed
 then reaches a program that is not reading keys yet.
 
+## Asking the terminal
+
+With `PYMUX_RELAY_ASK` naming a directory, the relay asks the terminal
+for its modes, with DECRQM, and writes what it answered to
+`<label>.json` there. A line written to the fifo `ask` in that
+directory asks with that line as the label, and the end of the program
+asks once more as `detached`. Beside the answers goes what the program
+meant: the last `CSI ? N h` or `l` it wrote for each mode. The answers
+are taken out of what the program is given. Lillecarl/pymux#800.
+
 ## The timeline
 
 Every step is written to stderr as it happens: when the first frame
@@ -75,8 +85,10 @@ import ast
 import base64
 import contextlib
 import fcntl
+import json
 import os
 import pty
+import re
 import select
 import selectors
 import signal
@@ -98,6 +110,15 @@ CHUNK = 65536
 #: A program that never draws is a run that photographs nothing, and
 #: the keys are pressed at the end of this rather than never.
 BOOT_TIMEOUT = 10.0
+
+#: The modes asked of the terminal. Lillecarl/pymux#800.
+ASKED_MODES = (1, 25, 1000, 1002, 1003, 1004, 1006, 1016, 1049, 2004, 2026, 2031, 2048)
+_MODE_REPORT = re.compile(rb"\x1b\[\?(\d+);(\d)\$y")
+_ATTRIBUTES = re.compile(rb"\x1b\[\?[\d;]*c")
+_PRIVATE_MODE = re.compile(rb"\x1b\[\?([\d;]+)([hl])")
+
+#: How long the terminal may take to answer, in seconds.
+ASK_TIMEOUT = 5.0
 
 #: The two fences, and they have to differ. Both stay in `seen` after
 #: they come back -- only the copy the terminal is given has them
@@ -192,6 +213,82 @@ def carry_the_answer(master, stdin_fd, ready) -> None:
         return
     if piece:
         os.write(master, piece)
+
+
+#: Modes that are one setting in xterm and kitty: mouse tracking, and
+#: mouse encoding. Setting one resets the others, so 1003 after 1000
+#: leaves 1000 answered reset.
+_ONE_OF = (frozenset({9, 1000, 1001, 1002, 1003}), frozenset({1005, 1006, 1015, 1016}))
+
+
+def meant_modes(seen):
+    "The last setting the program wrote for each private mode."
+    meant = {}
+    for match in _PRIVATE_MODE.finditer(seen):
+        for number in match.group(1).split(b";"):
+            if not number:
+                continue
+            mode = int(number)
+            on = match.group(2) == b"h"
+            if on:
+                for group in _ONE_OF:
+                    if mode in group:
+                        meant.update(dict.fromkeys(group & meant.keys(), False))
+            meant[mode] = on
+    return meant
+
+
+def ask_modes(stdin_fd, master, out):
+    """
+    What the terminal answers DECRQM for each of `ASKED_MODES`.
+
+    The primary device attributes go last, as the fence: every terminal
+    answers them, and in order. Whatever else the terminal says on the
+    way goes on to the program, when there still is one.
+    """
+    out.write(b"".join(b"\x1b[?%d$p" % mode for mode in ASKED_MODES) + b"\x1b[c")
+    out.flush()
+    heard = bytearray()
+    deadline = time.monotonic() + ASK_TIMEOUT
+    while not _ATTRIBUTES.search(heard) and time.monotonic() < deadline:
+        if not select.select([stdin_fd], [], [], 0.05)[0]:
+            continue
+        try:
+            piece = os.read(stdin_fd, CHUNK)
+        except OSError:
+            break
+        if not piece:
+            break
+        heard.extend(piece)
+    answers = {int(match.group(1)): int(match.group(2)) for match in _MODE_REPORT.finditer(heard)}
+    rest = _ATTRIBUTES.sub(b"", _MODE_REPORT.sub(b"", bytes(heard)), count=1)
+    if rest and master is not None:
+        with contextlib.suppress(OSError):
+            os.write(master, rest)
+    return answers
+
+
+def answer_the_ask(ask_dir, label, stdin_fd, master, out, seen):
+    "Ask the terminal, and write `<label>.json` whole, so a reader never finds half of it."
+    report = {"answers": ask_modes(stdin_fd, master, out), "meant": meant_modes(bytes(seen))}
+    path = ask_dir / ("%s.json" % label)
+    part = path.with_suffix(".part")
+    part.write_text(json.dumps(report, indent=1, sort_keys=True))
+    part.rename(path)
+
+
+def open_the_asks(ask_dir):
+    """
+    The fifo the asks come down, open for reading.
+
+    Opened for writing as well, so a writer that comes and goes is never
+    an end of file that wakes the loop for ever.
+    """
+    ask_dir.mkdir(parents=True, exist_ok=True)
+    fifo = ask_dir / "ask"
+    with contextlib.suppress(FileExistsError):
+        os.mkfifo(fifo)
+    return os.open(fifo, os.O_RDWR | os.O_NONBLOCK)
 
 
 def wait_for_program(master, stdin_fd, timeout) -> bool:
@@ -433,7 +530,7 @@ def frame_and_fence(master, seen, out, copied, writer, mark, token, deadline, st
     return True, copied
 
 
-def relay(argv, steps, hold, fifo=None, fence_seen=None):
+def relay(argv, steps, hold, fifo=None, fence_seen=None, ask_dir=None):
     """
     Run `argv` on a pty, copy it to this terminal, and press the keys.
 
@@ -508,6 +605,10 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None):
     selector.register(master, selectors.EVENT_READ)
     if stdin_fd is not None:
         selector.register(stdin_fd, selectors.EVENT_READ)
+    asks = None
+    if ask_dir is not None and stdin_fd is not None:
+        asks = open_the_asks(ask_dir)
+        selector.register(asks, selectors.EVENT_READ)
 
     try:
         while True:
@@ -572,6 +673,11 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None):
                 until = 0.1
 
             for key, _events in selector.select(timeout=until):
+                if key.fd == asks:
+                    for label in os.read(asks, CHUNK).decode().split():
+                        answer_the_ask(ask_dir, label, stdin_fd, master, out, seen)
+                        note(started, "asked the terminal, as %s" % (label,))
+                    continue
                 if key.fd != master:
                     carry_the_answer(master, stdin_fd, [stdin_fd])
                     continue
@@ -583,6 +689,9 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None):
                     if finished is None:
                         finished = wait_for(pid)
                         note(started, "the program ended, status %s" % (finished,))
+                        if asks is not None:
+                            answer_the_ask(ask_dir, "detached", stdin_fd, None, out, seen)
+                            note(started, "asked the terminal, as detached")
                     if not waiting and not fence_pending:
                         return finished
                     break
@@ -594,6 +703,8 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None):
     finally:
         selector.close()
         os.close(master)
+        if asks is not None:
+            os.close(asks)
         if finished is None:
             os.kill(pid, signal.SIGKILL)
             wait_for(pid)
@@ -625,7 +736,8 @@ def main(argv):
     fifo = mine[2] if len(mine) == 4 else None
     fence_seen = Path(mine[3]) if len(mine) == 4 else None
 
-    status = relay(theirs, steps, hold, fifo, fence_seen)
+    ask_dir = os.environ.get("PYMUX_RELAY_ASK")
+    status = relay(theirs, steps, hold, fifo, fence_seen, Path(ask_dir) if ask_dir else None)
 
     # A program that was still running when the hold ran out is the
     # normal case, and it is not a failure.
