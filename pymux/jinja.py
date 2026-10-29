@@ -66,10 +66,10 @@ BROKEN = "<template error>"
 #: here, where a tmux format spells them as one string.
 EXTRA_FACTS: dict[str, Callable[[FormatContext], object]] = {
     "now": lambda context: context.pymux.displayed_now(),
-    "user_vars": lambda context: dict(context.pane.user_vars),
+    "user_vars": lambda context: dict(context.the_pane().user_vars),
     "session_tags": lambda context: dict(context.session.tags),
-    "window_tags": lambda context: dict(context.window.tags),
-    "pane_tags": lambda context: dict(context.pane.tags),
+    "window_tags": lambda context: dict(context.the_window().tags),
+    "pane_tags": lambda context: dict(context.the_pane().tags),
 }
 
 
@@ -105,7 +105,7 @@ def _compile(source: str) -> _Compiled | TemplateSyntaxError:
 
 def render(context: FormatContext, source: str) -> str:
     "Draw this template with the facts of this context."
-    from .format import tmux_variables
+    from .format import Missing, tmux_variables
 
     compiled = _compile(source)
     if isinstance(compiled, TemplateSyntaxError):
@@ -115,7 +115,10 @@ def render(context: FormatContext, source: str) -> str:
     for name in compiled.names:
         extra = EXTRA_FACTS.get(name)
         if extra is not None:
-            facts[name] = extra(context)
+            try:
+                facts[name] = extra(context)
+            except Missing:
+                facts[name] = {}
             continue
 
         handler = tmux_variables.get(name)

@@ -42,6 +42,7 @@ def list_sessions(pymux: Pymux, args: argparse.Namespace) -> None:
                 pane=window.active_pane if window is not None else None,
                 session=session,
                 language=chosen.language,
+                windowless=True,
             )
         )
 
