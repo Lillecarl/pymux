@@ -1,5 +1,5 @@
 """
-`pymux imgcat`: show image files in the terminal it runs in.
+`pymux imgcat`: show image files in the terminal it runs in, SVG too.
 
 **It writes to its own terminal**, which in a pane is the pane, as the
 kitty graphics protocol: the image as PNG, in chunks, put at the cursor
@@ -24,6 +24,8 @@ import math
 import termios
 from pathlib import Path
 from typing import TYPE_CHECKING, BinaryIO, Final
+
+import resvg_py
 
 from pymux.graphics import DEFAULT_CELL_HEIGHT, DEFAULT_CELL_WIDTH
 from pymux.inline_images import as_png
@@ -87,6 +89,37 @@ def sequences_of(png: bytes, columns: int, rows: int) -> list[bytes]:
     return sequences
 
 
+def _svg_pixels(svg: str) -> tuple[int, int] | None:
+    "The size an SVG gives itself, in pixels; None when it is no SVG resvg reads."
+    try:
+        found = as_png(resvg_py.svg_to_bytes(svg_string=svg))
+    except ValueError:
+        return None
+    return found[1] if found else None
+
+
+def _shown(source: bytes, cell: tuple[int, int], room: int | None, width: int | None) -> tuple[bytes, int, int] | None:
+    """
+    An image file as PNG over the cells it covers; None for no image.
+
+    An SVG is drawn at the pixels of those cells, so it is as sharp as
+    the terminal's cell allows. Lillecarl/pymux#805.
+    """
+    found = as_png(source)
+    if found is not None:
+        png, pixels = found
+        return png, *cells_for(pixels, cell, room, width)
+    try:
+        svg = source.decode()
+    except UnicodeDecodeError:
+        return None
+    pixels = _svg_pixels(svg)
+    if pixels is None:
+        return None
+    columns, rows = cells_for(pixels, cell, room, width)
+    return resvg_py.svg_to_bytes(svg_string=svg, width=columns * cell[0]), columns, rows
+
+
 def imgcat(words: list[str], stdin: BinaryIO, out: BinaryIO, err: TextIO) -> int:
     "`pymux imgcat`: each image, one after the other. Returns the exit status."
     parser = argparse.ArgumentParser(prog="pymux imgcat", description="Show images in this terminal.")
@@ -101,7 +134,7 @@ def imgcat(words: list[str], stdin: BinaryIO, out: BinaryIO, err: TextIO) -> int
     status = 0
     for path in arguments.files:
         try:
-            found = as_png(stdin.read() if path == "-" else Path(path).read_bytes())
+            found = _shown(stdin.read() if path == "-" else Path(path).read_bytes(), cell, room, arguments.width)
         except OSError as error:
             err.write("pymux imgcat: %s: %s\n" % (path, error))
             status = 1
@@ -110,8 +143,7 @@ def imgcat(words: list[str], stdin: BinaryIO, out: BinaryIO, err: TextIO) -> int
             err.write("pymux imgcat: %s: not an image\n" % (path,))
             status = 1
             continue
-        png, pixels = found
-        columns, rows = cells_for(pixels, cell, room, arguments.width)
+        png, columns, rows = found
         out.writelines(sequences_of(png, columns, rows))
         # The cursor stands after the image's last cell; the next one
         # starts on a line of its own.

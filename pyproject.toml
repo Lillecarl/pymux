@@ -86,6 +86,9 @@ dependencies = [
     "pillow>=10.0.0",
     # And reads which characters each font has, to fall back per glyph.
     "fonttools>=4.0.0",
+    # `imgcat` draws an SVG, which Pillow cannot read, at the pixels of
+    # the cells it covers. Lillecarl/pymux#805.
+    "resvg-py",
     # `@override` on every override: the type check asks for it.
     # `typing` carries it from 3.12, so on this floor the shim is
     # vestigial; it stays until somebody rewrites the imports that

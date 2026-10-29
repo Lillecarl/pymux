@@ -16,6 +16,7 @@ from pyte.screen import Screen
 from pyte.streams import Stream
 
 from pymux.entry_points.run_pymux import Mode, parse_arguments
+from pymux.graphics import DEFAULT_CELL_WIDTH
 from pymux.imgcat import CHUNK, cells_for, imgcat, sequences_of
 
 
@@ -63,6 +64,22 @@ def test_a_screen_holds_the_image_over_the_cells_it_was_sized_to(tmp_path):
     image = screen.graphics.images_by_id[placement.image_id]
     assert (placement.columns, placement.rows) == (4, 2)
     assert (image.width, image.height) == (40, 40)
+
+
+def test_an_svg_is_drawn_at_the_pixels_of_the_cells_it_covers(tmp_path):
+    path = tmp_path / "red.svg"
+    path.write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="20" height="20" fill="red"/></svg>'
+    )
+    out = io.BytesIO()
+    assert imgcat(["--width", "4", str(path)], io.BytesIO(), out, io.StringIO()) == 0
+
+    screen = Screen(10, 20, write_process_input=lambda _data: None)
+    Stream(screen).feed(out.getvalue().decode("ascii"))
+    (placement,) = screen.graphics.placements
+    image = screen.graphics.images_by_id[placement.image_id]
+    assert (placement.columns, placement.rows) == (4, 2)
+    assert (image.width, image.height) == (4 * DEFAULT_CELL_WIDTH, 4 * DEFAULT_CELL_WIDTH)
 
 
 def test_standard_input_is_read_for_a_dash():
