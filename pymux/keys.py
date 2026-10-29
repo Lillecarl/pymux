@@ -957,10 +957,10 @@ class KittyVt100Parser(Vt100Parser):
                     return cast("Keys | tuple[Keys, ...]", named)
 
         # ctrl+F3 is "CSI 1;5R" in every legacy terminal, which is also a
-        # cursor report of row 1. The one report the server asks for is
-        # `EMOJI_WIDTH_PROBE`'s, on row 2, so row 1 is the key. A probe
-        # that asks on row 1 would be read as a key press here.
-        # Lillecarl/pymux#244.
+        # cursor report of row 1. The reports the server asks for are
+        # `EMOJI_WIDTH_PROBE`'s, on row 2, and `CLUSTER_WIDTH_PROBE`'s,
+        # on rows 3 to 5, so row 1 is the key. A probe that asks on row
+        # 1 would be read as a key press here. Lillecarl/pymux#244.
         f3 = _MODIFIED_F3_RE.match(prefix)
         if f3 is not None:
             return cast("Keys | tuple[Keys, ...]", key_named(str.__str__(Keys.F3), int(f3.group(1)) - 1))

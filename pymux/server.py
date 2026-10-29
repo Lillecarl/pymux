@@ -37,7 +37,7 @@ from pymux.commands.common import find_pane, terminal_of
 from .actions import Origin, started_by
 from .answer import Answer
 from .audio import AudioLink
-from .clusters import fitted, term_program_of
+from .clusters import CLUSTER_WIDTH_PROBE, PROBE_ROWS, PROBES, Drawn, fitted, table_width, term_program_of
 from .colors import COLOR_QUERIES, ColorDetection, DefaultColors
 from .commands import handle_command
 from .enums import ExtendedKeys, Woke
@@ -91,6 +91,8 @@ _SYNCHRONIZED_REPLY_RE = re.compile(r"^\x1b\[\?2026;(\d+)\$y$")
 #: Lillecarl/pymux#539.
 EMOJI_WIDTH_PROBE = "\x1b7\x1b[2;1H✳️\x1b[6n\x1b[2;1H\x1b[2X\x1b8"
 _EMOJI_WIDTH_REPLY_RE = re.compile(r"^\x1b\[2;(\d+)R$")
+#: The answers to `CLUSTER_WIDTH_PROBE`, one per row. Lillecarl/pymux#801.
+_CLUSTER_WIDTH_REPLY_RE = re.compile(r"^\x1b\[([%s]);(\d+)R$" % "".join(map(str, PROBES)))
 PIXEL_MOUSE_QUERY = "\x1b[?1016$p"
 PIXEL_MOUSE_ON = "\x1b[?1016h"
 PIXEL_MOUSE_OFF = "\x1b[?1016l"
@@ -242,6 +244,7 @@ class ServerConnection:
         "pixel_mouse": Keep.DROPPED,
         "sizes_in_band": Keep.DROPPED,  # the terminal reports again when the mode is set
         "widens_text_emoji": Keep.DROPPED,
+        "clusters_drawn": Keep.DROPPED,
         "_frames_shown": Keep.DROPPED,
         # A recording holds Python objects of this build, so it ends
         # with it. `upgrade.py` writes it out first.
@@ -283,6 +286,10 @@ class ServerConnection:
         #: Whether this client's terminal draws a text emoji with U+FE0F
         #: two columns wide, where a pane holds one. Lillecarl/pymux#539.
         self.widens_text_emoji = False
+        #: How wide this client's terminal draws each kind of grapheme
+        #: cluster, as it answered `CLUSTER_WIDTH_PROBE`.
+        #: Lillecarl/pymux#801.
+        self.clusters_drawn = Drawn()
 
         #: Window frames sent and not yet answered with `frame-shown`,
         #: for a client that answers; set while there are none.
@@ -791,6 +798,17 @@ class ServerConnection:
                 self._request_repaint()
             return
 
+        cluster_width = _CLUSTER_WIDTH_REPLY_RE.match(data)
+        if cluster_width is not None:
+            fit = self.cluster_fit()
+            row = int(cluster_width.group(1))
+            self.clusters_drawn = self.clusters_drawn.answered(row, int(cluster_width.group(2)))
+            self._compare_with_the_table(row)
+            # The clusters already on its screen were fitted otherwise.
+            if self.cluster_fit() != fit:
+                self._request_repaint()
+            return
+
         # The terminal read a frame. Lillecarl/pymux#259.
         if _STATUS_REPLY_RE.match(data):
             self._status_answered()
@@ -869,11 +887,11 @@ class ServerConnection:
         # The graphics query reply and the device attributes say
         # something about the images. The reply of the colour probe says
         # how many colours the terminal takes.
-        named = term_program_of(self.graphics.terminal_version, self.colors.term)
+        fit = self.cluster_fit()
         self.graphics.handle_reply(data)
         self.colors.handle_reply(data)
-        # The clusters already on its screen were fitted to another name.
-        if term_program_of(self.graphics.terminal_version, self.colors.term) != named:
+        # The clusters already on its screen were fitted otherwise.
+        if self.cluster_fit() != fit:
             self._request_repaint()
 
         # The secondary attributes end in `c` too, and are the survey's,
@@ -1038,6 +1056,36 @@ class ServerConnection:
         if self.client_state is not None:
             self.client_state.input_tick += 1
 
+    def cluster_fit(self) -> str | Drawn | None:
+        """
+        How this client's terminal draws a grapheme cluster: by the name
+        of its table in wcwidth, or else by what it answered the probe.
+        None where it draws each as a pane holds it.
+        """
+        named = term_program_of(self.graphics.terminal_version, self.colors.term)
+        if named is not None:
+            return named
+        return self.clusters_drawn if self.clusters_drawn.differs() else None
+
+    def _compare_with_the_table(self, row: int) -> None:
+        # A named terminal is fitted by its table; a probe that says
+        # otherwise is worth knowing about, a font or a version later.
+        named = term_program_of(self.graphics.terminal_version, self.colors.term)
+        if named is None:
+            return
+        kind, cluster = PROBES[row]
+        drawn = getattr(self.clusters_drawn, kind)
+        listed = table_width(cluster, named)
+        if drawn != listed:
+            logger.info(
+                "The terminal of client %s draws a %s %d columns wide, where wcwidth's table for %s says %d.",
+                self.client_id or "?",
+                kind,
+                drawn,
+                named,
+                listed,
+            )
+
     @_PACKETS.handles(Packet.KITTY_DETECT)
     def _on_kitty_detect(self, packet: Message) -> None:
         # The client queried its terminal for kitty keyboard protocol
@@ -1050,7 +1098,13 @@ class ServerConnection:
         # can do (OSC 99 `p=?`), which a client of an older build never
         # asked. Lillecarl/pymux#779.
         self._write_output_raw(
-            PIXEL_MOUSE_QUERY + EMOJI_WIDTH_PROBE + SURVEY + "\x1b]99;" + NOTIFICATION_QUERY + "\x1b\\"
+            PIXEL_MOUSE_QUERY
+            + EMOJI_WIDTH_PROBE
+            + (CLUSTER_WIDTH_PROBE if self.size.rows >= PROBE_ROWS else "")
+            + SURVEY
+            + "\x1b]99;"
+            + NOTIFICATION_QUERY
+            + "\x1b\\"
         )
         self._flush_output()
 
@@ -1733,7 +1787,7 @@ class ServerConnection:
         output.keeps_placeholders = lambda: self.graphics.forwards_placeholders
         output.pixel_mouse = lambda: self.pixel_mouse
         output.narrows_text_emoji = lambda: self.widens_text_emoji
-        output.term_program = lambda: term_program_of(self.graphics.terminal_version, self.colors.term)
+        output.cluster_fit = self.cluster_fit
 
         client_state = self.pymux.add_client(
             # A proxy: what it lacks of an `Input` it forwards to its pipe.
@@ -2020,9 +2074,9 @@ class _FrameOutput(Vt100_Output):
         #: Whether U+FE0F goes after a one-column character, which this
         #: terminal would widen. Lillecarl/pymux#539.
         self.narrows_text_emoji: Callable[[], bool] = lambda: False
-        #: The name wcwidth knows this terminal by, to fit each grapheme
-        #: cluster to the width it draws. Lillecarl/pymux#798.
-        self.term_program: Callable[[], str | None] = lambda: None
+        #: How to fit each grapheme cluster to the width this terminal
+        #: draws it: `ServerConnection.cluster_fit`. Lillecarl/pymux#798.
+        self.cluster_fit: Callable[[], str | Drawn | None] = lambda: None
 
     @override
     def enable_mouse_support(self) -> None:
@@ -2069,9 +2123,9 @@ class _FrameOutput(Vt100_Output):
                 frame = blanked(frame)
             if VS16 in frame and self.narrows_text_emoji():
                 frame = without_widening_selectors(frame)
-            term_program = self.term_program()
-            if term_program is not None:
-                frame = fitted(frame, term_program)
+            fit = self.cluster_fit()
+            if fit is not None:
+                frame = fitted(frame, fit)
             self._buffer = [frame]
         if self._in_frame and self._after_frame:
             self.write_raw("".join(self._after_frame))

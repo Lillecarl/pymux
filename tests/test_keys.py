@@ -170,14 +170,14 @@ def test_a_legacy_modified_f3_is_the_key_and_not_a_cursor_report():
         assert letter == number, modifier
 
 
-def test_the_emoji_probe_report_is_still_a_reply():
-    "The server's one cursor report, `EMOJI_WIDTH_PROBE`'s, is on row 2."
+def test_the_probe_reports_are_still_replies():
+    "The server's cursor reports are on rows 2 to 5: the emoji probe's and the clusters'."
     pressed = []
     replies = []
     parser = KittyVt100Parser(pressed.append, reply_callback=replies.append)
-    parser.feed_and_flush("\x1b[2;3R\x1b[1;1R")
+    parser.feed_and_flush("\x1b[2;3R\x1b[3;7R\x1b[4;2R\x1b[5;3R\x1b[1;1R")
     assert [kp for kp in pressed if kp is not _Flush] == []
-    assert replies == ["\x1b[2;3R", "\x1b[1;1R"]
+    assert replies == ["\x1b[2;3R", "\x1b[3;7R", "\x1b[4;2R", "\x1b[5;3R", "\x1b[1;1R"]
 
 
 def test_keypad_keys():
