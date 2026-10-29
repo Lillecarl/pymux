@@ -59,7 +59,7 @@ async def test_the_answers_outrank_the_table_of_the_terminal():
 
 
 async def test_what_the_probes_erase_is_drawn_again():
-    "The probes blank cells on rows 2 to 5 of a screen pymux already drew."
+    "The probes blank 2 cells of row 2 and 8 of rows 3 to 5, on a screen pymux already drew."
     recorder = Recorder()
     command = "sh -c 'printf \"row1\\nrow2\\nrow3\\nrow4\\nrow5\\n\"; sleep 30'"
     async with over_connection(pymux=Pymux(startup_command=command), read_packet=recorder) as session:
