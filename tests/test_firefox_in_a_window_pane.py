@@ -27,6 +27,7 @@ pytestmark = pytest.mark.skipif(FIREFOX is None, reason="no firefox on the PATH"
 
 from pymux.commands import handle_command
 from pymux.enums import WindowCodec
+from pymux.kitty_frames import SHM_PROBE_ID
 from pymux.main import Pymux
 
 SIZE = Size(rows=24, columns=80)
@@ -72,6 +73,8 @@ class Recorder:
 #: which paces Firefox, and with VP9 as well.
 ROUTES = {
     "kitty commands": {"frames": False},
+    # A kitty on the server's machine, which reads frames from shared memory.
+    "kitty shared memory": {"frames": False, "shm": True},
     "frame packets": {"frames": True},
     "answered frames": {"frames": True, "shows": True},
     "answered vp9": {"frames": True, "shows": True, "codecs": ("vp9",)},
@@ -105,6 +108,7 @@ async def firefox_in_a_pane(tmp_path, page: str, route: str):
     runtime.mkdir(mode=0o700)
     client = dict(ROUTES[route])
     late = client.pop("late", 0.0)
+    shm = client.pop("shm", False)
     async with over_connection(pymux=pymux, read_packet=recorder) as session, anyio.create_task_group() as tasks:
         state, _size = await session.attach("one", SIZE, **client)
         if client.get("shows"):
@@ -116,6 +120,8 @@ async def firefox_in_a_pane(tmp_path, page: str, route: str):
         graphics.detected = True
         graphics.cell_width, graphics.cell_height = (10, 20)
         graphics.cell_size_known = True
+        if shm:
+            state.connection._process({"cmd": "in", "data": "\x1b_Gi=%d;OK\x1b\\" % SHM_PROBE_ID})
         await once(lambda: pymux.wayland.display, 10.0, "the compositor never started")
         environment = dict(
             os.environ,
@@ -188,3 +194,22 @@ async def test_firefox_draws_again_after_a_switch_away_and_back(tmp_path, page, 
             await _command(pymux, state, "last-window")
             await once(lambda: not _shows(state, pane), 10.0, "never left")
             await anyio.sleep(away)
+
+
+async def test_a_still_page_is_sent_once_after_a_return(tmp_path):
+    "A page that paints nothing new is one whole picture after a return, not a stream of them."
+    async with firefox_in_a_pane(tmp_path, "still", "kitty commands") as (pymux, state, pane, recorder):
+        await once(lambda: _pictures(recorder, False), 60.0, "Firefox never drew")
+        await anyio.sleep(1.0)
+        await _command(pymux, state, "new-window")
+        await once(lambda: not _shows(state, pane), 10.0, "never left")
+        await anyio.sleep(0.5)
+        before, written = _pictures(recorder, False), len(recorder.out)
+        await _command(pymux, state, "last-window")
+        await anyio.sleep(1.5)
+        settled = len(recorder.out)
+        await anyio.sleep(1.5)
+        assert (_pictures(recorder, False) - before, len(recorder.out) - settled) == (1, 0), (
+            "after the return: %d pictures, %d bytes in the first 1.5 s, %d in the next"
+            % (_pictures(recorder, False) - before, settled - written, len(recorder.out) - settled)
+        )
