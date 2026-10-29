@@ -27,7 +27,7 @@ import argparse
 import pytest
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
-from session import in_this_process, over_connection
+from session import in_this_process, once, over_connection
 
 from pymux.commands import CommandException
 from pymux.commands.detach_client import detach_client
@@ -143,6 +143,17 @@ async def test_with_no_argument_it_still_detaches_only_the_caller():
         run_at(here, "detach-client")
 
         assert pymux.clients == [there]
+
+
+async def test_with_no_argument_from_another_shell_it_detaches_the_latest_client():
+    "Not the shell's own connection, which closed unanswered. Lillecarl/pymux#804."
+    async with over_connection() as session:
+        pymux = session.pymux
+        await session.attach("only", SIZE)
+
+        said = await session.command("detach-client")
+
+        await once(lambda: pymux.clients == [], 5.0, lambda: "still attached; it said %r" % (said,))
 
 
 async def test_t_detaches_the_client_of_that_name():

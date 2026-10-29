@@ -7,8 +7,6 @@ if TYPE_CHECKING:
     from pymux.main import ClientState, Pymux
 
 
-from prompt_toolkit.application.current import get_app
-
 from pymux.commands import (
     CommandException,
     CommandParser,
@@ -17,6 +15,7 @@ from pymux.commands import (
     this_client,
 )
 from pymux.commands.common import clients_named
+from pymux.enums import Woke
 
 
 def _detach(pymux: Pymux, client_state: ClientState, hang_up: bool = False) -> None:
@@ -96,7 +95,15 @@ def detach_client(pymux: Pymux, args: argparse.Namespace) -> None:
                 _detach(pymux, client_state, hang_up)
         return
 
-    pymux.detach_client(get_app(), hang_up=hang_up)
+    # A command from a pane or another shell runs under a temporary
+    # client, and detaching that one closes the command's own
+    # connection before it is answered. tmux takes the best client
+    # there (`cmd_find_best_client`). Lillecarl/pymux#804.
+    here = pymux.the_client_to_tell()
+    if here is None:
+        raise CommandException("no client to detach")
+    _detach(pymux, here, hang_up)
+    pymux.invalidate(Woke.CLIENT_DETACHED)
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
