@@ -12,7 +12,7 @@ a machine you are not on names nothing. Lillecarl/pymux#330.
 from __future__ import annotations
 
 from prompt_toolkit.data_structures import Size
-from session import OTHER_MACHINE, create_session, over_connection
+from session import OTHER_MACHINE, create_session, once, over_connection
 
 from pymux.answer import Answer
 
@@ -56,6 +56,17 @@ async def test_a_client_is_listed_with_its_size_and_terminal():
         said = await _lines(session, "list-clients -F '%s'" % ("#{client_width}x#{client_height} #{client_termname}",))
 
         assert said == ["80x24 xterm-256color"]
+
+
+async def test_a_client_is_listed_with_its_cell_once_its_terminal_said():
+    async with over_connection() as session:
+        state, _ = await session.attach("the client", SIZE)
+        cell = "list-clients -F '[#{client_cell_width}x#{client_cell_height}]'"
+        assert await _lines(session, cell) == ["[x]"]
+
+        state.connection._process({"cmd": "in", "data": "\x1b[6;19;9t"})
+        await once(lambda: state.connection.graphics.cell_size_known, 10.0, "the cell never arrived")
+        assert await _lines(session, cell) == ["[9x19]"]
 
 
 async def test_the_session_of_each_client_is_its_own():

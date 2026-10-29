@@ -30,6 +30,7 @@ from pymux.tags import spelled
 
 if TYPE_CHECKING:
     from pymux.arrangement import Pane, Window
+    from pymux.graphics import ClientGraphics
     from pymux.main import ClientState, Pymux
     from pymux.pipes.base import PipeConnection
     from pymux.rate import Rate
@@ -742,6 +743,18 @@ def _client_height(context: FormatContext) -> str:
     return str(connection.size.rows) if connection is not None else ""
 
 
+def _client_cell(side: Callable[[ClientGraphics], int]) -> Callable[[FormatContext], str]:
+    "One side of the client's cell in pixels, as tmux 3.4 names it; nothing until the terminal answered."
+
+    def answer(context: FormatContext) -> str:
+        connection = _connection_of(context)
+        if connection is None or not connection.graphics.cell_size_known:
+            return ""
+        return str(side(connection.graphics))
+
+    return answer
+
+
 def _client_bytes(count: Callable[[PipeConnection], int]) -> Callable[[FormatContext], str]:
     """
     What the wire carried to this client or from it, after zstd: the
@@ -905,6 +918,8 @@ tmux_variables: dict[str, Callable[[FormatContext], str]] = {
     "client_termname": _client_termname,
     "client_width": _client_width,
     "client_height": _client_height,
+    "client_cell_width": _client_cell(lambda graphics: graphics.cell_width),
+    "client_cell_height": _client_cell(lambda graphics: graphics.cell_height),
     "client_readonly": _client_readonly,
     "client_flags": _client_flags,
     "client_bytes_down": _client_bytes(lambda pipe: pipe.bytes_out),
