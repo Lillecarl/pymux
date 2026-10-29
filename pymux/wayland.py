@@ -570,6 +570,15 @@ class WaylandServer:
             else:
                 compositor.pointer_scroll(steps, time)
 
+    def frame(self, toplevel: int) -> tuple[int, int, bytes] | None:
+        "The last frame the window drew, as width, height and RGBA pixels."
+        if self.compositor is None:
+            return None
+        try:
+            return self.compositor.frame(toplevel)
+        except KeyError:
+            return None
+
     def view_of(
         self, pane_id: int, widget: WindowWidget, write_position: WritePosition, drained: Callable[[], Awaitable[None]]
     ) -> WindowView:

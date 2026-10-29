@@ -7,6 +7,8 @@ Needs the `wayland` extra. Lillecarl/pymux#620.
 
 from __future__ import annotations
 
+import base64
+import io
 import os
 import shlex
 import sys
@@ -15,6 +17,7 @@ from pathlib import Path
 
 import anyio
 import pytest
+from PIL import Image
 from prompt_toolkit.data_structures import Size
 from session import once, over_connection
 
@@ -458,6 +461,38 @@ async def test_wl_turns_the_pane_it_ran_in_into_the_window(tmp_path, monkeypatch
         # Its window opened, so `wl` has nothing to say.
         await once(lambda: answered(got)["exit"] is not None, 10.0, "wl never answered")
         assert answered(got) == {"out": "", "err": "", "exit": 0}
+
+
+async def test_capture_pane_png_of_a_window_pane_is_the_windows_frame(tmp_path, monkeypatch):
+    "Lillecarl/pymux#809."
+    log = tmp_path / "probe.log"
+    log.touch()
+    async with with_a_shell(tmp_path, monkeypatch) as (pymux, session, _window, shell):
+        await session.command(
+            "wl -- %s %s %s" % (sys.executable, PROBE, log), pane_id=shell.pane_id, environment=dict(os.environ)
+        )
+        await once(lambda: pymux.wayland.panes, 10.0, "the window never opened")
+        (pane,) = pymux.wayland.panes.values()
+        await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
+
+        got = await session.command("capture-pane -p --png -t %%%d" % pane.pane_id)
+        await once(lambda: answered(got)["exit"] is not None, 10.0, "capture-pane never answered")
+        told = answered(got)
+        assert (told["err"], told["exit"]) == ("", 0)
+        picture = Image.open(io.BytesIO(base64.b64decode(told["out"])))
+        width, height, rgba = pymux.wayland.frame(pane.terminal.toplevel)
+        assert picture.size == (width, height)
+        assert picture.convert("RGBA").tobytes() == rgba
+        # The probe's fill, in RGBA: it wrote B, G, R, A.
+        assert picture.convert("RGBA").getpixel((30, 20)) == (0x33, 0x66, 0x99, 0xFF)
+
+        got = await session.command("capture-pane -p --png --fit 16 -t %%%d" % pane.pane_id)
+        await once(lambda: answered(got)["exit"] is not None, 10.0, "capture-pane --fit never answered")
+        assert max(Image.open(io.BytesIO(base64.b64decode(answered(got)["out"]))).size) == 16
+
+        got = await session.command("capture-pane -p -t %%%d" % pane.pane_id)
+        await once(lambda: answered(got)["exit"] is not None, 10.0, "capture-pane -p never answered")
+        assert "shows a Wayland window" in answered(got)["err"]
 
 
 async def test_a_later_window_of_a_wl_program_goes_beside_its_first(tmp_path, monkeypatch):

@@ -126,6 +126,9 @@ class Pane(PaneFields):
         the attached terminal's without it. `fit` shrinks the cell until
         the longest edge is at most that many pixels. The range is
         `capture_html`'s.
+
+        A pane that shows a Wayland window answers the last frame the
+        window drew, in its own pixels. Only `fit` applies there.
         """
         return await self.server.run(operations.capture_png(self.id, start, end, fonts, fallbacks, cell, fit))
 

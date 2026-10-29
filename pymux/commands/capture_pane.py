@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import io
 from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
@@ -9,6 +11,8 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
+import anyio
+from PIL import Image
 from pyte.compact_html import compact_html_of_page
 from pyte.html import SCREEN_CLASS, html_of_page
 from pyte.osc import ColorOverrides
@@ -18,6 +22,7 @@ from pymux import screenshot
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import show_listing, terminal_of, the_pane
 from pymux.commands.pictures import add_picture_arguments, cell_from, drawn, fitted_cell, refuse_picture_flags
+from pymux.window_pane import WindowWidget
 
 
 def _row_of(given: str | None, name: str, here: int, far_end: int, line_offset: int) -> int:
@@ -102,6 +107,31 @@ async def _print_png(pymux: Pymux, screen: Screen, page: Page, args: argparse.Na
     pymux.print_command_line(await drawn(grid, args, cell, "capture-pane"))
 
 
+async def _print_window_png(pymux: Pymux, widget: WindowWidget, args: argparse.Namespace) -> None:
+    """
+    The last frame a Wayland window drew, as a PNG in base64: its own
+    pixels, with no cell and no font. `--fit` shrinks it.
+    Lillecarl/pymux#809.
+    """
+    if args.fonts or args.fallbacks or args.cell or args.start is not None or args.end is not None:
+        raise CommandException(
+            "capture-pane: a window pane is pixels, so --font, --fallback, --cell, -S and -E draw nothing"
+        )
+    frame = pymux.wayland.frame(widget.toplevel)
+    if frame is None:
+        raise CommandException("capture-pane: the window has drawn no frame yet")
+    pymux.print_command_line(await anyio.to_thread.run_sync(_window_png, *frame, args.fit))
+
+
+def _window_png(width: int, height: int, rgba: bytes, fit: int | None) -> str:
+    picture = Image.frombytes("RGBA", (width, height), rgba)
+    if fit is not None:
+        picture.thumbnail((fit, fit), Image.Resampling.LANCZOS)
+    out = io.BytesIO()
+    picture.save(out, "PNG")
+    return base64.b64encode(out.getvalue()).decode("ascii")
+
+
 def _html(screen: Screen, page: Page, args: argparse.Namespace) -> str:
     "The rows of a pane as the element `pyte.html` is written for, or `pyte.compact_html` with --compact."
     first, last = _drawn_rows(screen, page, args)
@@ -141,7 +171,12 @@ def capture_pane(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None] | No
     caller that asks for a pane means the screenful it draws, not the
     ten thousand rows behind it. Lillecarl/pymux#457.
     """
-    terminal = terminal_of(the_pane(pymux, args.target_pane))
+    pane = the_pane(pymux, args.target_pane)
+    if isinstance(pane.terminal, WindowWidget) and args.png:
+        if not args.p:
+            raise CommandException("capture-pane: --png prints base64, so it needs -p")
+        return _print_window_png(pymux, pane.terminal, args)
+    terminal = terminal_of(pane)
 
     process = terminal.process
     screen = terminal.screen
