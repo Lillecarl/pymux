@@ -357,6 +357,11 @@ def _fitted(path: str, size: int, height: int) -> tuple[ImageFont.FreeTypeFont, 
     return font, (height - ascent - descent) // 2
 
 
+#: What steers a glyph and draws nothing of its own: the text and emoji
+#: variation selectors and the zero width joiner. A font need not map them.
+_SELECTORS = frozenset("\ufe0e\ufe0f\u200d")
+
+
 class _Pens:
     "The fonts of one picture, and which one draws each glyph."
 
@@ -373,12 +378,21 @@ class _Pens:
         The face asked for when it has the glyph, or the first fallback
         that does. The bold and italic faces are taken to hold what the
         regular one holds. A glyph nobody has gets the face's own box.
+
+        A cell of several characters goes to a font that has all of
+        them, as a keycap does: the face has its digit and not U+20E3,
+        and drew a missing-glyph box beside it. Lillecarl/pymux#802.
         """
-        code = ord(glyph[0])
-        if code not in self.known:
+        codes = {ord(char) for char in glyph if char not in _SELECTORS} or {ord(glyph[0])}
+        if not codes <= self.known:
             for known, fitted in self.fallbacks:
-                if code in known:
+                if codes <= known:
                     return fitted
+            code = ord(glyph[0])
+            if code not in self.known:
+                for known, fitted in self.fallbacks:
+                    if code in known:
+                        return fitted
         return self.faces[face]
 
 

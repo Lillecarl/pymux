@@ -159,6 +159,18 @@ async def test_a_glyph_the_font_lacks_comes_from_the_fallback(pymux):
     assert alone.crop((0, 0, 9, 18)).tobytes() == alone.crop((18, 0, 27, 18)).tobytes(), "the font has U+23BF after all"
 
 
+def test_a_cell_of_several_characters_takes_a_font_that_has_them_all():
+    "The face has the digit of a keycap and not its U+20E3. Lillecarl/pymux#802."
+    keycap = "1\ufe0f\u20e3"
+    assert 0x20E3 not in screenshot._characters(FONTS[0])
+    assert 0x20E3 in screenshot._characters(FALLBACK)
+    pens = screenshot._Pens(screenshot.faces_of(FONTS, [FALLBACK]), 9, 18)
+    font, _ = pens.font_for(keycap, "regular")
+    assert font.path == FALLBACK
+    font, _ = pens.font_for("1", "regular")
+    assert font.path == FONTS[0]
+
+
 def test_a_fallback_is_known_by_what_it_holds():
     assert 0x23BF in screenshot._characters(FALLBACK)
     assert 0x23BF not in screenshot._characters(FONTS[0])
