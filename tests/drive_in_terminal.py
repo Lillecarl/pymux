@@ -211,8 +211,79 @@ def carry_the_answer(master, stdin_fd, ready) -> None:
         piece = os.read(stdin_fd, CHUNK)
     except OSError:
         return
-    if piece:
-        os.write(master, piece)
+    ANSWERS.write(master, piece.replace(FOCUS_IN, b""))
+
+
+#: What a terminal says when it takes the focus. The relay keeps it from
+#: the program: the fence is a notification, and pymux keeps one from a
+#: window a person looks at. A terminal has the focus until it says
+#: otherwise, so the relay says it looked away (`frame_and_fence`), and a
+#: terminal that reports its focus once pymux asks would undo that. Only
+#: notifications and a pane's focus reports read the focus, so no
+#: picture changes. Lillecarl/pymux#799, Lillecarl/pymux#806.
+FOCUS_IN = b"\x1b[I"
+FOCUS_OUT = b"\x1b[O"
+
+
+class TerminalStream:
+    """
+    What the terminal says to the program, and where in an escape
+    sequence it stopped.
+
+    **The relay's own report goes between two sequences, never into
+    one.** A terminal's answers arrive in pieces, cut anywhere, and a
+    focus report written between two pieces broke the answer it landed
+    in. pymux never counted that answer to its status report, held
+    every frame after it for good, and the fence behind a frame never
+    came. Lillecarl/pymux#806.
+    """
+
+    def __init__(self) -> None:
+        self.state = "ground"
+        self.looking_away = False
+
+    def write(self, master: int, data: bytes) -> None:
+        if data:
+            os.write(master, data)
+        for byte in data:
+            self._step(byte)
+        if self.looking_away and self.state == "ground":
+            os.write(master, FOCUS_OUT)
+            self.looking_away = False
+
+    def look_away(self, master: int) -> None:
+        "Tell the program the terminal lost the focus, as soon as that splits no sequence."
+        self.looking_away = True
+        self.write(master, b"")
+
+    def _step(self, byte: int) -> None:
+        if self.state == "ground":
+            if byte == 0x1B:
+                self.state = "escape"
+        elif self.state == "escape":
+            if byte == ord("["):
+                self.state = "csi"
+            elif byte == ord("O"):
+                self.state = "ss3"
+            elif byte in b"]P_^X":
+                self.state = "string"
+            else:
+                self.state = "ground"
+        elif self.state == "ss3":
+            self.state = "ground"
+        elif self.state == "csi":
+            if 0x40 <= byte <= 0x7E:
+                self.state = "ground"
+        elif self.state == "string":
+            if byte == 0x07:
+                self.state = "ground"
+            elif byte == 0x1B:
+                self.state = "string escape"
+        elif self.state == "string escape":
+            self.state = "ground" if byte == ord("\\") else "string"
+
+
+ANSWERS = TerminalStream()
 
 
 #: Modes that are one setting in xterm and kitty: mouse tracking, and
@@ -261,10 +332,10 @@ def ask_modes(stdin_fd, master, out):
             break
         heard.extend(piece)
     answers = {int(match.group(1)): int(match.group(2)) for match in _MODE_REPORT.finditer(heard)}
-    rest = _ATTRIBUTES.sub(b"", _MODE_REPORT.sub(b"", bytes(heard)), count=1)
+    rest = _ATTRIBUTES.sub(b"", _MODE_REPORT.sub(b"", bytes(heard)), count=1).replace(FOCUS_IN, b"")
     if rest and master is not None:
         with contextlib.suppress(OSError):
-            os.write(master, rest)
+            ANSWERS.write(master, rest)
     return answers
 
 
@@ -418,10 +489,15 @@ def settle(master, seen, out, copied, stdin_fd=None):
     into a pymux that has not drawn and is not reading them yet. So the
     quiet is measured, and only real silence counts.
     Lillecarl/pymux#353.
+
+    **A window pane is never silent.** Its program draws, and pymux
+    sends every frame on, so the quiet gives up after `QUIET_LIMIT` as
+    a quiet step does. Lillecarl/pymux#806.
     """
     quiet_since = time.monotonic()
     deadline = quiet_since + FIRST_BYTE
-    while time.monotonic() < deadline:
+    limit = quiet_since + QUIET_LIMIT
+    while time.monotonic() < min(deadline, limit):
         if not wait_for_program(master, stdin_fd, QUIET):
             if time.monotonic() - quiet_since >= QUIET:
                 return copied
@@ -459,19 +535,61 @@ def wait_for_first_frame(master, seen, out, copied, started, writer, stdin_fd=No
 
     A program that never draws waits out the boot, and the keys are
     pressed then: the hold covers the run that photographs nothing.
+
+    **The fence goes again every `BOOT_RETRY` seconds.** pymux keeps a
+    notification from a window a terminal with the focus shows, and a
+    pymux still starting read the relay's focus report only after the
+    first fence: that fence was kept, and the boot waited out all ten
+    seconds. Lillecarl/pymux#806.
     """
-    came, copied = frame_and_fence(
-        master,
-        seen,
-        out,
-        copied,
-        writer,
-        None,
-        BOOT_TOKEN,
-        started + BOOT_TIMEOUT,
-        stdin_fd,
-    )
+    deadline = started + BOOT_TIMEOUT
+    came = False
+    while not came and time.monotonic() < deadline:
+        came, copied = frame_and_fence(
+            master,
+            seen,
+            out,
+            copied,
+            writer,
+            None,
+            BOOT_TOKEN,
+            min(deadline, time.monotonic() + BOOT_RETRY),
+            stdin_fd,
+        )
     return came, time.monotonic(), copied
+
+
+#: How long the boot fence is waited for before it goes again.
+BOOT_RETRY = 1.0
+
+
+def copy_unfenced(seen, out, copied):
+    """
+    Copy what arrived while a fence is on its way, with the fences
+    taken out, and give back where the copying stopped.
+
+    **Held back, the frame deadlocks the fence.** pymux puts a status
+    report behind each frame and draws no next frame until the terminal
+    answers it, and a pane's notification goes out behind a frame. A
+    terminal that never saw the question never answers, so the fence
+    never came once a window pane drew. Only a tail that could still
+    become a fence waits for more. Lillecarl/pymux#806.
+    """
+    end = len(seen)
+    start = seen.rfind(b"\x1b", copied)
+    if start != -1:
+        tail = bytes(seen[start:])
+        opening = tail.startswith(FENCE_OPENING) and not FENCE.fullmatch(tail)
+        if opening or FENCE_OPENING.startswith(tail):
+            end = start
+    if end > copied:
+        out.write(FENCE.sub(b"", bytes(seen[copied:end])))
+        out.flush()
+    return max(copied, end)
+
+
+#: How every fence starts, as `fence_sequence` writes it.
+FENCE_OPENING = b"\x1b]99;"
 
 
 def frame_and_fence(master, seen, out, copied, writer, mark, token, deadline, stdin_fd=None):
@@ -493,10 +611,9 @@ def frame_and_fence(master, seen, out, copied, writer, mark, token, deadline, st
     boot has none: nothing was sent, and what is waited for is the
     program's own first drawing.
 
-    Nothing is copied while the fence is on its way, and what has
-    arrived when it does goes to the terminal with the fence taken
-    back out: a stream that holds our own scaffolding is a stream
-    nobody can read.
+    What arrives while the fence is on its way goes to the terminal
+    with the fence taken back out (`copy_unfenced`): a stream that
+    holds our own scaffolding is a stream nobody can read.
     """
     while mark is not None and len(seen) <= mark:
         if time.monotonic() > deadline:
@@ -510,6 +627,10 @@ def frame_and_fence(master, seen, out, copied, writer, mark, token, deadline, st
         out.flush()
         copied += len(piece)
 
+    # Before every fence and not once: pymux drops a focus report that
+    # comes before the client it belongs to, and a client starts out
+    # focused. The settle gives pymux the time to read it first.
+    ANSWERS.look_away(master)
     copied = settle(master, seen, out, copied, stdin_fd)
 
     os.write(writer, fence_sequence(token))
@@ -520,11 +641,13 @@ def frame_and_fence(master, seen, out, copied, writer, mark, token, deadline, st
             continue
         if not read_from(master, seen):
             return False, copied
+        copied = copy_unfenced(seen, out, copied)
 
-    clean = FENCE.sub(b"", bytes(seen))
-    out.write(clean[copied:])
+    # `copied` counts the bytes of `seen`, fences and all: pymux writes
+    # an OSC 99 of its own, so a count of the cleaned stream drifts.
+    out.write(FENCE.sub(b"", bytes(seen[copied:])))
     out.flush()
-    copied = len(clean)
+    copied = len(seen)
 
     copied = settle(master, seen, out, copied, stdin_fd)
     return True, copied
@@ -585,6 +708,9 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None, ask_dir=None):
             os.mkfifo(fifo)
         writer = take_fifo(fifo, started)
         note(started, "the pane took the fifo")
+        # Long before the boot fence, which `frame_and_fence` alone
+        # raced: the fence came 3ms ahead of its focus report.
+        ANSWERS.look_away(master)
         drawn, when, copied = wait_for_first_frame(master, seen, out, copied, started, writer, stdin_fd)
         note(
             started,
