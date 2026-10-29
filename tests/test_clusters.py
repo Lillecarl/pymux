@@ -10,7 +10,7 @@ import pytest
 
 from pymux.clusters import fitted, term_program_of
 
-FAMILY = "\U0001f468‍\U0001f469‍\U0001f467"
+FAMILY = "\U0001f468\u200d\U0001f469\u200d\U0001f467"
 FLAG = "\U0001f1f8\U0001f1ea"
 THUMB = "\U0001f44d\U0001f3fd"
 
@@ -52,5 +52,5 @@ def test_a_title_keeps_its_cluster():
 
 
 def test_a_frame_without_a_joiner_is_not_read():
-    frame = "中❤️"
+    frame = "中❤\ufe0f"
     assert fitted(frame, "xterm") is frame

@@ -29,7 +29,7 @@ _KNOWN: Final = frozenset(list_term_programs())
 #: The characters that make a cluster narrower than its pieces: a zero
 #: width joiner, a regional indicator, a skin tone. A frame without one
 #: holds no cluster to fit.
-_JOINS: Final = re.compile("[‍\U0001f1e6-\U0001f1ff\U0001f3fb-\U0001f3ff]")
+_JOINS: Final = re.compile("[\u200d\U0001f1e6-\U0001f1ff\U0001f3fb-\U0001f3ff]")
 
 #: Text outside the ASCII range, or an OSC string, which is a title or
 #: a link and no cells: it goes out as it is.
