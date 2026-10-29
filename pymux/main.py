@@ -1270,6 +1270,7 @@ class Pymux:
         "option_tables": Keep.REBUILT,
         "panes_by_id": Keep.REBUILT,
         "hanging_up": Keep.DROPPED,  # an upgrade kills them before it goes
+        "_killed_in": Keep.DROPPED,  # the panes it names are hanging up, and go with them
         "refusing_commands": Keep.DROPPED,  # the new image takes them again
         "_client_states": Keep.REBUILT,  # from the client records, as clients reconnect
         # Told again at the first focus sync, which a program reads as one more focus-in.
@@ -1441,6 +1442,10 @@ class Pymux:
 
         # Keep track of all the panes, by ID. (For quick lookup.)
         self.panes_by_id: weakref.WeakValueDictionary[PaneId, Pane] = weakref.WeakValueDictionary()
+        #: The session each pane `kill_pane` took out was in, until its
+        #: program ends: by then no session holds it, and the end has to
+        #: know which one it may leave empty. Lillecarl/pymux#807.
+        self._killed_in: dict[PaneId, Session] = {}
         #: Programs sent SIGHUP whose SIGKILL may still be due. The
         #: grace task keeps each backend alive until the program ends.
         self.hanging_up: weakref.WeakSet[PosixBackend] = weakref.WeakSet()
@@ -2774,18 +2779,20 @@ class Pymux:
         "Take a pane whose program ended out of its session, and the session if it empties."
         # The session the pane was in, and not the session of whoever
         # happens to be the current client when a program ends.
-        session = self.session_holding(pane)
+        killed_in = self._killed_in.pop(pane.pane_id, None)
+        session = self.session_holding(pane) or killed_in
         if session is not None:
             session.arrangement.remove_pane(pane)
-
-            # A session with no panes left is over. The last one to go
-            # stops the server.
-            if not session.arrangement.has_panes:
-                self.remove_session(session)
+            self._end_if_empty(session)
 
         # Make sure the right pane is focused for each client.
         for client_state in self._client_states.values():
             client_state.sync_focus()
+
+    def _end_if_empty(self, session: Session) -> None:
+        "A session with no panes left is over. The last one to go stops the server."
+        if session in self.sessions and not session.arrangement.has_panes:
+            self.remove_session(session)
 
     def open_window_pane(self, widget: WindowWidget, beside: Pane | None = None) -> Pane | None:
         """
@@ -4162,14 +4169,22 @@ class Pymux:
         runs in it: a shell writes its history on the way out, and a
         program that ignores it gets SIGKILL after a grace.
         """
-        if not pane.process.is_terminated:
-            self.hang_up(pane)
-
         # Remove from layout. The session the pane is in, and not the
         # session of whoever asked: `kill-pane -t` reaches across.
         session = self.session_holding(pane)
-        if session is not None:
-            session.arrangement.remove_pane(pane)
+        if session is None:
+            if not pane.process.is_terminated:
+                self.hang_up(pane)
+            return
+        session.arrangement.remove_pane(pane)
+
+        if pane.process.is_terminated:
+            # Its end was heard already, under `remain-on-exit`, and
+            # nothing calls back again.
+            self._end_if_empty(session)
+        else:
+            self._killed_in[pane.pane_id] = session
+            self.hang_up(pane)
 
     def leave_command_mode(self, append_to_history: bool = False) -> None:
         """
