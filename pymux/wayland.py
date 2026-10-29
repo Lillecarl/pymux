@@ -185,6 +185,8 @@ class WaylandServer:
         self._pacers: dict[int, _Pacer] = {}
         #: What each window was last configured with: width, height, scale.
         self._configured: dict[int, tuple[int, int, float]] = {}
+        #: The cell each window was last sized for, which the pointer is read at.
+        self._cells: dict[int, tuple[int, int]] = {}
         #: The programs `pymux wl` started, by their connection's tag.
         self._launches: dict[int, Launch] = {}
         self._tasks: anyio.abc.TaskGroup | None = None
@@ -304,6 +306,7 @@ class WaylandServer:
         widget = self.widgets.pop(toplevel, None)
         pacer = self._pacers.pop(toplevel, None)
         self._configured.pop(toplevel, None)
+        self._cells.pop(toplevel, None)
         if pacer is not None:
             pacer.shown.set()
         if pane is not None and widget is not None:
@@ -446,8 +449,9 @@ class WaylandServer:
         """
         if self.compositor is None:
             return
-        width, height = self.pymux.terminals.cell_size()
+        width, height = self._cell_of(toplevel)
         wanted = (columns * width, rows * height, self._scale_of(toplevel, height))
+        self._cells[toplevel] = (width, height)
         if self._configured.get(toplevel) == wanted:
             return
         self._configured[toplevel] = wanted
@@ -459,6 +463,12 @@ class WaylandServer:
         for toplevel, widget in self.widgets.items():
             if widget.columns and widget.rows:
                 self.configure(toplevel, widget.columns, widget.rows)
+
+    def _cell_of(self, toplevel: int) -> tuple[int, int]:
+        "The cell of the client a person used last of those watching the session that holds this window."
+        pane = self.panes.get(toplevel)
+        found = None if pane is None else self.pymux.window_of_pane(pane.pane_id)
+        return self.pymux.terminals.cell_size(None if found is None else found[0])
 
     def _scale_of(self, toplevel: int, cell_height: int) -> float:
         "The scale the `wayland-scale` of the window holding this one names."
@@ -502,13 +512,13 @@ class WaylandServer:
             return False
         return compositor.commit_text(text)
 
-    def _pixel_of(self, position: Point) -> tuple[float, float]:
+    def _pixel_of(self, toplevel: int, position: Point) -> tuple[float, float]:
         """
         Where in the window's pixels the pointer is: the cell, and where in
         it the terminal said, for one that reports pixels; else the middle.
-        Lillecarl/pymux#648.
+        Lillecarl/pymux#648. At the cell the window was sized for.
         """
-        width, height = self.pymux.terminals.cell_size()
+        width, height = self._cells.get(toplevel) or self._cell_of(toplevel)
         across, down = self._pointer_fraction()
         return (position.x + across) * width, (position.y + down) * height
 
@@ -528,7 +538,7 @@ class WaylandServer:
         compositor = self.compositor
         if compositor is None:
             return
-        x, y = self._pixel_of(position)
+        x, y = self._pixel_of(toplevel, position)
         with contextlib.suppress(KeyError):
             compositor.pointer_motion(toplevel, x, y, time)
             if button is not None:
@@ -540,11 +550,11 @@ class WaylandServer:
         compositor = self.compositor
         if compositor is None:
             return
-        x, y = self._pixel_of(position)
+        x, y = self._pixel_of(toplevel, position)
         with contextlib.suppress(KeyError):
             compositor.pointer_motion(toplevel, x, y, time)
             if self._scrolls_smooth():
-                compositor.pointer_scroll_smooth(toplevel, steps * self.pymux.terminals.cell_size()[1], time)
+                compositor.pointer_scroll_smooth(toplevel, steps * self._cell_of(toplevel)[1], time)
             else:
                 compositor.pointer_scroll(steps, time)
 

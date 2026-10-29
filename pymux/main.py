@@ -2359,6 +2359,8 @@ class Pymux:
         self._uses += 1
         client_state.last_used = self._uses
         client_state.session.last_used = self._uses
+        # The panes take this client's cell. Lillecarl/pymux#753.
+        self.terminals.sync_cell_size()
 
     def sync_pane_focus(self) -> None:
         """

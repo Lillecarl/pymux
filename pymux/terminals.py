@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from .arrangement import Pane
     from .ids import SessionId
     from .main import Pymux
+    from .session import Session
 
 __all__ = ["Terminals", "pointer_shape_of"]
 
@@ -160,17 +161,19 @@ class Terminals:
         for pane in list(self.pymux.panes_by_id.values()):
             self.tell_pane_about_keyboard(pane)
 
-    def cell_size(self) -> tuple[int, int]:
+    def cell_size(self, session: Session | None = None) -> tuple[int, int]:
         """
-        How big one cell is, in pixels, for the panes of this server.
+        How big one cell is, in pixels, for the panes of this server, or
+        for those of `session`.
 
-        **The cell of the client that has been here longest and knows
-        one.** A pane serves several clients and they do not share a
-        cell size, so one of them has to speak for the pane. First come
-        is the stable choice: a later client attaching does not move
-        what the panes already hold, and a session usually keeps one
-        client for its whole life. tmux picks a client's cell for the
-        window in the same spirit (`resize.c`).
+        **The cell of the client a person used last**, of `session` when
+        one watches it. A pane serves several clients and they do not
+        share a cell size, so one of them has to speak for the pane, and
+        every other terminal stretches a picture drawn for that cell. The
+        terminal in front of the person draws it pixel for pixel: a
+        Wayland window drawn for a 7x16 cell was grainy and 1.4 times too
+        wide in a kitty with a 10x18 one. Lillecarl/pymux#753. Clients
+        nobody typed in tie, and the first to attach wins.
 
         A client that never answered "CSI 16 t" is passed over rather
         than counted at its default, and a connection that runs one
@@ -178,13 +181,16 @@ class Terminals:
         With nobody to ask, the panes keep the size `pyte` assumes.
         Lillecarl/pymux#369.
         """
-        for connection, client_state in self.pymux._client_states.items():
-            if connection is None or client_state.temporary:
-                continue
-            graphics = connection.graphics
-            if graphics.cell_size_known:
-                return (graphics.cell_width, graphics.cell_height)
-        return (ASSUMED_CELL_WIDTH, ASSUMED_CELL_HEIGHT)
+        known = [
+            client_state
+            for connection, client_state in self.pymux._client_states.items()
+            if connection is not None and not client_state.temporary and connection.graphics.cell_size_known
+        ]
+        watching = [client_state for client_state in known if client_state.session is session] or known
+        if not watching:
+            return (ASSUMED_CELL_WIDTH, ASSUMED_CELL_HEIGHT)
+        graphics = max(watching, key=lambda client_state: client_state.last_used).connection.graphics
+        return (graphics.cell_width, graphics.cell_height)
 
     def sync_cell_size(self) -> None:
         """
