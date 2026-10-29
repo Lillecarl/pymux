@@ -14,7 +14,7 @@ from libpymux.wire import MSGPACK, MSGPACK_ZSTD, Compressor, PacketReader, encod
 from pymux.client.terminal import TerminalClient
 from pymux.main import Pymux
 from pymux.pipes.memory import connect_in_memory
-from pymux.pipes.posix import PosixSocketConnection
+from pymux.pipes.posix import COMPRESS_IN_A_THREAD, PosixSocketConnection
 from pymux.server import ServerConnection
 
 TURN = {"cmd": "wire", "wire": MSGPACK}
@@ -123,6 +123,39 @@ async def test_a_socket_compresses_for_a_client_that_asks():
         assert reader.zstd
         pymux.stop()
         client_socket.close()
+
+
+async def test_a_frame_compressed_in_a_thread_keeps_its_place_in_the_stream():
+    """
+    A packet past `COMPRESS_IN_A_THREAD` is compressed off the loop, and
+    a small one written while it is goes into the zstd stream after it.
+    Lillecarl/pymux#632.
+    """
+    server_socket, client_socket = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
+    client_socket.setblocking(False)
+    connection = PosixSocketConnection(server_socket)
+    turn = {"cmd": "wire", "wire": MSGPACK_ZSTD}
+    big = {"cmd": "out", "data": "".join("%08d" % n for n in range(COMPRESS_IN_A_THREAD))}
+    small = {"cmd": "out", "data": "after"}
+    reader = PacketReader()
+    said: list = []
+
+    async def read_all() -> None:
+        while len(said) < 3:
+            await anyio.wait_readable(client_socket)
+            said.extend(reader.feed(client_socket.recv(READ_SIZE)))
+
+    with anyio.fail_after(10):
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(read_all)
+            await connection.write(encode_json(turn), compress_after=True)
+            tasks.start_soon(connection.write, encode_msgpack(big))
+            await anyio.sleep(0)
+            await connection.write(encode_msgpack(small))
+
+    assert said == [turn, big, small]
+    connection.close()
+    client_socket.close()
 
 
 async def test_the_memory_pipe_never_compresses():

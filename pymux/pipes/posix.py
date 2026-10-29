@@ -263,6 +263,12 @@ def _bind_posix_socket(socket_name: str | None = None):
 #: ended attachment, and the server goes on. Lillecarl/pymux#418.
 TOO_SLOW_BYTES = 1024 * 1024
 
+#: A packet this big or bigger is compressed in a worker thread. zstd
+#: lets go of the GIL while it works, and a window pane's raw frame of
+#: 5.6 MB takes 5 to 9 ms at level 1. A smaller packet costs less on the
+#: loop than the trip to a thread. Lillecarl/pymux#632.
+COMPRESS_IN_A_THREAD = 64 * 1024
+
 #: How long a closed connection reads on, for the far end to read what
 #: it was sent and close its side too.
 LINGER_SECONDS = 2.0
@@ -379,13 +385,23 @@ class PosixSocketConnection(PipeConnection):
 
         try:
             async with self._turns.turn(urgent):
-                await self._send_all(self._compressor.compress(data) if self._compressor is not None else data)
+                await self._send_all(await self._compressed(data) if self._compressor is not None else data)
                 if compress_after:
                     self._compressor = Compressor()
         finally:
             self._outstanding -= len(data)
             if not self._outstanding and self._empty is not None:
                 self._empty.set()
+
+    async def _compressed(self, data: bytes) -> bytes:
+        """
+        `data` in the zstd stream. Called inside the write's turn, so
+        the stream takes the packets in the order they go out.
+        """
+        assert self._compressor is not None
+        if len(data) < COMPRESS_IN_A_THREAD:
+            return self._compressor.compress(data)
+        return await anyio.to_thread.run_sync(self._compressor.compress, data)
 
     async def _send_all(self, data: bytes) -> None:
         "Send every byte, waiting for room rather than blocking the loop."
