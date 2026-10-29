@@ -18,10 +18,10 @@ icon sixel frame again (pure) 541
 icon sixel frame again (rust) 541
 icon sixel frame scrolled (pure) 23615027
 icon sixel frame scrolled (rust) 2154
-icon sixel transmission (pure) 1424162
-icon sixel transmission (rust) 767
-icon text over it (pure) 100578
-icon text over it (rust) 13389
+icon sixel transmission (pure) 1424171
+icon sixel transmission (rust) 776
+icon text over it (pure) 101614
+icon text over it (rust) 14425
 panorama kitty frame (pure) 16062
 panorama kitty frame (rust) 16062
 panorama kitty frame again (pure) 634
@@ -36,10 +36,10 @@ panorama sixel frame again (pure) 541
 panorama sixel frame again (rust) 541
 panorama sixel frame scrolled (pure) 134470496
 panorama sixel frame scrolled (rust) 5941
-panorama sixel transmission (pure) 3610191
-panorama sixel transmission (rust) 668
-panorama text over it (pure) 100479
-panorama text over it (rust) 13290
+panorama sixel transmission (pure) 3610200
+panorama sixel transmission (rust) 677
+panorama text over it (pure) 101515
+panorama text over it (rust) 14326
 square kitty frame (pure) 3414
 square kitty frame (rust) 3414
 square kitty frame again (pure) 634
@@ -54,9 +54,9 @@ square sixel frame again (pure) 541
 square sixel frame again (rust) 541
 square sixel frame scrolled (pure) 189836565
 square sixel frame scrolled (rust) 5980
-square sixel transmission (pure) 9222852
-square sixel transmission (rust) 767
-square text over it (pure) 100578
-square text over it (rust) 13389
-text alone (pure) 99415
-text alone (rust) 11241
+square sixel transmission (pure) 9222861
+square sixel transmission (rust) 776
+square text over it (pure) 101614
+square text over it (rust) 14425
+text alone (pure) 100451
+text alone (rust) 12277
