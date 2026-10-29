@@ -52,9 +52,13 @@ share no substring are what a probe of the judge asks for.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import shlex
+import shutil
+import signal
 import sys
+import threading
 import time
 from collections import Counter
 from functools import partial
@@ -734,6 +738,25 @@ if wayland.available():
         (3,),
     )
     FIXTURES["window-pane-wev"] = Fixture(CHROME, window_keys("wev", typed=b"wev"), (3,))
+    # Firefox on a red page, then a new window and back: the pane has to
+    # be red again, not dark. Lillecarl/pymux#753.
+    if shutil.which("firefox"):
+        FIXTURES["window-pane-firefox-return"] = Fixture(
+            CHROME,
+            window_keys("sh %s" % shlex.quote(str(Path(__file__).parent / "open_firefox.sh")))
+            + keys(
+                ("quiet", 3.0),
+                (0.0, PREFIX),
+                (0.4, b"c"),
+                ("quiet", 1.0),
+                (0.0, PREFIX),
+                # `p`: this configuration binds `l` to the pane on the
+                # right, not to `last-window`.
+                (0.4, b"p"),
+                (2.0, b""),
+            ),
+            (3, 1),
+        )
     # `pymux wl` in the new pane: foot takes that pane's place, so the
     # window holds two panes and not three. Lillecarl/pymux#630.
     FIXTURES["window-pane-wl"] = Fixture(
@@ -925,33 +948,53 @@ def picture_of(terminal, seat, name, work, out, fixtures=None, render_mode=None)
     size_path = work / ("%s-pane-size.txt" % run)
     stem = picture.stem
 
-    seat.picture_of(
-        terminal,
-        chrome_command(
-            keys_path,
-            socket_path,
-            config_path,
-            room / ("%s-server.log" % stem),
-            room / ("%s-stderr.log" % stem),
-            fifo_path,
-            size_path,
-            forwarder_path,
-            # The file the relay touches when the fence comes back.
-            room / ("%s.fence" % stem),
-        ),
-        work,
-        picture,
-        room / ("%s.log" % stem),
-        # The relay touches the fence when pymux has done with the
-        # keys. A settle before that keeps the screen from before the
-        # keys and calls it finished.
-        not_before=room / ("%s.fence" % stem),
-        # And the fence cannot say a key arrived, so the server is
-        # asked what the keys built. Lillecarl/pymux#353.
-        judge=partial(judge_the_fixture, socket_path, fixture),
-    )
+    fence = room / ("%s.fence" % stem)
+    done = threading.Event()
+    threading.Thread(target=_dump_while_unfenced, args=(room, fence, done), daemon=True).start()
+    try:
+        seat.picture_of(
+            terminal,
+            chrome_command(
+                keys_path,
+                socket_path,
+                config_path,
+                room / ("%s-server.log" % stem),
+                room / ("%s-stderr.log" % stem),
+                fifo_path,
+                size_path,
+                forwarder_path,
+                # The file the relay touches when the fence comes back.
+                fence,
+            ),
+            work,
+            picture,
+            room / ("%s.log" % stem),
+            # The relay touches the fence when pymux has done with the
+            # keys. A settle before that keeps the screen from before the
+            # keys and calls it finished.
+            not_before=fence,
+            # And the fence cannot say a key arrived, so the server is
+            # asked what the keys built. Lillecarl/pymux#353.
+            judge=partial(judge_the_fixture, socket_path, fixture),
+        )
+    finally:
+        done.set()
 
     return picture
+
+
+def _dump_while_unfenced(room, fence, done) -> None:
+    """
+    SIGUSR1 to the server every few seconds until the keys are fenced: a
+    run that never fences then leaves the stacks of a server stuck after
+    them, which the seat kills before anyone can ask. Lillecarl/pymux#753.
+    """
+    while not done.wait(4.0):
+        if fence.exists():
+            return
+        for stacks in room.glob("stacks-*.log"):
+            with contextlib.suppress(ValueError, OSError):
+                os.kill(int(stacks.stem.removeprefix("stacks-")), signal.SIGUSR1)
 
 
 #: What the server log says when a terminal has a window pane feature,

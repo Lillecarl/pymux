@@ -406,7 +406,7 @@ let
       value = builtins.getEnv "PYMUX_WINDOW_PANES";
     in
     if value == "" then
-      "window-pane,window-pane-flower,window-pane-mpv,window-pane-wev,window-pane-wl"
+      "window-pane,window-pane-flower,window-pane-mpv,window-pane-wev,window-pane-wl,window-pane-firefox-return"
     else
       value;
 
@@ -1485,6 +1485,7 @@ in
           weston
           mpv
           wev
+          firefox
         ];
         env = { inherit chromeTerminals windowPanes; };
       }
