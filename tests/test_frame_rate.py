@@ -21,7 +21,7 @@ from prompt_toolkit.application.current import set_app
 from session import create_session
 
 from pymux.commands import handle_command
-from pymux.main import Pymux
+from pymux.main import BEHIND_INTERVAL, Pymux
 from pymux.options import ALL_WINDOW_OPTIONS, SetOptionError
 from pymux.window_options import DEFAULT_FRAME_RATE
 
@@ -146,3 +146,25 @@ async def test_client_follows_window_it_looks_at():
             mux.sync_frame_rate()
 
         assert state.app.min_redraw_interval == pytest.approx(0.1)
+
+
+@pytest.mark.parametrize("rate", [0, 60])
+async def test_a_pane_that_draws_keeps_the_pacing_of_a_terminal_behind(rate):
+    """
+    Every invalidate syncs the frame rate, and a pane that animates
+    invalidates many times a second. The pacing of a terminal that has
+    not read the last frame must survive that, or the client asks for a
+    frame on every turn of the loop. Lillecarl/pymux#811.
+    """
+    async with create_session() as (mux, state):
+        with set_app(state.app):
+            mux.handle_command("set-window-option frame-rate %d" % rate)
+        state.connection.waits_for_terminal = True
+        assert state.should_skip_render()
+
+        mux.invalidate()
+        assert state.app.min_redraw_interval == pytest.approx(BEHIND_INTERVAL)
+
+        state.connection.waits_for_terminal = False
+        assert not state.should_skip_render()
+        assert state.app.min_redraw_interval == (1 / rate if rate else None)

@@ -386,6 +386,7 @@ class ClientState:
         "schedule_tick": Keep.DROPPED,
         "_waiting_for_drain": Keep.DROPPED,
         "_paced_while_behind": Keep.DROPPED,
+        "frame_interval": Keep.DROPPED,
         # A command's client lives for one command, and no command
         # spans an upgrade.
         "temporary": Keep.DROPPED,
@@ -480,6 +481,11 @@ class ClientState:
         #: Whether this client's redraws are paced because its terminal
         #: fell behind; `should_skip_render` sets and clears it.
         self._paced_while_behind = False
+
+        #: The cap the window's `frame-rate` sets, in seconds per frame.
+        #: `sync_frame_rate` sets it and `pace` combines it with the
+        #: pacing above.
+        self.frame_interval: float | None = None
 
         #: The mode tables this client sits in, the innermost last.
         #: Empty when every key is read from root or prefix. A mode is
@@ -690,14 +696,29 @@ class ClientState:
         # and not for thirty. The answer asks for the frame at once,
         # and the pacing below is the fallback. Lillecarl/pymux#259.
         if behind or self.connection.waits_for_terminal:
-            if not self.app.min_redraw_interval:
-                self.app.min_redraw_interval = BEHIND_INTERVAL
+            if not self._paced_while_behind:
                 self._paced_while_behind = True
+                self.pace()
             return True
         if self._paced_while_behind:
             self._paced_while_behind = False
-            self.app.min_redraw_interval = None
+            self.pace()
         return False
+
+    def pace(self) -> None:
+        """
+        Set the redraw cap from the two things that ask for one.
+
+        **One writer, because both write one knob.** `sync_frame_rate`
+        runs on every invalidate, and a pane that animates invalidates
+        many times a second. If it wrote the knob alone, it would clear
+        the pacing a terminal that is behind needs, and the client would
+        ask for a frame a thousand times a second. Lillecarl/pymux#811.
+        """
+        interval = self.frame_interval
+        if self._paced_while_behind:
+            interval = max(interval or 0.0, BEHIND_INTERVAL)
+        self.app.min_redraw_interval = interval
 
     @property
     def active_key_table(self) -> str:
@@ -3139,7 +3160,8 @@ class Pymux:
                 continue
 
             rate = window.options.frame_rate if window is not None else 0
-            client_state.app.min_redraw_interval = (1.0 / rate) if rate else None
+            client_state.frame_interval = (1.0 / rate) if rate else None
+            client_state.pace()
 
     def get_focused_pane(self):
         """
