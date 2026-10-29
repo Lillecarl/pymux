@@ -3614,6 +3614,7 @@ class Pymux:
             # without the focus is no look. Lillecarl/pymux#799.
             notice = recorded or (code == Osc.NOTIFICATION and not is_question(param))
             if notice and pane.pane_id in self._panes_in_sight():
+                logger.debug("Kept a notification of pane %%%d: a terminal with the focus shows it.", pane.pane_id)
                 return
 
             sequence = build_osc(code, param)

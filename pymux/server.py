@@ -755,6 +755,7 @@ class ServerConnection:
         """
         # Not kept: one arrives at every switch between windows.
         if data in (FOCUS_IN, FOCUS_OUT):
+            logger.debug("The terminal %s the focus.", "took" if data == FOCUS_IN else "lost")
             if self.client_state is not None:
                 self.client_state.terminal_focused = data == FOCUS_IN
                 self.pymux.sync_pane_focus()
