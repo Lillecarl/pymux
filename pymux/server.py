@@ -37,6 +37,7 @@ from pymux.commands.common import find_pane, terminal_of
 from .actions import Origin, started_by
 from .answer import Answer
 from .audio import AudioLink
+from .clusters import fitted, term_program_of
 from .colors import COLOR_QUERIES, ColorDetection, DefaultColors
 from .commands import handle_command
 from .enums import ExtendedKeys, Woke
@@ -868,8 +869,12 @@ class ServerConnection:
         # The graphics query reply and the device attributes say
         # something about the images. The reply of the colour probe says
         # how many colours the terminal takes.
+        named = term_program_of(self.graphics.terminal_version, self.colors.term)
         self.graphics.handle_reply(data)
         self.colors.handle_reply(data)
+        # The clusters already on its screen were fitted to another name.
+        if term_program_of(self.graphics.terminal_version, self.colors.term) != named:
+            self._request_repaint()
 
         # The secondary attributes end in `c` too, and are the survey's,
         # never the fence. Lillecarl/pymux#725.
@@ -1728,6 +1733,7 @@ class ServerConnection:
         output.keeps_placeholders = lambda: self.graphics.forwards_placeholders
         output.pixel_mouse = lambda: self.pixel_mouse
         output.narrows_text_emoji = lambda: self.widens_text_emoji
+        output.term_program = lambda: term_program_of(self.graphics.terminal_version, self.colors.term)
 
         client_state = self.pymux.add_client(
             # A proxy: what it lacks of an `Input` it forwards to its pipe.
@@ -2014,6 +2020,9 @@ class _FrameOutput(Vt100_Output):
         #: Whether U+FE0F goes after a one-column character, which this
         #: terminal would widen. Lillecarl/pymux#539.
         self.narrows_text_emoji: Callable[[], bool] = lambda: False
+        #: The name wcwidth knows this terminal by, to fit each grapheme
+        #: cluster to the width it draws. Lillecarl/pymux#798.
+        self.term_program: Callable[[], str | None] = lambda: None
 
     @override
     def enable_mouse_support(self) -> None:
@@ -2060,6 +2069,9 @@ class _FrameOutput(Vt100_Output):
                 frame = blanked(frame)
             if VS16 in frame and self.narrows_text_emoji():
                 frame = without_widening_selectors(frame)
+            term_program = self.term_program()
+            if term_program is not None:
+                frame = fitted(frame, term_program)
             self._buffer = [frame]
         if self._in_frame and self._after_frame:
             self.write_raw("".join(self._after_frame))
