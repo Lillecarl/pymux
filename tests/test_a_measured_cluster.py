@@ -58,6 +58,21 @@ async def test_the_answers_outrank_the_table_of_the_terminal():
         assert connection.cluster_fit() is None
 
 
+async def test_what_the_probes_erase_is_drawn_again():
+    "The probes blank cells on rows 2 to 5 of a screen pymux already drew."
+    recorder = Recorder()
+    command = "sh -c 'printf \"row1\\nrow2\\nrow3\\nrow4\\nrow5\\n\"; sleep 30'"
+    async with over_connection(pymux=Pymux(startup_command=command), read_packet=recorder) as session:
+        state, _ = await session.attach("one", SIZE)
+        await once(lambda: "row5" in recorder.out, 10.0, "the pane never drew")
+        state.connection._process({"cmd": "kitty-detect"})
+        await once(lambda: CLUSTER_WIDTH_PROBE in recorder.out, 10.0, "the terminal was never asked")
+        after = recorder.out.index(CLUSTER_WIDTH_PROBE) + len(CLUSTER_WIDTH_PROBE)
+        state.connection._process({"cmd": "in", "data": "\x1b[?62c"})
+        for row in ("row2", "row3", "row4", "row5"):
+            await once(lambda row=row: row in recorder.out[after:], 10.0, lambda row=row: "%s never drawn again" % row)
+
+
 async def test_a_terminal_too_short_for_the_probe_is_not_asked():
     recorder = Recorder()
     async with over_connection(pymux=Pymux(startup_command="sleep 30"), read_packet=recorder) as session:
