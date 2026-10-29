@@ -14,6 +14,7 @@ from pymux.commands.common import (
     add_tag_filter,
     chosen_format,
     find_window,
+    session_of_target,
     show_listing,
     the_window,
 )
@@ -34,17 +35,21 @@ def list_panes(pymux: Pymux, args: argparse.Namespace) -> None:
     finds a pane wherever it is.
     """
     wanted = [parse_tag(word) for word in args.tags]
-    if args.target_pane:
+    if args.a:
+        # Every window of every session. tmux reads `-a` as the whole
+        # server too. Lillecarl/pymux#323.
+        windows: list[Window] = [w for session in pymux.sessions for w in session.arrangement.windows]
+    elif args.s:
+        # With `-s` the target is a session, as tmux reads it
+        # (`cmd-list-panes.c`). Lillecarl/pymux#808.
+        windows = list(session_of_target(pymux, args.target_pane).arrangement.windows)
+    elif args.target_pane:
         window = find_window(pymux, args.target_pane.rsplit(".", 1)[0])
         if window is None:
             raise CommandException("can't find window: %s" % (args.target_pane,))
-        windows: list[Window] = [window]
-    elif args.a or (wanted and not args.s):
-        # Every window of every session. tmux reads `-a` as the whole
-        # server too. Lillecarl/pymux#323.
+        windows = [window]
+    elif wanted:
         windows = [w for session in pymux.sessions for w in session.arrangement.windows]
-    elif args.s:
-        windows = list(pymux.arrangement.windows)
     else:
         windows = [the_window(pymux, None)]
 
