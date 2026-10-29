@@ -270,6 +270,11 @@ let
   imagesInclude = builtins.getEnv "PYMUX_IMAGES_INCLUDE";
   imagesTolerance = builtins.getEnv "PYMUX_IMAGES_TOLERANCE";
 
+  # How long mpv plays for the loop-stall measurement, in seconds, and
+  # how late a tick is when its stack is taken, in milliseconds.
+  stallSeconds = builtins.getEnv "PYMUX_STALL_SECONDS";
+  stallMs = builtins.getEnv "PYMUX_STALL_MS";
+
   # How big a window the profiler draws, and how many frames of it, for
   # instance
   # `PYMUX_PROFILE_PANES=16 nix build --file . checks.pymux-profile.run`.
@@ -699,6 +704,23 @@ in
         ${waylandTestEnv}/bin/python -m pytest -q -p no:cacheprovider \
           -o faulthandler_timeout=60 \
           tests/test_wayland_server.py tests/test_wayland_absent.py tests/test_window_panes.py
+      '';
+
+  # How long the loop stalls while mpv plays in a window pane, and what
+  # it ran meanwhile. Not a gate: it judges nothing, and the sandbox runs
+  # beside other jobs. `PYMUX_STALL_SECONDS` sets how long mpv plays.
+  # Lillecarl/pymux#632.
+  loopStalls =
+    runInSandbox
+      {
+        name = "pymux-loop-stalls";
+        inputs = [ mpv ];
+        env = { inherit stallSeconds stallMs; };
+      }
+      ''
+        export PYMUX_STALL_SECONDS="$stallSeconds"
+        export PYMUX_STALL_MS="$stallMs"
+        ${waylandTestEnv}/bin/python tests/measure_loop_stalls.py
       '';
 
   # A real Firefox in a window pane: it paints only what changed, which
