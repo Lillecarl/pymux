@@ -487,6 +487,24 @@ async def test_wl_tells_why_a_program_opened_no_window(tmp_path, monkeypatch):
         assert answered(got)["exit"] == 1
 
 
+async def test_wl_says_the_session_is_wayland_and_to_draw_in_software(tmp_path, monkeypatch):
+    "Chromium picks X11 without the first, and the compositor has no GPU buffers for the rest."
+    show = "wl -- sh -c 'echo $XDG_SESSION_TYPE $LIBGL_ALWAYS_SOFTWARE $QT_QUICK_BACKEND; exit 3'"
+    async with with_a_shell(tmp_path, monkeypatch) as (_pymux, session, _window, shell):
+        environment = dict(os.environ, XDG_SESSION_TYPE="tty")
+        environment.pop("QT_QUICK_BACKEND", None)
+        environment.pop("LIBGL_ALWAYS_SOFTWARE", None)
+        got = await session.command(show, pane_id=shell.pane_id, environment=environment)
+        await once(lambda: answered(got)["exit"] is not None, 10.0, "wl never answered")
+        assert answered(got)["out"] == "wayland 1 software\n"
+
+        # What the person chose stays.
+        chose = dict(environment, LIBGL_ALWAYS_SOFTWARE="0", QT_QUICK_BACKEND="rhi")
+        got = await session.command(show, pane_id=shell.pane_id, environment=chose)
+        await once(lambda: answered(got)["exit"] is not None, 10.0, "wl never answered")
+        assert answered(got)["out"] == "wayland 0 rhi\n"
+
+
 async def test_keys_reach_the_window(tmp_path):
     async with with_a_window(tmp_path) as (pymux, state, pane, _recorder, log, _probe):
         # The window's seat is set up before it draws.
