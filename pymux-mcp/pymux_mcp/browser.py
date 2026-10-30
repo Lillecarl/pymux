@@ -686,8 +686,13 @@ async def at(page: Page, x: float, y: float) -> dict[str, Any]:
     """
     await page.send("DOM.enable")
     try:
+        # In the page's coordinates, not the viewport's: measured on
+        # Chromium 155, a scrolled page answers nothing without the offset.
+        # Not `ignorePointerEventsNone`, which hit-tests what a click
+        # passes through: an overlay drawn over the page would answer.
+        view = (await page.send("Page.getLayoutMetrics"))["cssVisualViewport"]
         found = await page.send(
-            "DOM.getNodeForLocation", {"x": round(x), "y": round(y), "ignorePointerEventsNone": True}
+            "DOM.getNodeForLocation", {"x": round(x + view["pageX"]), "y": round(y + view["pageY"])}
         )
     except CDPError:
         raise LookupError("nothing at %g, %g: it is outside the page" % (x, y)) from None

@@ -286,7 +286,7 @@ LONG_PAGE = (
         b"<title>long</title><nav><a href='#a'>Home</a>"
         b" <a href='#b' onclick=\"document.title = 'contact'; return false\">Contact us</a></nav>"
         + b"".join(b"<p>Filler paragraph %d.</p>" % (number,) for number in range(200))
-        + b"<form aria-label=order><input aria-label=email><button>Order now</button></form>"
+        + b"<form aria-label=order><input aria-label=email><button type=button>Order now</button></form>"
     ).decode()
 )
 
