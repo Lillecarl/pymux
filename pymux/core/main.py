@@ -778,18 +778,6 @@ class Pymux:
                 return None if answer is None else awaited_as(Origin.CONFIG, answer)
         return None
 
-    def get_title(self):
-        """
-        The title to be displayed in the titlebar of the terminal.
-        """
-        w = self.arrangement.get_active_window()
-
-        title = w.active_pane.screen.titles.window if w and w.active_pane else ""
-
-        if title:
-            return "%s - Pymux" % (title,)
-        return "Pymux"
-
     def client_was_used(self, client_state: ClientState) -> None:
         """
         Note that a person just used this client.
