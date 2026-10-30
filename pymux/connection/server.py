@@ -327,12 +327,12 @@ class ServerConnection:
 
         It belongs to the connection's scope, so it ends when the
         client goes and it cannot be collected while it runs. A task
-        that nobody holds used to be collectable mid-flight: the loop
-        then reported that, and prompt_toolkit answers an exception in
-        the loop by leaving the alternate screen and asking the user to
+        that nobody holds can be collected mid-flight: the loop then
+        reports that, and prompt_toolkit answers an exception in the
+        loop by leaving the alternate screen and asking the user to
         press a key. There is no user at that end, so the answer fails
-        and reports again -- a lost task turned into an endless storm
-        of repaints on the terminal of every client.
+        and reports again -- a lost task becomes an endless storm of
+        repaints on the terminal of every client.
         """
         if self._tasks is None:
             logger.warning("A task was spawned on a connection that does not serve.")
@@ -348,8 +348,8 @@ class ServerConnection:
         exception cancels the siblings and goes up, and up from here is
         every other client of this server. The work a connection spawns
         is the work that answers one client, so the honest blast radius
-        is that client -- and even that is more than the old shape did,
-        which only logged. Lillecarl/pymux#87.
+        is that client: the failure is logged and the connection goes on.
+        Lillecarl/pymux#87.
         """
         try:
             await coro
@@ -1309,9 +1309,8 @@ class ServerConnection:
         """
         Drop a client that stops answering.
 
-        **A closed socket is the only thing that dropped a client
-        before this**, and a socket can stay open long after the
-        person is gone: a laptop that sleeps leaves a dead TCP
+        **A closed socket is not enough to drop a client**: a socket can
+        stay open long after the person is gone: a laptop that sleeps leaves a dead TCP
         connection that the far sshd holds until it gives up, and the
         forwarded unix socket here stays open behind it. Nothing else
         asks, because a client that is attached and quiet sends

@@ -8,9 +8,9 @@ the legacy encoding and none of the rest: without this the sequence
 arrives garbled, one key press per character.
 
 **The reading is pyte's.** `pyte.keys.parse_key_data` knows every mode
-a keyboard can be in, and this file used to carry a second reader
-beside it. Two readers of the same bytes cost 52 wrong keys once
-(Lillecarl/pymux#119), so there is one. What is here is the naming:
+a keyboard can be in, and there is no second reader here: two readers
+of the same bytes cost 52 wrong keys once (Lillecarl/pymux#119). What
+is here is the naming:
 which prompt_toolkit key a `KeyEvent` is, which pyte cannot say
 because a toolkit sits above it.
 
@@ -687,8 +687,8 @@ def key_named(base: str, mods: int) -> _Key:
         if mods & _CTRL and mods & _SHIFT:
             # Only a terminal that says more than the legacy encoding
             # can tell these apart: ctrl+a and ctrl+shift+a are one
-            # control code there. The shift used to be dropped, so a
-            # person could bind neither on its own. Lillecarl/pymux#168.
+            # control code there. Dropping the shift would leave a
+            # person able to bind neither on its own. Lillecarl/pymux#168.
             both = _CTRL_SHIFT_LETTERS.get(base.lower())
             if both is not None:
                 return _with_alt(both, mods)
@@ -735,10 +735,9 @@ def parse_kitty_key(prefix: str) -> _KeyResult | None:
     cannot, and None when `prefix` is not a key sequence at all.
 
     **The reading is pyte's.** `parse_key_data` knows every mode a
-    keyboard can be in, and this file used to carry a second reader
-    beside it: its own regex, its own modifier bits, its own keypad.
-    Two readers of the same bytes is what Lillecarl/pymux#119 cost 52
-    keys, so there is one, and what stays here is the naming: which
+    keyboard can be in, and there is no second reader here with its own
+    regex, modifier bits and keypad: two readers of the same bytes cost
+    52 keys in Lillecarl/pymux#119. What is here is the naming: which
     prompt_toolkit key a `KeyEvent` is. Lillecarl/pymux#176.
     """
     reply = _reply(prefix)

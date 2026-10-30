@@ -29,8 +29,9 @@ def run_shell(pymux: Pymux, args: argparse.Namespace):
     **The server does not wait, and the client does.** This is a
     handler that answers later: the shell runs in a task, so every
     pane keeps reading its pty and every other client keeps getting
-    frames while it does. `pymux run-shell 'sleep 30'` used to stop
-    all of that for thirty seconds. Lillecarl/pymux#311.
+    frames while it does. Run in the handler itself, `pymux run-shell
+    'sleep 30'` would stop all of that for thirty seconds.
+    Lillecarl/pymux#311.
     """
     # The command is the rest of the line, whatever words it holds:
     # they go back together, with the quoting the shell read. A

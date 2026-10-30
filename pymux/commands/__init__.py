@@ -364,9 +364,10 @@ def handle_command(pymux: Pymux, input_string: str):
             #
             # The alias is resolved here and not left to
             # `call_command_handler`, because `bind` is what a tmux
-            # configuration writes and `bind \; last-pane` used to split on
-            # the key it was binding: the bind ran with no arguments and
-            # last-pane moved the focus, with no message saying why.
+            # configuration writes, and a split there would cut
+            # `bind \; last-pane` on the key it binds: the bind would run
+            # with no arguments and last-pane would move the focus, with
+            # no message saying why.
             # Lillecarl/pymux#313.
             first = ALIASES.get(parts[0], parts[0])
             no_semicolon_split = first in ("bind-key", "unbind-key")

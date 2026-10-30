@@ -284,8 +284,8 @@ def event(text: str) -> KeyEvent:
     The key event that one chord is, such as "ctrl+shift+a".
 
     **The form a key goes to a pane in.** The other reading, into
-    prompt_toolkit keys, is for binding and never reaches a pane. The
-    two used to be one road, through the legacy encoding, which lost
+    prompt_toolkit keys, is for binding and never reaches a pane. They
+    are two roads because one through the legacy encoding loses
     everything that encoding cannot carry. Lillecarl/pymux#237.
 
     Raises `ValueError` for a name that no key has.

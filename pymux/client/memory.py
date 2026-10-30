@@ -11,18 +11,16 @@ The packets are the same ones. Only the transport differs, and both
 sides of the protocol run, so this route proves what the socket route
 proves, in one process instead of two.
 
-**One process is one SIGWINCH handler, and that used to be a real
-difference.** The server's `prompt_toolkit.Application` took the signal
-for itself while it ran: `attach_winch_signal_handler` calls
-`loop.add_signal_handler`, which replaces whatever was there, and
+**One process is one SIGWINCH handler.** A `prompt_toolkit.Application`
+takes the signal for itself while it runs: `attach_winch_signal_handler`
+calls `loop.add_signal_handler`, which replaces whatever was there, and
 asyncio holds one callback per signal. On the socket route the server
-is another process and cannot reach this one's handler. Here it could,
-and it did, so this client stopped hearing that the terminal had
-changed size: a font size change in kitty moved nothing, because the
-size the server had was the one this client last reported.
+is another process and cannot reach this one's handler. Here it can, and
+a server application that took it would leave this client deaf to its
+terminal's size: a font size change in kitty would move nothing.
 Lillecarl/pymux#208.
 
-**A server's application now says it does not want the signal**, which
+**So a server's application says it does not want the signal**, which
 is the honest statement of the same fact: it has no terminal of its own
 to be resized, and every client reports its size in a packet.
 `run_async(handle_sigwinch=False)` in `ServerConnection._create_app`,

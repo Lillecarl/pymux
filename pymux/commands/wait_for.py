@@ -15,12 +15,12 @@ here from `cmd-wait-for.c` rather than from memory:
 - `wait-for -U <name>` gives it back. The lock passes to the first
   waiting locker, or the channel unlocks.
 
-**The waiting is the whole issue.** A command used to be a plain
-function, so a wait could only be a wait on the server's own event
-loop -- and the client that would signal the channel is answered by
-that same loop. The canonical pair (`wait-for done` in one pane,
-`wait-for -S done` in another) was a deadlock, so this command stayed
-out of the tree. Lillecarl/pymux#302.
+**The waiting is the whole issue.** A command that is a plain
+function can only wait on the server's own event loop -- and the client
+that would signal the channel is answered by that same loop. The
+canonical pair (`wait-for done` in one pane, `wait-for -S done` in
+another) would deadlock, which is why this handler answers with a
+coroutine the caller awaits. Lillecarl/pymux#302.
 
 A handler may answer later now, so the waiting is one task and the
 server keeps serving. Lillecarl/pymux#87.

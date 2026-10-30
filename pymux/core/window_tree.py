@@ -806,15 +806,13 @@ class Window:
         """
         Every pane of this window, in the order they are drawn.
 
-        **The order is what a person sees, and it used to be the order
-        of a walk.** This took each split's own panes before it went
-        into the splits inside it, so every pane that sat directly in
-        the root was numbered before every pane in a nested split,
-        whatever their place on the screen. A strip met that at once:
-        turning `strip` on wraps the window it is turning into a row, so
-        the first column is a nested split and its panes came last. A
-        picture of three columns showed the first one holding pane
-        number 2. Lillecarl/pymux#210.
+        **The order is what a person sees, not the order of a walk.** A
+        walk that took each split's own panes before the splits inside
+        it would number every pane directly in the root before every
+        pane in a nested split, whatever their place on the screen. A
+        strip meets that at once: turning `strip` on wraps the window
+        into a row, so the first column is a nested split, and its panes
+        would come last. Lillecarl/pymux#210.
 
         `get_pane_index` reads this, and that number is what
         `select-pane -t`, `display-panes` and every title bar say. So

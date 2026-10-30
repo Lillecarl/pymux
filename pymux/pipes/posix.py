@@ -52,8 +52,8 @@ def bind_and_listen_on_posix_socket(
     # Set umask for the socket file.
     #
     # **Put back even when the bind fails.** The umask belongs to the
-    # process, so a bind that raised used to leave every file this
-    # process wrote afterwards at 0027. A suite that expects a
+    # process, so a bind that raised and left it would put every file
+    # this process writes afterwards at 0027. A suite that expects a
     # directory it makes to be group readable is where that shows.
     old_umask = os.umask(int("0027", 8))
     try:
@@ -105,7 +105,7 @@ class PosixSocketListener:
             # that stopped reading must not park the loop inside a
             # send: the partial-send loop in `_send_all` is also what
             # keeps a packet whole on OS X, where a non blocking send
-            # of more than the buffer holds used to lose the rest.
+            # of more than the buffer holds sends part of it.
             # Lillecarl/pymux#418.
             self._accept_callback(PosixSocketConnection(connection))
 

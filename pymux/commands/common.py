@@ -271,7 +271,7 @@ def send_key(pane: Pane, event: KeyEvent, written: str) -> None:
 
     **The pane decides what it can read, so the pane is asked.** A
     legacy pane turns super+a into "a" and ctrl+shift+a into ctrl+a,
-    and used to be sent those in silence. Nobody typing `send-keys
+    and sending it those in silence is wrong: nobody typing `send-keys
     super+a` means "type an a". Lillecarl/pymux#237.
     """
     terminal = terminal_of(pane)
@@ -435,12 +435,11 @@ def show_listing(pymux: Pymux, title: str, text: str) -> None:
     A listing, to the person who asked for it.
 
     A person in a pane asked for a view and gets the popup. The
-    command line has no view to show a listing in, and used to lose
-    it there: the popup went to the client that ran the command, and
-    there is no client to ask for when the command came over the
-    command line -- `get_client_state` has no app to answer with,
-    which is one reason the listing was silence and not a fault. That
-    asker reads stdout, so the listing is printed there, which is
+    command line has no view to show a listing in: a popup would go to
+    the client that ran the command, and there is no client to ask for
+    when the command came over the command line -- `get_client_state`
+    has no app to answer with, so the listing would be silence and not
+    a fault. That asker reads stdout, so the listing is printed there, which is
     what an answer says: the same question
     `print_command_line` asks. tmux prints a listing to stdout,
     always. Lillecarl/pymux#288.

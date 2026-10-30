@@ -2,9 +2,9 @@
 Everything a client's terminal said when it was asked, kept.
 
 pymux asks an attaching terminal a dozen questions and acts on a few of
-the answers. The rest used to go: a terminal nobody documents, such as
-a phone's, could only be guessed at. Now every reply is kept per
-client, and `show-terminal` reads them back. Lillecarl/pymux#725.
+the answers. Every reply is kept per client, and `show-terminal` reads
+them back, so a terminal nobody documents, such as a phone's, need not
+be guessed at. Lillecarl/pymux#725.
 
 **Keyed by what was said.** The same reply again adds to a count
 rather than a row, so the status answer behind every frame
