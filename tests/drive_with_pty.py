@@ -2841,6 +2841,23 @@ def check_libpymux(tmp):
         await window.unset_tags("bare")
         assert await window.tags() == {"role": "check"}
 
+        # Two sessions with windows at the same indexes. The library names
+        # a window by its id, so a window of the attached session is the
+        # one renamed and killed, though an index alone resolves in the
+        # newer session.
+        extra = await session.new_window(command=sys.executable, select=False)
+        other = await server.new_session("other")
+        elsewhere = await other.new_window(command=sys.executable, select=False)
+        extra, elsewhere = await extra.refresh(), await elsewhere.refresh()
+        assert extra.index == elsewhere.index >= 0, (extra.index, elsewhere.index)
+        await extra.rename("renamed")
+        assert (await extra.refresh()).name == "renamed"
+        assert (await elsewhere.refresh()).name != "renamed"
+        await extra.kill()
+        assert [one.id for one in await session.windows()] == [window.id]
+        assert elsewhere.id in [one.id for one in await other.windows()]
+        await other.kill()
+
     terminal = Terminal(tmp, "kitty")
     try:
         terminal.wait_for_queries()

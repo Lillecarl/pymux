@@ -303,10 +303,10 @@ class Window(WindowFields):
 
     async def select(self) -> None:
         "Show this window."
-        await self.server.run(operations.select_window(self.index))
+        await self.server.run(operations.select_window(self.id))
 
     async def rename(self, name: str) -> None:
-        await self.server.run(operations.rename_window(self.index, name))
+        await self.server.run(operations.rename_window(self.id, name))
 
     async def tags(self) -> Tags:
         "This window's tags, asked of the server. A bare key holds `None`."
@@ -320,7 +320,7 @@ class Window(WindowFields):
 
     async def kill(self) -> None:
         "End every pane of this window and take the window away."
-        await self.server.run(operations.kill_window(self.index))
+        await self.server.run(operations.kill_window(self.id))
 
     async def refresh(self) -> Window:
         row = await self.server.run(operations.window(self.id))

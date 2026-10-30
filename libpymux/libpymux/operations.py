@@ -230,7 +230,8 @@ def pane(pane_id: str) -> Operation[Row | None]:
 
 
 def window(window_id: str) -> Operation[Row | None]:
-    return having((yield from windows()), "window_id", window_id)
+    "The window with this id, in whichever session holds it."
+    return having((yield from query(["list-windows", "-a"], WINDOW_FIELDS)), "window_id", window_id)
 
 
 def window_at(index: int) -> Operation[Row | None]:
@@ -468,16 +469,21 @@ def split_window(
     return first(rows((yield Ask(arguments)), PANE_FIELDS))
 
 
-def select_window(index: int) -> Operation[None]:
-    yield Ask(["select-window", "-t", str(index)])
+# By id: an index is the window at that place in the session a target
+# without one resolves to, which is the caller's, and not necessarily the
+# window's own.
 
 
-def rename_window(index: int, name: str) -> Operation[None]:
-    yield Ask(["rename-window", "-t", str(index), name])
+def select_window(window_id: str) -> Operation[None]:
+    yield Ask(["select-window", "-t", window_id])
 
 
-def kill_window(index: int) -> Operation[None]:
-    yield Ask(["kill-window", "-t", str(index)])
+def rename_window(window_id: str, name: str) -> Operation[None]:
+    yield Ask(["rename-window", "-t", window_id, name])
+
+
+def kill_window(window_id: str) -> Operation[None]:
+    yield Ask(["kill-window", "-t", window_id])
 
 
 # -- a session ---------------------------------------------------------
