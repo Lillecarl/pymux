@@ -306,11 +306,11 @@ def test_a_frame_for_a_terminal_that_draws_no_placeholder_has_spaces():
 
     from prompt_toolkit.data_structures import Size
 
-    from pymux.server import _FrameOutput
+    from pymux.client_io import FrameOutput
 
     for keeps in (False, True):
         stdout = io.StringIO()
-        output = _FrameOutput(stdout, lambda: Size(24, 80), term="xterm")
+        output = FrameOutput(stdout, lambda: Size(24, 80), term="xterm")
         output.keeps_placeholders = lambda keeps=keeps: keeps
         output.write("a" + PLACEHOLDER + mark(0) + mark(3) + "b")
         output.flush()

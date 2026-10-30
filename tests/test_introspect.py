@@ -29,10 +29,10 @@ from session import Connection
 
 from pymux import introspect, log
 from pymux.answer import Answer
+from pymux.client_io import SocketStdout
 from pymux.commands import handle_command
 from pymux.enums import Woke
 from pymux.main import Pymux
-from pymux.server import _SocketStdout
 
 SIZE = Size(rows=24, columns=80)
 
@@ -210,7 +210,7 @@ async def test_frame_that_went_out_is_counted():
     are asked for.
     """
     counters = introspect.Counters()
-    stdout = _SocketStdout(lambda packet: None, counters)
+    stdout = SocketStdout(lambda packet: None, counters)
 
     stdout.write("hello")
     stdout.write(" there")
@@ -223,7 +223,7 @@ async def test_frame_that_went_out_is_counted():
 async def test_a_frame_is_counted_for_its_client():
     "What `#{client_fps}` reads. Lillecarl/pymux#596."
     told = []
-    stdout = _SocketStdout(lambda packet: None, None, lambda: told.append(1))
+    stdout = SocketStdout(lambda packet: None, None, lambda: told.append(1))
 
     stdout.write("one")
     stdout.flush()
@@ -236,7 +236,7 @@ async def test_a_frame_is_counted_for_its_client():
 async def test_create_server_with_no_counters_still_writes(create_server):
     "The counting is not what a frame is for."
     sent = []
-    stdout = _SocketStdout(sent.append, None)
+    stdout = SocketStdout(sent.append, None)
 
     stdout.write("hello")
     stdout.flush()

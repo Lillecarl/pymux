@@ -11,7 +11,7 @@ windows and the layout, which is where the objects and the bytes are.
 
 **connection**: a real `ServerConnection` over the queues of
 `pipes.memory`, which is the transport of `pymux integrated`. Its
-background tasks, its `_ClientInput` and the `ClientState` the server
+background tasks, its `ClientInput` and the `ClientState` the server
 makes for it are all the real ones, and a detach is what a person
 walking away is -- the client end closes and the server tears its side
 down. Lillecarl/pymux#226.
@@ -329,7 +329,7 @@ async def in_this_process(pymux=None):
         # that reads the key encoding of the kitty keyboard protocol,
         # so a test that feeds bytes has to have it, and a driver
         # cannot tell the routes apart without it. See
-        # `pymux.server._ClientInput`.
+        # `pymux.client_io.ClientInput`.
         pipe.vt100_parser = KittyVt100Parser(pipe._buffer.append)
 
         # A terminal apiece, so two attached clients have two names.
@@ -434,7 +434,7 @@ async def over_connection(pymux=None, read_packet=None):
     The transport is `pipes.memory`, which is what `pymux integrated`
     uses: two queues rather than a unix socket. Everything else of the
     socket route is the real thing -- the `ServerConnection`, its
-    background tasks, its `_ClientInput` and the `ClientState` the
+    background tasks, its `ClientInput` and the `ClientState` the
     server makes for it -- and none of an operating system's is, so
     this runs in a build sandbox. Lillecarl/pymux#226.
 
@@ -445,7 +445,7 @@ async def over_connection(pymux=None, read_packet=None):
       never finishes keeps its connection.
     - `Pymux._client_states` and `Pymux.connections`, both keyed by or
       holding the connection.
-    - The `_ClientInput` pipe input, whose parser holds callbacks back
+    - The `ClientInput` pipe input, whose parser holds callbacks back
       into the connection.
 
     A detach here is what a person walking away is: the client end

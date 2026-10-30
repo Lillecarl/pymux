@@ -26,9 +26,10 @@ from libpymux.protocol import Packet
 from session import once
 from test_a_session_on_a_pyte_screen import attached, shows
 
+from pymux.client_io import FrameOutput, SocketStdout
 from pymux.enums import Clipboard, NotificationPopups
 from pymux.main import Pymux
-from pymux.server import ServerConnection, _FrameOutput, _SocketStdout
+from pymux.server import ServerConnection
 
 #: A clipboard write, as a pane writes one.
 COPIED = "\x1b]52;c;aGVsbG8=\x07"
@@ -48,13 +49,13 @@ def wire():
     """
     A connection whose output is the real one, and the packets it sends.
 
-    `_SocketStdout` is where a frame is counted, and `_FrameOutput` is
+    `SocketStdout` is where a frame is counted, and `FrameOutput` is
     what the renderer writes through, so the buffering under test is
     the buffering that ships.
     """
     sent = []
-    stdout = _SocketStdout(sent.append)
-    output = _FrameOutput(stdout, lambda: None, term="xterm")
+    stdout = SocketStdout(sent.append)
+    output = FrameOutput(stdout, lambda: None, term="xterm")
 
     connection = ServerConnection.__new__(ServerConnection)
     connection.client_state = _ClientState(output)
