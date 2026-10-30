@@ -1072,7 +1072,6 @@ async def screenshot(page: Page, full_page: bool, fit: int | None, marked: bool 
     The clip's scale shrinks what Chromium draws, so a window on a
     high-density screen answers fewer pixels and not a resample.
     """
-    found = await marks(page) if marked else []
     metrics = await page.send("Page.getLayoutMetrics")
     if full_page:
         size = metrics["cssContentSize"]
@@ -1091,7 +1090,10 @@ async def screenshot(page: Page, full_page: bool, fit: int | None, marked: bool 
     png = base64.b64decode(answer["data"])
     if not marked:
         return png, []
-    found = await reachable(page, [mark for mark in found if _within(mark, clip)])
+    # Read right after the picture, and the hit test right after that: a
+    # dialog that arrives between a reading taken before the picture and
+    # the hit test covers every element read, and its own go unread.
+    found = await reachable(page, [mark for mark in await marks(page) if _within(mark, clip)])
     return draw_marks(png, clip, found), found
 
 
