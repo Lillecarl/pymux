@@ -27,8 +27,8 @@ def which_key_floats(state) -> list[Float]:
     The floats the which-key box can draw in.
 
     Like the palette's box, each is a `DynamicContainer` over the
-    method that builds it, and the method's name tells them apart
-    from everything else the layout floats.
+    method that builds it, and that method tells them apart from
+    everything else the layout floats.
     """
     found = []
     # The corner above the status line is the body's float, so it
@@ -37,7 +37,7 @@ def which_key_floats(state) -> list[Float]:
     for one in layout.floats + layout.content.children[0].floats:
         inner = getattr(one.content, "content", None)
         builder = getattr(inner, "get_container", None)
-        if builder is not None and builder.__name__ == "_which_key_box":
+        if builder is not None and builder == state.layout_manager.which_key.box:
             found.append(one)
     assert found, "the layout draws no which-key box at all"
     return found
@@ -174,7 +174,7 @@ async def test_box_takes_no_focus():
         ALL_OPTIONS["which-key"].set_value(pymux, "on")
         state.has_prefix = True
 
-        box = state.layout_manager._which_key_box()
+        box = state.layout_manager.which_key.box()
 
         for container in walk(box):
             control = getattr(container, "content", None)

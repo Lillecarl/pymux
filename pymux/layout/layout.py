@@ -66,6 +66,7 @@ from .plan_container import PlanContainer
 from .plane import Plan, Rect, Side, View
 from .popups import Popups
 from .status_line import StatusLine
+from .which_key import WhichKey
 from .widgets import Background, ConfirmationToolbar, MessageToolbar, UrlLabels
 from .z_index import Z_INDEX
 
@@ -192,11 +193,8 @@ class LayoutManager:
         self._command_window: Window | None = None
         self._palette: Container | None = None
 
-        # The keys a prefix leads to, when `which-key` is on. Built
-        # once, like the two above: a window built fresh each frame is
-        # one the layout never focused. Nothing here takes focus, but
-        # the same rule keeps the box one object. Lillecarl/pymux#29.
-        self._which_key: Container | None = None
+        self.which_key = WhichKey(self)
+
         self.popups = Popups(self)
 
         # And the same two for the prompt: the line a person answers a
@@ -636,53 +634,6 @@ class LayoutManager:
         )
         return self._key_prompt
 
-    def _which_key_box(self) -> Container:
-        """
-        The keys the prefix leads to, in a box.
-
-        Built once, for the reason `_command_line_window` gives.
-        Lillecarl/pymux#29.
-        """
-        if self._which_key is not None:
-            return self._which_key
-
-        self._which_key = HSplit(
-            [
-                Window(
-                    height=1,
-                    align=WindowAlign.CENTER,
-                    content=FormattedTextControl([("class:commandpalette.title", " Prefix ")]),
-                    style="class:commandpalette.titlebar",
-                ),
-                Window(
-                    content=FormattedTextControl(self._which_key_tokens),
-                    height=lambda: D(min=1, max=self.palette_rows() - 1),
-                    style="class:commandpalette",
-                ),
-            ],
-        )
-        return self._which_key
-
-    def _which_key_tokens(self) -> StyleAndTextTuples:
-        """
-        The keys the prefix leads to, one row each.
-
-        Two columns, the key and the command it runs, the key column
-        one width for the whole list so the meanings line up under
-        each other. A prefix that leads nowhere says so rather than
-        drawing an empty box. Lillecarl/pymux#29.
-        """
-        rows = self.pymux.key_bindings_manager.prefix_keys()
-        if not rows:
-            return [("class:commandpalette", " No keys follow the prefix. ")]
-
-        width = max(len(key) for key, _meaning in rows) + 2
-        tokens: StyleAndTextTuples = []
-        for key, meaning in rows:
-            tokens.append(("class:which-key.key", key.ljust(width)))
-            tokens.append(("class:commandpalette", meaning + "\n"))
-        return tokens
-
     def cursor_on_view(self) -> Point:
         """
         Where the cursor of the focused pane sits on this client's
@@ -800,7 +751,7 @@ class LayoutManager:
             # corner and says why there are two.
             Float(
                 content=ConditionalContainer(
-                    content=DynamicContainer(self._which_key_box),
+                    content=DynamicContainer(self.which_key.box),
                     filter=which_key_shows & Condition(lambda: self.cursor_is_in_top_right()),
                 ),
                 # A row clear of the status line.
@@ -1044,7 +995,7 @@ class LayoutManager:
                 # draws. Lillecarl/pymux#29.
                 Float(
                     content=ConditionalContainer(
-                        content=DynamicContainer(self._which_key_box),
+                        content=DynamicContainer(self.which_key.box),
                         filter=which_key_shows & Condition(lambda: not self.cursor_is_in_top_right()),
                     ),
                     top=0,
