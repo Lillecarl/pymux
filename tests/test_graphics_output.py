@@ -17,6 +17,7 @@ from pyte.sequences import apc
 from pyte.sixel import store_payload
 
 from pymux.graphics import ClientGraphics, PaneView
+from pymux.plane import Rect
 
 # 2x2 pixels, RGB.
 IMAGE_DATA = bytes(range(12))
@@ -45,7 +46,7 @@ def placement(x=0, y=0, columns=3, rows=2, z=0, virtual=False):
     return GraphicsPlacement(1, 0, x, y, columns, rows, z, virtual)
 
 
-def view(state, x=0, y=0, width=80, height=24, vscroll=0, hscroll=0, pane_id=1):
+def view(state, x=0, y=0, width=80, height=24, vscroll=0, hscroll=0, pane_id=1, covered=()):
     return PaneView(
         pane_id=pane_id,
         x=x,
@@ -55,6 +56,7 @@ def view(state, x=0, y=0, width=80, height=24, vscroll=0, hscroll=0, pane_id=1):
         vertical_scroll=vscroll,
         horizontal_scroll=hscroll,
         graphics=state,
+        covered=covered,
     )
 
 
@@ -200,6 +202,63 @@ def test_placement_over_right_edge_is_cropped():
     # Two of the four columns fit. The image is 2 pixels wide, so half
     # a pixel per column: the width rounds up to one pixel.
     assert puts(written) == ["\x1b[1;3H\x1b_Ga=p,i=%i,p=1,c=2,r=2,C=1,q=2,x=0,y=0,w=1,h=2\x1b\\" % image_id]
+
+
+# ----------------------------------------------------------------------
+# What the client draws over a pane: an image goes under it.
+# Lillecarl/pymux#816.
+
+
+def _cells_of(put: str) -> set[tuple[int, int]]:
+    "The cells one put command covers, from its cursor move and its c and r."
+    row, column = (int(one) for one in re.match(r"\x1b\[(\d+);(\d+)H", put).groups())
+    columns = int(re.search(r"c=(\d+)", put).group(1))
+    rows = int(re.search(r"r=(\d+)", put).group(1))
+    return {(column - 1 + dx, row - 1 + dy) for dx in range(columns) for dy in range(rows)}
+
+
+def test_a_float_in_the_middle_cuts_the_image_around_it():
+    client, written = make_client()
+    hole = Rect(2, 2, 2, 2)
+    client.render([view(make_state(placement(columns=6, rows=6)), covered=(hole,))])
+
+    shown = [_cells_of(put) for put in puts(written)]
+    assert len(shown) == 4
+    every = set().union(*shown)
+    assert len(every) == sum(len(one) for one in shown), "two pieces share a cell"
+    assert every == {(x, y) for x in range(6) for y in range(6)} - {(cell.x, cell.y) for cell in hole.cells()}
+
+
+def test_each_piece_shows_the_pixels_under_its_cells():
+    "Four pixels over four cells: the half that stays shows the half of the image under it."
+    client, written = make_client()
+    state = make_state(placement(columns=4, rows=4), data=bytes(range(48)), width=4, height=4)
+    client.render([view(state, covered=(Rect(2, 0, 2, 4),))])
+
+    image_id = outer_id(written)
+    assert puts(written) == ["\x1b[1;1H\x1b_Ga=p,i=%i,p=1,c=2,r=4,C=1,q=2,x=0,y=0,w=2,h=4\x1b\\" % image_id]
+
+
+def test_a_float_over_the_whole_image_takes_it_down_and_gives_it_back():
+    client, written = make_client()
+    state = make_state(placement(columns=3, rows=2))
+    client.render([view(state)])
+    assert len(puts(written)) == 1
+
+    written.clear()
+    client.render([view(state, covered=(Rect(0, 0, 10, 10),))])
+    assert puts(written) == []
+    assert len(deletes(written)) == 1
+
+    written.clear()
+    client.render([view(state)])
+    assert len(puts(written)) == 1
+
+
+def test_a_float_beside_the_image_leaves_it_whole():
+    client, written = make_client()
+    client.render([view(make_state(placement(columns=3, rows=2)), covered=(Rect(10, 10, 4, 4),))])
+    assert puts(written) == ["\x1b[1;1H\x1b_Ga=p,i=%i,p=1,c=3,r=2,C=1,q=2\x1b\\" % outer_id(written)]
 
 
 def test_placement_outside_pane_is_skipped():

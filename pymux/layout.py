@@ -38,6 +38,7 @@ from prompt_toolkit.layout.containers import (
 )
 from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
 from prompt_toolkit.layout.dimension import Dimension as D
+from prompt_toolkit.layout.layout import walk
 from prompt_toolkit.layout.margins import ScrollbarMargin
 from prompt_toolkit.layout.menus import CompletionsMenu, CompletionsMenuControl
 from prompt_toolkit.layout.mouse_handlers import MouseHandlers
@@ -161,6 +162,55 @@ def pane_write_positions(screen: Screen) -> dict[arrangement.Pane, WritePosition
         positions = {}
         setattr(screen, _PANE_POSITIONS, positions)
     return positions
+
+
+#: The container each pane was drawn from, on that screen, and what the
+#: frame drew over each pane, once something asked.
+_PANE_CONTAINERS = "pymux_pane_containers"
+_PANE_COVERS = "pymux_pane_covers"
+
+
+def pane_containers(screen: Screen) -> dict[arrangement.Pane, Container]:
+    "The container each pane was drawn from on this screen."
+    containers: dict[arrangement.Pane, Container] | None = getattr(screen, _PANE_CONTAINERS, None)
+    if containers is None:
+        containers = {}
+        setattr(screen, _PANE_CONTAINERS, containers)
+    return containers
+
+
+def pane_covers(screen: Screen) -> dict[arrangement.Pane, tuple[Rect, ...]]:
+    """
+    What this screen drew over each pane, in cells of the screen: every
+    window it drew that overlaps the pane and is not one of the pane's
+    own. A popup, a menu, the which-key box, the command line. An image
+    of the pane belongs under them. Lillecarl/pymux#816.
+
+    **Not by paint order.** prompt_toolkit records a window when it
+    paints, but a pane can paint twice in one frame (a body drawn late
+    runs its panes again), and a window that paints again keeps its first
+    place in the record. Nothing paints under the panes as a window --
+    the background is a container -- so a window that is not the pane's
+    and overlaps it is over it.
+
+    Worked out once per screen, on the first ask.
+    """
+    covers: dict[arrangement.Pane, tuple[Rect, ...]] | None = getattr(screen, _PANE_COVERS, None)
+    if covers is not None:
+        return covers
+    drawn = [
+        (window, Rect(at.xpos, at.ypos, at.width, at.height))
+        for window, at in screen.visible_windows_to_write_positions.items()
+    ]
+    containers = pane_containers(screen)
+    covers = {}
+    for pane, at in pane_write_positions(screen).items():
+        area = Rect(at.xpos, at.ypos, at.width, at.height)
+        container = containers.get(pane)
+        own = set(walk(container)) if container is not None else set()
+        covers[pane] = tuple(rect for window, rect in drawn if window not in own and rect.overlaps(area))
+    setattr(screen, _PANE_COVERS, covers)
+    return covers
 
 
 #: How much of the screen an overlay pane takes when nobody says.
@@ -702,6 +752,15 @@ class LayoutManager:
         if screen is None:
             return {}
         return pane_write_positions(screen)
+
+    @property
+    def pane_covers(self) -> dict[arrangement.Pane, tuple[Rect, ...]]:
+        "What the last render of this client drew over each pane: `pane_covers`."
+        renderer = getattr(self.client_state.app, "renderer", None)
+        screen = getattr(renderer, "_last_screen", None)
+        if screen is None:
+            return {}
+        return pane_covers(screen)
 
     @property
     def room_this_client_has(self) -> Size:
@@ -2612,6 +2671,7 @@ class TracePaneWritePosition(_ContainerProxy):  # XXX: replace with SizedBox
         # two clients attached, a render of one can carry the context of
         # the other, and the positions then land on the wrong client.
         pane_write_positions(screen)[self.arrangement_pane] = write_position
+        pane_containers(screen)[self.arrangement_pane] = self
 
 
 def move_focus(pymux: Pymux, side: Side) -> None:

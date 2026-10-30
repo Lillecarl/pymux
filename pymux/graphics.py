@@ -35,7 +35,7 @@ import base64
 import random
 import re
 import zlib
-from collections.abc import Awaitable, Callable, Coroutine, Iterable, Iterator
+from collections.abc import Awaitable, Callable, Coroutine, Iterable, Iterator, Sequence
 from typing import Any, NamedTuple
 
 import anyio
@@ -53,6 +53,7 @@ from . import blocks, sixel
 from .blocks import blocks_for, rows_for_cells
 from .kitty_frames import SHM_PROBE_ID
 from .log import logger
+from .plane import Rect
 
 __all__ = [
     "CELL_SIZE_QUERY",
@@ -223,6 +224,10 @@ class PaneView(NamedTuple):
     #: The screen of the pane. The unicode placeholders live in its
     #: cells, so drawing them needs the text and not only the images.
     screen: Any = None
+    #: What the client drew over the pane, in cells of its screen: a
+    #: popup, a menu, the which-key box. An image is cut around them.
+    #: `layout.pane_covers`. Lillecarl/pymux#816.
+    covered: tuple[Rect, ...] = ()
 
 
 class WindowView(NamedTuple):
@@ -1489,6 +1494,36 @@ def pane_placements(view: PaneView, cell_width: int, cell_height: int) -> Iterat
     yield from placeholder_placements(view, cell_width, cell_height)
 
 
+def _uncovered(placed: Placed, covered: Sequence[Rect]) -> Iterator[Placed]:
+    """
+    The parts of one placement that nothing in `covered` hides, each
+    with the pixels of the image it shows: the placement itself when
+    nothing does, nothing when they hide it whole. Lillecarl/pymux#816.
+
+    **Cut, not lowered.** A window pane's picture goes under every cell
+    with a background of its own (`WINDOW_Z`), so a float covers it with
+    no cut. A program's image cannot: it belongs over its pane's own
+    coloured cells.
+
+    The cells map onto the pixels evenly, the way a crop at the edge of
+    a pane does.
+    """
+    placement, image, columns, rows, x, y, source = placed
+    whole = Rect(x, y, columns, rows)
+    pieces = whole.minus(covered)
+    if pieces == [whole]:
+        yield placed
+        return
+    left, top, width, height = source if source is not None else (0, 0, image.width, image.height)
+    for piece in pieces:
+        start_x = left + (piece.x - x) * width // columns
+        start_y = top + (piece.y - y) * height // rows
+        end_x = left + (piece.right - x) * width // columns
+        end_y = top + (piece.bottom - y) * height // rows
+        cut = (start_x, start_y, max(1, end_x - start_x), max(1, end_y - start_y))
+        yield placement, image, piece.width, piece.height, piece.x, piece.y, cut
+
+
 def placeholder_placements(view: PaneView, cell_width: int, cell_height: int) -> Iterator[Placed]:
     """
     Yield the images that the unicode placeholders of one pane
@@ -1535,15 +1570,11 @@ def placeholder_placements(view: PaneView, cell_width: int, cell_height: int) ->
         if source is None:
             continue  # The empty border around a fitted image.
 
-        yield (
-            placement,
-            image,
-            columns,
-            rows,
-            view.x + x + crop_left,
-            view.y + y,
-            source,
-        )
+        placed = (placement, image, columns, rows, view.x + x + crop_left, view.y + y, source)
+        if view.covered:
+            yield from _uncovered(placed, view.covered)
+        else:
+            yield placed
 
 
 def visible_placements(view: PaneView) -> Iterator[Placed]:
@@ -1594,15 +1625,14 @@ def visible_placements(view: PaneView) -> Iterator[Placed]:
         else:
             source = None
 
-        yield (
-            placement,
-            image,
-            columns,
-            rows,
-            view.x + x + crop_left,
-            view.y + y + crop_top,
-            source,
-        )
+        placed = (placement, image, columns, rows, view.x + x + crop_left, view.y + y + crop_top, source)
+        # Not through `_uncovered` when nothing covers the pane: a frame
+        # pays for a generator per placement, which `checks.pymux-images`
+        # counts.
+        if view.covered:
+            yield from _uncovered(placed, view.covered)
+        else:
+            yield placed
 
 
 def _placeholder_source(

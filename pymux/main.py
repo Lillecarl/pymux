@@ -806,11 +806,13 @@ class ClientState:
         A pane in clock mode or copy mode shows something else than its
         terminal content, and a popup covers the panes. Those show no
         images. (The list is empty then, so the previous images go
-        away.)
+        away.) What this client drew over a pane goes with it, and its
+        images are cut around that. Lillecarl/pymux#816.
         """
         if self.display_popup:
             return []
 
+        covers = self.layout_manager.pane_covers
         result = []
         for pane, write_position in self.layout_manager.pane_write_positions.items():
             terminal = pane.terminal
@@ -829,6 +831,7 @@ class ClientState:
                     horizontal_scroll=window.horizontal_scroll,
                     graphics=terminal.screen.graphics,
                     screen=terminal.screen,
+                    covered=covers.get(pane, ()),
                 )
             )
         return result

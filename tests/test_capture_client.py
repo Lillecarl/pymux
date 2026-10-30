@@ -13,6 +13,7 @@ import io
 
 import pytest
 from PIL import Image
+from prompt_toolkit.application.current import set_app
 from test_a_session_on_a_pyte_screen import COLUMNS, ROWS, attached, pymux, settled, shows  # noqa: F401
 from test_capture_pane_as_png import FALLBACK, FONTS, KITTY_RED, RED, pytestmark  # noqa: F401
 
@@ -82,6 +83,47 @@ async def test_a_panes_image_is_where_the_client_shows_it(pymux):
     width, height = CELL
     corner = image.crop((0, 0, width, height))
     assert {color for _count, color in corner.getcolors(width * height)} == {RED}
+
+
+async def test_an_image_goes_under_a_menu_drawn_over_it(pymux):
+    """
+    A red image over the whole pane, and a menu over that: the cells of
+    the menu show the menu, and the image keeps the cells around it.
+    Lillecarl/pymux#816.
+    """
+    async with pymux.running(), attached(pymux) as session:
+        await shows(session, "$")
+        (pane,) = pymux.panes_by_id.values()
+        whole = "\x1b_Ga=T,f=24,s=2,v=2,c=%d,r=%d;" % (COLUMNS, ROWS) + base64.b64encode(bytes(RED) * 4).decode()
+        pane.terminal.terminal_control.stream.feed("\x1b[H\x1b[2J\x1b[?25l" + whole + "\x1b\\")
+        await settled(session)
+        (client,) = pymux.clients
+        # The client that asks is the one the menu shows on.
+        with set_app(client.app):
+            call_command_handler("display-menu", pymux, ["-T", "Do", "again", "a", "display-message again"])
+        client.app.invalidate()
+        await settled(session)
+
+        covers = client.layout_manager.pane_covers[pane]
+        assert covers, "the menu covers nothing of the pane"
+        at = client.layout_manager.pane_write_positions[pane]
+        image = await picture(pymux)
+
+    width, height = CELL
+    under = covers[0]
+    beside = next(
+        (x, y)
+        for y in range(at.ypos, at.ypos + at.height)
+        for x in range(at.xpos, at.xpos + at.width)
+        if not any(cover.x <= x < cover.right and cover.y <= y < cover.bottom for cover in covers)
+    )
+
+    def colours(x, y):
+        cell = image.crop((x * width, y * height, (x + 1) * width, (y + 1) * height))
+        return {color for _count, color in cell.getcolors(width * height)}
+
+    assert colours(*beside) == {RED}
+    assert colours(under.x, under.y) != {RED}
 
 
 async def test_a_client_nobody_has_is_refused(pymux):

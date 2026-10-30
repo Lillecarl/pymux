@@ -241,6 +241,22 @@ class Rect(NamedTuple):
             for x in range(self.x, self.right):
                 yield Point(x=x, y=y)
 
+    def minus(self, others: Iterable[Rect]) -> list[Rect]:
+        """
+        The cells of this rectangle that none of `others` covers, as
+        rectangles that do not overlap: itself when nothing covers it,
+        nothing when they cover it whole. `_without` takes each one out.
+
+        Rectangles, not cells, so it costs the number of rectangles and
+        not the area. Lillecarl/pymux#355.
+        """
+        left: list[Rect] = [self]
+        for one in others:
+            if not left:
+                break
+            left = [piece for held in left for piece in _without(held, one)]
+        return left
+
 
 class Line(NamedTuple):
     """
@@ -987,23 +1003,13 @@ def _covered(rect: Rect, over: Iterable[Rect]) -> bool:
     rectangles that cover this one between them each answer no on
     their own.
 
-    **Rectangles, not cells.** This asked every cell of `rect` whether
-    something held it, which is honest for a handful of rectangles and
-    wrong on the frame loop: `PlanContainer` calls `Plan.drawn` on
-    every frame, and a full pane is thousands of cells. Subtracting
-    each cover in turn costs the number of rectangles and not the area.
-    Lillecarl/pymux#355.
+    **Rectangles, not cells**: `Rect.minus`. `PlanContainer` calls
+    `Plan.drawn` on every frame, and a full pane is thousands of cells.
 
     `tests/test_plane.py` holds the cell-at-a-time version as the
     oracle this is checked against.
     """
-    left = [rect]
-    for one in over:
-        if not left:
-            return True
-        left = [piece for held in left for piece in _without(held, one)]
-
-    return not left
+    return not rect.minus(over)
 
 
 def _enters(rect: Rect, start: tuple[float, float], step: tuple[float, float]) -> float | None:

@@ -837,14 +837,13 @@ def test_subtracting_rectangles_answers_what_counting_cells_answers(rect, over):
 @given(SMALL, st.lists(SMALL, max_size=4))
 def test_what_is_left_holds_exactly_the_cells_nothing_covered(rect, over):
     """
-    Stronger than the answer: the pieces `_without` leaves are the
+    Stronger than the answer: the pieces `Rect.minus` leaves are the
     uncovered cells, no more and no less. A piece that overlapped
     another would double-count, and one that ran outside `rect` would
-    claim a cell nobody asked about.
+    claim a cell nobody asked about. A pane's image is cut this way
+    around a float. Lillecarl/pymux#816.
     """
-    left = [rect]
-    for one in over:
-        left = [piece for held in left for piece in _without(held, one)]
+    left = rect.minus(over)
 
     kept = set()
     for piece in left:
