@@ -414,8 +414,8 @@ class ClientGraphics:
     ) -> None:
         self._write_raw = write_raw
         self._flush = flush
-        self._repaint = repaint
-        self._spawn = spawn
+        self.repaint = repaint
+        self.spawn = spawn
         #: The colour depth of the outer terminal, read when it is
         #: needed. Only the half blocks ask: they are cells, so they
         #: take the colours that the terminal has.
@@ -561,6 +561,11 @@ class ClientGraphics:
         except Exception:
             return ColorDepth.DEPTH_24_BIT
 
+    def write_in_place(self, commands: str) -> None:
+        "Write `commands` with the cursor saved around them, and send them."
+        self._write_raw(SAVE_CURSOR + commands + RESTORE_CURSOR)
+        self._flush()
+
     def is_frame_answer(self, data: str) -> bool:
         "Whether `data` is the terminal's answer to a window pane's frame. Lillecarl/pymux#643."
         match = _IMAGE_REPLY_RE.match(data)
@@ -633,12 +638,12 @@ class ClientGraphics:
                     "yes" if self.kitty_supported else "no",
                     "yes" if self.sixel_supported else "no",
                 )
-            if not was_detected and self._repaint is not None:
+            if not was_detected and self.repaint is not None:
                 # The frames drawn so far carried no image, because
                 # nothing knew yet whether this terminal takes one. Ask
                 # for another, or an image on a quiet pane waits for
                 # the next thing that happens to the pane.
-                self._repaint()
+                self.repaint()
 
     # ------------------------------------------------------------------
     # Frames.
@@ -684,7 +689,7 @@ class ClientGraphics:
         the two share. A window that moved is put again at once, without
         waiting for its pixels. Lillecarl/pymux#631.
         """
-        if not self.kitty_supported or self._spawn is None:
+        if not self.kitty_supported or self.spawn is None:
             return
         commands: list[str] = []
         places: dict[int, str] = {}
@@ -708,8 +713,8 @@ class ClientGraphics:
             self._encoders.pop(pane_id, None)
             self._window_departures[pane_id] = self._window_departures.get(pane_id, 0) + 1
         if commands:
-            self._write_raw(SAVE_CURSOR + "".join(commands) + RESTORE_CURSOR)
-        if commands or gone:
+            self.write_in_place("".join(commands))
+        elif gone:
             self._flush()
 
     def refresh_window(self, view: WindowView) -> None:
@@ -721,7 +726,7 @@ class ClientGraphics:
         an update is out goes with the next one, which starts as soon
         as that one is written. Lillecarl/pymux#636.
         """
-        if not self.kitty_supported or self._spawn is None or view.pane_id not in self._window_places:
+        if not self.kitty_supported or self.spawn is None or view.pane_id not in self._window_places:
             return
         if view.pane_id in self._window_pending:
             self._window_again[view.pane_id] = view
@@ -729,7 +734,7 @@ class ClientGraphics:
         self._start_window_update(view)
 
     def _start_window_update(self, view: WindowView) -> None:
-        if self._spawn is None:
+        if self.spawn is None:
             return
         departures = self._window_departures.get(view.pane_id, 0)
         started = self._window_pending.get(view.pane_id)
@@ -745,7 +750,7 @@ class ClientGraphics:
         # Raw edits go on top of raw frames only: what a decoder made is
         # near the pixels, not them.
         since = known.serial if known is not None and not known.codec else None
-        self._spawn(self._update_window(view, outer_id, since, self._window_generation))
+        self.spawn(self._update_window(view, outer_id, since, self._window_generation))
 
     def _still_current(self, pane_id: int, generation: int) -> bool:
         "Is an update started at `generation` still for the image this client holds?"
@@ -787,8 +792,7 @@ class ClientGraphics:
             commands.append(put)
         self._windows[view.pane_id] = _ShownWindow(outer_id, serial, put)
         if commands:
-            self._write_raw(SAVE_CURSOR + "".join(commands) + RESTORE_CURSOR)
-            self._flush()
+            self.write_in_place("".join(commands))
         # After the flush, so a wait for the terminal to take the frame
         # counts the frame. A client already up to date shows the frame
         # too: a commit that drew nothing waits on its callback as well,
@@ -896,8 +900,7 @@ class ClientGraphics:
         if not commands:
             return
 
-        self._write_raw(SAVE_CURSOR + "".join(commands) + RESTORE_CURSOR)
-        self._flush()
+        self.write_in_place("".join(commands))
 
     def draws_at_its_own_size(
         self, placement: GraphicsPlacement, image: GraphicsImage, source: Source | None, columns: int, rows: int
@@ -955,7 +958,7 @@ class ClientGraphics:
 
             if forwards:
                 self._collect_virtual(view, desired)
-            placements = visible_placements(view) if forwards else self._pane_placements(view)
+            placements = visible_placements(view) if forwards else self.placements_of(view)
             for placement in placements:
                 (
                     pane_placement,
@@ -1026,7 +1029,7 @@ class ClientGraphics:
                 "\x1b_Ga=p,U=1,i=%i,p=%i,c=%i,r=%i,q=2\x1b\\" % (outer_id, slot, placement.columns, placement.rows),
             )
 
-    def _pane_placements(self, view: PaneView) -> Iterator[Placed]:
+    def placements_of(self, view: PaneView) -> Iterator[Placed]:
         return pane_placements(view, self.cell_width, self.cell_height)
 
     # ------------------------------------------------------------------
@@ -1067,9 +1070,9 @@ class ClientGraphics:
             # the new one takes, so each has to be put again.
             self._placements = {key: put for key, put in self._placements.items() if put.image_id != outer_id}
 
-        if self._spawn is not None:
+        if self.spawn is not None:
             self._image_pending[key] = image
-            self._spawn(self._transmit_in_thread(key, image, outer_id))
+            self.spawn(self._transmit_in_thread(key, image, outer_id))
             return None
 
         try:
@@ -1100,8 +1103,8 @@ class ClientGraphics:
             return
         del self._image_pending[key]
         self._send_image(key, image, outer_id, commands)
-        if self._repaint is not None:
-            self._repaint()
+        if self.repaint is not None:
+            self.repaint()
 
     def _send_image(self, key: tuple[int, int], image: GraphicsImage, outer_id: int, commands: list[str]) -> None:
         for command in commands:
@@ -1174,10 +1177,10 @@ class ClientGraphics:
             return
 
         self._cell_placements = desired
-        if changed and self._repaint is not None:
+        if changed and self.repaint is not None:
             # The next frame paints the whole screen, which wipes the
             # pixels. Draw again once it did.
-            self._repaint()
+            self.repaint()
             self._cell_redraw = True
         else:
             self._cell_redraw = False
@@ -1185,8 +1188,7 @@ class ClientGraphics:
         if not desired:
             return
 
-        self._write_raw(SAVE_CURSOR + "".join(desired[key] for key in sorted(desired)) + RESTORE_CURSOR)
-        self._flush()
+        self.write_in_place("".join(desired[key] for key in sorted(desired)))
 
     def _collect_sixel(self, views: Iterable[PaneView]) -> Collected:
         "The sixel commands of one frame, and the cache keys they used."
@@ -1203,7 +1205,7 @@ class ClientGraphics:
                 x,
                 y,
                 source,
-            ) in self._pane_placements(view):
+            ) in self.placements_of(view):
                 slot = slots.get(placement.image_id, 0) + 1
                 slots[placement.image_id] = slot
 
@@ -1252,7 +1254,7 @@ class ClientGraphics:
                 x,
                 y,
                 source,
-            ) in self._pane_placements(view):
+            ) in self.placements_of(view):
                 slot = slots.get(placement.image_id, 0) + 1
                 slots[placement.image_id] = slot
 
@@ -1321,14 +1323,14 @@ class ClientGraphics:
         if known is not None and known[0] is image:
             return known[1]
 
-        if self._spawn is None:
+        if self.spawn is None:
             result = work(*args)
             self._cell_cache[key] = (image, result)
             return result
 
         if key not in self._cell_pending:
             self._cell_pending.add(key)
-            self._spawn(self._work_in_thread(key, image, work, args))
+            self.spawn(self._work_in_thread(key, image, work, args))
         return None
 
     async def _work_in_thread(
@@ -1347,8 +1349,8 @@ class ClientGraphics:
             return
         self._cell_pending.discard(key)
         self._cell_cache[key] = (image, result)
-        if self._repaint is not None:
-            self._repaint()
+        if self.repaint is not None:
+            self.repaint()
 
     # ------------------------------------------------------------------
 
@@ -1372,8 +1374,8 @@ class ClientGraphics:
             self._cell_placements = {}
             self._cell_cache = {}
             self._cell_redraw = False
-            if self._repaint is not None:
-                self._repaint()
+            if self.repaint is not None:
+                self.repaint()
 
         if not self._images and not self._placements:
             return

@@ -406,7 +406,7 @@ def make_spawning_client(blocks=False):
     client, written = make_client(sixel=not blocks, repaint=lambda: repaints.append(1))
     if blocks:
         client.handle_reply(csi(escape.DA, 62, 1, 6, private="?"))
-    client._spawn = spawned.append
+    client.spawn = spawned.append
     return client, written, spawned, repaints
 
 
