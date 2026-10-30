@@ -22,7 +22,7 @@ def display_popup(pymux: Pymux, args: argparse.Namespace):
     first. `-E` is accepted for the tmux command line and changes
     nothing: an overlay of pymux always closes when its program ends.
     """
-    return pymux.display_overlay(
+    return pymux.overlays.display(
         command=args.executable,
         width=args.width,
         height=args.height,

@@ -106,7 +106,7 @@ async def test_closing_the_overlay_leaves_the_job_running(pymux_state):
     overlay = pymux.current_session.overlay_pane
     assert overlay is not None and not overlay.process.is_terminated
 
-    pymux.close_overlay()
+    pymux.overlays.close()
     assert pymux.current_session.overlay_pane is None
     assert overlay.process.is_terminated
 

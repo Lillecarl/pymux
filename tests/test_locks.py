@@ -24,7 +24,7 @@ async def test_locking_runs_lock_command_over_whole_screen():
             assert overlay is not None
             assert pymux.current_session.overlay_title == "sleep 5"
 
-            pymux.close_overlay()
+            pymux.overlays.close()
             assert pymux.overlay_pane is None
 
 
@@ -36,4 +36,4 @@ async def test_all_three_locks_arrive_at_same_screen():
             for command in ("lock-client", "lock-session", "lock-server"):
                 await run_as(pymux, state, command)
                 assert pymux.overlay_pane is not None, command
-                pymux.close_overlay()
+                pymux.overlays.close()

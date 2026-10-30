@@ -20,4 +20,4 @@ def lock(pymux: Pymux, args: argparse.Namespace):
     arrive at the same screen: the one the asking client is on.
     Lillecarl/pymux#324.
     """
-    return pymux.display_overlay(command=pymux.current_session.options.lock_command, width="100%", height="100%")
+    return pymux.overlays.display(command=pymux.current_session.options.lock_command, width="100%", height="100%")

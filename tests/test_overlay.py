@@ -51,49 +51,49 @@ def test_session_starts_without_overlay():
 async def test_opening_overlay_starts_pane():
     pymux = Pymux()
     async with pymux.running():
-        pane = await pymux.display_overlay(command="%s -c pass" % _python(), title="a title")
+        pane = await pymux.overlays.display(command="%s -c pass" % _python(), title="a title")
         try:
             assert pymux.overlay_pane is pane
             assert pymux.current_session.overlay_title == "a title"
             # The overlay takes the keyboard.
             assert pymux.get_focused_pane() is pane
         finally:
-            pymux.close_overlay()
+            pymux.overlays.close()
 
 
 async def test_title_falls_back_to_command():
     pymux = Pymux()
     command = "%s -c pass" % _python()
     async with pymux.running():
-        await pymux.display_overlay(command=command)
+        await pymux.overlays.display(command=command)
         try:
             assert pymux.current_session.overlay_title == command
         finally:
-            pymux.close_overlay()
+            pymux.overlays.close()
 
 
 async def test_second_overlay_replaces_first():
     pymux = Pymux()
     async with pymux.running():
-        first = await pymux.display_overlay(command="%s -c pass" % _python())
-        second = await pymux.display_overlay(command="%s -c pass" % _python())
+        first = await pymux.overlays.display(command="%s -c pass" % _python())
+        second = await pymux.overlays.display(command="%s -c pass" % _python())
         try:
             assert first is not second
             assert pymux.overlay_pane is second
         finally:
-            pymux.close_overlay()
+            pymux.overlays.close()
 
 
 async def test_closing_overlay_gives_keyboard_back():
     pymux = Pymux()
     async with pymux.running():
-        await pymux.display_overlay(command="%s -c pass" % _python())
-        pymux.close_overlay()
+        await pymux.overlays.display(command="%s -c pass" % _python())
+        pymux.overlays.close()
         assert pymux.overlay_pane is None
 
 
 def test_closing_when_there_is_none_is_fine():
-    Pymux().close_overlay()  # Does not raise.
+    Pymux().overlays.close()  # Does not raise.
 
 
 async def test_every_client_of_the_session_looks_at_overlay():
@@ -121,13 +121,13 @@ async def test_every_client_of_the_session_looks_at_overlay():
     here = pymux.create_session(name="here")
 
     async with pymux.running():
-        pane = await pymux.display_overlay(command="%s -c pass" % _python())
+        pane = await pymux.overlays.display(command="%s -c pass" % _python())
         try:
             assert pymux._has_focus(FakeClientState(here), pane) is True
             assert pymux._has_focus(FakeClientState(here), FakePane()) is False
             assert pymux._has_focus(FakeClientState(elsewhere), pane) is False
         finally:
-            pymux.close_overlay()
+            pymux.overlays.close()
 
 
 def _python():

@@ -1183,7 +1183,7 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
             overlay: list[Pane] = []
             session.overlay_pane = pane_of(
                 overlay_row,
-                lambda session=session: pymux.overlay_ended(session, overlay[0] if overlay else None),
+                lambda session=session: pymux.overlays.ended(session, overlay[0] if overlay else None),
             )
             overlay.append(session.overlay_pane)
         sessions.append(session)

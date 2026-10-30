@@ -14,7 +14,7 @@ def close_popup(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Close the overlay pane, and kill what runs in it.
     """
-    pymux.close_overlay()
+    pymux.overlays.close()
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):

@@ -44,7 +44,7 @@ from .forwarding import LOOPBACK_NAMES
 from .graphics import OuterImageIds
 from .hooks import Hooks
 from .ids import PaneId, SessionId, WindowIndex
-from .jobs import JOB_SWEEP_EVERY, Job, JobTable, describe
+from .jobs import JOB_SWEEP_EVERY, JobTable
 from .key_bindings import PymuxKeyBindings
 from .keys import FOCUS_IN, FOCUS_OUT
 from .known_terminals import identify
@@ -63,6 +63,7 @@ from .options import (
     Scope,
 )
 from .outward import Outward
+from .overlays import Overlays
 from .panes import PaneMaker
 from .planes import Planes, remember_the_size_made_at
 from .portal import Portal
@@ -207,6 +208,7 @@ class Pymux:
         "panes": Keep.REBUILT,
         "serving": Keep.REBUILT,
         "planes": Keep.REBUILT,
+        "overlays": Keep.REBUILT,
         # The running server.
         "connections": Keep.DROPPED,
         "tasks": Keep.DROPPED,
@@ -312,6 +314,7 @@ class Pymux:
 
         self.terminals = Terminals(self)
         self.planes = Planes(self)
+        self.overlays = Overlays(self)
         self.serving = Serving(self)
         self.panes = PaneMaker(self)
         self.outward = Outward(self)
@@ -1198,150 +1201,7 @@ class Pymux:
             self.hanging_up.add(backend)
         pane.process.hang_up()
 
-    async def display_overlay(
-        self,
-        command: str | None = None,
-        width: str | None = None,
-        height: str | None = None,
-        title: str | None = None,
-        session: Session | None = None,
-    ):
-        """
-        Open an overlay pane in the middle of the screen.
-
-        It runs `command`, or the default shell, and closes itself when
-        that finishes. It takes the keyboard while it is open.
-
-        The overlay belongs to the session, like a window does, so
-        every client of that session sees the same one and a second
-        call replaces the first. That also means a command from the
-        command line reaches it: the temporary client that runs such a
-        command is gone before the next render, and it is on the
-        session of the pane the command was typed in.
-        Lillecarl/pymux#324.
-        """
-        if session is None:
-            session = self.current_session
-        self.close_overlay(session)
-
-        pane: Pane | None = None
-
-        def done() -> None:
-            self.overlay_ended(session, pane)
-
-        try:
-            window = session.arrangement.get_active_window()
-        except Exception:
-            window = None
-
-        pane = await self.panes.create_pane(window=window, command=command, on_done=done)
-
-        session.overlay_pane = pane
-        session.overlay_title = title or command or "overlay"
-        session.overlay_width = width
-        session.overlay_height = height
-        self._sync_focus_everywhere()
-        self.invalidate(Woke.OVERLAY_OPENED)
-
-        return pane
-
-    def overlay_ended(self, session: Session, pane: Pane | None) -> None:
-        "The program of an overlay finished, so the overlay goes."
-        if session.overlay_pane is pane:
-            session.overlay_pane = None
-            self._sync_focus_everywhere()
-
-    def close_overlay(self, session: Session | None = None) -> None:
-        """
-        Close the overlay pane of one session, and kill what runs in
-        it. Without a session, the one this client is on.
-        """
-        if session is None:
-            session = self.current_session
-
-        pane = session.overlay_pane
-        if pane is None:
-            return
-
-        session.overlay_pane = None
-
-        if not pane.process.is_terminated:
-            self.hang_up(pane)
-
-        self._sync_focus_everywhere()
-        self.invalidate(Woke.OVERLAY_CLOSED)
-
-    async def display_job_overlay(
-        self,
-        job: Job,
-        session: Session | None = None,
-        width: str | None = None,
-        height: str | None = None,
-    ) -> Pane:
-        """
-        Show a job in the overlay of a session.
-
-        The tail replays and the rest follows, read-only, until
-        Escape closes it: a viewer never ends on its own, so unlike a
-        program's overlay this one stays past the end of the job,
-        saying how it ended. Closing stops the follow and never
-        touches the job, which runs on until it ends on its own. A
-        second call replaces the first, the way overlays do.
-        Lillecarl/pymux#528.
-        """
-        if session is None:
-            session = self.current_session
-        self.close_overlay(session)
-
-        pane = await self.panes.create_pane(session=session, job=job)
-
-        session.overlay_pane = pane
-        session.overlay_title = describe(job)
-        session.overlay_width = width
-        session.overlay_height = height
-        self._sync_focus_everywhere()
-        self.invalidate(Woke.OVERLAY_OPENED)
-
-        return pane
-
-    async def open_job_in_pane(self, job: Job, session: Session | None = None) -> Window:
-        """
-        Open a job as a pane in a new window of a session.
-
-        A viewer, read-only, that replays the tail and follows the
-        rest; nothing forks and no program runs. Closing the window
-        never touches the job. Without a session it is the session of
-        the client that asks. Lillecarl/pymux#528.
-        """
-        if session is None:
-            session = self.current_session
-
-        pane = await self.panes.create_pane(session=session, job=job)
-        remember_the_size_made_at(session.arrangement.create_window(pane, name="job %d" % job.job_id), pane)
-        if session is self.current_session:
-            pane.focus()
-        self.invalidate(Woke.WINDOW_OPENED)
-
-        window = self._window_holding(pane)
-        assert window is not None  # The arrangement just took the pane.
-        return window
-
-    async def take_over_job(self, job: Job, session: Session | None = None) -> None:
-        """
-        Run a job's command again, interactively, in a new window.
-
-        A terminal the person can type in, from the job's directory:
-        that is what taking over means for a job that holds no stdin
-        (`run` starts one on `/dev/null`). The recorded job is
-        untouched -- it runs on, and detaching never kills it -- and
-        the new program answers to the session's environment, not the
-        job's. Lillecarl/pymux#528.
-        """
-        if session is None:
-            session = self.current_session
-        await self.create_window(command=job.command, start_directory=job.directory, session=session)
-
-    def _sync_focus_everywhere(self) -> None:
+    def sync_focus_everywhere(self) -> None:
         "Give every client the focus that its state asks for."
         for client_state in list(self._client_states.values()):
             try:
