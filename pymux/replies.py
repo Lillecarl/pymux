@@ -252,7 +252,9 @@ class TerminalReplies:
             return
 
         # The terminal processed a window pane's frame. Lillecarl/pymux#643.
-        if self.connection.graphics.frame_room is not None and self.connection.graphics.is_frame_answer(data):
+        if self.connection.graphics.windows.frame_room is not None and self.connection.graphics.windows.is_frame_answer(
+            data
+        ):
             self.connection.pacing.frame_answered()
             return
 

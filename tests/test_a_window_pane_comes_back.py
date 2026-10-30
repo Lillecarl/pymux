@@ -14,7 +14,8 @@ from __future__ import annotations
 import anyio
 from libpymux.protocol import Field
 
-from pymux.graphics import ClientGraphics, FrameRects, WindowView
+from pymux.graphics import ClientGraphics
+from pymux.window_frames import FrameRects, WindowView
 
 #: A pixel, in the shape `frame_rects` answers rectangles.
 PIXEL = (0, 0, 1, 1, b"\x00\x00\x00")
@@ -57,21 +58,21 @@ async def test_a_window_shown_again_mid_frame_gets_a_whole_frame():
             spawn=lambda coroutine: tasks.start_soon(_run, coroutine),
         )
         graphics.kitty_supported = True
-        graphics.send_frame = send_frame
+        graphics.windows.send_frame = send_frame
         window = Window()
 
         # The first frame, whole.
-        graphics.render_windows([window.view()])
+        graphics.windows.render([window.view()])
         await wait_for(lambda: window.asked == [None])
         window.release.set()
         await wait_for(lambda: len(sent) == 1)
 
         # The window draws, and its frame of changes is being read when
         # the person switches away and straight back.
-        graphics.refresh_window(window.view())
+        graphics.windows.refresh(window.view())
         await wait_for(lambda: window.asked == [None, 1])
-        graphics.render_windows([])
-        graphics.render_windows([window.view()])
+        graphics.windows.render([])
+        graphics.windows.render([window.view()])
         window.release.set()
 
         # What reaches the client after it deleted its image starts whole.

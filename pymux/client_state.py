@@ -64,10 +64,10 @@ if TYPE_CHECKING:
     from prompt_toolkit.output import ColorDepth, Output
 
     from .border_drag import BorderDrag
-    from .graphics import WindowView
     from .main import Pymux
     from .server import ServerConnection
     from .url_mode import UrlMode
+    from .window_frames import WindowView
 
 __all__ = ["BEHIND_INTERVAL", "ClientState", "PaneCursor"]
 
@@ -486,7 +486,7 @@ class ClientState:
                 self._windows_after_drain()
                 return
             try:
-                graphics.render_windows(self._window_views())
+                graphics.windows.render(self._window_views())
             except Exception:
                 logger.exception("Drawing the window panes failed.")
 
@@ -644,7 +644,7 @@ class ClientState:
         if write_position is None or not isinstance(pane.terminal, WindowWidget):
             return
         drained = self.connection.pacing.drained
-        self.connection.graphics.refresh_window(
+        self.connection.graphics.windows.refresh(
             self.pymux.wayland.view_of(pane.pane_id, pane.terminal, write_position, drained)
         )
 

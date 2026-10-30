@@ -43,10 +43,10 @@ from prompt_toolkit.application.current import get_app
 from prompt_toolkit.clipboard import ClipboardData
 
 from pymux.enums import Clipboard, WindowScroll, Woke
-from pymux.graphics import FrameRects, VideoFrame, WindowView
 from pymux.ids import PaneId
 from pymux.niceness import as_a_person_runs
 from pymux.wayland_scale import DEFAULT_WAYLAND_SCALE, resolve_scale
+from pymux.window_frames import FrameRects, VideoFrame, WindowView
 from pymux.window_pane import WindowWidget, now
 
 if TYPE_CHECKING:

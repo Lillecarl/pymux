@@ -53,8 +53,9 @@ from pyte.html import visible_char
 from pyte.painted import Paint
 
 from . import box_drawing
-from .graphics import UNDER_BACKGROUNDS, WINDOW_Z, PaneView
+from .graphics import PaneView
 from .placements import pane_placements, source_rgba
+from .window_frames import UNDER_BACKGROUNDS, WINDOW_Z
 
 if TYPE_CHECKING:
     from prompt_toolkit.styles import Attrs

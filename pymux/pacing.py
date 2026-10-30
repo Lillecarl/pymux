@@ -112,7 +112,7 @@ class FramePacing:
         socket empty. Lillecarl/pymux#641.
         """
         await self.connection.pipe_connection.drained()
-        if self.connection.graphics.frame_room is not None:
+        if self.connection.graphics.windows.frame_room is not None:
             await self.frames_all_shown()
 
     def frame_went_out(self) -> None:
@@ -120,7 +120,7 @@ class FramePacing:
 
     def window_frame_went_out(self) -> None:
         self.window_frames_sent += 1
-        if self.connection.graphics.frame_room is not None:
+        if self.connection.graphics.windows.frame_room is not None:
             self.frames_out += 1
             if self.frames_shown.is_set():
                 self.frames_shown = anyio.Event()

@@ -16,7 +16,6 @@ from prompt_toolkit.data_structures import Size
 from session import once, over_connection
 
 from pymux.client.terminal import TerminalClient
-from pymux.graphics import FRAME_PART_BYTES, frame_parts, video_parts
 from pymux.kitty_frames import (
     SHM_NAME_MAX,
     SHM_PROBE_ID,
@@ -27,6 +26,7 @@ from pymux.kitty_frames import (
     rgba,
     shm_probe,
 )
+from pymux.window_frames import FRAME_PART_BYTES, frame_parts, video_parts
 
 #: One graphics command: its keys and its payload.
 COMMAND = re.compile(r"\x1b_G([^;]*);([^\x1b]*)\x1b\\")

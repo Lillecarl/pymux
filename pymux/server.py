@@ -615,17 +615,17 @@ class ServerConnection:
         # its own terminal. Only in msgpack, which carries bytes.
         # Lillecarl/pymux#634.
         if packet.get(Field.FRAMES) and self._encode is encode_msgpack:
-            self.graphics.send_frame = self._send_frame
+            self.graphics.windows.send_frame = self._send_frame
             # And the codecs it decodes, for `window-codec`.
             # Lillecarl/pymux#639.
-            self.graphics.codecs = frozenset(packet.get(Field.CODECS) or ())
+            self.graphics.windows.codecs = frozenset(packet.get(Field.CODECS) or ())
             # A client that says when it wrote a frame gets the next
             # one after that: the socket draining says only that the
             # kernel took it, and over SSH megabytes of frames wait
             # in the buffers past it, with every key's echo behind
             # them. Lillecarl/pymux#641.
             if packet.get(Field.SHOWS):
-                self.graphics.frame_room = self.pacing.frames_all_shown
+                self.graphics.windows.frame_room = self.pacing.frames_all_shown
 
         detach_other_clients = bool(packet[Field.DETACH_OTHERS])
         # `attach -x`: the others leave, and the terminals they were

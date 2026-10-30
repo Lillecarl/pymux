@@ -24,8 +24,8 @@ from session import once, over_connection
 pytest.importorskip("pysmithay")
 
 from pymux.enums import WindowCodec, WindowScroll, Woke
-from pymux.graphics import WINDOW_Z
 from pymux.main import Pymux
+from pymux.window_frames import WINDOW_Z
 from pymux.window_options import DEFAULT_FRAME_RATE
 from pymux.window_pane import is_window_pane
 
