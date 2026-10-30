@@ -44,6 +44,17 @@ accessibility tree, with a ref on each element that `browser.click` and
 `browser.screenshot`, `browser.console`, `browser.tabs`, `browser.list`
 and `browser.close` do the rest.
 
+A long page need not be read whole. `browser.screenshot` with `marks`
+boxes each element a person acts on with its ref, and lists them after
+the picture. `browser.at` names the element at a point of a picture,
+and `browser.click` takes a point too. `browser.find` answers only the
+elements that read some text, and `browser.snapshot` with `within`
+only one element's part of the tree.
+
+For the person watching, `browser.selection` reads what they selected,
+and `browser.point` outlines an element with a label for a few
+seconds.
+
 A `pane` browser opens in a window of its own, or with `window` as a
 split of a window somebody works in; closing it then takes only its own
 panes away. Every browser prefers reduced motion, so a watched one
