@@ -21,7 +21,14 @@ from pyte.screen import Page, Screen
 from pymux import screenshot
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import show_listing, terminal_of, the_pane
-from pymux.commands.pictures import add_picture_arguments, cell_from, drawn, fitted_cell, refuse_picture_flags
+from pymux.commands.pictures import (
+    FRAME_WAIT,
+    add_picture_arguments,
+    cell_from,
+    drawn,
+    fitted_cell,
+    refuse_picture_flags,
+)
 from pymux.window_pane import WindowWidget
 
 
@@ -109,14 +116,16 @@ async def _print_png(pymux: Pymux, screen: Screen, page: Page, args: argparse.Na
 
 async def _print_window_png(pymux: Pymux, widget: WindowWidget, args: argparse.Namespace) -> None:
     """
-    The last frame a Wayland window drew, as a PNG in base64: its own
-    pixels, with no cell and no font. `--fit` shrinks it.
-    Lillecarl/pymux#809.
+    The window's frame, as a PNG in base64: its own pixels, with no cell
+    and no font. `--fit` shrinks it. The program draws what it waits to
+    draw first, which a window no client shows is not let do otherwise.
+    Lillecarl/pymux#809, Lillecarl/pymux#822.
     """
     if args.fonts or args.fallbacks or args.cell or args.start is not None or args.end is not None:
         raise CommandException(
             "capture-pane: a window pane is pixels, so --font, --fallback, --cell, -S and -E draw nothing"
         )
+    await pymux.wayland.drawn_again([widget.toplevel], FRAME_WAIT)
     frame = pymux.wayland.frame(widget.toplevel)
     if frame is None:
         raise CommandException("capture-pane: the window has drawn no frame yet")

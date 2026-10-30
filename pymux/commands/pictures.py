@@ -74,6 +74,9 @@ def add_picture_arguments(parser: argparse.ArgumentParser, what: str) -> None:
 #: What `-o` with no path writes: a new name in the pictures directory.
 IN_PICTURES = ""
 
+#: How long a capture waits for what it shows to draw again, in seconds.
+FRAME_WAIT = 1.0
+
 
 def add_output_argument(parser: argparse.ArgumentParser) -> None:
     "The `-o` a picture takes, to write it to a file instead of printing it."

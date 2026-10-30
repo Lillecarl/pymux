@@ -465,6 +465,38 @@ async def test_wl_turns_the_pane_it_ran_in_into_the_window(tmp_path, monkeypatch
         assert answered(got) == {"out": "", "err": "", "exit": 0}
 
 
+def red_square_in(frame) -> bool:
+    "Whether the probe's frame holds the square it draws once its first frame was shown."
+    width, _height, rgba = frame
+    start = (6 * width + 11) * 4
+    return rgba[start : start + 4] == bytes([0xFF, 0x00, 0x00, 0xFF])
+
+
+async def test_a_capture_lets_a_window_nobody_shows_draw_what_it_waits_to(tmp_path):
+    """
+    A client with no kitty graphics shows no window, so the probe waits
+    after its first frame. What a capture asks for first lets it draw
+    on to the square. Lillecarl/pymux#822.
+    """
+    async with with_a_window(tmp_path, kitty=False) as (pymux, _state, pane, _recorder, log, _probe):
+        toplevel = pane.terminal.toplevel
+        await once(lambda: pymux.wayland.frame(toplevel), 10.0, "the window never drew")
+        await anyio.sleep(0.3)
+        assert not red_square_in(pymux.wayland.frame(toplevel))
+        await pymux.wayland.drawn_again([toplevel], 10.0)
+        assert red_square_in(pymux.wayland.frame(toplevel))
+        assert "drew" in logged(log)
+
+
+async def test_a_window_that_never_stops_drawing_costs_a_capture_its_timeout(tmp_path):
+    async with with_a_window(tmp_path, kitty=False, animate=True) as (pymux, _state, pane, _recorder, log, _probe):
+        toplevel = pane.terminal.toplevel
+        await once(lambda: pymux.wayland.frame(toplevel), 10.0, "the window never drew")
+        with anyio.fail_after(5.0):
+            await pymux.wayland.drawn_again([toplevel], 0.5)
+        assert "frame" in logged(log)
+
+
 async def test_capture_pane_png_of_a_window_pane_is_the_windows_frame(tmp_path, monkeypatch):
     "Lillecarl/pymux#809."
     log = tmp_path / "probe.log"

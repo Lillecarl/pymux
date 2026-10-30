@@ -33,7 +33,7 @@ import logging
 import math
 import os
 import sys
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
 from subprocess import DEVNULL, PIPE, STDOUT
 from typing import TYPE_CHECKING, Any
 
@@ -98,6 +98,12 @@ class _Pacer:
         self.drained: list[Callable[[], Awaitable[None]]] = []
         #: Whether pixels went to any client for the frames shown.
         self.sent = False
+        #: Set by the window's next commit, and then replaced.
+        self.committed = anyio.Event()
+
+    def commit(self) -> None:
+        self.committed.set()
+        self.committed = anyio.Event()
 
     def shown_by(self, drained: Callable[[], Awaitable[None]], sent: bool) -> None:
         # Once per client: a client shows a window on every frame of its
@@ -273,6 +279,8 @@ class WaylandServer:
                 # The shape goes out behind a frame (`forward_osc`).
                 self.pymux.invalidate(Woke.WINDOW_PANE_CHANGED)
             case ("commit", int(toplevel), _damage) if toplevel in self.panes:
+                if (pacer := self._pacers.get(toplevel)) is not None:
+                    pacer.commit()
                 # Straight to the clients, with no frame of the cells:
                 # a redraw of every client for every window frame is
                 # what a window drawing at the link's pace would cost.
@@ -574,6 +582,32 @@ class WaylandServer:
                 compositor.pointer_scroll_smooth(toplevel, steps * self._cell_of(toplevel)[1], time)
             else:
                 compositor.pointer_scroll(steps, time)
+
+    async def drawn_again(self, toplevels: Iterable[int], timeout: float) -> None:
+        """
+        Let each window draw what it waits to draw, and wait until none
+        wants another frame, or `timeout` passes: what a capture does
+        first. A window no client shows is never told it may draw, so its
+        last frame can be one the program would long have replaced. A
+        window that wants no frame has drawn everything already, and
+        costs nothing here.
+        """
+        compositor = self.compositor
+        if compositor is None:
+            return
+
+        async def drawn(toplevel: int, pacer: _Pacer) -> None:
+            with contextlib.suppress(KeyError):
+                while compositor.wants_frame(toplevel):
+                    committed = pacer.committed
+                    compositor.frame_done(toplevel, now())
+                    await committed.wait()
+
+        with anyio.move_on_after(timeout):
+            async with anyio.create_task_group() as tasks:
+                for toplevel in toplevels:
+                    if (pacer := self._pacers.get(toplevel)) is not None:
+                        tasks.start_soon(drawn, toplevel, pacer)
 
     def frame(self, toplevel: int) -> tuple[int, int, bytes] | None:
         "The last frame the window drew, as width, height and RGBA pixels."

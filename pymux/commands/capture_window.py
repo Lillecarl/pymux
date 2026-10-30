@@ -10,6 +10,7 @@ from pymux.arrangement import Pane
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import the_window
 from pymux.commands.pictures import (
+    FRAME_WAIT,
     add_output_argument,
     add_picture_arguments,
     cell_from,
@@ -27,6 +28,12 @@ if TYPE_CHECKING:
     from pymux.arrangement import Window
     from pymux.main import Pymux
     from pymux.plane import Rect
+
+
+async def _drawn_again(pymux: Pymux, window: Window) -> None:
+    "Let the window panes draw what they wait to draw: a window no client shows is not let do it otherwise."
+    toplevels = [pane.terminal.toplevel for pane in window.panes if isinstance(pane.terminal, WindowWidget)]
+    await pymux.wayland.drawn_again(toplevels, FRAME_WAIT)
 
 
 def _grid_of(pymux: Pymux, window: Window, cell: tuple[int, int]) -> screenshot.Grid:
@@ -57,7 +64,8 @@ def capture_window(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None] | 
 
     The status line is a client's and not the window's, so it is not
     here: `capture-client` draws what a client shows. A Wayland window
-    pane shows its last frame. Lillecarl/pymux#818.
+    pane draws what it waits to draw first, for a second at most.
+    Lillecarl/pymux#818, Lillecarl/pymux#822.
     """
     if args.output is None and not args.p:
         raise CommandException("capture-window: it prints, so it needs -p or -o")
@@ -65,12 +73,17 @@ def capture_window(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None] | 
     if args.output is not None or args.png:
         return _png(pymux, window, args)
     refuse_picture_flags(args, "capture-window")
+    return _text(pymux, window)
+
+
+async def _text(pymux: Pymux, window: Window) -> None:
+    await _drawn_again(pymux, window)
     grid = _grid_of(pymux, window, pymux.terminals.cell_size())
     pymux.print_command_line("\n".join("".join(char for char, _look in row).rstrip() for row in grid.rows))
-    return None
 
 
 async def _png(pymux: Pymux, window: Window, args: argparse.Namespace) -> None:
+    await _drawn_again(pymux, window)
     cell = cell_from(args.cell, pymux.terminals.cell_size(), "capture-window")
     if args.fit is not None:
         # The cell sizes the images, so the window is measured first.

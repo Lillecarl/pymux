@@ -10,6 +10,7 @@ from pymux.colors import theme_color_base
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import the_client
 from pymux.commands.pictures import (
+    FRAME_WAIT,
     add_output_argument,
     add_picture_arguments,
     cell_from,
@@ -23,10 +24,6 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable
 
     from pymux.main import ClientState, Pymux
-
-
-#: How long a capture waits for its client to draw again, in seconds.
-FRAME_WAIT = 1.0
 
 
 def _colors_of(pymux: Pymux, client_state: ClientState) -> ColorOverrides:
