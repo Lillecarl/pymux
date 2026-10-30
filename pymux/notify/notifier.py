@@ -47,7 +47,7 @@ class Notifier:
         "Mark the window a notification came from, and tell each client. Lillecarl/pymux#767."
         self._pop_up(record)
         self._emit(record)
-        found = self.pymux.window_of_pane(record.pane_id)
+        found = self.pymux.place_of_pane_id(record.pane_id)
         if found is None:
             return
         session, window, _pane = found

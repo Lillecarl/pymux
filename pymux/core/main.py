@@ -793,7 +793,7 @@ class Pymux:
 
     def show_pane(self, client_state: ClientState, pane: Pane) -> bool:
         "Move this client onto a pane, wherever it is. False when the pane is in no window."
-        found = self.window_of_pane(pane.pane_id)
+        found = self.place_of_pane_id(pane.pane_id)
         if found is None:
             return False
         session, window, _pane = found
@@ -832,7 +832,7 @@ class Pymux:
         When a client saw the window a notification came from, or None.
         One with no window to look at is seen now, so it goes in time.
         """
-        found = self.window_of_pane(record.pane_id)
+        found = self.place_of_pane_id(record.pane_id)
         if found is None:
             return time.time()
         session, window, _pane = found
@@ -1157,7 +1157,7 @@ class Pymux:
         place = self._place_of(pane)
         return None if place is None else place[0]
 
-    def window_of_pane(self, pane_id: PaneId | None):
+    def place_of_pane_id(self, pane_id: PaneId | None) -> tuple[Session, Window, Pane] | None:
         """
         The session, window and pane for a pane id, or None when the
         pane is gone. The hub jumps to a notification with this.

@@ -440,7 +440,7 @@ class WaylandServer:
         Lillecarl/pymux#636.
         """
         pane = self.panes.get(toplevel)
-        found = None if pane is None else self.pymux.window_of_pane(pane.pane_id)
+        found = None if pane is None else self.pymux.place_of_pane_id(pane.pane_id)
         if found is None:
             return 0
         session, window, _pane = found
@@ -492,13 +492,13 @@ class WaylandServer:
     def _cell_of(self, toplevel: int) -> tuple[int, int]:
         "The cell of the client a person used last of those watching the session that holds this window."
         pane = self.panes.get(toplevel)
-        found = None if pane is None else self.pymux.window_of_pane(pane.pane_id)
+        found = None if pane is None else self.pymux.place_of_pane_id(pane.pane_id)
         return self.pymux.terminals.cell_size(None if found is None else found[0])
 
     def _scale_of(self, toplevel: int, cell_height: int) -> float:
         "The scale the `wayland-scale` of the window holding this one names."
         pane = self.panes.get(toplevel)
-        found = None if pane is None else self.pymux.window_of_pane(pane.pane_id)
+        found = None if pane is None else self.pymux.place_of_pane_id(pane.pane_id)
         value = DEFAULT_WAYLAND_SCALE if found is None else found[1].options.wayland_scale
         return resolve_scale(value, cell_height)
 
@@ -659,7 +659,7 @@ class WaylandServer:
             if pacer is not None:
                 pacer.shown_by(drained, sent)
 
-        found = self.pymux.window_of_pane(PaneId(pane_id))
+        found = self.pymux.place_of_pane_id(PaneId(pane_id))
 
         return WindowView(
             pane_id=pane_id,

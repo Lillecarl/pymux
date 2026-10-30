@@ -379,7 +379,7 @@ class PaneMaker:
             that is active. A pane in no window -- an overlay, or one
             already gone -- stays as it is. Lillecarl/pymux#527.
             """
-            found = self.pymux.window_of_pane(pane.pane_id)
+            found = self.pymux.place_of_pane_id(pane.pane_id)
             if found is None:
                 return
             _, window, _ = found
@@ -421,7 +421,7 @@ class PaneMaker:
         session a person used last. None when there is no window to put
         it in. Lillecarl/pymux#620.
         """
-        found = None if beside is None else self.pymux.window_of_pane(beside.pane_id)
+        found = None if beside is None else self.pymux.place_of_pane_id(beside.pane_id)
         if found is not None:
             window = found[1]
         elif self.pymux.sessions:
@@ -465,7 +465,7 @@ class PaneMaker:
 
         def focus_pane_on_click() -> None:
             "Select this pane: the mouse went to it, as `_build_pane` does for a terminal."
-            found = self.pymux.window_of_pane(pane.pane_id)
+            found = self.pymux.place_of_pane_id(pane.pane_id)
             if found is not None:
                 found[1].active_pane = pane
                 with started_by(Origin.MOUSE):

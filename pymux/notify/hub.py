@@ -82,7 +82,7 @@ def rows_of(pymux: Pymux, records: list[Notification], text: str = "") -> list[H
     groups: dict[int | None, list[Notification]] = {}
     places: dict[int | None, tuple[Session | None, Window | None, Pane | None]] = {}
     for record in reversed(records):
-        found = pymux.window_of_pane(record.pane_id)
+        found = pymux.place_of_pane_id(record.pane_id)
         key = None if found is None else id(found[1])
         if key not in groups:
             groups[key] = []

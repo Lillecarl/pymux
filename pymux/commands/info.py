@@ -74,7 +74,7 @@ def _caller_tree(pymux: Pymux):
         return None
     if asking is None or not asking.temporary or asking.caller_pane_id is None:
         return None
-    found = pymux.window_of_pane(asking.caller_pane_id)
+    found = pymux.place_of_pane_id(asking.caller_pane_id)
     if found is None:
         return None
     session, window, pane = found
@@ -98,7 +98,7 @@ def _clients_tree(pymux: Pymux):
     clients = []
     for state in pymux.clients:
         pane = pymux.focused_pane_of(state)
-        found = pymux.window_of_pane(pane.pane_id) if pane is not None else None
+        found = pymux.place_of_pane_id(pane.pane_id) if pane is not None else None
         clients.append(
             {
                 "session_id": state.session.session_id,
