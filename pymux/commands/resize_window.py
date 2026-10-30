@@ -71,7 +71,7 @@ def resize_window(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     window = the_window(pymux, args.target_window)
 
-    now = cast(Size, pymux.plane_size(window))
+    now = cast(Size, pymux.planes.size(window))
 
     def number(given: str | None, instead: int):
         if given is None:

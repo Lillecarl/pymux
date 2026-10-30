@@ -298,7 +298,7 @@ class LayoutManager:
         smaller than the plane shows part of it and its view scrolls,
         which is what `window-size largest` is for.
         """
-        plane = cast(Size, self.pymux.plane_size())
+        plane = cast(Size, self.pymux.planes.size())
         mine = self.room_this_client_has
 
         return Size(

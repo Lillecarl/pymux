@@ -7,7 +7,7 @@ import os
 import time
 import weakref
 from collections import deque
-from collections.abc import Coroutine, Iterable, Sequence
+from collections.abc import Coroutine, Iterable
 from contextlib import asynccontextmanager, suppress
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
 
@@ -20,7 +20,6 @@ from prompt_toolkit.application.current import get_app, set_app
 from prompt_toolkit.clipboard import InMemoryClipboard
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.history import InMemoryHistory
-from ptterm import Terminal
 from ptyhost.backends.posix import GRACE, PosixBackend
 from ptyhost.ending import say_how_it_ends
 from pyte.keep import Keep
@@ -38,12 +37,10 @@ from .enums import (
     ForwardMode,
     OpenUrlTarget,
     RenderMode,
-    WindowSize,
     Woke,
 )
 from .error_notice import ErrorNotice
 from .forwarding import LOOPBACK_NAMES
-from .geometry import change_pane_size
 from .graphics import OuterImageIds
 from .hooks import Hooks
 from .ids import PaneId, SessionId, WindowIndex
@@ -67,17 +64,17 @@ from .options import (
 )
 from .outward import Outward
 from .panes import PaneMaker
+from .planes import Planes, remember_the_size_made_at
 from .portal import Portal
 from .rc import STARTUP_COMMANDS
 from .server import ServerConnection
 from .server_options import ServerOptions
 from .serving import Serving
-from .session import DEFAULT_SIZE, OwnOptions, Session
+from .session import OwnOptions, Session
 from .session_options import SessionOptions
 from .shims import Shims
 from .terminals import Terminals
 from .wayland import WaylandServer
-from .window_options import WindowOptions
 from .window_pane import WindowProcess, WindowScreen
 
 if TYPE_CHECKING:
@@ -108,63 +105,6 @@ DEFAULT_UPDATE_ENVIRONMENT = (
     "SSH_CONNECTION WAYLAND_DISPLAY WINDOWID XAUTHORITY XDG_CURRENT_DESKTOP "
     "XDG_SESSION_DESKTOP XDG_SESSION_TYPE"
 )
-
-
-def _any_of_them_wants_chrome(watchers: Iterable[ClientState]) -> bool:
-    """
-    Whether any of those clients is not in full screen.
-
-    **Nobody watching is yes**, which is the answer the plane was
-    measured with before `full-screen` belonged to a client. It is not
-    the obvious reading -- nothing draws a titlebar over a window
-    nobody looks at, so the plan reserves a row that stays empty -- and
-    changing it moves the size of every detached pane in the
-    collection: measured, and `pymux-vterm`, `pymux-alacritty` and
-    `pymux-pictures` all read a different screen. That is its own
-    question, and it is Lillecarl/pymux#474.
-    """
-    return not watchers or any(not one.options.full_screen for one in watchers)
-
-
-def _remember_the_size_made_at(window: Window, pane: Pane) -> None:
-    """
-    Keep the size a new window's one pane was given as the window's own
-    while nobody watches it. `size_with_no_client` gave the pane the
-    whole plane, so the two are the same number, and the window keeps it
-    whatever the clients do after. Lillecarl/pymux#817.
-    """
-    terminal = pane.terminal
-    assert isinstance(terminal, Terminal), "`_create_pane` builds a terminal pane"
-    window.size_when_made = Size(rows=terminal.screen.lines, columns=terminal.screen.columns)
-
-
-def _plane_of_clients(clients: Sequence[ClientState], rule: WindowSize) -> Size:
-    """
-    The plane those clients give a window under `window-size` `rule`,
-    less the status rows. `manual` without a size is `smallest`.
-
-    A client that attached with `-r` is left out of the size. **Unless
-    they all are** -- then they decide it between them, because the
-    alternative is a plane no terminal here can show. tmux does the
-    same, and for the same reason (`resize.c:95-107`).
-    Lillecarl/pymux#467.
-
-    **Every client, and not the ones that size it**, gives status rows.
-    A read-only client still draws its own status line, so the rows it
-    needs come off the plane even while its columns do not. The tallest
-    one decides: a phone whose window list wraps to three rows takes
-    three off everybody's plane, and the others draw background there.
-    Lillecarl/pymux#723.
-    """
-    sizing = [one for one in clients if not one.ignore_size] or list(clients)
-    if rule is WindowSize.LATEST:
-        size = max(sizing, key=lambda client: client.last_used).app.output.get_size()
-    else:
-        pick = max if rule is WindowSize.LARGEST else min
-        sizes = [client.app.output.get_size() for client in sizing]
-        size = Size(rows=pick(one.rows for one in sizes), columns=pick(one.columns for one in sizes))
-    status_rows = max(one.layout_manager.status.rows() for one in clients)
-    return Size(rows=size.rows - status_rows, columns=size.columns)
 
 
 class Asker(NamedTuple):
@@ -266,6 +206,7 @@ class Pymux:
         "notifier": Keep.REBUILT,
         "panes": Keep.REBUILT,
         "serving": Keep.REBUILT,
+        "planes": Keep.REBUILT,
         # The running server.
         "connections": Keep.DROPPED,
         "tasks": Keep.DROPPED,
@@ -370,6 +311,7 @@ class Pymux:
         self.connections = []
 
         self.terminals = Terminals(self)
+        self.planes = Planes(self)
         self.serving = Serving(self)
         self.panes = PaneMaker(self)
         self.outward = Outward(self)
@@ -813,46 +755,6 @@ class Pymux:
         except ValueError:
             return False
 
-    def _anyone_is_full_screen(self) -> bool:
-        """
-        Whether any client of this server wants no chrome.
-
-        **The cheap half of the plane's question.** Until somebody asks
-        for full screen the answer below is the server's option, and no
-        window has to be walked for it. `clients_watching` sets the
-        application of every client and asks which window it is on, and
-        a plan asks the question four times per pane: measured at +128
-        bytecode instructions each, which `checks.pymux-frame` read as
-        10% of a one-pane window's neighbour cost.
-        Lillecarl/pymux#471.
-        """
-        return any(one.options.full_screen for one in self._client_states.values())
-
-    def any_watcher_shows_pane_status(self, window: Window | None = None) -> bool:
-        """
-        Whether any client watching that window draws the titlebar of a
-        pane.
-
-        **This is the plane's question, and `show_pane_status` is
-        not.** The plane is one size for every client watching a
-        window, because a pane has one pty, so it keeps the rows the
-        chrome of any watcher needs and a client that dropped its own
-        draws background in them. The other way round -- a plane that
-        grew when the last client with chrome turned it off -- resizes
-        everybody's programs because somebody else changed their mind.
-        `plane_size` asks the same of the status line.
-
-        **Nobody watching is yes**, which is what the plane was
-        measured with before this question existed.
-        `_any_of_them_wants_chrome` says why it is not the other
-        answer. Lillecarl/pymux#471.
-        """
-        session = self.session_of_window(window) if window is not None else None
-        wanted = (session or self.current_session).options.pane_border_status
-        if not self._anyone_is_full_screen():
-            return wanted
-        return wanted and _any_of_them_wants_chrome(self.clients_watching(window))
-
     def refresh_what_time_moves(self, but_not: Application[Any] | None = None) -> None:
         """
         Ask for a frame from each client whose screen moved by itself.
@@ -1207,87 +1109,6 @@ class Pymux:
             return "%s - Pymux" % (title,)
         return "Pymux"
 
-    def plane_size(self, window: Window | None = None) -> Size:
-        """
-        How big the plane of that window is, in cells.
-
-        **A plane is shared and a view is not.** A pane has one pty, so
-        it has one size however many clients look at it (decision 10 of
-        `docs/layout-engine-plan.md`), and this is that one size. A
-        client bigger than the plane draws background around it, and a
-        client smaller than it moves its view over it.
-
-        **The window's `window-size` option decides which client.**
-        `smallest` is the default and what pymux always did; `largest`
-        gives the plane to the biggest client watching, `latest` to
-        whoever used one last, and `manual` to nobody. tmux has the
-        same four, and leaves a client too small to see the whole
-        window stuck at the top left of it; here that client moves its
-        view instead.
-
-        The status line comes off the bottom of a client's terminal,
-        because it is not part of any window.
-        `geometry.room_for_panes` takes the rows the chrome
-        around the panes wants off what is left. **A manual size is
-        already the window's own**, so nothing comes off it.
-
-        **Nobody watching is the session's `default_size`**, and no
-        status row comes off it. A window exists before a client
-        attaches to it, and the program in a pane needs a size from the
-        first byte it writes. `new-session -x -y` is what names that
-        size. Lillecarl/pymux#459.
-
-        **A session nobody named a size for takes the clients' size**,
-        by the same `window-size` rule, once: when the window is made.
-        An agent's window is then the size the person's would be, and a
-        program in it is never resized behind its back.
-        Lillecarl/pymux#817.
-        """
-        if window is None:
-            window = self.arrangement.get_active_window()
-        if window is None:
-            return self.size_with_no_client(None)
-
-        if window.options.window_size is WindowSize.MANUAL and window.manual_size is not None:
-            return window.manual_size
-
-        watchers = self.clients_watching(window)
-
-        if not watchers:
-            return self.size_with_no_client(self.session_showing(window), window)
-
-        return _plane_of_clients(watchers, window.options.window_size)
-
-    def size_with_no_client(self, session: Session | None, window: Window | None = None) -> Size:
-        """
-        How big a window of that session is while nobody is watching it.
-
-        The size `new-session -x -y` named, when it named one. Otherwise
-        the size the window took when it was made, and for a window
-        being made, what the clients give it now (`size_for_a_new_window`).
-        """
-        if session is not None and session.default_size is not None:
-            return session.default_size
-        if window is not None and window.size_when_made is not None:
-            return window.size_when_made
-        return self.size_for_a_new_window(session)
-
-    def size_for_a_new_window(self, session: Session | None) -> Size:
-        """
-        What the clients on the server give a window made now, by the
-        `window-size` a new window of that session starts with
-        (`set-window-option -g`). With no client at all, the same two
-        numbers tmux answers.
-        """
-        clients = self.clients
-        if not clients:
-            return DEFAULT_SIZE
-        defaults = session.arrangement.window_defaults if session is not None else {}
-        rule = defaults.get("window_size")
-        if not isinstance(rule, WindowSize):
-            rule = WindowOptions().window_size
-        return _plane_of_clients(clients, rule)
-
     def session_showing(self, window: Window) -> Session | None:
         "The session whose windows hold this one, or None when it is gone."
         for session in self.sessions:
@@ -1496,7 +1317,7 @@ class Pymux:
             session = self.current_session
 
         pane = await self.panes.create_pane(session=session, job=job)
-        _remember_the_size_made_at(session.arrangement.create_window(pane, name="job %d" % job.job_id), pane)
+        remember_the_size_made_at(session.arrangement.create_window(pane, name="job %d" % job.job_id), pane)
         if session is self.current_session:
             pane.focus()
         self.invalidate(Woke.WINDOW_OPENED)
@@ -1663,42 +1484,6 @@ class Pymux:
         if pane is None:
             return 0
         return pane.screen.kitty_keyboard_flags
-
-    def resize_pane_for_program(self, pane: Pane, lines: int | None, columns: int | None) -> None:
-        """
-        Give a pane the size that the program inside it asks for.
-
-        Three sequences ask: DECSLPP, and the two forms of a window
-        resize. xterm has one window and does as it is told. A pane
-        does not: it sits in a layout, and making one pane taller makes
-        another shorter. So a program only gets its way when the person
-        says it may, with "set-option allow-program-resize on".
-
-        The layout holds weights and not cells, and a weight of one is
-        about one cell, so the change is what "resize-pane" would do.
-        The other panes give up the room, and the size of the window
-        holds. So a pane cannot ask for more than there is.
-
-        Never raises: this runs on the read path of a pane, and one
-        sequence may not stop it.
-        """
-        if not self.options_of_pane(pane).allow_program_resize:
-            return
-
-        try:
-            window = self._window_holding(pane)
-            if window is None:
-                return
-
-            process = pane.process
-            if lines is not None and process.sy:
-                change_pane_size(self, window, pane, down=lines - process.sy)
-            if columns is not None and process.sx:
-                change_pane_size(self, window, pane, right=columns - process.sx)
-
-            self.invalidate(Woke.PANE_RESIZED)
-        except Exception:
-            logger.exception("Failed to resize a pane for the program in it.")
 
     def _place_of(self, pane: Pane) -> tuple[Session, Window] | None:
         "The session and window that hold this pane, or None when it is gone."
@@ -2044,7 +1829,7 @@ class Pymux:
         )
 
         window = session.arrangement.create_window(pane, name=name, index=index)
-        _remember_the_size_made_at(window, pane)
+        remember_the_size_made_at(window, pane)
         if session is asked_for:
             pane.focus()
         self.invalidate(Woke.WINDOW_OPENED)

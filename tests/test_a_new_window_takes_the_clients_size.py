@@ -46,8 +46,8 @@ async def test_a_detached_window_is_the_size_of_the_client(pymux):
 
         # The client's terminal, less its status line.
         status_rows = pymux.clients[0].layout_manager.status.rows()
-        assert pymux.plane_size(window).columns == COLUMNS
-        assert pymux.plane_size(window).rows == ROWS - status_rows
+        assert pymux.planes.size(window).columns == COLUMNS
+        assert pymux.planes.size(window).rows == ROWS - status_rows
         assert pane.process.sx == COLUMNS
 
 
@@ -66,13 +66,13 @@ async def test_a_client_that_resizes_later_leaves_the_window_alone(pymux):
         await shows(session, "$")
         await new_session(pymux)
         window, pane = agents_pane(pymux)
-        before = pymux.plane_size(window)
+        before = pymux.planes.size(window)
 
         session.resize(ROWS + 8, COLUMNS + 20)
         connection = pymux.connections[-1]
         await once(lambda: connection.size.columns == COLUMNS + 20, 10.0, "the server never took the new size")
 
-        assert pymux.plane_size(window) == before
+        assert pymux.planes.size(window) == before
         assert pane.process.sx == COLUMNS
 
 
@@ -86,4 +86,4 @@ async def test_a_window_made_after_the_resize_takes_the_new_size(pymux):
         await new_session(pymux)
         window, _pane = agents_pane(pymux)
 
-        assert pymux.plane_size(window).columns == COLUMNS + 20
+        assert pymux.planes.size(window).columns == COLUMNS + 20

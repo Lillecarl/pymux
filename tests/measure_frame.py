@@ -174,8 +174,10 @@ class _Pymux:
 
     def __init__(self) -> None:
         self.state = None
+        #: The plane's questions are this stub's own answers.
+        self.planes = self
 
-    def plane_size(self, window=None) -> Size:
+    def size(self, window=None) -> Size:
         return Size(rows=ROWS, columns=COLUMNS)
 
     def any_watcher_shows_pane_status(self, window=None) -> bool:

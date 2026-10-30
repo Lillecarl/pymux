@@ -129,7 +129,7 @@ async def test_the_plane_of_a_window_nobody_watches_is_that_size(pymux):
     session, _pane = one_pane(pymux)
     window = session.arrangement.windows[0]
 
-    assert pymux.plane_size(window) == session.default_size
+    assert pymux.planes.size(window) == session.default_size
 
 
 async def test_a_pane_split_off_later_is_the_same_size(pymux):
@@ -148,7 +148,7 @@ async def test_each_session_has_its_own(pymux):
     await new_session(pymux, "-s", "narrow")
 
     sizes = {
-        session.name: pymux.plane_size(session.arrangement.windows[0])
+        session.name: pymux.planes.size(session.arrangement.windows[0])
         for session in pymux.sessions
         if session.name in ("wide", "narrow")
     }
@@ -306,7 +306,7 @@ async def test_a_window_of_a_detached_session_can_be_resized(pymux):
     window = window_of(pymux)
 
     assert resize_window(pymux, *named(window), "-x", "200", "-y", "50") == []
-    assert pymux.plane_size(window) == Size(rows=50, columns=200)
+    assert pymux.planes.size(window) == Size(rows=50, columns=200)
 
 
 async def test_the_new_size_reaches_the_program(pymux):
@@ -364,7 +364,7 @@ async def test_the_titlebar_row_comes_out_of_the_size_that_was_named(pymux):
 
     resize_window(pymux, *named(window), "-x", "200", "-y", "50")
 
-    assert pymux.plane_size(window).rows == 50
+    assert pymux.planes.size(window).rows == 50
     assert size_of(window.panes[0]) == (200, 49)
 
 
@@ -375,4 +375,4 @@ async def test_a_nudge_counts_from_the_size_that_window_has(pymux):
 
     resize_window(pymux, *named(window), "-R", "10", "-D", "5")
 
-    assert pymux.plane_size(window) == Size(rows=35, columns=110)
+    assert pymux.planes.size(window) == Size(rows=35, columns=110)

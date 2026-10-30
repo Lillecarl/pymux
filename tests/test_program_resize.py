@@ -72,7 +72,7 @@ def _rows(pymux, window):
 def test_pane_keeps_its_size_while_option_is_off():
     pymux, window, first, _second = _pymux(allow=False)
     before = _weights(window)
-    pymux.resize_pane_for_program(first, 40, None)
+    pymux.planes.resize_pane_for_program(first, 40, None)
     assert _weights(window) == before
 
 
@@ -82,7 +82,7 @@ def test_taller_pane_takes_room_from_its_neighbour():
 
     # The program holds 24 lines and asks for 30, so it asks for six
     # more than it has, and its neighbour gives up exactly those six.
-    pymux.resize_pane_for_program(first, 30, None)
+    pymux.planes.resize_pane_for_program(first, 30, None)
 
     after = _rows(pymux, window)
     assert after == [before[0] + 6, before[1] - 6]
@@ -93,7 +93,7 @@ def test_shorter_pane_gives_room_back():
     pymux, window, first, _second = _pymux(allow=True)
     before = _rows(pymux, window)
 
-    pymux.resize_pane_for_program(first, 20, None)
+    pymux.planes.resize_pane_for_program(first, 20, None)
 
     after = _rows(pymux, window)
     assert after == [before[0] - 4, before[1] + 4]
@@ -104,7 +104,7 @@ def test_side_program_left_alone_does_not_move():
     "DECSLPP names the lines, and says nothing about the columns."
     pymux, window, first, _second = _pymux(allow=True)
     before = _weights(window)
-    pymux.resize_pane_for_program(first, None, None)
+    pymux.planes.resize_pane_for_program(first, None, None)
     assert _weights(window) == before
 
 
@@ -112,12 +112,12 @@ def test_pane_that_is_gone_changes_nothing():
     "A program can ask after its pane has been closed."
     pymux, window, _first, _second = _pymux(allow=True)
     before = _weights(window)
-    pymux.resize_pane_for_program(Pane(terminal=_FakeTerminal()), 40, None)
+    pymux.planes.resize_pane_for_program(Pane(terminal=_FakeTerminal()), 40, None)
     assert _weights(window) == before
 
 
 def test_pane_never_loses_its_last_row():
     "A pane that asks for everything still leaves its neighbour a line."
     pymux, window, first, _second = _pymux(allow=True)
-    pymux.resize_pane_for_program(first, 10000, None)
+    pymux.planes.resize_pane_for_program(first, 10000, None)
     assert min(_rows(pymux, window)) >= 1

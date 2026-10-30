@@ -119,7 +119,7 @@ def bar_below_is_drawn(pymux: Pymux, window: arrangement.Window) -> bool:
 
 def _the_plane_keeps_a_bar_below(pymux: Pymux, window: arrangement.Window) -> bool:
     "The same rows, asked of every client watching. Lillecarl/pymux#471."
-    return pymux.any_watcher_shows_pane_status(window) and not window.zoom and window.has_stack()
+    return pymux.planes.any_watcher_shows_pane_status(window) and not window.zoom and window.has_stack()
 
 
 def gaps_of(pymux: Pymux, window: arrangement.Window) -> Gaps:
@@ -159,10 +159,10 @@ def room_for_panes(pymux: Pymux, window: arrangement.Window) -> Size:
     plan of its own and resizing everybody's programs.
     Lillecarl/pymux#471.
     """
-    size = cast(Size, pymux.plane_size(window))
+    size = cast(Size, pymux.planes.size(window))
 
     rows = size.rows
-    if pymux.any_watcher_shows_pane_status(window):
+    if pymux.planes.any_watcher_shows_pane_status(window):
         rows -= 1
     if _the_plane_keeps_a_bar_below(pymux, window):
         rows -= 1

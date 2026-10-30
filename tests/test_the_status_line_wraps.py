@@ -116,7 +116,7 @@ async def test_windows_that_fit_take_one_row():
         state = await with_windows(session, DESK)
 
         assert state.layout_manager.status.rows() == 1
-        assert session.pymux.plane_size().rows == DESK.rows - 1
+        assert session.pymux.planes.size().rows == DESK.rows - 1
 
 
 async def test_windows_that_do_not_fit_take_more_rows():
@@ -126,7 +126,7 @@ async def test_windows_that_do_not_fit_take_more_rows():
         rows = state.layout_manager.status.rows()
         assert rows > 1
         assert state.layout_manager.room_this_client_has.rows == PHONE.rows - rows
-        assert session.pymux.plane_size().rows == PHONE.rows - rows
+        assert session.pymux.planes.size().rows == PHONE.rows - rows
 
 
 async def test_every_window_is_drawn_whole():
@@ -158,7 +158,7 @@ async def test_status_max_rows_caps_it():
         set_option(session.pymux, state, "status-max-rows", "1")
 
         assert state.layout_manager.status.rows() == 1
-        assert session.pymux.plane_size().rows == PHONE.rows - 1
+        assert session.pymux.planes.size().rows == PHONE.rows - 1
 
 
 async def test_full_screen_takes_none():
@@ -167,7 +167,7 @@ async def test_full_screen_takes_none():
         set_option(session.pymux, state, "full-screen", "on")
 
         assert state.layout_manager.status.rows() == 0
-        assert session.pymux.plane_size().rows == PHONE.rows
+        assert session.pymux.planes.size().rows == PHONE.rows
 
 
 async def test_a_message_sits_on_the_row_above_the_status_line():
@@ -191,7 +191,7 @@ async def test_the_wide_client_sizes_nothing_for_the_narrow_one():
         phone = await with_windows(session, PHONE)
         await session.attach("desk", Size(rows=PHONE.rows, columns=DESK.columns))
 
-        assert session.pymux.plane_size().rows == PHONE.rows - phone.layout_manager.status.rows()
+        assert session.pymux.planes.size().rows == PHONE.rows - phone.layout_manager.status.rows()
 
 
 async def test_the_plane_is_the_same_whichever_client_asks():
@@ -206,8 +206,8 @@ async def test_the_plane_is_the_same_whichever_client_asks():
         desk, _ = await session.attach("desk", Size(rows=PHONE.rows, columns=DESK.columns))
 
         with set_app(phone.app):
-            from_the_phone = session.pymux.plane_size()
+            from_the_phone = session.pymux.planes.size()
         with set_app(desk.app):
-            from_the_desk = session.pymux.plane_size()
+            from_the_desk = session.pymux.planes.size()
 
         assert from_the_phone == from_the_desk

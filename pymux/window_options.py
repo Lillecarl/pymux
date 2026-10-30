@@ -45,7 +45,7 @@ def _freeze_manual(pymux: Pymux, window: Window) -> None:
     # not "pick a size for me", and tmux does the same. `resize-window`
     # is how a size is named.
     if window.options.window_size is WindowSize.MANUAL and window.manual_size is None:
-        window.manual_size = pymux.plane_size(window)
+        window.manual_size = pymux.planes.size(window)
 
 
 def _frame_rate_chosen(pymux: Pymux, window: Window) -> None:

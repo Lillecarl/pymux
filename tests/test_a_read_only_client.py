@@ -352,7 +352,7 @@ async def test_a_read_only_client_does_not_shrink_the_plane():
         watching, _ = await session.attach("watching", SMALL)
         watching.ignore_size = True
 
-        assert pymux.plane_size().columns == BIG.columns
+        assert pymux.planes.size().columns == BIG.columns
 
 
 async def test_without_the_flag_the_small_client_still_wins():
@@ -363,7 +363,7 @@ async def test_without_the_flag_the_small_client_still_wins():
         await session.attach("working", BIG)
         await session.attach("watching", SMALL)
 
-        assert pymux.plane_size().columns == SMALL.columns
+        assert pymux.planes.size().columns == SMALL.columns
 
 
 async def test_a_read_only_client_on_its_own_still_sizes_the_plane():
@@ -378,7 +378,7 @@ async def test_a_read_only_client_on_its_own_still_sizes_the_plane():
         watching, _ = await session.attach("watching", SMALL)
         watching.ignore_size = True
 
-        assert pymux.plane_size().columns == SMALL.columns
+        assert pymux.planes.size().columns == SMALL.columns
 
 
 async def test_a_command_from_a_pane_is_nobody_and_is_not_refused():

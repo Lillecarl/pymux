@@ -193,7 +193,7 @@ class PaneMaker:
             # It showed as `capture-pane -p` printing one character per line,
             # while `-J` read correctly because it joins wrapped rows back
             # together. Lillecarl/pymux#321.
-            size = self.pymux.size_with_no_client(session, window)
+            size = self.pymux.planes.size_with_no_client(session, window)
             terminal_control.set_size(size.columns, size.rows)
             # A program starts watched, so that panes in detached
             # sessions also run and produce output. (Like tmux does.) A
@@ -287,7 +287,7 @@ class PaneMaker:
 
         def resize(lines: int | None, columns: int | None) -> None:
             "Give a pane the size that the program inside it asks for."
-            self.pymux.resize_pane_for_program(pane, lines, columns)
+            self.pymux.planes.resize_pane_for_program(pane, lines, columns)
 
         def may_resize() -> bool:
             """

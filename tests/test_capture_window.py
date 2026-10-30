@@ -92,7 +92,7 @@ async def test_the_picture_is_the_window_at_the_cell_it_was_given():
                 "-t",
                 "@%d" % window.window_id,
             )
-            plane = mux.plane_size(window)
+            plane = mux.planes.size(window)
     finally:
         kill_all(mux)
     assert not errors, errors

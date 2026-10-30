@@ -34,7 +34,7 @@ from pymux.options import ALL_CLIENT_OPTIONS, ALL_OPTIONS, SetOptionError
 BIG = Size(rows=24, columns=100)
 SMALL = Size(rows=12, columns=40)
 
-#: A window. `plane_size` answers the session's default size while
+#: A window. `Planes.size` answers the session's default size while
 #: nobody watches, so the sizing tests need a client and a window.
 #: **The program stays.** One that ends at once takes its window with
 #: it, and a test that asks a moment later reads the default size.
@@ -113,11 +113,11 @@ async def test_the_status_line_costs_a_row_and_full_screen_gives_it_back():
         await pymux.create_window(NOTHING)
         state, _ = await session.attach("only", BIG)
 
-        with_chrome = pymux.plane_size().rows
+        with_chrome = pymux.planes.size().rows
         set_option(pymux, state, "full-screen", "on")
 
-        assert pymux.plane_size().rows == with_chrome + 1
-        assert pymux.plane_size().rows == BIG.rows
+        assert pymux.planes.size().rows == with_chrome + 1
+        assert pymux.planes.size().rows == BIG.rows
 
 
 # ----------------------------------------------------------------------
@@ -151,7 +151,7 @@ async def test_the_plane_keeps_the_row_the_other_client_needs():
     async with in_this_process() as session:
         working, watching = await _one_of_each(session)
 
-        assert session.pymux.plane_size().rows == BIG.rows - 1
+        assert session.pymux.planes.size().rows == BIG.rows - 1
 
 
 async def test_the_plane_gives_the_row_back_when_the_last_one_goes():
@@ -159,7 +159,7 @@ async def test_the_plane_gives_the_row_back_when_the_last_one_goes():
         working, watching = await _one_of_each(session)
         set_option(session.pymux, working, "full-screen", "on")
 
-        assert session.pymux.plane_size().rows == BIG.rows
+        assert session.pymux.planes.size().rows == BIG.rows
 
 
 async def test_a_full_screen_client_still_sizes_the_plane():
@@ -170,7 +170,7 @@ async def test_a_full_screen_client_still_sizes_the_plane():
         watching, _ = await session.attach("watching", SMALL)
         set_option(session.pymux, watching, "full-screen", "on")
 
-        assert session.pymux.plane_size().columns == SMALL.columns
+        assert session.pymux.planes.size().columns == SMALL.columns
 
 
 # ----------------------------------------------------------------------

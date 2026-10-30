@@ -195,7 +195,7 @@ async def test_plan_uses_size_window_was_given():
         await create_row_of_panes(pymux, count=1)
         draw()
 
-        assert pymux.plane_size() == Size(rows=ROWS - 1, columns=COLUMNS)
+        assert pymux.planes.size() == Size(rows=ROWS - 1, columns=COLUMNS)
 
 
 # ----------------------------------------------------------------------
