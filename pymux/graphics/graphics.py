@@ -355,10 +355,7 @@ class ClientGraphics:
         "What the outer terminal can colour a cell with."
         if self._color_depth is None:
             return ColorDepth.DEPTH_24_BIT
-        try:
-            return self._color_depth()
-        except Exception:
-            return ColorDepth.DEPTH_24_BIT
+        return self._color_depth()
 
     def write_in_place(self, commands: str) -> None:
         "Write `commands` with the cursor saved around them, and send them."
