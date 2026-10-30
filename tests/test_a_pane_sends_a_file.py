@@ -36,7 +36,7 @@ from pymux.downloads import (
     multipart_sequences,
     route_of,
 )
-from pymux.entry_points.run_pymux import Mode, parse_arguments
+from pymux.entry_points.arguments import Mode, parse_arguments
 from pymux.enums import FileTransfer
 from pymux.files import ArrivingFiles, Whole, safe_name, save
 from pymux.notify.osc import extension_key_of

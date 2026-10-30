@@ -89,16 +89,16 @@ def test_flag_and_option_take_same_words():
     One list, so a person cannot learn one spelling and be refused the
     other.
     """
-    from pymux.entry_points.run_pymux import _build_parser, _how_much_to_log
+    from pymux.entry_points.arguments import _build_parser, how_much_to_log
 
     for name, level in log.LEVELS.items():
-        assert _how_much_to_log(name) == level
+        assert how_much_to_log(name) == level
 
     action = next(one for one in _build_parser()._actions if one.dest == "log_level")
     assert sorted(action.choices) == sorted(log.LEVELS)
 
 
 def test_no_flag_means_info():
-    from pymux.entry_points.run_pymux import _how_much_to_log
+    from pymux.entry_points.arguments import how_much_to_log
 
-    assert _how_much_to_log(None) == logging.INFO
+    assert how_much_to_log(None) == logging.INFO

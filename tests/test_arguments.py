@@ -16,7 +16,8 @@ from __future__ import annotations
 
 import pytest
 
-from pymux.entry_points.run_pymux import Attaching, Mode, _flag_args, parse_arguments
+from pymux.entry_points.arguments import Mode, parse_arguments
+from pymux.entry_points.run_pymux import Attaching, _flag_args
 
 
 def parse(*argv):

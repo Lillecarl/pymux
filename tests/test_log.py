@@ -24,7 +24,7 @@ import sys
 import pytest
 
 from pymux import log
-from pymux.entry_points.run_pymux import _how_much_to_log
+from pymux.entry_points.arguments import how_much_to_log
 
 
 @pytest.fixture(autouse=True)
@@ -209,13 +209,13 @@ def test_log_says_where_it_went(tmp_path):
 
 
 def test_level_nobody_named_is_info():
-    assert _how_much_to_log(None) == logging.INFO
-    assert _how_much_to_log("") == logging.INFO
+    assert how_much_to_log(None) == logging.INFO
+    assert how_much_to_log("") == logging.INFO
 
 
 def test_person_debugging_asks_for_it():
-    assert _how_much_to_log(log.LogLevel.DEBUG) == logging.DEBUG
-    assert _how_much_to_log(log.LogLevel.WARNING) == logging.WARNING
+    assert how_much_to_log(log.LogLevel.DEBUG) == logging.DEBUG
+    assert how_much_to_log(log.LogLevel.WARNING) == logging.WARNING
 
 
 def test_frame_is_not_logged_at_info():
