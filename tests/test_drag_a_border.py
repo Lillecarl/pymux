@@ -18,7 +18,7 @@ from session import DEFAULT_SIZE, create_session, once, over_connection
 
 from pymux import layout
 from pymux.actions import Kind
-from pymux.layout import pane_write_positions
+from pymux.pane_container import pane_write_positions
 from pymux.plan_container import LineHandler
 
 PRESS, DRAG = 0, 32
