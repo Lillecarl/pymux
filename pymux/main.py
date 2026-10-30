@@ -2524,10 +2524,19 @@ class Pymux:
         self._focused_panes = focused
 
     def _panes_in_sight(self) -> set[PaneId]:
-        "The panes of every window a client shows on a terminal that has the focus."
+        """
+        The panes of every window a client shows on a terminal that has the focus.
+
+        Not while the window chooser is open: it switches to each window
+        it points at, as a preview, and a window walked past is not seen.
+        """
         shown: set[PaneId] = set()
         for client_state in self._client_states.values():
-            if client_state.terminal_focused and not client_state.temporary:
+            if (
+                client_state.terminal_focused
+                and not client_state.temporary
+                and client_state.chooser is not Chooser.WINDOW
+            ):
                 window = client_state.session.arrangement.get_active_window_for(client_state.app)
                 if window is not None:
                     shown.update(pane.pane_id for pane in window.panes)

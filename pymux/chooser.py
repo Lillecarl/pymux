@@ -351,6 +351,8 @@ class ChooserView:
             session, window = going_back
             if window in session.arrangement.windows:
                 self.show_window(window)
+        # What the chooser left on screen is seen now.
+        self.pymux.sync_pane_focus()
 
     def display_box_chooser(self, kind: Chooser) -> None:
         """

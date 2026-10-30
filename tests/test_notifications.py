@@ -497,6 +497,30 @@ async def test_a_look_at_the_window_closes_its_notification_on_the_terminal():
         assert [each for each in sent if "p=close" in each] == ["\x1b]99;i=1:p=close;\x1b\\"]
 
 
+async def test_the_window_chooser_closes_only_what_was_chosen():
+    "Its preview switches to each window it points at, and that is no look."
+    async with create_session() as (pymux, state):
+        (connection,) = [each for each, value in pymux._client_states.items() if value is state]
+        connection.notification_actions = frozenset({"report"})
+        connection.notification_closes = True
+        sent = []
+        connection.forward_osc = sent.append
+        chooser = state.layout_manager.chooser
+        with set_app(state.app):
+            first = pymux.current_session.arrangement.get_active_window()
+            await run_as(pymux, state, "new-window")
+            state.terminal_focused = False
+            pymux.forward_osc(first.active_pane, "99", "i=a;Built")
+            state.terminal_focused = True
+            await run_as(pymux, state, "choose-window")
+            chooser.point_at(chooser.chooser_matches().index(first))
+            pymux.sync_pane_focus()
+            assert not [each for each in sent if "p=close" in each]
+
+            chooser.choose_pointed_window()
+        assert [each for each in sent if "p=close" in each] == ["\x1b]99;i=1:p=close;\x1b\\"]
+
+
 async def test_a_window_in_sight_sends_no_notification_out():
     """
     The person sees the window already. A terminal without the focus
