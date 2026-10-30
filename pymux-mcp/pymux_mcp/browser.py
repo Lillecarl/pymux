@@ -714,11 +714,24 @@ async def _centre(page: Page, element: str) -> tuple[float, float]:
     return box["x"], box["y"]
 
 
-async def click(page: Page, ref: str | None, selector: str | None) -> dict[str, float]:
-    x, y = await _centre(page, await _element(page, ref, selector))
+async def click(
+    page: Page, ref: str | None, selector: str | None, at_point: tuple[float, float] | None = None
+) -> dict[str, Any]:
+    "Click an element at its centre, or a point of the viewport, and answer what the click hit."
+    if at_point is None:
+        x, y = await _centre(page, await _element(page, ref, selector))
+    elif ref is not None or selector is not None:
+        raise ValueError("click an element or a point, not both")
+    else:
+        x, y = at_point
+    # Before the click, which may take the element away.
+    try:
+        hit = await at(page, x, y)
+    except LookupError:
+        hit = {"x": x, "y": y}
     for kind in ("mouseMoved", "mousePressed", "mouseReleased"):
         await page.send("Input.dispatchMouseEvent", {"type": kind, "x": x, "y": y, "button": "left", "clickCount": 1})
-    return {"x": x, "y": y}
+    return hit
 
 
 async def type_text(page: Page, text: str, ref: str | None, selector: str | None, clear: bool) -> None:

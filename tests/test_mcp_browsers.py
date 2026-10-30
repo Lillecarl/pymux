@@ -264,6 +264,13 @@ async def test_a_point_on_the_picture_names_the_element_there(server):
 
         with pytest.raises(LookupError, match="nothing the page names"):
             await call(server, "browser.at", name="probe", x=view["clientWidth"] - 5, y=view["clientHeight"] - 5)
+
+        # A click at the same point of the picture hits the button.
+        hit = await call(server, "browser.click", name="probe", x=x * scale, y=y * scale, of=list(size))
+        assert hit["ref"] == button.ref, hit
+        assert await call(server, "browser.evaluate", name="probe", expression="document.title") == "done"
+        with pytest.raises(ValueError, match="both"):
+            await call(server, "browser.click", name="probe", x=x)
     finally:
         await call(server, "browser.close", name="probe")
 

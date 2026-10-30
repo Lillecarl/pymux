@@ -788,11 +788,25 @@ async def browser_at(
 
 @operation("browser.click")
 async def browser_click(
-    server: Server, name: BrowserName = "browser", ref: Ref = None, selector: Selector = None, tab: Tab = None
+    server: Server,
+    name: BrowserName = "browser",
+    ref: Ref = None,
+    selector: Selector = None,
+    x: Annotated[float | None, Field(description="A point to click instead, across; with `y`.")] = None,
+    y: Annotated[float | None, Field(description="Down; with `x`.")] = None,
+    of: Of = None,
+    tab: Tab = None,
 ) -> Json:
-    "Click an element, named by a ref or a CSS selector, at its centre."
+    """
+    Click an element, named by a ref or a CSS selector, at its centre;
+    or a point, read off `browser.screenshot`. Answers what the click
+    hit.
+    """
+    if (x is None) != (y is None):
+        raise ValueError("a point takes both `x` and `y`")
     async with browser.tab(server, name, tab) as page:
-        return await browser.click(page, ref, selector)
+        at_point = None if x is None or y is None else await browser.point(page, x, y, of)
+        return await browser.click(page, ref, selector, at_point)
 
 
 @operation("browser.type")
