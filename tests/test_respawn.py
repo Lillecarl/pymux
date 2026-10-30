@@ -129,13 +129,13 @@ async def test_respawn_restarts_in_reported_directory():
             pane.current_directory = "/tmp"
 
             seen = {}
-            real_create_pane = pymux._create_pane
+            real_create_pane = pymux.panes.create_pane
 
             async def spy(*args, **kwargs):
                 seen.update(kwargs)
                 return await real_create_pane(*args, **kwargs)
 
-            pymux._create_pane = spy
+            pymux.panes.create_pane = spy
             await respawn_pane(
                 pymux,
                 argparse.Namespace(k=True, target_pane=None, command="sleep 30"),
@@ -149,13 +149,13 @@ async def test_respawn_without_report_starts_nowhere_special():
     async with create_session() as (pymux, state):
         with set_app(state.app):
             seen = {}
-            real_create_pane = pymux._create_pane
+            real_create_pane = pymux.panes.create_pane
 
             async def spy(*args, **kwargs):
                 seen.update(kwargs)
                 return await real_create_pane(*args, **kwargs)
 
-            pymux._create_pane = spy
+            pymux.panes.create_pane = spy
             await respawn_pane(
                 pymux,
                 argparse.Namespace(k=True, target_pane=None, command="sleep 30"),

@@ -872,7 +872,7 @@ def _adopted(pymux: Pymux, takeover: Takeover, program: Program, on_done: Callab
     made. Nothing starts until `start`.
     """
     backend = takeover.pane(program)
-    return _thawed(pymux, program, pymux._build_pane(backend=backend, on_done=on_done))
+    return _thawed(pymux, program, pymux.panes.build_pane(backend=backend, on_done=on_done))
 
 
 def _viewer(pymux: Pymux, row: ViewerRow) -> Pane:
@@ -880,10 +880,10 @@ def _viewer(pymux: Pymux, row: ViewerRow) -> Pane:
     job = pymux.jobs.get(JobId(row.job_id))
     if job is None:
         raise SnapshotError("pane %d views job %d, which the snapshot does not hold" % (row.pane_id, row.job_id))
-    pane = pymux._build_viewer(job)
+    pane = pymux.panes.build_viewer(job)
     pane.pane_id = PaneId(row.pane_id)
     _terminal(pane).terminal_control.set_size(row.pane_width, row.pane_height)
-    pymux._register_pane(pane)
+    pymux.panes.register_pane(pane)
     return pane
 
 
@@ -894,7 +894,7 @@ def _thawed(pymux: Pymux, program: Program, pane: Pane) -> Pane:
     thaw(program.screen, control.screen)
     # After the screen: the replay of an open sequence reaches it.
     thaw(program.stream, control.stream)
-    pymux._register_pane(pane)
+    pymux.panes.register_pane(pane)
     return pane
 
 

@@ -126,7 +126,7 @@ class Pane:
         #: How many times anything this pane shows may have changed. It
         #: only goes up, and `#{pane_revision}` is it.
         #:
-        #: **`Pymux._create_pane` is what makes it move**, because it is
+        #: **`PaneMaker.create_pane` is what makes it move**, because it is
         #: what builds the terminal that says so. A pane built around
         #: anything else -- a dozen tests build one around a stub -- has
         #: the field and never counts, which is what lets those tests go

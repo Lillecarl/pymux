@@ -28,7 +28,7 @@ def test_reported_directory_wins_over_process_table():
     pane = SimpleNamespace(current_directory="/reported")
     process = SimpleNamespace(get_cwd=lambda: "/proc-says")
     window = SimpleNamespace(active_pane=pane, active_process=process)
-    assert pymux._directory_to_start_in(window, None) == "/reported"
+    assert pymux.panes.directory_to_start_in(window, None) == "/reported"
 
 
 def test_process_table_covers_pane_that_never_reported():
@@ -36,7 +36,7 @@ def test_process_table_covers_pane_that_never_reported():
     pane = SimpleNamespace(current_directory=None)
     process = SimpleNamespace(get_cwd=lambda: "/proc-says")
     window = SimpleNamespace(active_pane=pane, active_process=process)
-    assert pymux._directory_to_start_in(window, None) == "/proc-says"
+    assert pymux.panes.directory_to_start_in(window, None) == "/proc-says"
 
 
 def test_unknown_process_table_covers_nothing():
@@ -44,7 +44,7 @@ def test_unknown_process_table_covers_nothing():
     pane = SimpleNamespace(current_directory=None)
     process = SimpleNamespace(get_cwd=lambda: None)
     window = SimpleNamespace(active_pane=pane, active_process=process)
-    assert pymux._directory_to_start_in(window, None) is None
+    assert pymux.panes.directory_to_start_in(window, None) is None
 
 
 def test_new_window_reads_session_active_pane():
@@ -53,13 +53,13 @@ def test_new_window_reads_session_active_pane():
     pane = SimpleNamespace(current_directory="/reported")
     window = SimpleNamespace(active_pane=pane)
     session = SimpleNamespace(arrangement=SimpleNamespace(get_active_window=lambda: window))
-    assert pymux._directory_to_start_in(None, session) == "/reported"
+    assert pymux.panes.directory_to_start_in(None, session) == "/reported"
 
 
 def test_first_pane_of_session_starts_nowhere():
     pymux = Pymux()
     session = SimpleNamespace(arrangement=SimpleNamespace(get_active_window=lambda: None))
-    assert pymux._directory_to_start_in(None, session) is None
+    assert pymux.panes.directory_to_start_in(None, session) is None
 
 
 async def test_new_window_starts_in_reported_directory():

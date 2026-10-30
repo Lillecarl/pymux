@@ -95,7 +95,7 @@ async def upgrade(pymux: Pymux, command: list[str]) -> None:
     # A Wayland window lives on this server's compositor, which ends with
     # the exec, so its pane goes now and not into the snapshot.
     # Lillecarl/pymux#620.
-    pymux.close_window_panes()
+    pymux.panes.close_window_panes()
 
     path = Path(socket_directory()) / ("pymux.upgrade.%d.sqlite" % os.getpid())
     written = snapshot.Snapshot(path)

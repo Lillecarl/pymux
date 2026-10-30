@@ -9,7 +9,7 @@ still cheap.
 A command is one string on purpose. That is what reaches a pane and
 what a server reads over the socket, and `shlex.quote` is what keeps an
 argument with a space in it in one piece on the way there.
-`Pymux._create_pane` takes it apart again with `shlex.split`.
+`PaneMaker.create_pane` takes it apart again with `shlex.split`.
 """
 
 from __future__ import annotations

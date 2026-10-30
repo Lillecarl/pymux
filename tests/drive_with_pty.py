@@ -1809,7 +1809,7 @@ def check_quoted_argument(tmp):
     An argument with a space in it reaches the pane in one piece.
 
     A command reaches a pane as one string, and the quoting inside it is
-    what says where one argument ends. `Pymux._create_pane` used to
+    what says where one argument ends. `PaneMaker.create_pane` used to
     split it on whitespace, so `sh -c 'echo one two'` became seven words
     and `sh` read `'echo` as the whole of its script. The pane then died
     at once and took the window with it. Lillecarl/pymux#39.

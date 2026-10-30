@@ -284,7 +284,7 @@ class WaylandServer:
                 # Straight to the clients, with no frame of the cells:
                 # a redraw of every client for every window frame is
                 # what a window drawing at the link's pace would cost.
-                self.pymux.window_pane_drew(self.panes[toplevel])
+                self.pymux.panes.window_pane_drew(self.panes[toplevel])
             case ("closed", int(toplevel)):
                 self._closed(toplevel)
 
@@ -295,11 +295,11 @@ class WaylandServer:
         widget = WindowWidget(self, toplevel, self._takes_keys)
         pane = None
         if launch is not None and launch.adopted is None:
-            pane = launch.adopted = self.pymux.adopt_window_pane(launch.pane, widget)
+            pane = launch.adopted = self.pymux.panes.adopt_window_pane(launch.pane, widget)
             launch.opened.set()
         if pane is None:
             # A later window of a `pymux wl` program goes beside its first.
-            pane = self.pymux.open_window_pane(widget, beside=launch.adopted if launch is not None else None)
+            pane = self.pymux.panes.open_window_pane(widget, beside=launch.adopted if launch is not None else None)
         if pane is None:
             # Nowhere to show it: no session has a window.
             self.close(toplevel)
@@ -319,7 +319,7 @@ class WaylandServer:
             pacer.shown.set()
         if pane is not None and widget is not None:
             widget.process.is_terminated = True
-            self.pymux.window_pane_ended(pane)
+            self.pymux.panes.window_pane_ended(pane)
 
     async def _pace(self, compositor: Compositor, toplevel: int, pacer: _Pacer) -> None:
         """

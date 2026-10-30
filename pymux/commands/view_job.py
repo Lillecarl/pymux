@@ -46,7 +46,7 @@ async def _replace(pymux: Pymux, pane: Pane, job: Job, args: argparse.Namespace)
         raise CommandException("Pane is busy: -k kills a program that runs.")
 
     pymux.hang_up(pane)
-    new_pane = await pymux._create_pane(job=job)
+    new_pane = await pymux.panes.create_pane(job=job)
     pymux.arrangement.replace_pane(pane, new_pane)
     pymux.invalidate(Woke.PANE_WAS_RESPAWNED)
 
