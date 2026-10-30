@@ -54,8 +54,10 @@ from .kitty_frames import SHM_PROBE_ID
 from .log import logger
 from .placements import (
     Placed,
+    Scroll,
     Source,
     drawn_size,
+    moved_by,
     pane_placements,
     put_command,
     visible_placements,
@@ -353,19 +355,6 @@ class _Placement:
         self.slot = slot
         self.command = command
         self.rows = rows
-
-
-#: A scroll the renderer wrote: first row, last row, distance.
-Scroll = tuple[int, int, int]
-
-
-def moved_by(rows: range, scrolls: Sequence[Scroll]) -> bool:
-    """
-    Whether a scroll moved what lies on these rows: kitty moves an image
-    that lies wholly inside a scrolled region, and only such an image
-    (`scroll_filter_margins_func`, `kitty/graphics.c`). Lillecarl/pymux#821.
-    """
-    return bool(rows) and any(top <= rows[0] and rows[-1] <= bottom for top, bottom, _distance in scrolls)
 
 
 class ClientGraphics:

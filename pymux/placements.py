@@ -20,7 +20,16 @@ from .plane import Rect
 if TYPE_CHECKING:
     from pymux.graphics import PaneView
 
-__all__ = ["Placed", "Source", "pane_placements", "placeholder_placements", "source_rgba", "visible_placements"]
+__all__ = [
+    "Placed",
+    "Scroll",
+    "Source",
+    "moved_by",
+    "pane_placements",
+    "placeholder_placements",
+    "source_rgba",
+    "visible_placements",
+]
 
 
 #: The pixels of an image that a placement shows: x, y, width, height.
@@ -31,6 +40,19 @@ type Source = tuple[int, int, int, int]
 #: placement, the image, its size in cells, its top left cell on the
 #: screen, and the pixels of the image it shows, or None for all of it.
 type Placed = tuple[GraphicsPlacement, GraphicsImage, int, int, int, int, Source | None]
+
+
+#: A scroll the renderer wrote: first row, last row, distance.
+type Scroll = tuple[int, int, int]
+
+
+def moved_by(rows: range, scrolls: Sequence[Scroll]) -> bool:
+    """
+    Whether a scroll moved what lies on these rows: kitty moves an image
+    that lies wholly inside a scrolled region, and only such an image
+    (`scroll_filter_margins_func`, `kitty/graphics.c`). Lillecarl/pymux#821.
+    """
+    return bool(rows) and any(top <= rows[0] and rows[-1] <= bottom for top, bottom, _distance in scrolls)
 
 
 def source_rgba(image: GraphicsImage, source: Source | None) -> tuple[bytes, int, int] | None:
