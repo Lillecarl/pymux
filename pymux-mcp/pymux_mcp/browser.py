@@ -499,9 +499,27 @@ async def press(page: Page, key: str) -> None:
     await page.send("Input.dispatchKeyEvent", {**common, "type": "keyUp"})
 
 
-async def screenshot(page: Page, full_page: bool) -> bytes:
+async def screenshot(page: Page, full_page: bool, fit: int | None) -> bytes:
+    """
+    A PNG of the tab, its longest edge `fit` pixels at most.
+
+    The clip's scale shrinks what Chromium draws, so a window on a
+    high-density screen answers fewer pixels and not a resample.
+    """
+    metrics = await page.send("Page.getLayoutMetrics")
+    if full_page:
+        size = metrics["cssContentSize"]
+        clip = {"x": 0, "y": 0, "width": size["width"], "height": size["height"]}
+    else:
+        view = metrics["cssVisualViewport"]
+        clip = {"x": view["pageX"], "y": view["pageY"], "width": view["clientWidth"], "height": view["clientHeight"]}
+    density = float(await evaluate(page, "window.devicePixelRatio") or 1)
+    longest = max(clip["width"], clip["height"]) * density
+    clip["scale"] = min(1.0, fit / longest) if fit and longest else 1.0
     answer = await page.send(
-        "Page.captureScreenshot", {"format": "png", "captureBeyondViewport": full_page}, timeout=60.0
+        "Page.captureScreenshot",
+        {"format": "png", "clip": clip, "captureBeyondViewport": full_page},
+        timeout=60.0,
     )
     return base64.b64decode(answer["data"])
 

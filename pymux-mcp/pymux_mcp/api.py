@@ -752,10 +752,14 @@ async def browser_screenshot(
     name: BrowserName = "browser",
     tab: Tab = None,
     full_page: Annotated[bool, Field(description="The whole page, not only what the window shows.")] = False,
+    fit: Annotated[
+        int | None,
+        Field(gt=0, description="The longest edge in pixels; the page is drawn smaller to fit. null for none."),
+    ] = PNG_FIT,
 ) -> Png:
     "A picture of a tab."
     async with browser.tab(server, name, tab) as page:
-        return Png(await browser.screenshot(page, full_page))
+        return Png(await browser.screenshot(page, full_page, fit))
 
 
 @operation("browser.console")

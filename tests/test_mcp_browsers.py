@@ -11,6 +11,7 @@ import base64
 import json
 import os
 import shutil
+import struct
 import subprocess
 import sys
 from pathlib import Path
@@ -90,8 +91,9 @@ async def test_an_agent_fills_a_form_and_reads_what_the_page_logged(server, seat
     said = await call(server, "browser.console", name="probe")
     assert {"type": "log", "text": "clicked hello"} in said, said
 
-    shot = await call(server, "browser.screenshot", name="probe")
+    shot = await call(server, "browser.screenshot", name="probe", fit=300)
     assert isinstance(shot, Png) and shot.data.startswith(b"\x89PNG")
+    assert max(struct.unpack(">II", shot.data[16:24])) <= 300, shot.data[16:24]
 
     loaded = await call(server, "browser.goto", name="probe", url=PAGE)
     assert loaded["loaded"] and loaded["title"] == "probe", loaded
