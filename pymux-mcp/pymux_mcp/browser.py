@@ -867,6 +867,48 @@ async def click(
     return hit
 
 
+#: Draws a spotlight on `this` for a person to see, and takes it away
+#: after `seconds`. Fixed and above everything, and no pointer event
+#: reaches it, so it covers nothing a person clicks.
+_POINT: Final = """function(label, seconds, colour) {
+  this.scrollIntoView({block: 'center', inline: 'center', behavior: 'instant'});
+  const box = this.getBoundingClientRect();
+  const mark = document.createElement('div');
+  mark.setAttribute('data-pymux-point', '');
+  Object.assign(mark.style, {
+    position: 'fixed', left: (box.left - 4) + 'px', top: (box.top - 4) + 'px',
+    width: (box.width + 8) + 'px', height: (box.height + 8) + 'px',
+    outline: '3px solid ' + colour, borderRadius: '4px',
+    boxShadow: '0 0 0 100vmax rgba(0, 0, 0, 0.25)',
+    pointerEvents: 'none', zIndex: '2147483647',
+  });
+  if (label) {
+    const tag = document.createElement('div');
+    tag.textContent = label;
+    Object.assign(tag.style, {
+      position: 'absolute', left: '0', background: colour, color: 'white',
+      font: 'bold 13px sans-serif', padding: '2px 6px', borderRadius: '3px', whiteSpace: 'nowrap',
+    });
+    tag.style[box.top < 28 ? 'top' : 'bottom'] = 'calc(100% + 4px)';
+    mark.append(tag);
+  }
+  document.documentElement.append(mark);
+  setTimeout(() => mark.remove(), seconds * 1000);
+}"""
+
+
+async def point_at(page: Page, ref: str | None, selector: str | None, label: str, seconds: float) -> None:
+    "Show a person an element: a spotlight around it, and `label` beside it, for `seconds`."
+    await page.send(
+        "Runtime.callFunctionOn",
+        {
+            "objectId": await _element(page, ref, selector),
+            "functionDeclaration": _POINT,
+            "arguments": [{"value": label}, {"value": seconds}, {"value": MARK_COLOURS[0]}],
+        },
+    )
+
+
 async def type_text(page: Page, text: str, ref: str | None, selector: str | None, clear: bool) -> None:
     "Type `text` where the focus is, or into the element named, emptied first when `clear`."
     if ref is not None or selector is not None:

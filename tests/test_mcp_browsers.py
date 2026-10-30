@@ -344,6 +344,26 @@ async def test_the_agent_reads_what_the_person_selected(server):
         await call(server, "browser.close", name="probe")
 
 
+async def test_pointing_shows_the_person_an_element_for_a_while(server):
+    await call(server, "browser.open", name="probe", seat="headless", url=LONG_PAGE, arguments=ARGUMENTS)
+    try:
+        (order,) = [line for line in (await call(server, "browser.find", name="probe", text="order now")).splitlines()]
+        await call(server, "browser.point", name="probe", ref=ref(order), label="this one", seconds=1)
+        shown = "document.querySelector('[data-pymux-point]')?.textContent ?? null"
+        assert await call(server, "browser.evaluate", name="probe", expression=shown) == "this one"
+        # Scrolled to: the button is in view, past two hundred paragraphs.
+        in_view = "document.querySelector('button').getBoundingClientRect().top < innerHeight"
+        assert await call(server, "browser.evaluate", name="probe", expression=in_view)
+        # It covers nothing a person clicks.
+        hit = await call(server, "browser.click", name="probe", ref=ref(order))
+        assert hit["ref"] == ref(order), hit
+        with anyio.fail_after(5):
+            while await call(server, "browser.evaluate", name="probe", expression=shown) is not None:
+                await anyio.sleep(0.2)
+    finally:
+        await call(server, "browser.close", name="probe")
+
+
 async def test_a_profile_name_is_one_path_part(server):
     with pytest.raises(ValueError, match="not a profile name"):
         await call(server, "browser.open", name="probe", seat="headless", profile="../escape", arguments=ARGUMENTS)

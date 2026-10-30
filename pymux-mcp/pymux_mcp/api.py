@@ -838,6 +838,25 @@ async def browser_click(
         return await browser.click(page, ref, selector, at_point)
 
 
+@operation("browser.point")
+async def browser_point(
+    server: Server,
+    name: BrowserName = "browser",
+    ref: Ref = None,
+    selector: Selector = None,
+    label: Annotated[str, Field(description="A few words beside it, for the person.")] = "",
+    seconds: Annotated[float, Field(gt=0, le=60, description="How long it shows.")] = 4.0,
+    tab: Tab = None,
+) -> None:
+    """
+    Show the person watching an element: scroll to it, outline it, dim
+    the rest, and put `label` beside it, for `seconds`. How the agent
+    says "this one".
+    """
+    async with browser.tab(server, name, tab) as page:
+        await browser.point_at(page, ref, selector, label, seconds)
+
+
 @operation("browser.type")
 async def browser_type(
     server: Server,
