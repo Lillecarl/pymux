@@ -409,14 +409,32 @@ class OuterImageIds:
 
 
 class _Placement:
-    "One placement as it is emitted to the outer terminal."
+    """
+    One placement as it is emitted to the outer terminal, and the rows of
+    the screen it covers. A virtual placement covers none: kitty draws it
+    through the placeholder cells, which a scroll moves with the text.
+    """
 
-    __slots__ = ("command", "image_id", "slot")
+    __slots__ = ("command", "image_id", "rows", "slot")
 
-    def __init__(self, image_id: int, slot: int, command: str) -> None:
+    def __init__(self, image_id: int, slot: int, command: str, rows: range = range(0)) -> None:
         self.image_id = image_id
         self.slot = slot
         self.command = command
+        self.rows = rows
+
+
+#: A scroll the renderer wrote: first row, last row, distance.
+Scroll = tuple[int, int, int]
+
+
+def moved_by(rows: range, scrolls: Sequence[Scroll]) -> bool:
+    """
+    Whether a scroll moved what lies on these rows: kitty moves an image
+    that lies wholly inside a scrolled region, and only such an image
+    (`scroll_filter_margins_func`, `kitty/graphics.c`). Lillecarl/pymux#821.
+    """
+    return bool(rows) and any(top <= rows[0] and rows[-1] <= bottom for top, bottom, _distance in scrolls)
 
 
 class ClientGraphics:
@@ -528,6 +546,10 @@ class ClientGraphics:
         self._windows: dict[int, _ShownWindow] = {}
         #: Pane id -> where each window pane shows now: its put command.
         self._window_places: dict[int, str] = {}
+        #: The scrolls the renderer wrote since the placements, and since
+        #: the window panes, were last put: each may have moved one.
+        self._scrolled_placements: list[Scroll] = []
+        self._scrolled_windows: list[Scroll] = []
         #: The window panes whose update is being encoded, and how often
         #: each had left view when it started.
         self._window_pending: dict[int, int] = {}
@@ -675,6 +697,16 @@ class ClientGraphics:
     # ------------------------------------------------------------------
     # Frames.
 
+    def scrolled(self, scrolls: Sequence[Scroll]) -> None:
+        """
+        The renderer wrote these scrolls to this client's terminal. A
+        kitty terminal moved each image wholly inside one, so the next
+        frame puts it back where pymux has it. Lillecarl/pymux#821.
+        """
+        if scrolls and self.kitty_supported:
+            self._scrolled_placements.extend(scrolls)
+            self._scrolled_windows.extend(scrolls)
+
     def render(self, views: Iterable[PaneView]) -> None:
         """
         Draw the images of one frame. `views` holds one `PaneView` per
@@ -710,12 +742,16 @@ class ClientGraphics:
             return
         commands: list[str] = []
         places: dict[int, str] = {}
+        scrolls = self._scrolled_windows
+        if scrolls:
+            self._scrolled_windows = []
         for view in views:
             outer_id = self._image_ids.id_of(view.pane_id, WINDOW_IMAGE)
             put = _put_command(outer_id, 1, view.x, view.y, view.width, view.height, WINDOW_Z, None)
             places[view.pane_id] = put
             known = self._windows.get(view.pane_id)
-            if known is not None and known.put != put:
+            moved = bool(scrolls) and moved_by(range(view.y, view.y + view.height), scrolls)
+            if known is not None and (known.put != put or moved):
                 commands.append(put)
                 self._windows[view.pane_id] = known._replace(put=put)
             self._start_window_update(view)
@@ -896,10 +932,17 @@ class ClientGraphics:
             if key not in desired:
                 commands.append("\x1b_Ga=d,d=i,i=%i,p=%i,q=2\x1b\\" % (placement.image_id, placement.slot))
 
-        # New and changed placements.
+        # New and changed placements, and the ones a scroll moved.
+        scrolls = self._scrolled_placements
+        if scrolls:
+            self._scrolled_placements = []
         for key, placement in desired.items():
             previous = self._placements.get(key)
-            if previous is None or previous.command != placement.command:
+            if (
+                previous is None
+                or previous.command != placement.command
+                or (scrolls and moved_by(placement.rows, scrolls))
+            ):
                 commands.append(placement.command)
 
         self._placements = desired
@@ -999,6 +1042,7 @@ class ClientGraphics:
                         source,
                         natural=self.draws_at_its_own_size(pane_placement, image, source, columns, rows),
                     ),
+                    range(y, y + rows),
                 )
 
         self._forget_unused_images(live_keys)

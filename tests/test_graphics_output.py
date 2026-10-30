@@ -89,6 +89,31 @@ def test_placement_is_transmitted_and_put():
     assert puts(written) == ["\x1b[6;11H\x1b_Ga=p,i=%i,p=1,c=3,r=2,C=1,q=2\x1b\\" % image_id]
 
 
+def test_a_scroll_that_moved_a_placement_puts_it_back():
+    """
+    kitty moves an image wholly inside a scrolled region, so the unchanged
+    placement goes out again; a region that only holds part of it moves
+    nothing. Lillecarl/pymux#821.
+    """
+    client, written = make_client()
+    state = make_state(placement())
+    client.render([view(state, x=10, y=5)])
+    first = puts(written)
+    del written[:]
+
+    client.render([view(state, x=10, y=5)])
+    assert puts(written) == []
+
+    client.scrolled([(5, 6, 1)])
+    client.render([view(state, x=10, y=5)])
+    assert puts(written) == first
+    del written[:]
+
+    client.scrolled([(6, 20, 3)])
+    client.render([view(state, x=10, y=5)])
+    assert puts(written) == []
+
+
 def test_transmitted_data_is_image():
     client, written = make_client()
     client.render([view(make_state(placement()))])

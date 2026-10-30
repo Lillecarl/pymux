@@ -708,6 +708,11 @@ class ClientState:
             graphics = self.connection.graphics
             if not graphics.supported:
                 return
+            # Taken, so a frame the renderer skipped does not count them twice.
+            drawn = self.app.renderer.last_rendered_screen
+            if drawn is not None and drawn.scrolls_sent:
+                graphics.scrolled(drawn.scrolls_sent)
+                drawn.scrolls_sent = []
             try:
                 graphics.render(self.graphics_views())
             except Exception:
