@@ -13,11 +13,12 @@ from pymux.commands.common import the_window
 
 def rename_window(pymux: Pymux, args: argparse.Namespace) -> None:
     """
-    Rename the active window.
+    Rename a window: the active one when -t names none.
     """
-    the_window(pymux, None).chosen_name = args.name
+    the_window(pymux, args.target_window).chosen_name = args.name
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, rename_window)
+    parser.add_argument("-t", dest="target_window", metavar="<target-window>", help="The window to rename.")
     parser.add_argument("name", metavar="<name>", help="The new name of the window.")
