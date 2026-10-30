@@ -111,7 +111,7 @@ async def _attach(pymux: Pymux, tasks, hang_up_others: bool = False):
     )
 
     with anyio.fail_after(5.0):
-        while connection.client_state is None and not connection._closed:
+        while connection.client_state is None and not connection.closed:
             await anyio.sleep(0.005)
 
     return connection, heard
@@ -136,8 +136,8 @@ async def test_the_others_are_told_to_hang_up():
             await _until(lambda: heard.exits, "the exit packet")
 
             assert heard.exits[-1]["hang-up"] is True
-            await _until(lambda: first._closed, "the connection to close")
-            assert not second._closed
+            await _until(lambda: first.closed, "the connection to close")
+            assert not second.closed
         tasks.cancel_scope.cancel()
 
 
@@ -154,7 +154,7 @@ async def test_without_the_flag_nobody_is_told_anything():
             # The `-d` path, without the hangup.
             second._detach_the_others()
 
-            await _until(lambda: first._closed, "the connection to close")
+            await _until(lambda: first.closed, "the connection to close")
             assert heard.exits == []
         tasks.cancel_scope.cancel()
 
@@ -208,7 +208,7 @@ async def test_attach_session_x_tells_them_to_hang_up():
 
             await _until(lambda: heard.exits, "the exit packet")
             assert heard.exits[-1]["hang-up"] is True
-            assert not asking._closed
+            assert not asking.closed
         tasks.cancel_scope.cancel()
 
 
@@ -227,7 +227,7 @@ async def test_attach_session_x_detaches_them_too():
             with set_app(asking.client_state.app):
                 pymux.handle_command("attach-session -t here -x")
 
-            await _until(lambda: sitting._closed, "the other client to go")
+            await _until(lambda: sitting.closed, "the other client to go")
         tasks.cancel_scope.cancel()
 
 
@@ -261,7 +261,7 @@ async def test_detach_client_without_it_says_nothing():
             with set_app(asking.client_state.app):
                 pymux.handle_command("detach-client -t %s" % (sitting.client_state.connection.name,))
 
-            await _until(lambda: sitting._closed, "the other client to go")
+            await _until(lambda: sitting.closed, "the other client to go")
             assert heard.exits == []
         tasks.cancel_scope.cancel()
 

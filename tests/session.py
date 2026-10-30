@@ -195,7 +195,7 @@ class Connection:
         "What `ServerConnection.set_progress` was given last."
         self.progress = progress
 
-    def _send_packet(self, packet):
+    def send_packet(self, packet):
         pass
 
 
@@ -647,7 +647,7 @@ async def over_connection(pymux=None, read_packet=None):
 
         client_end.close()
         await once(
-            lambda: connection._closed,
+            lambda: connection.closed,
             5.0,
             "the connection never closed after its client went",
         )

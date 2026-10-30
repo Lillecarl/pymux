@@ -116,7 +116,7 @@ class Browsers:
                 raise BrowserRefused("the person said no")
 
             launch.port = free_port()
-            connection._send_packet(
+            connection.send_packet(
                 {
                     Field.CMD: Packet.BROWSER,
                     Field.BROWSER: launch.launch_id,
@@ -178,7 +178,7 @@ class Browsers:
             return
         connection = launch.client_state.connection
         if connection is not None and launch.port:
-            connection._send_packet({Field.CMD: Packet.BROWSER_STOP, Field.BROWSER: launch_id})
+            connection.send_packet({Field.CMD: Packet.BROWSER_STOP, Field.BROWSER: launch_id})
         self.ended(launch_id)
 
     def client_gone(self, client_state: ClientState) -> None:

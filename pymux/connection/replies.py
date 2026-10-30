@@ -335,7 +335,7 @@ class TerminalReplies:
         # not answer by now is not supported.
         self.detection_pending = False
         self._apply_color_depth()
-        self.connection._send_packet(
+        self.connection.send_packet(
             {
                 Field.CMD: Packet.KITTY_KEYBOARD,
                 Field.DATA: {"supported": self.keyboard_is_supported()},
@@ -345,7 +345,7 @@ class TerminalReplies:
         # clients are kept in sync through `Terminals.sync_kitty_flags`,
         # which only sends on change, so a client that attaches after
         # the value settled would otherwise never hear it.)
-        self.connection._send_packet(
+        self.connection.send_packet(
             {
                 Field.CMD: Packet.KITTY_KEYBOARD,
                 Field.DATA: {"flags": self.connection.pymux.terminals.keyboard_flags_for_client()},

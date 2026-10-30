@@ -439,6 +439,6 @@ class Terminals:
         self._kitty_flags_sent = flags
         try:
             for connection in self.pymux.connections:
-                connection._send_packet({Field.CMD: Packet.KITTY_KEYBOARD, Field.DATA: {"flags": flags}})
+                connection.send_packet({Field.CMD: Packet.KITTY_KEYBOARD, Field.DATA: {"flags": flags}})
         except Exception:
             logger.exception("Sending kitty keyboard flags failed.")

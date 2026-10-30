@@ -147,7 +147,7 @@ async def _attached(pymux: Pymux, announced) -> ServerConnection:
     client_end.write_nowait(_start_gui(announced))
 
     with anyio.fail_after(5.0):
-        while connection.client_state is None and not connection._closed:
+        while connection.client_state is None and not connection.closed:
             await anyio.sleep(0.005)
 
     return connection

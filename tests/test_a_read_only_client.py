@@ -121,7 +121,7 @@ async def test_a_read_only_client_may_still_leave():
             pymux.handle_command("detach-client")
 
         await once(
-            lambda: state.connection._closed,
+            lambda: state.connection.closed,
             5.0,
             "a read-only client could not detach itself",
         )
@@ -185,7 +185,7 @@ async def test_a_read_only_client_cannot_detach_everybody_else():
             session.pymux.handle_command("detach-client -a")
 
         assert watching.message == "client is read-only"
-        assert not working.connection._closed
+        assert not working.connection.closed
 
 
 async def test_a_read_only_client_cannot_detach_a_named_client():
@@ -196,7 +196,7 @@ async def test_a_read_only_client_cannot_detach_a_named_client():
             session.pymux.handle_command("detach-client -t %s" % (working.connection.name,))
 
         assert watching.message == "client is read-only"
-        assert not working.connection._closed
+        assert not working.connection.closed
 
 
 async def test_a_read_only_client_cannot_take_the_session():
@@ -212,7 +212,7 @@ async def test_a_read_only_client_cannot_take_the_session():
             session.pymux.handle_command("attach-session -x")
 
         assert watching.message == "client is read-only"
-        assert not working.connection._closed
+        assert not working.connection.closed
 
 
 async def test_an_ordinary_client_still_takes_the_session():
@@ -225,7 +225,7 @@ async def test_an_ordinary_client_still_takes_the_session():
             session.pymux.handle_command("detach-client -a")
 
         await once(
-            lambda: working.connection._closed,
+            lambda: working.connection.closed,
             5.0,
             "an ordinary client could not detach the others",
         )

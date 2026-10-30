@@ -143,7 +143,7 @@ class Outward:
                 # that was taken here moves the URL, and a message from
                 # this side would name the address that did not work.
                 packet[Field.FORWARD] = forward
-            client_state.connection._send_packet(packet)
+            client_state.connection.send_packet(packet)
 
     def url_forward(self, url: str, client_state: ClientState) -> dict[str, Any] | None:
         """
@@ -559,7 +559,7 @@ class Outward:
             self.pymux.invalidate(Woke.PANE_WROTE_AN_OSC)
             return
         for packet in file_packets(download):
-            client.connection._send_packet(packet)
+            client.connection.send_packet(packet)
 
     def copied_in_copy_mode(self, text: str) -> None:
         """

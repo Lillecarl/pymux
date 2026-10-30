@@ -147,7 +147,7 @@ class ServerConnection:
         # The next server measures the client's round trip again.
         "_audio": Keep.DROPPED,
         "_tasks": Keep.DROPPED,
-        "_closed": Keep.DROPPED,
+        "closed": Keep.DROPPED,
         "_unanswered": Keep.DROPPED,
         # A recording holds Python objects of this build, so it ends
         # with it. `upgrade.py` writes it out first.
@@ -173,7 +173,7 @@ class ServerConnection:
         self.may_attach = may_attach
 
         self.size = Size(rows=20, columns=80)
-        self._closed = False
+        self.closed = False
 
         self.replies = TerminalReplies(self)
 
@@ -301,7 +301,7 @@ class ServerConnection:
         # that also understands the kitty keyboard protocol, and route
         # terminal replies to `_handle_kitty_reply`.
         self._pipeinput = ClientInput(
-            self._send_packet,
+            self.send_packet,
             kitty_reply_callback=self.replies.arrived,
             # Whether this client's terminal counts the modifiers the
             # way the protocol does. It is asked when a key arrives and
@@ -605,7 +605,7 @@ class ServerConnection:
         # `libpymux.wire`.
         wire = choose(packet.get(Field.WIRE), self.pipe_connection.can_compress)
         if wire is not None and self._encode is encode_json:
-            self._send_packet(
+            self.send_packet(
                 {Field.CMD: Packet.WIRE, Field.WIRE: wire},
                 compress_after=wire == MSGPACK_ZSTD,
             )
@@ -788,7 +788,7 @@ class ServerConnection:
         if self._next_forwards is None:
             self._next_forwards = anyio.Event()
         arrived = self._next_forwards
-        self._send_packet({Field.CMD: Packet.REPORT_FORWARDS})
+        self.send_packet({Field.CMD: Packet.REPORT_FORWARDS})
         await arrived.wait()
 
     def _detach_the_others(self, hang_up: bool = False) -> None:
@@ -844,12 +844,12 @@ class ServerConnection:
 
         self.pymux.terminals.sync_color_bases()
 
-    def _send_packet(self, data: object, compress_after: bool = False) -> None:
+    def send_packet(self, data: object, compress_after: bool = False) -> None:
         """
         Send packet to client. `compress_after` turns the stream to zstd
         after this one (`PipeConnection.write`).
         """
-        if self._closed:
+        if self.closed:
             return
         # Every byte for the client's terminal passes here, the frames
         # and what follows them alike.
@@ -867,7 +867,7 @@ class ServerConnection:
         server stops. Lillecarl/pymux#409.
         """
         await self._write_packet({Field.CMD: Packet.RESTARTING, Field.WAIT: wait, Field.MESSAGE: why})
-        if self._closed:
+        if self.closed:
             # `_write` lets a client go on a broken pipe or a full
             # buffer, and that client leaves for good instead of
             # waiting. Lillecarl/pymux#766.
@@ -878,7 +878,7 @@ class ServerConnection:
         Tell this client that it cannot have the user interface, and
         close the connection. Lillecarl/pymux#159.
 
-        **The write is awaited, and `_send_packet` does not wait.** That
+        **The write is awaited, and `send_packet` does not wait.** That
         one spawns the write into the scope of this connection, and
         closing cancels that scope: the reason the client came would
         reach it only if the cancel lost the race.
@@ -1028,11 +1028,11 @@ class ServerConnection:
         `uploads` when it stops waiting. Lillecarl/pymux#743.
         """
         upload = Upload(paths)
-        if self._closed:
+        if self.closed:
             upload.end("the client went before it answered")
             return upload
         self.uploads[upload.request] = upload
-        self._send_packet(upload.packet(pane))
+        self.send_packet(upload.packet(pane))
         return upload
 
     def stop_waiting_for_files(self, upload: Upload) -> None:
@@ -1042,10 +1042,10 @@ class ServerConnection:
         and a later "y" sends a file nobody takes.
         """
         self.uploads.pop(upload.request, None)
-        if upload.ended or self._closed:
+        if upload.ended or self.closed:
             return
         with suppress(BrokenPipeError):
-            self._send_packet({Field.CMD: Packet.FILES_WITHDRAWN, Field.REQUEST: upload.request})
+            self.send_packet({Field.CMD: Packet.FILES_WITHDRAWN, Field.REQUEST: upload.request})
 
     async def list_files(self, path: str) -> list[str]:
         """
@@ -1053,11 +1053,11 @@ class ServerConnection:
         machine, for completing `pymux receive`. Empty when it answers
         nothing within `LIST_SECONDS`, or goes.
         """
-        if self._closed:
+        if self.closed:
             return []
         listed = Listing(path)
         self.listings[listed.request] = listed
-        self._send_packet(listed.packet())
+        self.send_packet(listed.packet())
         with anyio.move_on_after(LIST_SECONDS):
             await listed.answered.wait()
         self.listings.pop(listed.request, None)
@@ -1070,7 +1070,7 @@ class ServerConnection:
 
     async def _write_urgent(self, data_obj: object) -> None:
         "Write a packet ahead of every write that waits for the connection: sound."
-        if self._closed:
+        if self.closed:
             return
         try:
             await self.pipe_connection.write(self._encode(data_obj), urgent=True)
@@ -1081,13 +1081,13 @@ class ServerConnection:
         """
         Write a packet to the client. (This waits for the write to complete.)
         """
-        if self._closed:
+        if self.closed:
             return
         await self._write(self._encode(data_obj))
 
     def _terminal_reads_shm(self) -> None:
         logger.info("The terminal of client %s reads window frames from shared memory.", self.client_id or "?")
-        self._send_packet({Field.CMD: Packet.SHM})
+        self.send_packet({Field.CMD: Packet.SHM})
 
     async def _send_frame(self, parts: list[Message]) -> None:
         """
@@ -1107,7 +1107,7 @@ class ServerConnection:
         self.flush_output()
         self.pacing.window_frame_went_out()
         for part in parts:
-            if self._closed:
+            if self.closed:
                 return
             await self._write(self._encode(part))
             await anyio.lowlevel.checkpoint()
@@ -1157,7 +1157,7 @@ class ServerConnection:
         """
         stdout = (
             SocketStdout(
-                self._send_packet, self.pymux.counters, self.pacing.frame_went_out, self.pacing.report_after_frame
+                self.send_packet, self.pymux.counters, self.pacing.frame_went_out, self.pacing.report_after_frame
             )
             if start
             else NoStdout()
@@ -1234,7 +1234,7 @@ class ServerConnection:
     def _close_connection(self) -> None:
         # This is important. If we would forget this, the server will
         # render CLI output for clients that aren't connected anymore.
-        if self._closed:
+        if self.closed:
             return
         if self.recording is not None:
             self.pymux.finish_recordings([self])
@@ -1253,7 +1253,7 @@ class ServerConnection:
                 pass
         self.pymux.remove_client(self)
         self.client_state = None
-        self._closed = True
+        self.closed = True
         self.pacing.frames_shown.set()
         # A `pymux receive` waiting for this client would wait for ever.
         for upload in self.uploads.values():
@@ -1277,7 +1277,7 @@ class ServerConnection:
         """
         Ask the client to suspend itself. (Like, when Ctrl-Z is pressed.)
         """
-        self._send_packet({Field.CMD: Packet.SUSPEND})
+        self.send_packet({Field.CMD: Packet.SUSPEND})
 
     @property
     def name(self) -> str:
@@ -1356,7 +1356,7 @@ class ServerConnection:
         Lillecarl/pymux#347.
 
         **The packet has to be written before the close.**
-        `_send_packet` spawns the write into the scope of this
+        `send_packet` spawns the write into the scope of this
         connection, and closing cancels that scope, so the two in a row
         would race and the client would usually hear nothing. This
         spawns one task that writes and then closes.

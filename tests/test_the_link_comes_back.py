@@ -739,7 +739,7 @@ async def test_a_restarting_server_s_refusals_are_waited_out(monkeypatch):
         dropped = []
         for connection in list(it.pymux.connections):
             await connection.say_restarting(5.0, "pymux is being upgraded.")
-            dropped.append(connection._closed)
+            dropped.append(connection.closed)
             connection._close_connection()
 
         # What the client left with says which way the notice was lost:
@@ -812,11 +812,11 @@ async def test_a_client_told_to_hang_up_does_not_come_back(monkeypatch):
             write_packet, close = connection._write_packet, connection._close_connection
 
             async def recording_write_packet(data_obj, connection=connection, write_packet=write_packet):
-                written.append((data_obj.get(Field.CMD), connection._closed))
+                written.append((data_obj.get(Field.CMD), connection.closed))
                 await write_packet(data_obj)
 
             def recording_close(connection=connection, close=close):
-                if not connection._closed and not closed_by:
+                if not connection.closed and not closed_by:
                     closed_by.append("".join(traceback.format_stack(limit=12)))
                 close()
 

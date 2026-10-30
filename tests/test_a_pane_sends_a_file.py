@@ -211,7 +211,7 @@ class Collected:
         self.sequences: list[str] = []
         self.packets: list[dict] = []
         state.connection.forward_osc = self.sequences.append
-        state.connection._send_packet = self.packets.append
+        state.connection.send_packet = self.packets.append
 
     def files(self) -> list[dict]:
         return [packet for packet in self.packets if packet[Field.CMD] == Packet.FILE]

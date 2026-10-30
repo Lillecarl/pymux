@@ -426,6 +426,6 @@ async def test_input_for_no_stream_is_ignored_and_not_a_crash(pymux):
         client_end.write_nowait(encode_json({"cmd": "stream-in", "data": "{}"}))
         await anyio.sleep(0.05)
 
-        assert not connection._closed
+        assert not connection.closed
 
         pymux.stop()

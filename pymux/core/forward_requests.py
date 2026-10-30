@@ -123,4 +123,4 @@ class ForwardRequests:
         `client` has already refused a client that cannot
         forward at all. Lillecarl/pymux#436.
         """
-        client_state.connection._send_packet(packet)
+        client_state.connection.send_packet(packet)

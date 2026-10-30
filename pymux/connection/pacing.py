@@ -96,7 +96,7 @@ class FramePacing:
         `FRAME_ANSWER_SECONDS`, so it costs frames and never the window.
         """
         with anyio.move_on_after(FRAME_ANSWER_SECONDS) as waited:
-            while self.frames_out and not self.connection._closed:
+            while self.frames_out and not self.connection.closed:
                 await self.frames_shown.wait()
         if waited.cancelled_caught:
             logger.warning(

@@ -68,7 +68,7 @@ async def test_a_client_may_not_attach_when_the_server_serves_one_terminal():
 
         assert connection.client_state is None, "the client attached anyway"
         assert [p["data"] for p in said if p["cmd"] == "out"] == [CANNOT_ATTACH]
-        assert connection._closed, "the refused client is still connected"
+        assert connection.closed, "the refused client is still connected"
 
         pymux.stop()
 
