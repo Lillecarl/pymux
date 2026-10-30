@@ -132,6 +132,8 @@ class Connection:
         self.waits_for_terminal = False
         self.pointer_fraction = (0.5, 0.5)
         self.notification_actions: frozenset[str] = frozenset()
+        self.notification_closes = False
+        self.notification_osc = None
 
     async def read_clipboard(self, selection: str = "c") -> str | None:
         return None

@@ -30,6 +30,7 @@ from prompt_toolkit.output.vt100 import Vt100_Output
 from ptterm import Terminal
 from pyte.cells import VS16, without_widening_selectors
 from pyte.keep import Keep
+from pyte.osc import Osc
 from pyte.placeholders import PLACEHOLDER, blanked
 
 from pymux.commands import CommandException
@@ -53,6 +54,7 @@ from .notifications import (
     QUERY_IDENTIFIER,
     can_close,
     is_click,
+    notification_osc_of,
     read_actions,
     read_identifier,
     split_payload,
@@ -209,6 +211,7 @@ class ServerConnection:
         "_kitty_supported": Keep.REBUILT,
         "notification_actions": Keep.REBUILT,
         "notification_closes": Keep.REBUILT,
+        "answered_notification_query": Keep.REBUILT,
         "_pointer_shape_sent": Keep.REBUILT,
         "_progress_sent": Keep.REBUILT,
         "answers_ping": Keep.REBUILT,
@@ -365,9 +368,11 @@ class ServerConnection:
         #: OSC 99, so a click on it shows its pane. Lillecarl/pymux#779.
         self.notification_actions: frozenset[str] = frozenset()
         #: Whether the outer terminal can take a notification back off
-        #: its screen (`c=1`), which pymux does once one is seen.
-        #: Lillecarl/pymux#799.
+        #: its screen (`close` in `p=`), which pymux does once one is
+        #: seen. Lillecarl/pymux#799.
         self.notification_closes = False
+        #: Whether the outer terminal answered the OSC 99 query.
+        self.answered_notification_query = False
 
         # Kitty graphics protocol state of the outer terminal. The same
         # query answers this one: the reply of the graphics query
@@ -947,6 +952,17 @@ class ServerConnection:
             return True
         return self._kitty_supported
 
+    @property
+    def notification_osc(self) -> Osc | None:
+        """
+        The notification OSC this client's terminal shows, or None when
+        it is known to show none. The query answer goes first; a
+        terminal with no OSC 99 is known by its name. Lillecarl/pymux#826.
+        """
+        if self.answered_notification_query:
+            return Osc.NOTIFICATION
+        return notification_osc_of(self.graphics.terminal_version)
+
     def _route_notification(self, param: str) -> None:
         """
         Give the answer to a desktop notification to the pane that
@@ -962,6 +978,7 @@ class ServerConnection:
         if read_identifier(metadata) == QUERY_IDENTIFIER:
             self.notification_actions = frozenset(read_actions(text))
             self.notification_closes = can_close(text)
+            self.answered_notification_query = True
             return
 
         routed = self.pymux.notifications.incoming(param)

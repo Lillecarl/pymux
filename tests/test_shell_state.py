@@ -19,7 +19,7 @@ from prompt_toolkit.application.current import set_app
 from pyte.page import RowMark
 from session import create_session
 
-from pymux.enums import Clipboard
+from pymux.enums import Clipboard, NotificationPopups
 from pymux.format import format_pymux_string
 from pymux.graphics import draws_progress
 from pymux.main import MAX_USER_VARS, Pymux
@@ -97,7 +97,14 @@ def make_pymux(clipboard=Clipboard.ON):
     connections = [FakeConnection(), FakeConnection()]
     # Clients out of sight, so a notification goes out. Lillecarl/pymux#799.
     pymux._client_states = {
-        connection: SimpleNamespace(terminal_focused=False, temporary=False) for connection in connections
+        connection: SimpleNamespace(
+            terminal_focused=False,
+            temporary=False,
+            chooser=None,
+            popups=(),
+            options=SimpleNamespace(notification_popups=NotificationPopups.OFF),
+        )
+        for connection in connections
     }
     return pymux, connections
 

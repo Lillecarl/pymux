@@ -39,6 +39,7 @@ from pymux.enums import (
     Clipboard,
     FileTransfer,
     ForwardMode,
+    NotificationPopups,
     WindowCodec,
     WindowScroll,
     WindowSize,
@@ -329,6 +330,8 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     client_state.options.theme = "grey"
     client_state.options.frames_in_flight = 2
     client_state.options.bytes_in_flight = 16384
+    client_state.options.notification_popups = NotificationPopups.ON
+    client_state.options.notification_popup_seconds = 9.0
     pymux.returning_clients["gone"] = {
         "session_id": second.session_id,
         "previous_session_id": None,

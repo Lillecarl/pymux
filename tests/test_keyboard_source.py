@@ -48,6 +48,8 @@ class FakeClientState:
     temporary = False
 
     terminal_focused = True
+    chooser = None
+    popups: tuple = ()
 
     #: What `latest_client` and the portal's scheme read of every
     #: client. Lillecarl/pymux#812.

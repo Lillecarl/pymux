@@ -220,6 +220,11 @@ def derive(r: dict[str, str]) -> dict[str, str]:
         # the meanings behind it, on the same surface the box has.
         # Lillecarl/pymux#29.
         "which-key.key": "bold %s" % (r["text-bright"],),
+        # A notification as a box: the frame in the accent, the title
+        # bright, on the surface the other boxes have. Lillecarl/pymux#826.
+        "notification-popup": "bg:%s %s" % (r["surface"], r["text"]),
+        "notification-popup.border": "%s" % (r["accent"],),
+        "notification-popup.title": "bold %s" % (r["text-bright"],),
         # The row the window chooser points at. It borrows the title
         # bar's colours, so the selection reads the way a title does.
         # Lillecarl/pymux#295.

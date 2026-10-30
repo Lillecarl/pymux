@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .enums import AudioFrame, ClientAudio, FileTransfer, WindowScroll, Woke
+from .enums import AudioFrame, ClientAudio, FileTransfer, NotificationPopups, WindowScroll, Woke
 from .nearest import NEAREST
 from .option_fields import Options, option, options
 from .style import THEMES
@@ -197,4 +197,15 @@ class ClientOptions(Options):
             "Who saves a file a pane sends to the person: this terminal, or the pymux client on the "
             "person's machine. Lillecarl/pymux#743."
         ),
+    )
+    notification_popups: NotificationPopups = option(
+        NotificationPopups.AUTO,
+        doc=(
+            "Whether a notification shows as a box inside pymux: always, never, or with auto only when "
+            "this terminal does not show desktop notifications itself. Lillecarl/pymux#826."
+        ),
+    )
+    notification_popup_seconds: float = option(
+        5.0,
+        doc="How long a notification box stays on screen. Lillecarl/pymux#826.",
     )

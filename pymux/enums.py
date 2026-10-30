@@ -166,6 +166,16 @@ class FileTransfer(StrEnum):
     PASSTHROUGH = "passthrough"
 
 
+class NotificationPopups(StrEnum):
+    "Whether a client shows a notification as a box inside pymux. Lillecarl/pymux#826."
+
+    #: Only when the client's terminal is not known to show desktop
+    #: notifications itself (`ServerConnection.notification_osc`).
+    AUTO = "auto"
+    ON = "on"
+    OFF = "off"
+
+
 class WindowScroll(StrEnum):
     """
     What one scroll event from a client's terminal does to a Wayland

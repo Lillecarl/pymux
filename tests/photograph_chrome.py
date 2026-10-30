@@ -181,7 +181,12 @@ DEMO = Path(__file__).parent / "demo_application.py"
 #: edges. That is the point of photographing a theme at all.
 #: `photograph_themes.py` set it on two fixtures by hand before this,
 #: which is the same thing said once.
-CHROME = "set-option status on\nset-option pane-border-status on\nset-option test-mode on\nset-option paint-screen on\n"
+#: The relay's fences are OSC 99 notifications, so popups are off but
+#: where a fixture asks for them. Lillecarl/pymux#826.
+CHROME = (
+    "set-option status on\nset-option pane-border-status on\nset-option test-mode on\nset-option paint-screen on\n"
+    "set-client-option notification-popups off\n"
+)
 
 #: The prefix, and the keys that reach a binding behind it. `rc.py` is
 #: where these are bound: `"` splits a pane in two, top and bottom, and
@@ -348,6 +353,9 @@ def demo_keys():
         (0.8, ("python %s\n" % (shlex.quote(str(DEMO)),)).encode("ascii")),
     )
 
+
+#: The program of the window that notifies, for `notification-popups`.
+NOTIFY_TWICE = Path(__file__).parent / "notify_twice.py"
 
 #: Opens foot on the pymux server's own compositor.
 OPEN_A_WINDOW = Path(__file__).parent / "open_a_window.sh"
@@ -563,6 +571,19 @@ FIXTURES = {
         CHROME + "set-option which-key on\n",
         keys((0.0, PREFIX), (0.8, b"")),
         prefix=True,
+    ),
+    # Two notifications from a window nobody looks at, as boxes in the
+    # corner away from the cursor, newest on top. The cursor is at the
+    # top left, so the boxes go top right. The boxes "Ym9vdA==" and
+    # "a2V5cw==" are the relay's own fences, sent after the option is
+    # on. Lillecarl/pymux#826.
+    "notification-popups": Fixture(
+        CHROME + "set-client-option notification-popups on\nset-client-option notification-popup-seconds 60\n",
+        keys(
+            *create_command("new-window -d %s" % (shlex.quote("python %s" % (NOTIFY_TWICE,)),)),
+            (2.0, b""),
+        ),
+        (1, 1),
     ),
     # The window chooser: a bar across the top, over the window it
     # points at. It is not a box, and the preview is the switch itself

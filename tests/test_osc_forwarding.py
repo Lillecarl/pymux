@@ -9,12 +9,14 @@ comes from a program in a pane, so it is checked first.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 from pyte import escape
 from pyte.osc import PointerShapes
 from pyte.sequences import Terminator, csi, osc
 
-from pymux.enums import Clipboard
+from pymux.enums import Clipboard, NotificationPopups
 from pymux.main import Pymux
 from pymux.osc import MAX_OSC_LENGTH, build_osc
 from pymux.terminals import pointer_shape_of
@@ -136,6 +138,9 @@ class FakeClientState:
     border_drag = None
     # Out of sight, so a notification goes out. Lillecarl/pymux#799.
     terminal_focused = False
+    chooser = None
+    popups: tuple = ()
+    options = SimpleNamespace(notification_popups=NotificationPopups.OFF)
 
 
 class FakeScreen:

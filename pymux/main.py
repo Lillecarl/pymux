@@ -80,6 +80,7 @@ from .enums import (
     EditingKeys,
     FileTransfer,
     ForwardMode,
+    NotificationPopups,
     OpenUrlMode,
     OpenUrlTarget,
     RenderMode,
@@ -238,6 +239,10 @@ MAX_KEYS_TO_REMEMBER = 512
 #: program that mints names without end loses the oldest, the way the
 #: notification hub does.
 MAX_USER_VARS = 64
+
+#: How many notification boxes one client stacks; a new one pushes the
+#: oldest off. Lillecarl/pymux#826.
+MAX_POPUPS = 5
 
 #: The rows "OSC 133" marks: where a prompt starts, and where the output
 #: of a command starts.
@@ -417,6 +422,7 @@ class ClientState:
         "choose_window_along": Keep.DROPPED,
         "choose_window_filter": Keep.SAVED,
         "choose_window_command": Keep.SAVED,
+        "popups": Keep.DROPPED,  # a few seconds each
         # The application and what it is made of.
         "pymux": Keep.REBUILT,
         "connection": Keep.REBUILT,
@@ -590,6 +596,9 @@ class ClientState:
         # runs the same keys over its own rows.
         # Lillecarl/pymux#295. Lillecarl/pymux#304.
         self.chooser: Chooser | None = None
+        #: The notifications this client shows as boxes, newest last.
+        #: Lillecarl/pymux#826.
+        self.popups: list[Notification] = []
         self.choose_window_index = 0
         self.choose_window_command = ""
         #: The place along a line that j and k aim for. A shorter line
@@ -2152,6 +2161,7 @@ class Pymux:
 
     def _notified(self, record: Notification) -> None:
         "Mark the window a notification came from. Lillecarl/pymux#767."
+        self._pop_up(record)
         found = self.window_of_pane(record.pane_id)
         if found is None:
             return
@@ -2160,6 +2170,53 @@ class Pymux:
             self.invalidate(Woke.WINDOW_MARKED)
         if record.source not in (NotificationSource.OSC_99, NotificationSource.UNKNOWN):
             self._send_clickable(record, pane)
+
+    def _pop_up(self, record: Notification) -> None:
+        """
+        Show a notification as a box on each client that asks for one,
+        for `notification-popup-seconds`. Not for a pane a client with
+        the focus already shows, as a desktop notification is not.
+        Lillecarl/pymux#826.
+        """
+        if record.pane_id is not None and record.pane_id in self._panes_in_sight():
+            return
+        shown = False
+        for connection, client_state in self._client_states.items():
+            if client_state.temporary:
+                continue
+            wanted = client_state.options.notification_popups
+            if wanted is NotificationPopups.OFF or (
+                wanted is NotificationPopups.AUTO and connection is not None and connection.notification_osc is not None
+            ):
+                continue
+            client_state.popups = [*client_state.popups, record][-MAX_POPUPS:]
+            if self.tasks is not None:
+                self.tasks.start_soon(
+                    self._take_down, client_state, record, client_state.options.notification_popup_seconds
+                )
+            shown = True
+        if shown:
+            self.invalidate(Woke.NOTIFICATION_SENT)
+
+    async def _take_down(self, client_state: ClientState, record: Notification, seconds: float) -> None:
+        await anyio.sleep(seconds)
+        self.drop_popup(client_state, record)
+
+    def drop_popup(self, client_state: ClientState, record: Notification) -> None:
+        if record in client_state.popups:
+            client_state.popups = [one for one in client_state.popups if one is not record]
+            self.invalidate(Woke.NOTIFICATION_SENT)
+
+    def _drop_seen_popups(self) -> None:
+        "A box goes once its pane is seen, as a desktop notification does."
+        showing = [state for state in self._client_states.values() if state.popups]
+        if not showing:
+            return
+        seen = self._panes_in_sight()
+        for client_state in showing:
+            for record in client_state.popups:
+                if record.pane_id in seen:
+                    self.drop_popup(client_state, record)
 
     def _send_clickable(self, record: Notification, pane: Pane) -> None:
         """
@@ -2501,6 +2558,7 @@ class Pymux:
         Lillecarl/pymux#795.
         """
         self._close_seen_notifications()
+        self._drop_seen_popups()
         focused = set()
         for client_state in self._client_states.values():
             if client_state.terminal_focused and not client_state.temporary:

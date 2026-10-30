@@ -188,8 +188,9 @@ class Pane:
         # `set-client-option`, because full screen belongs to the
         # terminal a person is sitting at. The client reads this file
         # for itself and announces the line when it attaches.
-        # Lillecarl/pymux#471.
-        config.write_text("set-client-option full-screen on\n")
+        # Lillecarl/pymux#471. The fences are OSC 99 notifications, and
+        # a box for each would draw over the screen. Lillecarl/pymux#826.
+        config.write_text("set-client-option full-screen on\nset-client-option notification-popups off\n")
 
         size = self.size_file
 

@@ -30,6 +30,8 @@ from collections.abc import Callable, Container
 from enum import StrEnum
 from typing import Final, NamedTuple
 
+from pyte.osc import Osc
+
 from pymux.ids import PaneId
 
 __all__ = ["QUERY", "QUERY_IDENTIFIER", "Notification", "NotificationCenter", "NotificationRoutes", "Route"]
@@ -299,6 +301,23 @@ def is_question(param: str) -> bool:
     "Whether an OSC 99 payload asks the terminal something rather than shows a notification."
     metadata, _semicolon, _text = split_payload(param)
     return read_payload_type(metadata) in _QUESTIONS
+
+
+#: The notification each terminal shows that answers no OSC 99 query,
+#: by the first word of its XTVERSION answer: iTerm2 shows OSC 9, and
+#: WezTerm, Ghostty and foot show OSC 777 as well. Lillecarl/pymux#826.
+_SHOWN_BY_NAME: Final = {
+    "iterm2": Osc.MESSAGE,
+    "wezterm": Osc.SIMPLE_NOTIFICATION,
+    "ghostty": Osc.SIMPLE_NOTIFICATION,
+    "foot": Osc.SIMPLE_NOTIFICATION,
+}
+
+
+def notification_osc_of(version: str) -> Osc | None:
+    "The notification OSC the terminal that answered XTVERSION with `version` shows, or None when unknown."
+    words = version.split(maxsplit=1)
+    return _SHOWN_BY_NAME.get(words[0].split("(", 1)[0].lower()) if words else None
 
 
 def can_close(answer: str) -> bool:

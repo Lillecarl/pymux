@@ -26,7 +26,7 @@ from libpymux.protocol import Packet
 from session import once
 from test_a_session_on_a_pyte_screen import attached, shows
 
-from pymux.enums import Clipboard
+from pymux.enums import Clipboard, NotificationPopups
 from pymux.main import Pymux
 from pymux.server import ServerConnection, _FrameOutput, _SocketStdout
 
@@ -183,6 +183,8 @@ async def test_a_real_client_holds_it_through_a_flush_between_frames():
             # Lillecarl/pymux#799.
             connection.client_state.terminal_focused = False
 
+            # The fence is a notification, and its box would cover the line.
+            connection.client_state.options.notification_popups = NotificationPopups.OFF
             fence = "\x1b]99;;fence-611\x1b\\"
             pane.terminal.terminal_control.feed_output("drawn-before-the-fence" + fence)
             connection._flush_output()
