@@ -833,6 +833,13 @@ def _named(event: KeyEvent) -> _KeyResult | None:
         if text and not mods & _CTRL:
             return _with_alt(text, mods)
 
+        # The shifted key, which the layout gives as well: ':' for
+        # shift+; on a US layout. kitty sends it with no text in a
+        # keyboard mode that passes every key on.
+        shifted = event.alternates[0] if event.alternates else None
+        if shifted is not None and mods & _SHIFT and not mods & _CTRL:
+            return _with_alt(chr(shifted), mods)
+
     elif final == "~":
         if _TILDE_KEYS.get(key) is None:
             return Unnamed(UnnamedReason.TILDE_KEY_WITH_NO_NAME)

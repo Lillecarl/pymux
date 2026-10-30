@@ -103,9 +103,17 @@ def test_ctrl_shift_text_key():
     assert parse("\x1b[120;6u") == [(Keys.ControlShiftX, "\x1b[120;6u")]
 
 
-def test_alternate_key_codes_are_ignored():
-    # "CSI 97:65 ; 2 u" carries 'a' with alternate 'A'.
+def test_the_shifted_key_is_the_character_shift_types():
+    """
+    kitty sends shift+; as the key, its shifted key and shift when a
+    keyboard mode passes every key on. The shifted key is ':', and
+    shift on ';' alone is ';' again, so prefix : never opened the
+    command prompt.
+    """
+    assert parse("\x1b[59:58;2u") == [(":", "\x1b[59:58;2u")]
     assert parse("\x1b[97:65;2u") == [("A", "\x1b[97:65;2u")]
+    # Alt keeps its escape in front of the shifted key.
+    assert parse("\x1b[59:58;4u") == [(Keys.Escape, "\x1b[59:58;4u"), (":", "")]
 
 
 def test_release_keeps_its_sequence_under_key_of_its_own():
