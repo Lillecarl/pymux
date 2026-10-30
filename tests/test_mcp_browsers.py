@@ -107,8 +107,13 @@ async def test_an_agent_fills_a_form_and_reads_what_the_page_logged(server, seat
     (tab,) = await call(server, "browser.tabs", name="probe")
     assert tab["title"] == "probe", tab
 
+    pid = browser._pid(profile)
+    assert pid is not None
     await call(server, "browser.close", name="probe")
     assert await call(server, "browser.list") == []
+    # A pane's window closes before Chromium ends, which writes into the
+    # profile until it does.
+    assert not browser._alive(pid)
     assert not profile.exists()
     if seat == "pane":
         # Its window went with it, and no window of Chromium opened again.

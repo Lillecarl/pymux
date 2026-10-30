@@ -32,6 +32,7 @@ import os
 import re
 import shlex
 import shutil
+import signal
 import tempfile
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
@@ -371,7 +372,11 @@ async def close(browser: Browser) -> None:
 
     Chromium is asked to quit first. Killing a window pane closes one of
     its windows and nothing more, and the next one opens in its place.
+
+    The profile goes only once Chromium's process ended: its last window
+    closes before it does, and it writes into the profile until then.
     """
+    pid = _pid(browser.profile)
     try:
         endpoint = browser.endpoint()
         if endpoint is not None:
@@ -389,8 +394,33 @@ async def close(browser: Browser) -> None:
                 await pane.kill()
         elif await _held(browser):
             await browser.holder.kill()
+        if pid is not None:
+            with anyio.move_on_after(QUIT_TIMEOUT):
+                while _alive(pid):
+                    await anyio.sleep(0.1)
+            if _alive(pid):
+                os.kill(pid, signal.SIGKILL)
     finally:
         _forget(browser.profile)
+
+
+def _pid(profile: Path) -> int | None:
+    "The process that has the profile open, from the `host-pid` Chromium links its `SingletonLock` to."
+    try:
+        _host, _, pid = os.readlink(profile / "SingletonLock").rpartition("-")
+    except OSError:
+        return None
+    return int(pid) if pid.isdigit() else None
+
+
+def _alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
 
 
 def _an_extension(directory: str) -> None:
