@@ -67,6 +67,50 @@ def drawn(state) -> list[str]:
     return ["".join(screen.data_buffer[y][x].char for x in range(size.columns)).rstrip() for y in range(size.rows)]
 
 
+async def test_a_frame_formats_each_side_of_the_status_line_once():
+    """
+    The room for the window list, the status line and `what_time_moves`
+    after the frame all read both sides, and a side may be a template.
+    Lillecarl/pymux#824.
+    """
+    async with in_this_process() as session:
+        state = await with_windows(session, DESK)
+        set_option(session.pymux, state, "status-left", "left-#{session_name}")
+        set_option(session.pymux, state, "status-right", "right-#{window_index}")
+        status = state.layout_manager.status
+        formatted: list[str] = []
+        format_one = status._format
+
+        def counted(string: str) -> str:
+            formatted.append(string)
+            return format_one(string)
+
+        status._format = counted
+        manager = state.layout_manager
+        size = state.app.output.get_size()
+        with set_app(state.app):
+            manager.frame_started(state.app)
+            try:
+                state.app.layout.container.write_to_screen(
+                    Screen(initial_width=size.columns),
+                    MouseHandlers(),
+                    WritePosition(xpos=0, ypos=0, width=size.columns, height=size.rows),
+                    parent_style="",
+                    erase_bg=False,
+                    z_index=None,
+                )
+                manager.what_time_moves()
+            finally:
+                manager.frame_ended(state.app)
+
+        assert formatted.count("left-#{session_name}") == 1, formatted
+        assert formatted.count("right-#{window_index}") == 1, formatted
+
+        # Between frames each read is fresh: the clock asks there.
+        status.right()
+        assert formatted.count("right-#{window_index}") == 2, formatted
+
+
 async def test_windows_that_fit_take_one_row():
     async with in_this_process() as session:
         state = await with_windows(session, DESK)

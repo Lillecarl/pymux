@@ -62,10 +62,16 @@ class StatusLine:
         #: room for the body asks it for every float and the plane
         #: asks it again, and each answer formats every window.
         self._frame_lines: list[StyleAndTextTuples] | None = None
+        #: `left` and `right`, while this client renders. The room for
+        #: the window list reads both, the status line draws them, and
+        #: `what_time_moves` reads them after: three formats a frame of
+        #: what may be a template. Lillecarl/pymux#824.
+        self._frame_sides: dict[str, str] = {}
 
     def frame_changed(self) -> None:
         "A render of this client starts or ends: the cached lines go."
         self._frame_lines = None
+        self._frame_sides = {}
 
     def _select_window_handler(self, window: arrangement.Window) -> Callable[[MouseEvent], NotImplementedOrNone]:
         "Return a mouse handler that selects the given window when clicking."
@@ -190,13 +196,22 @@ class StatusLine:
         return len(self._lines())
 
     def left(self) -> str:
-        return self._format(self.client_state.session.options.status_left)
+        return self._side("left", self.client_state.session.options.status_left)
 
     def right(self) -> str:
-        text = self._format(self.client_state.session.options.status_right)
+        text = self._side("right", self.client_state.session.options.status_right)
         if self._in_passthrough():
             text = PASSTHROUGH_MARK + text
         return text
+
+    def _side(self, side: str, string: str) -> str:
+        "One side of the status line, formatted once a render."
+        if self.layout.frame_plans is None:
+            return self._format(string)
+        found = self._frame_sides.get(side)
+        if found is None:
+            found = self._frame_sides[side] = self._format(string)
+        return found
 
     def _in_passthrough(self) -> bool:
         tables = self.client_state.key_tables
