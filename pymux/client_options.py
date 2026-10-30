@@ -146,6 +146,24 @@ class ClientOptions(Options):
     browser_profile: str = option(
         "", doc="The profile that browser runs with: empty for one pymux keeps. Lillecarl/pymux#653."
     )
+    frames_in_flight: int = option(
+        5,
+        doc=(
+            "The most frames on their way to this terminal at once, over a link where its answer says what "
+            "arrived. More lets an animation go faster than one frame a round trip; a key's frame waits "
+            "behind the ones ahead of it. 0 sets no limit. Lillecarl/pymux#259, Lillecarl/pymux#825."
+        ),
+        choices=[1, 2, 5, 10],
+    )
+    bytes_in_flight: int = option(
+        4096,
+        doc=(
+            "The most bytes of frames on their way to this terminal at once. A frame always goes when none "
+            "is, so a slow link still gets the newest screen and never a backlog. 0 sets no limit. "
+            "Lillecarl/pymux#825."
+        ),
+        choices=[1024, 4096, 16384, 65536],
+    )
     audio: ClientAudio = option(
         ClientAudio.ON,
         doc="Whether this machine plays the panes' sound and lends its microphone. Lillecarl/pymux#657.",

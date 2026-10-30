@@ -72,20 +72,25 @@ async def test_a_terminal_that_never_answered_is_not_waited_for():
         assert not state.connection.waits_for_terminal
 
 
+async def answered_all(session, state, in_flight: int = 1) -> None:
+    "Every report answered, so the terminal is known to answer; `in_flight` frames allowed out."
+    connection = state.connection
+    state.options.frames_in_flight = in_flight
+    for _ in range(len(connection.unread)):
+        session.typed(state, ANSWER)
+    await once(lambda: connection.answers_reports and not connection.unread, 5.0, "answers not read")
+
+
 async def test_after_an_answer_the_next_frame_waits_for_the_next_one():
     packets: list = []
     async with over_connection(read_packet=packets.append) as session:
         state = await attach_paced(session, packets)
         connection = state.connection
-
-        # Every report answered: the terminal is known to answer.
-        for _ in range(connection.reports_out):
-            session.typed(state, ANSWER)
-        await once(lambda: connection.answers_reports and not connection.reports_out, 5.0, "answers not read")
+        await answered_all(session, state)
 
         state.message = "one"
         redraw(state)
-        await once(lambda: connection.reports_out == 1, 5.0, "the frame never went")
+        await once(lambda: len(connection.unread) == 1, 5.0, "the frame never went")
         sent = len(frames_of(packets))
 
         # Unanswered: more changes draw nothing.
@@ -102,6 +107,49 @@ async def test_after_an_answer_the_next_frame_waits_for_the_next_one():
         await once(lambda: connection.waits_for_terminal, 5.0, "the new frame was not held for")
         assert len(frames_of(packets)) == sent + 1
         assert "three" in frames_of(packets)[-1]
+
+
+async def test_small_frames_go_until_the_count_is_out():
+    """
+    An animation runs faster than one frame a round trip: frames go
+    until `frames-in-flight` are unanswered. Lillecarl/pymux#825.
+    """
+    packets: list = []
+    async with over_connection(read_packet=packets.append) as session:
+        state = await attach_paced(session, packets)
+        connection = state.connection
+        await answered_all(session, state, in_flight=3)
+
+        for word in ("one", "two", "three", "four"):
+            state.message = word
+            redraw(state)
+            await once(lambda: connection.waits_for_terminal or word in frames_of(packets)[-1], 5.0, "no frame")
+        assert len(connection.unread) == 3
+        assert connection.waits_for_terminal
+        assert "four" not in frames_of(packets)[-1]
+
+        # One answer makes room for the newest screen.
+        session.typed(state, ANSWER)
+        await once(lambda: "four" in frames_of(packets)[-1], 5.0, "the answer drew nothing")
+
+
+async def test_a_frame_past_the_bytes_waits_however_few_frames():
+    """
+    What a key waits behind is bytes in the link, so a big frame holds
+    the next one though the count has room. Lillecarl/pymux#825.
+    """
+    packets: list = []
+    async with over_connection(read_packet=packets.append) as session:
+        state = await attach_paced(session, packets)
+        connection = state.connection
+        await answered_all(session, state, in_flight=5)
+        state.options.bytes_in_flight = 64
+
+        state.message = "x" * 70
+        redraw(state)
+        await once(lambda: len(connection.unread) == 1, 5.0, "the frame never went")
+        # Nothing was out, so it went whatever its size.
+        assert connection.waits_for_terminal
 
 
 #: The round trip to Carl's Mac, as the audio link measures it.
@@ -156,6 +204,7 @@ async def test_a_key_draws_within_a_round_trip_while_a_pane_animates():
 
         delays = []
         started = time.monotonic()
+        drawn_before = len(arrived)
         async with anyio.create_task_group() as tasks:
             tasks.start_soon(terminal)
             tasks.start_soon(spinner)
@@ -182,6 +231,10 @@ async def test_a_key_draws_within_a_round_trip_while_a_pane_animates():
         assert max(delays) < ROUND_TRIP * 1.6, sorted(delays)
         # Twenty spins and a key or two a second, and no spin of skips.
         assert redraws < 150, redraws
+        # Five frames may be out, so the spinner's twenty a second all go:
+        # one in flight held it to one a round trip. Lillecarl/pymux#825.
+        drawn = (len(arrived) - drawn_before) / seconds
+        assert drawn > 15, drawn
 
 
 async def test_the_answer_never_reaches_a_pane():

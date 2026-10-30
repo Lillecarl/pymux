@@ -4,6 +4,7 @@ import base64
 import json
 import re
 import time
+from collections import deque
 from collections.abc import Callable, Coroutine
 from contextlib import AbstractContextManager, suppress
 from typing import (
@@ -37,6 +38,7 @@ from pymux.commands.common import find_pane, terminal_of
 from .actions import Origin, started_by
 from .answer import Answer
 from .audio import AudioLink
+from .client_options import ClientOptions
 from .clusters import CLUSTER_WIDTH_PROBE, PROBE_ROWS, PROBES, Drawn, fitted, table_width, term_program_of
 from .colors import COLOR_QUERIES, ColorDetection, DefaultColors
 from .commands import handle_command
@@ -238,7 +240,8 @@ class ServerConnection:
         "_frames_out": Keep.DROPPED,
         # A new server asks its own reports, and learns again whether
         # the terminal answers them.
-        "reports_out": Keep.DROPPED,
+        "unread": Keep.DROPPED,
+        "frame_held": Keep.DROPPED,
         # The client asks again when it reattaches to the new server.
         "terminal_said": Keep.DROPPED,
         "answers_reports": Keep.DROPPED,
@@ -301,11 +304,14 @@ class ServerConnection:
         self._frames_shown.set()
 
         #: Whether this client said its terminal answers a status
-        #: report, the status reports asked and not yet answered, and
-        #: whether one ever was. Lillecarl/pymux#259.
+        #: report, the size of each frame whose report is not answered
+        #: yet, oldest first, and whether one ever was. Lillecarl/pymux#259.
         self.paced = False
-        self.reports_out = 0
+        self.unread: deque[int] = deque()
         self.answers_reports = False
+        #: A frame was skipped for the terminal, so its answer asks for
+        #: the next one. Lillecarl/pymux#824.
+        self.frame_held = False
 
         #: Every reply this client's terminal gave. Lillecarl/pymux#725.
         self.terminal_said = TerminalAnswers()
@@ -1755,37 +1761,47 @@ class ServerConnection:
     def _frame_went_out(self) -> None:
         self.frames_sent += 1
 
-    def _report_after_frame(self) -> str:
+    def _report_after_frame(self, size: int) -> str:
         """
-        What goes behind a frame: a status report, for a client whose
-        terminal answers one. The answer arrives once the terminal read
-        everything before it, which over ssh is the only thing that
-        says a frame reached the person. Lillecarl/pymux#259.
+        What goes behind a frame of `size` bytes: a status report, for a
+        client whose terminal answers one. The answer arrives once the
+        terminal read everything before it, which over ssh is the only
+        thing that says a frame reached the person. Lillecarl/pymux#259.
         """
         if not self.paced:
             return ""
-        self.reports_out += 1
+        self.unread.append(size + len(STATUS_REPORT))
         return STATUS_REPORT
 
     def _status_answered(self) -> None:
         """
         The terminal read a frame. A frame held back for it can draw.
         """
-        self.reports_out = max(0, self.reports_out - 1)
+        if self.unread:
+            self.unread.popleft()
         self.answers_reports = True
-        if self.client_state is not None and not self.reports_out:
+        if self.frame_held and not self.waits_for_terminal and self.client_state is not None:
+            self.frame_held = False
             self.client_state.app.invalidate()
 
     @property
     def waits_for_terminal(self) -> bool:
         """
-        Whether the next frame waits: a frame is in flight to a terminal
-        that has answered before. One that never answered is never
-        waited for, so a terminal that ignores the report costs nothing;
-        one that answered and went quiet holds one frame and no more,
-        which is the dead link of a phone that lost its signal.
+        Whether the next frame waits: as many frames, or as many bytes,
+        are on their way to a terminal that has answered before as this
+        client's `frames-in-flight` and `bytes-in-flight` allow. A frame
+        goes whenever none is, so a big one on a slow link waits for the
+        answer and never builds a backlog. One that never answered is
+        never waited for, so a terminal that ignores the report costs
+        nothing; one that answered and went quiet holds a few frames and
+        no more, which is the dead link of a phone that lost its signal.
+        Lillecarl/pymux#825.
         """
-        return self.answers_reports and self.reports_out > 0
+        if not self.answers_reports or not self.unread:
+            return False
+        options = self.client_state.options if self.client_state is not None else ClientOptions()
+        frames, size = options.frames_in_flight, options.bytes_in_flight
+        return bool(frames and len(self.unread) >= frames) or bool(size and sum(self.unread) >= size)
 
     def _create_app(
         self,
@@ -2033,7 +2049,7 @@ class _SocketStdout:
         send_packet: Callable[[Message], None],
         counters: Counters | None = None,
         frame_went_out: Callable[[], None] | None = None,
-        after_frame: Callable[[], str] | None = None,
+        after_frame: Callable[[int], str] | None = None,
     ) -> None:
         self.send_packet = send_packet
         self.counters = counters
@@ -2054,7 +2070,7 @@ class _SocketStdout:
         # those become one frame.
         written = "".join(self._buffer)
         if written and self.after_frame is not None:
-            written += self.after_frame()
+            written += self.after_frame(len(written))
         if self.counters is not None:
             self.counters.frame_went_out(len(written))
         if self.frame_went_out is not None:

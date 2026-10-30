@@ -325,6 +325,8 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     client_state.options.name = "desk"
     client_state.options.full_screen = True
     client_state.options.theme = "grey"
+    client_state.options.frames_in_flight = 2
+    client_state.options.bytes_in_flight = 16384
     pymux.returning_clients["gone"] = {
         "session_id": second.session_id,
         "previous_session_id": None,

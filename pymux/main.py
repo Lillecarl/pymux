@@ -762,6 +762,7 @@ class ClientState:
             self.app.invalidate()
             return True
         if self.connection.waits_for_terminal:
+            self.connection.frame_held = True
             return True
         pipe = self.connection.pipe_connection
         if pipe.holds_frames_while_behind and pipe.outstanding:
