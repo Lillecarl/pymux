@@ -77,6 +77,24 @@ class _NoPacing:
     frame_held = False
 
 
+class _NoReplies:
+    "A terminal that answered nothing, by the rules of `TerminalReplies`."
+
+    kitty_source_flags = 0
+
+    def __init__(self, connection: Connection) -> None:
+        self.connection = connection
+        self.terminal_said = TerminalAnswers()
+        self.notification_actions: frozenset[str] = frozenset()
+        self.notification_closes = False
+        self.notification_osc = None
+
+    @property
+    def identity(self) -> Identity:
+        "The same rule as `TerminalReplies.identity`."
+        return identify(self.connection.graphics.terminal_version, self.connection.colors.term)
+
+
 class Connection:
     """
     What `Pymux` asks a connection for, and nothing else.
@@ -88,7 +106,6 @@ class Connection:
     session in the suite builds one.
     """
 
-    kitty_source_flags = 0
     pointer_shape = None
     #: No mouse report ever arrives, and no shape ever goes out.
     pointer_cell = None
@@ -138,7 +155,7 @@ class Connection:
         self.size = DEFAULT_SIZE
         self.rate_down = Rate()
         self.rate_up = Rate()
-        self.terminal_said = TerminalAnswers()
+        self.replies = _NoReplies(self)
         self.recording = None
         self.client_id = ""
         self.starts_browsers = False
@@ -146,15 +163,7 @@ class Connection:
         self.saves_files = True
         self.pacing = _NoPacing()
         self.pointer_fraction = (0.5, 0.5)
-        self.notification_actions: frozenset[str] = frozenset()
-        self.notification_closes = False
-        self.notification_osc = None
         self.clipboard = _NoClipboard()
-
-    @property
-    def identity(self) -> Identity:
-        "The same rule as `ServerConnection.identity`."
-        return identify(self.graphics.terminal_version, self.colors.term)
 
     @property
     def name(self) -> str:

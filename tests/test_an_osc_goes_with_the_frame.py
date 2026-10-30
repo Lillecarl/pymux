@@ -184,13 +184,13 @@ async def test_a_real_client_holds_it_through_a_flush_between_frames():
             # Lillecarl/pymux#799.
             connection.client_state.terminal_focused = False
             # A kitty, so the fence goes as it came. Lillecarl/pymux#497.
-            connection.answered_notification_query = True
+            connection.replies.answered_notification_query = True
 
             # The fence is a notification, and its box would cover the line.
             connection.client_state.options.notification_popups = NotificationPopups.OFF
             fence = "\x1b]99;;fence-611\x1b\\"
             pane.terminal.terminal_control.feed_output("drawn-before-the-fence" + fence)
-            connection._flush_output()
+            connection.flush_output()
             await once(lambda: "fence-611" in written(session.packets), 10.0, "no fence")
 
             wire = written(session.packets)

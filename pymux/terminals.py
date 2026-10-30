@@ -169,7 +169,7 @@ class Terminals:
         # would drag the mask of every real client down with it for as
         # long as the command runs. Lillecarl/pymux#420.
         masks = [
-            0 if connection is None else connection.kitty_source_flags
+            0 if connection is None else connection.replies.kitty_source_flags
             for connection, client_state in self.pymux._client_states.items()
             if not client_state.temporary
         ]

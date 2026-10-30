@@ -23,7 +23,7 @@ async def away_from_a_pane(shows_notifications=False):
     "A client on a second window, its terminal focused; yields the pane of the first."
     async with create_session() as (pymux, state):
         (connection,) = [each for each, value in pymux._client_states.items() if value is state]
-        connection.notification_osc = Osc.NOTIFICATION if shows_notifications else None
+        connection.replies.notification_osc = Osc.NOTIFICATION if shows_notifications else None
         connection.forward_osc = lambda _sequence: None
         with set_app(state.app):
             first = pymux.current_session.arrangement.get_active_window()

@@ -28,7 +28,7 @@ def frames_of(packets: list) -> str:
 async def test_every_reply_is_kept_with_a_count():
     async with over_connection() as session:
         state, _ = await session.attach("phone", SIZE)
-        said = state.connection.terminal_said
+        said = state.connection.replies.terminal_said
 
         session.typed(state, DA2)
         session.typed(state, MOUSE_MODE)
@@ -48,7 +48,7 @@ async def test_the_secondary_attributes_never_reach_a_pane():
         pane.process.write_input = written.append
 
         session.typed(state, DA2)
-        await once(lambda: len(state.connection.terminal_said) == 1, 5.0, "the reply was not read")
+        await once(lambda: len(state.connection.replies.terminal_said) == 1, 5.0, "the reply was not read")
 
         assert "".join(written) == ""
 
@@ -70,7 +70,7 @@ async def test_show_terminal_lists_them():
         session.typed(state, DA2)
         session.typed(state, STATUS)
         session.typed(state, STATUS)
-        said = state.connection.terminal_said
+        said = state.connection.replies.terminal_said
         await once(lambda: sum(answer.count for answer in said) == 3, 5.0, "the replies were not kept")
 
         pymux.answer = answer = Answer()

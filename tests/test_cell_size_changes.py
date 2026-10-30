@@ -25,7 +25,7 @@ async def test_a_resize_asks_the_cell_again_and_the_answer_is_taken():
         connection = state.connection
         session.typed(state, "\x1b[6;35;19t")
         await once(lambda: connection.graphics.cell_width == 19, 5.0, "the first cell was not read")
-        connection.pixel_mouse = True
+        connection.replies.pixel_mouse = True
 
         packets.clear()
         connection._process({Field.CMD: Packet.SIZE, Field.DATA: [SIZE.rows, SIZE.columns]})
@@ -33,4 +33,4 @@ async def test_a_resize_asks_the_cell_again_and_the_answer_is_taken():
 
         session.typed(state, "\x1b[6;18;10t")
         await once(lambda: connection.graphics.cell_width == 10, 5.0, "the new cell was not read")
-        assert connection._pixel_cell()[:2] == (10, 18)
+        assert connection.replies.pixel_cell()[:2] == (10, 18)

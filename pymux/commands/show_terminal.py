@@ -34,7 +34,7 @@ def show_terminal(pymux: Pymux, args: argparse.Namespace) -> None:
         "term %s" % (connection.colors.term or "-",),
         "colorterm %s" % (connection.colors.colorterm or "-",),
     ]
-    for answer in connection.terminal_said:
+    for answer in connection.replies.terminal_said:
         when = datetime.datetime.fromtimestamp(answer.last).strftime("%H:%M:%S")
         lines.append("%s  x%d  %s" % (readable(answer.text), answer.count, when))
     show_listing(pymux, "show-terminal", "\n".join(lines))

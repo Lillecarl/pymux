@@ -321,7 +321,7 @@ class Outward:
                 # client: nothing to send to. Lillecarl/pymux#493.
                 if connection is None or code in (Osc.SIMPLE_NOTIFICATION, Osc.MESSAGE):
                     continue
-                if code == Osc.NOTIFICATION and connection.notification_osc is not Osc.NOTIFICATION:
+                if code == Osc.NOTIFICATION and connection.replies.notification_osc is not Osc.NOTIFICATION:
                     continue
                 connection.forward_osc(sequence)
 
@@ -556,7 +556,7 @@ class Outward:
             return
         # Only `SshClient` says it can forward, so this is the fact that
         # the client came over SSH.
-        terminal_saves = client.connection.identity.saves_downloads
+        terminal_saves = client.connection.replies.identity.saves_downloads
         route = route_of(client.options.file_transfer, client.connection.can_forward, terminal_saves)
         refused = None
         if route is FileTransfer.PASSTHROUGH and not terminal_saves:

@@ -170,7 +170,7 @@ class NotificationPopups(StrEnum):
     "Whether a client shows a notification as a box inside pymux. Lillecarl/pymux#826."
 
     #: Only when the client's terminal is not known to show desktop
-    #: notifications itself (`ServerConnection.notification_osc`).
+    #: notifications itself (`TerminalReplies.notification_osc`).
     AUTO = "auto"
     ON = "on"
     OFF = "off"

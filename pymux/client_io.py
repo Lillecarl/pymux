@@ -121,7 +121,7 @@ class FrameOutput(Vt100_Output):
         #: terminal would widen. Lillecarl/pymux#539.
         self.narrows_text_emoji: Callable[[], bool] = lambda: False
         #: How to fit each grapheme cluster to the width this terminal
-        #: draws it: `ServerConnection.cluster_fit`. Lillecarl/pymux#798.
+        #: draws it: `TerminalReplies.cluster_fit`. Lillecarl/pymux#798.
         self.cluster_fit: Callable[[], str | Drawn | None] = lambda: None
 
     @override

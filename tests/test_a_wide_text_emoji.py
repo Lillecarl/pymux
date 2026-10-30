@@ -13,7 +13,7 @@ from prompt_toolkit.data_structures import Size
 from session import once, over_connection
 
 from pymux.main import Pymux
-from pymux.server import EMOJI_WIDTH_PROBE
+from pymux.replies import EMOJI_WIDTH_PROBE
 
 SIZE = Size(rows=10, columns=40)
 EMOJI = "✳️"
@@ -44,7 +44,7 @@ async def _answered(answer: str, drawn: str) -> tuple[str, bool]:
         before = len(recorder.out)
         state.connection._process({"cmd": "in", "data": answer})
         await once(lambda: drawn in recorder.out[before:], 10.0, lambda: "never drawn: %r" % recorder.out[before:])
-        return recorder.out[before:], state.connection.widens_text_emoji
+        return recorder.out[before:], state.connection.replies.widens_text_emoji
 
 
 async def test_a_terminal_that_widens_it_is_sent_the_character_alone():
@@ -67,4 +67,4 @@ async def test_a_terminal_that_keeps_it_narrow_changes_nothing():
         before = len(recorder.out)
         state.connection._process({"cmd": "in", "data": "\x1b[2;2R"})
         await once(lambda: EMOJI in recorder.out[before:], 10.0, lambda: "never drawn: %r" % recorder.out[before:])
-        assert not state.connection.widens_text_emoji
+        assert not state.connection.replies.widens_text_emoji

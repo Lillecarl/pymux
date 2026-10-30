@@ -48,10 +48,9 @@ class FakeConnection:
 
     def __init__(self, notification_actions=frozenset()):
         self.written = []
-        self.notification_actions = notification_actions
         # An iTerm2: it shows OSC 9, and an attention request as it came.
         # Lillecarl/pymux#497.
-        self.notification_osc = Osc.MESSAGE
+        self.replies = SimpleNamespace(notification_actions=notification_actions, notification_osc=Osc.MESSAGE)
 
     def forward_osc(self, data):
         self.written.append(data)

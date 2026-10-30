@@ -110,9 +110,8 @@ class FakeConnection:
     def __init__(self):
         self.written = []
         self._pointer_shape_sent = ""
-        self.notification_actions = frozenset()
         # A kitty: it shows OSC 99. Lillecarl/pymux#497.
-        self.notification_osc = Osc.NOTIFICATION
+        self.replies = SimpleNamespace(notification_actions=frozenset(), notification_osc=Osc.NOTIFICATION)
         self.pointer_cell = None
 
     def forward_osc(self, data):
@@ -255,7 +254,7 @@ FROM = {
 def test_each_terminal_gets_a_notification_in_the_osc_it_shows(source, shows, wanted):
     "Every notification OSC in, every one out, per client. Lillecarl/pymux#497."
     pymux, (connection, _other) = make_pymux()
-    connection.notification_osc = shows
+    connection.replies.notification_osc = shows
     for code, param in FROM[source]:
         pymux.outward.forward_osc(FakePane(), code, param)
     assert connection.written == [sequence(*one) for one in wanted]

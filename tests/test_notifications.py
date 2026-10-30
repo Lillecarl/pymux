@@ -361,16 +361,18 @@ def test_pymux_s_own_notification_is_base64_and_asks_for_the_click():
 
 def _clicked(pymux, state, param):
     "kitty's answer arriving on the connection of the client `state` is."
-    from pymux.server import ServerConnection
+    from pymux.replies import TerminalReplies
 
-    ServerConnection._route_notification(SimpleNamespace(pymux=pymux, client_state=state), param)
+    TerminalReplies._route_notification(
+        SimpleNamespace(connection=SimpleNamespace(pymux=pymux, client_state=state)), param
+    )
 
 
 async def test_a_click_on_a_notification_shows_its_pane():
     async with create_session() as (pymux, state):
         (connection,) = [each for each, value in pymux._client_states.items() if value is state]
-        connection.notification_actions = frozenset({"focus", "report"})
-        connection.notification_osc = Osc.NOTIFICATION
+        connection.replies.notification_actions = frozenset({"focus", "report"})
+        connection.replies.notification_osc = Osc.NOTIFICATION
         sent = []
         connection.forward_osc = sent.append
         # Out of sight, so the notification goes out. Lillecarl/pymux#799.
@@ -421,10 +423,10 @@ async def test_steal_focus_shows_the_pane_when_the_session_allows_it():
 
 
 def test_the_query_answer_says_what_the_terminal_takes():
-    from pymux.server import ServerConnection
+    from pymux.replies import TerminalReplies
 
     connection = SimpleNamespace(notification_actions=frozenset())
-    ServerConnection._route_notification(connection, "i=pymux:p=?;a=focus,report:o=always:u=0,1,2:p=title,body")
+    TerminalReplies._route_notification(connection, "i=pymux:p=?;a=focus,report:o=always:u=0,1,2:p=title,body")
     assert connection.notification_actions == {"focus", "report"}
 
 
@@ -432,8 +434,8 @@ async def test_a_terminal_that_reports_clicks_gets_osc_777_as_osc_99():
     "A terminal that shows OSC 99 gets every notification as one, so a click shows the pane."
     async with create_session() as (pymux, state):
         (connection,) = [each for each, value in pymux._client_states.items() if value is state]
-        connection.notification_actions = frozenset({"report"})
-        connection.notification_osc = Osc.NOTIFICATION
+        connection.replies.notification_actions = frozenset({"report"})
+        connection.replies.notification_osc = Osc.NOTIFICATION
         sent = []
         connection.forward_osc = sent.append
         state.terminal_focused = False
@@ -452,16 +454,16 @@ def test_the_query_answer_says_whether_the_terminal_closes():
     Mac. `c=1` says the terminal reports a close a person made, which is
     another thing. Lillecarl/pymux#799.
     """
-    from pymux.server import ServerConnection
+    from pymux.replies import TerminalReplies
 
     kitty = (
         "a=focus,report:o=always,unfocused,invisible:u=0,1,2:p=title,body,?,close,icon,alive,buttons"
         ":w=1:s=system,silent,error,info,question,warn,warning"
     )
     connection = SimpleNamespace(notification_actions=frozenset(), notification_closes=False)
-    ServerConnection._route_notification(connection, "i=pymux:p=?;" + kitty)
+    TerminalReplies._route_notification(connection, "i=pymux:p=?;" + kitty)
     assert connection.notification_closes
-    ServerConnection._route_notification(connection, "i=pymux:p=?;a=focus,report:c=1:o=always:p=title,body")
+    TerminalReplies._route_notification(connection, "i=pymux:p=?;a=focus,report:c=1:o=always:p=title,body")
     assert not connection.notification_closes
 
 
@@ -482,8 +484,8 @@ async def test_a_look_at_the_window_closes_its_notification_on_the_terminal():
     "Once a client whose terminal has the focus shows the window. Lillecarl/pymux#799."
     async with create_session() as (pymux, state):
         (connection,) = [each for each, value in pymux._client_states.items() if value is state]
-        connection.notification_actions = frozenset({"report"})
-        connection.notification_closes = True
+        connection.replies.notification_actions = frozenset({"report"})
+        connection.replies.notification_closes = True
         sent = []
         connection.forward_osc = sent.append
         with set_app(state.app):
@@ -504,8 +506,8 @@ async def test_the_window_chooser_closes_only_what_was_chosen():
     "Its preview switches to each window it points at, and that is no look."
     async with create_session() as (pymux, state):
         (connection,) = [each for each, value in pymux._client_states.items() if value is state]
-        connection.notification_actions = frozenset({"report"})
-        connection.notification_closes = True
+        connection.replies.notification_actions = frozenset({"report"})
+        connection.replies.notification_closes = True
         sent = []
         connection.forward_osc = sent.append
         chooser = state.layout_manager.chooser
@@ -531,7 +533,7 @@ async def test_a_window_in_sight_sends_no_notification_out():
     """
     async with create_session() as (pymux, state):
         (connection,) = [each for each, value in pymux._client_states.items() if value is state]
-        connection.notification_osc = Osc.NOTIFICATION
+        connection.replies.notification_osc = Osc.NOTIFICATION
         sent = []
         connection.forward_osc = sent.append
         with set_app(state.app):

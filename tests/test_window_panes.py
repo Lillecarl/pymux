@@ -739,7 +739,7 @@ async def test_a_terminal_that_can_never_report_pixels_keeps_the_mouse_in_cells(
         state.connection._process({"cmd": "kitty-detect"})
         state.connection._process({"cmd": "in", "data": "\x1b[?1016;4$y"})
         state.connection._process({"cmd": "in", "data": "\x1b[0n"})
-        assert not state.connection.pixel_mouse
+        assert not state.connection.replies.pixel_mouse
 
 
 async def test_a_terminal_that_keeps_its_cell_size_keeps_the_mouse_in_cells(tmp_path):
@@ -758,7 +758,7 @@ async def test_a_terminal_that_keeps_its_cell_size_keeps_the_mouse_in_cells(tmp_
         for end in ("M", "m"):
             state.connection._process({"cmd": "in", "data": "\x1b[<0;%d;%d%s" % (x + 1, y + 1, end)})
         await once(lambda: "button 272 0" in logged(log), 10.0, lambda: "no click: %s" % logged(log)[-6:])
-        assert not state.connection.pixel_mouse
+        assert not state.connection.replies.pixel_mouse
         width, height = pymux.terminals.cell_size()
         motion = [line for line in logged(log) if line.startswith("motion")][-1]
         assert motion == "motion %d %d" % (3.5 * width, 1.5 * height)

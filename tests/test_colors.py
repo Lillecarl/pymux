@@ -391,7 +391,7 @@ def test_theme_report_asks_for_colours_again(report):
         output = Output()
         connection.client_state = SimpleNamespace(output=output)
 
-        connection._handle_kitty_reply(report)
+        connection.replies.arrived(report)
 
         assert output.written == [COLOR_QUERIES]
         connection._close_connection()
@@ -422,7 +422,7 @@ def test_in_band_size_report_sets_size_and_cell():
         output = Output()
         connection.client_state = SimpleNamespace(output=output)
 
-        connection._handle_kitty_reply("\x1b[48;30;100;600;800t")
+        connection.replies.arrived("\x1b[48;30;100;600;800t")
 
         assert (connection.size.rows, connection.size.columns) == (30, 100)
         assert (connection.graphics.cell_width, connection.graphics.cell_height) == (8, 20)
@@ -443,8 +443,8 @@ def test_reply_lands_on_connection_that_carried_it():
         one = ServerConnection(FakePymux(), FakePipe())
         other = ServerConnection(FakePymux(), FakePipe())
 
-        one._handle_kitty_reply(osc("11", "rgb:1e1e/1e1e/2e2e"))
-        other._handle_kitty_reply(osc("11", "rgb:ffff/ffff/ffff"))
+        one.replies.arrived(osc("11", "rgb:1e1e/1e1e/2e2e"))
+        other.replies.arrived(osc("11", "rgb:ffff/ffff/ffff"))
 
         assert one.default_colors.background == Color(0x1E, 0x1E, 0x2E)
         assert other.default_colors.background == Color(0xFF, 0xFF, 0xFF)
@@ -460,9 +460,9 @@ def test_colour_arriving_after_detection_is_still_read():
 
     async def check():
         connection = ServerConnection(FakePymux(), FakePipe())
-        assert not connection._kitty_detection_pending
+        assert not connection.replies.detection_pending
 
-        connection._handle_kitty_reply(osc("11", "rgb:0000/0000/0000"))
+        connection.replies.arrived(osc("11", "rgb:0000/0000/0000"))
 
         assert connection.default_colors.background == Color(0, 0, 0)
         connection._close_connection()
@@ -481,8 +481,8 @@ def test_learned_colour_tells_panes_again():
         pymux = FakePymux()
         connection = ServerConnection(pymux, FakePipe())
 
-        connection._handle_kitty_reply(osc("4", "1;rgb:ffff/0000/0000"))
-        connection._handle_kitty_reply(osc("11", "rgb:0000/0000/0000"))
+        connection.replies.arrived(osc("4", "1;rgb:ffff/0000/0000"))
+        connection.replies.arrived(osc("11", "rgb:0000/0000/0000"))
 
         assert pymux.terminals.color_base_syncs == 2
         connection._close_connection()
@@ -497,10 +497,10 @@ def test_reply_that_learns_nothing_tells_panes_nothing():
         pymux = FakePymux()
         connection = ServerConnection(pymux, FakePipe())
 
-        connection._handle_kitty_reply(osc("4", "20;rgb:ffff/0000/0000"))
+        connection.replies.arrived(osc("4", "20;rgb:ffff/0000/0000"))
         # The cursor is a colour pymux does not draw with, and an
         # index beyond the sixteen is one nobody asked for.
-        connection._handle_kitty_reply(osc("12", "rgb:ffff/0000/0000"))
+        connection.replies.arrived(osc("12", "rgb:ffff/0000/0000"))
 
         assert pymux.terminals.color_base_syncs == 0
         connection._close_connection()

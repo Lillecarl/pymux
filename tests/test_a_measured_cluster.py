@@ -40,7 +40,7 @@ async def test_a_flag_the_terminal_draws_one_column_wide_is_padded():
         # The renderer puts the cursor back after the cell itself, so
         # the blank is all that tells.
         await once(lambda: FLAG + " " in recorder.out[before:], 10.0, lambda: "never drawn: %r" % recorder.out[before:])
-        assert state.connection.clusters_drawn == Drawn(flag=1)
+        assert state.connection.replies.clusters_drawn == Drawn(flag=1)
 
 
 async def test_the_answers_outrank_the_table_of_the_terminal():
@@ -51,11 +51,13 @@ async def test_the_answers_outrank_the_table_of_the_terminal():
         connection._process({"cmd": "kitty-detect"})
         connection._process({"cmd": "in", "data": "\x1bP>|WezTerm 20240203-110809-5046fc22\x1b\\"})
         await once(
-            lambda: connection.cluster_fit() == "wezterm", 10.0, lambda: "fitted by %r" % connection.cluster_fit()
+            lambda: connection.replies.cluster_fit() == "wezterm",
+            10.0,
+            lambda: "fitted by %r" % connection.replies.cluster_fit(),
         )
         connection._process({"cmd": "in", "data": "\x1b[3;3R\x1b[4;3R\x1b[5;3R"})
-        await once(lambda: connection.clusters_drawn.heard(), 10.0, "the answers never arrived")
-        assert connection.cluster_fit() is None
+        await once(lambda: connection.replies.clusters_drawn.heard(), 10.0, "the answers never arrived")
+        assert connection.replies.cluster_fit() is None
 
 
 async def test_what_the_probes_erase_is_drawn_again():

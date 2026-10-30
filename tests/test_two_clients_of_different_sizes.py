@@ -221,10 +221,10 @@ async def test_focus_in_uses_client():
     async with two_clients(["set-window-option window-size latest"]) as (pymux, big, _small):
         connection = ServerConnection(pymux, FakePipe())
         connection.client_state = big.state
-        connection._handle_kitty_reply(FOCUS_OUT)
+        connection.replies.arrived(FOCUS_OUT)
         assert plane(pymux).columns == SMALL.columns
 
-        connection._handle_kitty_reply(FOCUS_IN)
+        connection.replies.arrived(FOCUS_IN)
         assert plane(pymux).columns == BIG.columns
         connection._close_connection()
 

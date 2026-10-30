@@ -27,7 +27,7 @@ class FakeConnection(Connection):
 
     def __init__(self, flags=0):
         super().__init__()
-        self.kitty_source_flags = flags
+        self.replies.kitty_source_flags = flags
 
 
 class FakeClientState:

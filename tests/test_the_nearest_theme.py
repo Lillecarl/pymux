@@ -155,7 +155,7 @@ def test_the_background_weighs_more_than_one_accent():
 
 def _reply(connection, code: str, payload: str) -> None:
     "One OSC reply from the outer terminal, as the client forwards it."
-    connection._handle_kitty_reply("\x1b]%s;%s\x07" % (code, payload))
+    connection.replies.arrived("\x1b]%s;%s\x07" % (code, payload))
 
 
 async def test_a_client_takes_the_theme_of_its_terminal():

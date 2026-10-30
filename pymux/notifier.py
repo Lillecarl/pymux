@@ -82,7 +82,9 @@ class Notifier:
                 continue
             wanted = client_state.options.notification_popups
             if wanted is NotificationPopups.OFF or (
-                wanted is NotificationPopups.AUTO and connection is not None and connection.notification_osc is not None
+                wanted is NotificationPopups.AUTO
+                and connection is not None
+                and connection.replies.notification_osc is not None
             ):
                 continue
             client_state.popups = [*client_state.popups, record][-MAX_POPUPS:]
@@ -131,7 +133,7 @@ class Notifier:
         for connection, client_state in self.pymux._client_states.items():
             if connection is None or client_state.temporary:
                 continue
-            osc = connection.notification_osc
+            osc = connection.replies.notification_osc
             if osc is None or (osc, record.source) in _WENT_AS_IT_CAME:
                 continue
             if osc not in spelled:
@@ -183,6 +185,6 @@ class Notifier:
         if not closed:
             return
         for connection in self.pymux._client_states:
-            if connection is not None and connection.notification_closes:
+            if connection is not None and connection.replies.notification_closes:
                 for ours in closed:
                     connection.forward_osc(build_osc(Osc.NOTIFICATION, close_of(ours)))
