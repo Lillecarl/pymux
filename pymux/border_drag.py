@@ -87,7 +87,7 @@ def press_on_line(pymux: Pymux, window: arrangement.Window, line: Line, event: M
         return NotImplemented
 
     # Imported here: layout imports this module.
-    from .layout import room_for_panes, write_sizes_into_weights
+    from .geometry import room_for_panes, write_sizes_into_weights
 
     client_state = pymux.get_client_state()
     drag = BorderDrag(window, seam, event.position.x if seam.sideways else event.position.y)

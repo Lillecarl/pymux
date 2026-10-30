@@ -19,7 +19,7 @@ from pymux.commands.pictures import (
     refuse_picture_flags,
     save_png,
 )
-from pymux.layout import plan_of
+from pymux.geometry import plan_of
 from pymux.window_pane import WindowWidget
 
 if TYPE_CHECKING:

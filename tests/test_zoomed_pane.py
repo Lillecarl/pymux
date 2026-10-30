@@ -19,7 +19,7 @@ from run_commands import run
 from test_strip_draws import CHROME, create_client, dump
 
 from pymux.divided import Divided
-from pymux.layout import layout_of, pane_beside, plan_of
+from pymux.geometry import layout_of, pane_beside, plan_of
 from pymux.plane import Side
 from pymux.strip import Strip
 from pymux.zoomed import Zoomed

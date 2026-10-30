@@ -124,7 +124,7 @@ def shares(total: int, weights: list[int]) -> list[int]:
     never in absolute cells. That is the one thing tmux does not do:
     `layout_resize_adjust` moves its cells by a delta, so its rounding
     drifts over repeated resizes and ours cannot.
-    `layout.write_sizes_into_weights` is what makes `resize-pane +1`
+    `geometry.write_sizes_into_weights` is what makes `resize-pane +1`
     mean one cell, by writing the size a person asked for into the
     weights.
 

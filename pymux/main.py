@@ -43,6 +43,7 @@ from .enums import (
 )
 from .error_notice import ErrorNotice
 from .forwarding import LOOPBACK_NAMES
+from .geometry import change_pane_size
 from .graphics import OuterImageIds
 from .hooks import Hooks
 from .ids import PaneId, SessionId, WindowIndex
@@ -50,7 +51,6 @@ from .jobs import JOB_SWEEP_EVERY, Job, JobTable, describe
 from .key_bindings import PymuxKeyBindings
 from .keys import FOCUS_IN, FOCUS_OUT
 from .known_terminals import identify
-from .layout import change_pane_size
 from .log import logger
 from .notifications import (
     Notification,
@@ -1227,7 +1227,7 @@ class Pymux:
 
         The status line comes off the bottom of a client's terminal,
         because it is not part of any window.
-        `layout.room_for_panes` takes the rows the chrome
+        `geometry.room_for_panes` takes the rows the chrome
         around the panes wants off what is left. **A manual size is
         already the window's own**, so nothing comes off it.
 

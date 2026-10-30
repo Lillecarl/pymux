@@ -95,11 +95,7 @@ from recorded import how_to_record, moved, read_counts, write_list
 from pymux.arrangement import Pane
 from pymux.arrangement import Window as ArrangementWindow
 from pymux.divided import Divided
-from pymux.layout import (
-    layout_of,
-    pane_beside,
-    room_for_panes,
-)
+from pymux.geometry import layout_of, pane_beside, room_for_panes
 from pymux.plan_container import PlanContainer
 from pymux.plane import Side
 from pymux.strip import Strip

@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import the_window
-from pymux.layout import change_pane_size
+from pymux.geometry import change_pane_size
 
 
 def resize_pane(pymux: Pymux, args: argparse.Namespace) -> None:

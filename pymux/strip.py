@@ -85,7 +85,7 @@ class Strip:
     """
 
     window: arrangement.Window
-    #: Read on every measure, for the reason `layout.layout_of` gives.
+    #: Read on every measure, for the reason `geometry.layout_of` gives.
     gaps: Callable[[], Gaps] = field(default=Gaps, repr=False)
 
     def edges(self, columns: int) -> list[int]:

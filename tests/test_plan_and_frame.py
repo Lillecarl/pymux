@@ -22,7 +22,7 @@ from prompt_toolkit.data_structures import Size
 from run_commands import run
 from test_strip_draws import CHROME, create_client
 
-from pymux.layout import plan_of
+from pymux.geometry import plan_of
 
 #: Wide enough for two columns of half a window, so a third runs past
 #: the edge and the strip has something to scroll.
@@ -122,7 +122,7 @@ async def test_a_render_measures_room_once_and_a_resize_after_it_is_seen(monkeyp
     the answer. Between renders a command may move a border, and the
     next ask has to see it.
     """
-    from pymux import layout
+    from pymux import geometry
 
     async with create_client(STRIP, rows=ROWS, columns=COLUMNS) as (pymux, draw):
         panes = await create_row_of_panes(pymux, count=2)
@@ -133,8 +133,8 @@ async def test_a_render_measures_room_once_and_a_resize_after_it_is_seen(monkeyp
         manager = state.layout_manager
 
         measured = []
-        room = layout.room_for_panes
-        monkeypatch.setattr(layout, "room_for_panes", lambda *a: measured.append(1) or room(*a))
+        room = geometry.room_for_panes
+        monkeypatch.setattr(geometry, "room_for_panes", lambda *a: measured.append(1) or room(*a))
 
         manager.frame_started(state.app)
         was = plan_of(pymux, window).rect_of(panes[-1]).height

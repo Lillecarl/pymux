@@ -12,7 +12,7 @@ from prompt_toolkit.data_structures import Size
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import the_window
 from pymux.enums import WindowSize
-from pymux.layout import size_the_panes_of
+from pymux.geometry import size_the_panes_of
 
 
 def resize_window(pymux: Pymux, args: argparse.Namespace) -> None:
