@@ -27,7 +27,8 @@ from .style import DEFAULT_THEME
 if TYPE_CHECKING:
     from .arrangement import Pane
     from .ids import SessionId
-    from .main import Pymux
+    from .main import ClientState, Pymux
+    from .server import ServerConnection
     from .session import Session
 
 __all__ = ["Terminals", "pointer_shape_of"]
@@ -95,9 +96,40 @@ class Terminals:
                 # Lillecarl/pymux#493.
                 if connection is None:
                     continue
-                connection.set_pointer_shape(pointer_shape_of(self.pymux.focused_pane_of(client_state)))
+                connection.set_pointer_shape(self._pointer_shape_for(connection, client_state))
         except Exception:
             logger.exception("Sending the shape of the pointer failed.")
+
+    def sync_pointer_shape_of(self, connection: ServerConnection) -> None:
+        "The same for one client, whose pointer moved."
+        client_state = self.pymux._client_states.get(connection)
+        if client_state is None:
+            return
+        try:
+            # A move draws nothing, so a frame is asked for to carry the shape.
+            if connection.set_pointer_shape(self._pointer_shape_for(connection, client_state)):
+                client_state.app.invalidate()
+        except Exception:
+            logger.exception("Sending the shape of the pointer failed.")
+
+    def _pointer_shape_for(self, connection: ServerConnection, client_state: ClientState) -> str:
+        """
+        A line's resize shape while the client drags it or the pointer is
+        over it, else the shape the pane asks for. The mouse handler
+        under the pointer says which line, so a line under a menu has
+        none. Lillecarl/pymux#819.
+        """
+        drag = client_state.border_drag
+        if drag is not None:
+            return drag.seam.pointer_shape
+        cell = connection.pointer_cell
+        if cell is not None:
+            column, row = cell
+            handlers = client_state.app.renderer.mouse_handlers.mouse_handlers.get(row)
+            shape = getattr(handlers.get(column) if handlers is not None else None, "pointer_shape", None)
+            if shape:
+                return shape
+        return pointer_shape_of(self.pymux.focused_pane_of(client_state))
 
     def sync_progress(self) -> None:
         """

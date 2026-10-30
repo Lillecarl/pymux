@@ -280,6 +280,12 @@ class Line(NamedTuple):
     seam: Seam | None = None
 
 
+#: The pointer shapes of a line a drag moves, as OSC 22 names them.
+COLUMN_RESIZE = "col-resize"
+ROW_RESIZE = "row-resize"
+RESIZE_SHAPES = frozenset((COLUMN_RESIZE, ROW_RESIZE))
+
+
 class Seam:
     """
     What a line divides: the child of `split` at `index` and the one
@@ -290,11 +296,18 @@ class Seam:
     of everything under it. Lillecarl/pymux#772.
     """
 
-    __slots__ = ("index", "split")
+    __slots__ = ("index", "sideways", "split")
 
-    def __init__(self, split: object, index: int) -> None:
+    def __init__(self, split: object, index: int, sideways: bool) -> None:
         self.split = split
         self.index = index
+        #: The line runs down, so a drag moves columns.
+        self.sideways = sideways
+
+    @property
+    def pointer_shape(self) -> str:
+        "The OSC 22 shape of a pointer over the line. Lillecarl/pymux#819."
+        return COLUMN_RESIZE if self.sideways else ROW_RESIZE
 
     def __eq__(self, other: object) -> bool:
         return isinstance(other, Seam) and self.split is other.split and self.index == other.index

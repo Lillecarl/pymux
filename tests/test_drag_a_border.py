@@ -6,19 +6,24 @@ and the handlers a real frame registered. Lillecarl/pymux#772.
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 import apsw
 import pytest
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.key_binding.key_processor import KeyPress
 from prompt_toolkit.keys import Keys
 from run_commands import run_as
-from session import create_session, once
+from session import DEFAULT_SIZE, create_session, once, over_connection
 
 from pymux import layout
 from pymux.actions import Kind
 from pymux.layout import pane_write_positions
+from pymux.plan_container import LineHandler
 
 PRESS, DRAG = 0, 32
+#: A move with no button held, which any-event tracking reports.
+MOVE = 35
 
 
 def _drawn(state) -> dict:
@@ -81,7 +86,7 @@ async def test_a_drag_moves_the_line_between_two_rows():
         x, y = drawn[top].xpos + 2, drawn[top].ypos + drawn[top].height
 
         handler = state.app.renderer.mouse_handlers.mouse_handlers[y][x]
-        assert getattr(handler, "func", handler).__name__ == "press_on_line", (handler, drawn, y)
+        assert isinstance(handler, LineHandler), (handler, drawn, y)
         _mouse(state, PRESS, x, y)
         _mouse(state, DRAG, x, y + 2)
         _mouse(state, PRESS, x, y + 2, "m")
@@ -185,3 +190,68 @@ async def test_a_window_pane_hears_its_size_at_the_release(monkeypatch):
         _mouse(state, PRESS, x - 3, y, "m")
         _drawn(state)
         assert told[-1][0] == drawn[left].width - 3
+
+
+def _shape(shape: str) -> str:
+    return "\x1b]22;%s\x1b\\" % shape
+
+
+@asynccontextmanager
+async def _client_with_two_panes(command: str):
+    """
+    A client over a connection, so a mouse report goes through its own
+    parser, with two panes it has drawn. Yields what its terminal was
+    sent, a cell of the line, and a way to report the pointer at a cell.
+    """
+    sent: list[str] = []
+
+    def read(packet) -> None:
+        if packet.get("cmd") == "out":
+            sent.append(packet.get("data", ""))
+
+    async with over_connection(read_packet=read) as session:
+        state, _size = await session.attach("one", DEFAULT_SIZE)
+        await run_as(session.pymux, state, command)
+        await once(lambda: len(state.layout_manager.pane_write_positions) == 2, 10.0, "two panes were never drawn")
+        first = min(state.layout_manager.pane_write_positions.values(), key=lambda at: (at.xpos, at.ypos))
+        if "-h" in command:
+            line = (first.xpos + first.width, first.ypos + 1)
+        else:
+            line = (first.xpos + 2, first.ypos + first.height)
+
+        def report(code: int, x: int, y: int, end: str = "M") -> None:
+            session.typed(state, "\x1b[<%d;%d;%d%s" % (code, x + 1, y + 1, end))
+
+        yield state, sent, line, report
+
+
+def _since(sent: list[str], shape: str) -> str:
+    "What the terminal was sent after the last time the pointer took `shape`."
+    return "".join(sent).rpartition(_shape(shape))[2]
+
+
+@pytest.mark.parametrize(("command", "shape"), [("split-window -h", "col-resize"), ("split-window -v", "row-resize")])
+async def test_the_pointer_takes_the_resize_shape_over_a_line(command, shape):
+    "And drops it off the line. Lillecarl/pymux#819."
+    async with _client_with_two_panes(command) as (_state, sent, (x, y), report):
+        report(MOVE, x, y)
+        await once(lambda: _shape(shape) in "".join(sent), 10.0, "the pointer never took the shape")
+        report(MOVE, 1, 1)
+        await once(lambda: _shape("") in _since(sent, shape), 10.0, "the pointer kept the shape off the line")
+
+
+async def test_the_pointer_keeps_the_shape_while_a_drag_lasts():
+    "Off the line, until the release. Lillecarl/pymux#819."
+    async with _client_with_two_panes("split-window -h") as (state, sent, (x, y), report):
+        report(PRESS, x, y)
+        report(DRAG, x - 4, y)
+        report(DRAG, x - 5, y)
+        await once(
+            lambda: min(at.width for at in state.layout_manager.pane_write_positions.values()) <= x - 5,
+            10.0,
+            "the drag never moved the line",
+        )
+        assert _shape("col-resize") in "".join(sent)
+        assert _shape("") not in _since(sent, "col-resize")
+        report(PRESS, x - 5, y, "m")
+        await once(lambda: _shape("") in _since(sent, "col-resize"), 10.0, "the release kept the shape")

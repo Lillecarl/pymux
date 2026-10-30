@@ -77,7 +77,7 @@ Ask it with `sqlite3`, for example the commands you run most and how:
 
 | option | scope | default | why |
 | --- | --- | --- | --- |
-| `mouse` | session | on | Unlike tmux: a click selects a pane and reaches the program. A drag of the line between two panes, or of the bars between two stacked panes, resizes them, as in tmux. |
+| `mouse` | session | on | Unlike tmux: a click selects a pane and reaches the program. A drag of the line between two panes, or of the bars between two stacked panes, resizes them, as in tmux. Over such a line the pointer takes a resize shape, in a terminal that reads OSC 22. |
 | `extended-keys` | session | `on` | Every key a terminal can name reaches the pane. |
 | `status-keys` | session | from `$VISUAL`, else `$EDITOR` | The keys of the `:` line and of `command-prompt`: `emacs`, `vi`, or `helix`. An editor whose name holds `vi` gives `vi`, as tmux does; `hx` or `helix` gives `helix`. With `vi` or `helix` the first Escape leaves insert mode and the second closes the line, and the line shows its mode. Lillecarl/pymux#749. |
 | `mode-keys` | session | from the editor, as above | The keys of copy mode: `emacs`, `vi`, or `helix`. With `helix` the copy is Helix: its moves, selections, `/` search and edits, so a person can trim or change the text before copying it. `y` or Enter copies and leaves, `q` or Escape in normal mode leaves, and `Alt-r` takes a new copy, refused while there are edits. Leaving drops the edits. The corner shows the mode, a search as it is typed, and whether the copy is edited. Lillecarl/pymux#751. |

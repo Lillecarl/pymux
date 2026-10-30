@@ -46,8 +46,6 @@ class BorderDrag:
 
     window: arrangement.Window
     seam: Seam
-    #: The line runs down, so the drag moves columns.
-    sideways: bool
     #: Where the press was, across the line: a column or a row.
     start: int
     #: The cells of the two neighbours at the press. A strip column
@@ -91,8 +89,7 @@ def press_on_line(pymux: Pymux, window: arrangement.Window, line: Line, event: M
     from .layout import room_for_panes, write_sizes_into_weights
 
     client_state = pymux.get_client_state()
-    sideways = isinstance(seam.split, arrangement.VSplit)
-    drag = BorderDrag(window, seam, sideways, event.position.x if sideways else event.position.y)
+    drag = BorderDrag(window, seam, event.position.x if seam.sideways else event.position.y)
     split = drag.split
     if drag.in_strip:
         drag.width = window.column_width(split[seam.index])
@@ -118,9 +115,11 @@ def _follow(pymux: Pymux, client_state: ClientState, event: MouseEvent) -> NotIm
     if drag is None:
         return NotImplemented
     if event.event_type in (MouseEventType.MOUSE_MOVE, MouseEventType.MOUSE_UP):
-        drag.move_to(event.position.x if drag.sideways else event.position.y)
+        drag.move_to(event.position.x if drag.seam.sideways else event.position.y)
     if event.event_type is MouseEventType.MOUSE_UP:
         client_state.border_drag = None
+        # The pointer kept the line's shape while the drag lasted.
+        pymux.terminals.sync_pointer_shape()
         with started_by(Origin.MOUSE):
             note(pymux, Kind.CLICK, "drag-border")
     return None

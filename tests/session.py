@@ -75,6 +75,9 @@ class Connection:
 
     kitty_source_flags = 0
     pointer_shape = None
+    #: No mouse report ever arrives, and no shape ever goes out.
+    pointer_cell = None
+    pointer_shape_sent = ""
 
     #: What a client on a unix socket reports: it holds no SSH
     #: connection, so it can forward nothing and has nothing to list.
@@ -153,7 +156,7 @@ class Connection:
             self._pymux.remove_client(self)
 
     def set_pointer_shape(self, shape):
-        pass
+        return False
 
     def forward_osc(self, sequence):
         pass

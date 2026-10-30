@@ -148,7 +148,7 @@ class Strip:
         # because a stack of more panes than rows runs past the bottom.
         height = max((rect.bottom for _, rect in rects), default=0)
         lines.extend(
-            Line(Rect(x=right, y=0, width=gap, height=height), BORDER_VERTICAL, Seam(self.window.root, index))
+            Line(Rect(x=right, y=0, width=gap, height=height), BORDER_VERTICAL, Seam(self.window.root, index, True))
             for index, right in enumerate(rights)
         )
 

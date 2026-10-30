@@ -479,6 +479,7 @@ class ServerConnection:
             # Lillecarl/pymux#182.
             speaks_protocol=self.keyboard_is_supported,
             pixel_cell=self._pixel_cell,
+            pointer_moved=lambda: self.pymux.terminals.sync_pointer_shape_of(self),
         )
 
         # The shape of the pointer that this client was told about. A
@@ -678,7 +679,7 @@ class ServerConnection:
             answer.append(text)
             done.set()
 
-    def set_pointer_shape(self, shape: str) -> None:
+    def set_pointer_shape(self, shape: str) -> bool:
         """
         Put the shape that the focused pane asks for on the pointer of
         this client. An empty shape gives the pointer back to the
@@ -687,11 +688,14 @@ class ServerConnection:
         Only a change goes out. The shape belongs to the pane that the
         client looks at, so it has to be written again when the focus
         moves to a pane that wants a different one, or none.
+
+        Says whether the shape changed: it goes out behind the next frame.
         """
         if shape == self._pointer_shape_sent:
-            return
+            return False
         self._pointer_shape_sent = shape
         self.forward_osc("\x1b]22;%s\x1b\\" % shape)
+        return True
 
     def set_progress(self, progress: Progress) -> None:
         """
@@ -1696,6 +1700,15 @@ class ServerConnection:
         "Where in its cell the client's last mouse report was. Lillecarl/pymux#648."
         return self._pipeinput.pointer_fraction
 
+    @property
+    def pointer_cell(self) -> tuple[int, int] | None:
+        "The cell of the client's last mouse report, column and row from 0."
+        return self._pipeinput.pointer_cell
+
+    @property
+    def pointer_shape_sent(self) -> str:
+        return self._pointer_shape_sent
+
     def _frame_answered(self) -> None:
         self._frames_out = max(0, self._frames_out - 1)
         if not self._frames_out:
@@ -2179,6 +2192,7 @@ class _ClientInput:
         kitty_reply_callback: Callable[[str], None] | None = None,
         speaks_protocol: Callable[[], bool | None] | None = None,
         pixel_cell: Callable[[], tuple[int, int, int] | None] | None = None,
+        pointer_moved: Callable[[], None] | None = None,
     ) -> None:
         self.send_packet = send_packet
         # Keep a reference to the context manager for the whole lifetime of
@@ -2197,6 +2211,7 @@ class _ClientInput:
             reply_callback=kitty_reply_callback,
             speaks_protocol=speaks_protocol,
             pixel_cell=pixel_cell,
+            pointer_moved=pointer_moved,
         )
         vt100_input.vt100_parser = self._parser
 
@@ -2209,6 +2224,11 @@ class _ClientInput:
     def pointer_fraction(self) -> tuple[float, float]:
         "Where in its cell the last mouse report was."
         return self._parser.pointer_fraction
+
+    @property
+    def pointer_cell(self) -> tuple[int, int] | None:
+        "The cell of the last mouse report."
+        return self._parser.pointer_cell
 
     def close(self) -> None:
         "Close the input pipe. (Idempotent.)"

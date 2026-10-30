@@ -36,6 +36,8 @@ SELECTED = "hello"
 class FakeConnection:
     "A client connection that collects what pymux writes to it."
 
+    pointer_cell = None
+
     def __init__(self):
         self.written = []
 
@@ -48,6 +50,7 @@ class FakeConnection:
 
 class FakeClientState:
     app = None
+    border_drag = None
 
 
 def a_selection(mux):

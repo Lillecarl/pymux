@@ -109,6 +109,7 @@ class FakeConnection:
         self.written = []
         self._pointer_shape_sent = ""
         self.notification_actions = frozenset()
+        self.pointer_cell = None
 
     def forward_osc(self, data):
         self.written.append(data)
@@ -132,6 +133,7 @@ class FakeClientState:
     app = None
     session = FakeSession()
     temporary = False
+    border_drag = None
     # Out of sight, so a notification goes out. Lillecarl/pymux#799.
     terminal_focused = False
 

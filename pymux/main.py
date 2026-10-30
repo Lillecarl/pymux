@@ -133,6 +133,7 @@ from .osc import (
     simple_notification_of,
 )
 from .pipes import bind_and_listen_on_socket, connect_in_memory
+from .plane import RESIZE_SHAPES
 from .portal import Portal
 from .rc import STARTUP_COMMANDS
 from .server import ServerConnection
@@ -691,6 +692,10 @@ class ClientState:
             # no connection, and there is nothing to draw images on.
             if self.connection is None:
                 return
+
+            # A line that moved away from a still pointer leaves its shape.
+            if self.connection.pointer_shape_sent in RESIZE_SHAPES:
+                self.pymux.terminals.sync_pointer_shape_of(self.connection)
 
             graphics = self.connection.graphics
             if not graphics.supported:

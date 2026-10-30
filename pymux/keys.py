@@ -868,6 +868,7 @@ class KittyVt100Parser(Vt100Parser):
         reply_callback: Callable[[str], None] | None = None,
         speaks_protocol: Callable[[], bool | None] | None = None,
         pixel_cell: Callable[[], tuple[int, int, int] | None] | None = None,
+        pointer_moved: Callable[[], None] | None = None,
     ) -> None:
         self.reply_callback = reply_callback
         # The cell size of a terminal that reports the mouse in pixels
@@ -877,6 +878,10 @@ class KittyVt100Parser(Vt100Parser):
         self.pixel_cell = pixel_cell
         #: Where in its cell the last mouse report was, as fractions.
         self.pointer_fraction = (0.5, 0.5)
+        #: The cell of the last mouse report, column and row from 0.
+        self.pointer_cell: tuple[int, int] | None = None
+        #: Called after each mouse report, before a handler reads it.
+        self.pointer_moved = pointer_moved
         # Whether the terminal counts the modifiers the way the
         # protocol does. Asked when a key arrives and not once at the
         # start, because the detection answers after this is built.
@@ -1016,6 +1021,12 @@ class KittyVt100Parser(Vt100Parser):
                     return
                 insert_text, *fraction = converted
                 self.pointer_fraction = (fraction[0], fraction[1])
+        if key is Keys.Vt100MouseEvent:
+            match = _SGR_MOUSE_RE.match(insert_text)
+            if match is not None:
+                self.pointer_cell = (int(match.group(2)) - 1, int(match.group(3)) - 1)
+                if self.pointer_moved is not None:
+                    self.pointer_moved()
         if key is _KEY_RELEASE:
             # A release keeps the sequence that the terminal sent, and
             # takes the name of a release. A pane that asked for the

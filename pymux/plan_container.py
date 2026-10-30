@@ -35,7 +35,6 @@ answer, which is the whole point of the work.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from functools import partial
 from time import monotonic
 from typing import TYPE_CHECKING, Any, override
 
@@ -60,6 +59,25 @@ if TYPE_CHECKING:
 from .plane import Line, Pane, Plan, Rect, View
 
 __all__ = ["PlanContainer"]
+
+
+class LineHandler:
+    """
+    The mouse handler of a line a drag moves. It carries the shape of a
+    pointer over the line: `Terminals` reads it off the handler under the
+    pointer, so a line something covers shows no shape. Lillecarl/pymux#819.
+    """
+
+    __slots__ = ("line", "on_line", "pointer_shape")
+
+    def __init__(self, on_line: Callable[[Line, MouseEvent], NotImplementedOrNone], line: Line) -> None:
+        assert line.seam is not None
+        self.on_line = on_line
+        self.line = line
+        self.pointer_shape = line.seam.pointer_shape
+
+    def __call__(self, event: MouseEvent) -> NotImplementedOrNone:
+        return self.on_line(self.line, event)
 
 
 class PlanContainer(Container):
@@ -293,7 +311,7 @@ class PlanContainer(Container):
                         min(right + 1, write_position.xpos + write_position.width),
                         max(top, write_position.ypos),
                         min(top + line.rect.height, write_position.ypos + write_position.height),
-                        partial(self.on_line, line),
+                        LineHandler(self.on_line, line),
                     )
                 )
             for y in range(top, top + line.rect.height):

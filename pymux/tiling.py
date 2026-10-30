@@ -107,9 +107,9 @@ def lay_out(
         # it says so itself.
         if lines is not None and place < len(item) - 1:
             if sideways:
-                lines.append(Line(Rect(at, rect.y, gap, rect.height), BORDER_VERTICAL, Seam(item, place)))
+                lines.append(Line(Rect(at, rect.y, gap, rect.height), BORDER_VERTICAL, Seam(item, place, True)))
             else:
-                lines.append(Line(Rect(rect.x, at, rect.width, gap), BORDER_HORIZONTAL, Seam(item, place)))
+                lines.append(Line(Rect(rect.x, at, rect.width, gap), BORDER_HORIZONTAL, Seam(item, place, False)))
 
         at += gap
 
