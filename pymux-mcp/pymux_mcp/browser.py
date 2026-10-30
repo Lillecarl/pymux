@@ -691,15 +691,24 @@ async def at(page: Page, x: float, y: float) -> dict[str, Any]:
         )
     except CDPError:
         raise LookupError("nothing at %g, %g: it is outside the page" % (x, y)) from None
+    holding = await _holding(page, found["backendNodeId"], acted=True)
+    if holding is None:
+        raise LookupError("nothing the page names at %g, %g" % (x, y))
+    return {**holding, "x": x, "y": y}
+
+
+async def _holding(page: Page, backend: int, acted: bool) -> dict[str, str] | None:
+    """
+    The ref, role and name of the nearest element the accessibility tree
+    names that holds a node: of one a person acts on first, when `acted`.
+    """
     await page.send("Accessibility.enable")
-    nodes = (
-        await page.send(
-            "Accessibility.getPartialAXTree", {"backendNodeId": found["backendNodeId"], "fetchRelatives": True}
-        )
-    )["nodes"]
+    nodes = (await page.send("Accessibility.getPartialAXTree", {"backendNodeId": backend, "fetchRelatives": True}))[
+        "nodes"
+    ]
     by_id = {node["nodeId"]: node for node in nodes}
     chain = []
-    node = next((node for node in nodes if node.get("backendDOMNodeId") == found["backendNodeId"]), None)
+    node = next((node for node in nodes if node.get("backendDOMNodeId") == backend), None)
     while node is not None:
         chain.append(node)
         node = by_id.get(node.get("parentId", ""))
@@ -712,17 +721,55 @@ async def at(page: Page, x: float, y: float) -> dict[str, Any]:
         for node in chain
         if not node.get("ignored") and "backendDOMNodeId" in node and role(node) not in _SKIPPED_ROLES | _NO_REF_ROLES
     ]
-    acted = [node for node in named if role(node) in ACTIONABLE]
-    if not (acted or named):
-        raise LookupError("nothing the page names at %g, %g" % (x, y))
-    node = (acted or named)[0]
+    found = ([node for node in named if role(node) in ACTIONABLE] if acted else []) or named
+    if not found:
+        return None
     return {
-        "ref": "%s%d" % (REF_PREFIX, node["backendDOMNodeId"]),
-        "role": role(node),
-        "name": str((node.get("name") or {}).get("value", "")),
-        "x": x,
-        "y": y,
+        "ref": "%s%d" % (REF_PREFIX, found[0]["backendDOMNodeId"]),
+        "role": role(found[0]),
+        "name": str((found[0].get("name") or {}).get("value", "")),
     }
+
+
+#: What the person selected: in a text field, else on the page, and the
+#: element around it. Null when nothing is.
+_SELECTION: Final = """(() => {
+  const field = document.activeElement;
+  if (field && typeof field.selectionStart === 'number' && field.selectionEnd > field.selectionStart) {
+    return {text: field.value.slice(field.selectionStart, field.selectionEnd), element: field};
+  }
+  const selected = getSelection();
+  if (!selected || selected.isCollapsed) return null;
+  let around = selected.getRangeAt(0).commonAncestorContainer;
+  if (around.nodeType !== Node.ELEMENT_NODE) around = around.parentElement;
+  return {text: selected.toString(), element: around};
+})()"""
+
+
+async def selection(page: Page) -> dict[str, Any] | None:
+    """
+    What a person selected in the tab, as text, with the element around
+    it as a ref; None when nothing is selected.
+    """
+    answer = await page.send("Runtime.evaluate", {"expression": _SELECTION})
+    if "exceptionDetails" in answer or answer["result"].get("subtype") == "null":
+        return None
+    selected = answer["result"]["objectId"]
+    try:
+        text = await page.send(
+            "Runtime.callFunctionOn",
+            {"objectId": selected, "functionDeclaration": "function() { return this.text; }", "returnByValue": True},
+        )
+        element = await page.send(
+            "Runtime.callFunctionOn",
+            {"objectId": selected, "functionDeclaration": "function() { return this.element; }"},
+        )
+        await page.send("DOM.enable")
+        described = await page.send("DOM.describeNode", {"objectId": element["result"]["objectId"]})
+    finally:
+        await page.send("Runtime.releaseObject", {"objectId": selected})
+    around = await _holding(page, described["node"]["backendNodeId"], acted=False)
+    return {"text": text["result"]["value"], **(around or {})}
 
 
 def _backend(ref: str) -> int:

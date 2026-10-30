@@ -312,6 +312,38 @@ async def test_find_answers_only_the_elements_that_read_the_text(server):
         await call(server, "browser.close", name="probe")
 
 
+async def test_the_agent_reads_what_the_person_selected(server):
+    await call(server, "browser.open", name="probe", seat="headless", url=LONG_PAGE, arguments=ARGUMENTS)
+    try:
+        assert await call(server, "browser.selection", name="probe") == "nothing is selected"
+        (paragraph,) = (await call(server, "browser.find", name="probe", text="paragraph 7.")).splitlines()
+        await call(
+            server,
+            "browser.evaluate",
+            name="probe",
+            expression=(
+                "(() => { const text = document.querySelectorAll('p')[7].firstChild;"
+                " const range = document.createRange(); range.setStart(text, 7); range.setEnd(text, 16);"
+                " getSelection().removeAllRanges(); getSelection().addRange(range); })()"
+            ),
+        )
+        found = await call(server, "browser.selection", name="probe")
+        assert found == {"text": "paragraph", "ref": ref(paragraph), "role": "paragraph", "name": ""}, found
+
+        # In a text field the page's selection is empty; the field's is not.
+        await call(server, "browser.type", name="probe", text="me@example.com", selector="input")
+        await call(
+            server,
+            "browser.evaluate",
+            name="probe",
+            expression="document.querySelector('input').setSelectionRange(3, 10)",
+        )
+        found = await call(server, "browser.selection", name="probe")
+        assert (found["text"], found["role"], found["name"]) == ("example", "textbox", "email"), found
+    finally:
+        await call(server, "browser.close", name="probe")
+
+
 async def test_a_profile_name_is_one_path_part(server):
     with pytest.raises(ValueError, match="not a profile name"):
         await call(server, "browser.open", name="probe", seat="headless", profile="../escape", arguments=ARGUMENTS)

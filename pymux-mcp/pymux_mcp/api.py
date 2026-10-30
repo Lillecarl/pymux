@@ -786,6 +786,17 @@ async def browser_find(
     return "\n".join(lines) if lines else "nothing reads %s" % (json.dumps(text, ensure_ascii=False),)
 
 
+@operation("browser.selection")
+async def browser_selection(server: Server, name: BrowserName = "browser", tab: Tab = None) -> Json | str:
+    """
+    What a person selected in a tab, as text, and the element around it
+    as a ref, a role and a name: how they point the agent at something.
+    """
+    async with browser.tab(server, name, tab) as page:
+        found = await browser.selection(page)
+    return found if found is not None else "nothing is selected"
+
+
 @operation("browser.at")
 async def browser_at(
     server: Server,
