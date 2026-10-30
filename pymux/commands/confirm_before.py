@@ -15,7 +15,7 @@ def confirm_before(pymux: Pymux, args: argparse.Namespace) -> None:
     Ask on the command line before running a command.
     """
     # The client a person is looking at, which is not the one that ran
-    # this when the command came from a pane. A question on a fake CLI
+    # this when the command came from a pane. A question on a temporary client
     # is one nobody can answer, so the command never ran.
     # Lillecarl/pymux#272.
     client_state = pymux.the_client_to_tell()

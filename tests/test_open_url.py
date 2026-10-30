@@ -103,7 +103,7 @@ async def test_broadcast_reaches_every_client():
 async def test_command_from_pane_opens_in_browser_of_client():
     """
     `pymux open-url` typed in a pane reaches the server over a socket,
-    and the server runs it under a fake CLI: a client state for the
+    and the server runs it under a temporary client: a client state for the
     connection of the command, which closes the moment the command
     answers. It used to carry the newest "used last" stamp, so the
     open packet went to that connection and no browser opened.

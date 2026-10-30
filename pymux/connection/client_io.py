@@ -183,7 +183,7 @@ class NoStdout:
     """
     Stdout-like object that keeps nothing: writes go nowhere.
 
-    The temporary CLI of a socket command has no terminal behind it,
+    The temporary client of a socket command has no terminal behind it,
     and nothing it holds is ever drawn. But building the application
     builds a renderer, and prompt_toolkit's renderer answers its
     construction with a reset -- `show_cursor`, the cursor shape --
@@ -205,7 +205,7 @@ class NoStdout:
 
 class ClientInput:
     """
-    Input class that can be given to the CommandLineInterface.
+    Input class that can be given to the Application.
     We only need this for turning the client into raw_mode/cooked_mode.
     """
 

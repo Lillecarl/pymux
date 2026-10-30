@@ -1152,7 +1152,7 @@ class LayoutManager:
 
 class DynamicBody(Container):
     """
-    The dynamic part, which is different for each CLI (for each client). It
+    The dynamic part, which is different for each client. It
     depends on which window/pane is active.
 
     This makes it possible to have just one main layout class, and

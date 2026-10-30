@@ -41,7 +41,7 @@ class FakeClientState:
 
     app = None
 
-    #: A real client state says whether the temporary CLI of a socket
+    #: A real client state says whether the temporary client of a socket
     #: command holds it, and the keyboard mask walks that: a client
     #: that never attached a terminal must not be counted as one that
     #: reports nothing. Lillecarl/pymux#420.
@@ -122,7 +122,7 @@ def test_client_that_leaves_lets_rest_speak():
 
 def test_temporary_client_does_not_hold_the_mask_back():
     """
-    The temporary CLI of a socket command never asked a terminal
+    The temporary client of a socket command never asked a terminal
     anything, so its report of nothing must not drag the mask of every
     real client down while the command runs. Lillecarl/pymux#420.
     """

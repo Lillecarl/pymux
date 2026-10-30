@@ -101,7 +101,7 @@ class Arrangement:
         # none. Lillecarl/pymux#658.
         self._window_history_for_cli: WeakKeyDictionary[Application[Any], list[Window]] = WeakKeyDictionary()
 
-        # The active window of the last CLI. Used as default when a new session
+        # The active window of the last client. Used as default when a new session
         # is attached.
         self._last_active_window: Window | None = None
 

@@ -106,5 +106,3 @@ def test_palette_is_scheme_verbatim(schemes):
     assert roles["color-7"] == "#cdd6f4"  # base05, the text.
     assert roles["color-8"] == "#45475a"  # base03, the muted one.
     assert roles["color-15"] == "#b4befe"  # base07, the bright one.
-
-

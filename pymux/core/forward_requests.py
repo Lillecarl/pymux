@@ -69,7 +69,7 @@ class ForwardRequests:
             raise CommandException("Nobody is attached, so there is nothing to forward through.")
         if len(attached) > 1:
             raise CommandException("Several clients are attached. Run this from the one that should forward.")
-        # A temporary client is the fake CLI of a command that arrived
+        # A temporary client is what a command that arrived
         # over the socket, which is how a program in a pane runs one.
         # Nobody typed this.
         return self._can_it_forward(Asker(attached[0], in_person=False))

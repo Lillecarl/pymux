@@ -385,7 +385,7 @@ class ClientState:
         #: Lillecarl/pymux#795.
         self.terminal_focused = True
 
-        #: True for the fake CLI that runs a command that arrived over
+        #: True for the temporary client that runs a command that arrived over
         #: a socket: it draws nothing, nobody uses it, and it is gone
         #: the moment the command answers. It must not win "the client
         #: a person used last", or a URL that `open-url` opens goes to
@@ -791,9 +791,8 @@ class ClientState:
             on_invalidate=pymux.waking.client_asked_for_frame,
         )
 
-        # Synchronize the Vi state with the CLI object.
-        # (This is stored in the current class, but expected to be in the
-        # CommandLineInterface.)
+        # The editing mode lives on the application, and the state that
+        # chooses it lives here.
         def sync_vi_state(_):
             VI = EditingMode.VI
             EMACS = EditingMode.EMACS

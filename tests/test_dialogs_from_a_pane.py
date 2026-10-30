@@ -1,5 +1,5 @@
 """
-A command typed in a pane talks to the person, not to a fake CLI.
+A command typed in a pane talks to the person, not to a temporary client.
 
 A command that arrives over a socket runs under a temporary client
 state: it draws nothing, and it is taken away as soon as the command is

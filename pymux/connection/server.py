@@ -947,13 +947,12 @@ class ServerConnection:
         """
         Execute a run command from the client.
         """
-        create_temp_cli = self.client_state is None
+        temporary = self.client_state is None
 
-        if create_temp_cli:
-            # If this client doesn't have a CLI. Create a Fake CLI where the
-            # window containing this pane, is the active one. (The CLI instance
-            # will be removed right after the command handler ran, so it
-            # doesn't hurt too much and makes the code easier.)
+        if temporary:
+            # A command over the socket has no client of its own: it runs
+            # under a temporary client, on the window that holds the pane it
+            # was typed in, which goes again once the command answered.
             pane_id = packet.get(Field.PANE_ID)
             pane = self.pymux.panes_by_id.get(PaneId(int(pane_id))) if pane_id is not None else None
 
@@ -1146,10 +1145,10 @@ class ServerConnection:
         session: Session | None = None,
     ) -> None:
         """
-        Create CommandLineInterface for this client.
-        Called when the client wants to attach the UI to the server.
+        Make this client's state and application: on attach, or for a
+        command that arrived over the socket.
 
-        :param start: Start the application. (`False` for the temporary CLI
+        :param start: Start the application. (`False` for the temporary client
             that handles `run-command` packets. That one is removed right
             after the command handler ran.)
         :param session: The session this client is on. Without one it is
@@ -1178,7 +1177,7 @@ class ServerConnection:
             output=output,
             connection=self,
             color_depth=color_depth,
-            # The fake CLI of a command that arrived over a socket is
+            # The temporary client of a command that arrived over a socket is
             # not a client a person uses: it must not win "used last",
             # and what a command shows must go to a real one.
             temporary=not start,
@@ -1232,8 +1231,8 @@ class ServerConnection:
             self._spawn(run())
 
     def _close_connection(self) -> None:
-        # This is important. If we would forget this, the server will
-        # render CLI output for clients that aren't connected anymore.
+        # Without this the server goes on drawing frames for a client
+        # that is no longer connected.
         if self.closed:
             return
         if self.recording is not None:
@@ -1302,7 +1301,7 @@ class ServerConnection:
             what = "client-%d" % (self.pid,)
         else:
             # Nothing said. A connection that never sent `start-gui`
-            # is the fake CLI of a command, which nobody selects.
+            # is the temporary client of a command, which nobody selects.
             return ""
         return "%s:%s" % (self.hostname or "?", what)
 

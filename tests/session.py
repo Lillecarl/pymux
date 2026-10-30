@@ -199,7 +199,7 @@ class Connection:
         pass
 
 
-#: The size a fake CLI reports. Nothing draws in it; a window that
+#: The size a temporary client reports. Nothing draws in it; a window that
 #: sizes itself by the latest client must never read it.
 DEFAULT_SIZE = Size(rows=24, columns=80)
 
@@ -269,8 +269,8 @@ class Session(NamedTuple):
     typed: Callable
 
     #: `create_command(text)`: a command over a connection of its own, the
-    #: way a pane's CLI sends one. The server runs it under the fake
-    #: CLI it makes for such a command, and what that connection
+    #: way a pane's CLI sends one. The server runs it under the
+    #: temporary client it makes for such a command, and what that connection
     #: received comes back: the packets of the answer, and nothing a
     #: browser was meant to read.
     command: Callable
@@ -396,7 +396,7 @@ async def in_this_process(pymux=None):
 
         def create_command(text):
             """
-            A command under the fake CLI of a socket, the way the
+            A command under the temporary client of a socket, the way the
             server runs one that arrived from a pane. The client state
             it made comes back, so a test can ask what the command did
             to it before it is taken away.

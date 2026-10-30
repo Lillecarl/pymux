@@ -34,9 +34,9 @@ def display_message(pymux: Pymux, args: argparse.Namespace) -> None:
         answer(pymux, format_pymux_string(pymux, args.message, session=session, client=named))
         return
 
-    # The client a person is looking at. A command typed in a pane runs
-    # under a fake CLI that draws nothing, so this used to say the
-    # message to nobody at all. Lillecarl/pymux#272.
+    # The client a person is looking at: a command typed in a pane runs
+    # under a temporary client that draws nothing, and a message there
+    # reaches nobody. Lillecarl/pymux#272.
     client_state = named or pymux.the_client_to_tell()
     if client_state is None:
         pymux.add_command_error("pymux: nobody is attached to show a message to.")

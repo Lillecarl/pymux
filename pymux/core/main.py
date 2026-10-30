@@ -856,7 +856,7 @@ class Pymux:
         """
         The client a dialog belongs to, or `None` when nobody is there.
 
-        A command that arrives over a socket runs under a temporary CLI
+        A command that arrives over a socket runs under a temporary client
         that draws nothing and is taken away as soon as the command is
         answered. A dialog put on that one is a dialog nobody sees: a
         `display-message` typed in a pane said nothing at all, and a
@@ -1189,7 +1189,7 @@ class Pymux:
 
         `open-url-target last` is the client a person used last, by the
         same stamp that `window-size latest` reads. Nothing attached
-        means nobody, and the person who asked hears so. The fake CLI
+        means nobody, and the person who asked hears so. The temporary client
         of a command that arrived over a socket is never one of them:
         it is the connection that ran the command, and it closes while
         the answer is still being sent.
@@ -1265,7 +1265,7 @@ class Pymux:
     def latest_client(self):
         """
         The client a person used last, or `None` when nobody is
-        attached. The fake CLI of a socket command is never it, for the
+        attached. The temporary client of a socket command is never it, for the
         reason `clients_to_open_on` names.
         """
         clients = self.clients
@@ -1336,8 +1336,8 @@ class Pymux:
 
         for app in self.apps:
             # `Application.exit()` raises for applications that never
-            # started running. (E.g. temporary CLIs that only handled a
-            # command.)
+            # started running. (The temporary clients that only handled
+            # a command.)
             with suppress(Exception):
                 app.exit()
         self.done.set()
@@ -1521,7 +1521,7 @@ class Pymux:
         self.message_log.append(message)
 
         # Not `get_client_state`. A command from a pane runs under a fake
-        # CLI that draws nothing, and a message left there is a message
+        # client that draws nothing, and a message left there is a message
         # nobody sees. Lillecarl/pymux#272.
         client_state = self.the_client_to_tell()
         if client_state is not None:
@@ -1600,7 +1600,7 @@ class Pymux:
 
     def detach_client(self, app: Application[Any], hang_up: bool = False) -> None:
         """
-        Detach the client that belongs to this CLI.
+        Detach the client that belongs to this application.
 
         **The client of this application, and not the current one.**
         This took an app and then read `get_app()`, so
@@ -1647,7 +1647,7 @@ class Pymux:
 
         # Attaching counts as using it, so `window-size latest` has an
         # answer before anybody has pressed a key. tmux stamps a client
-        # on attach for the same reason. The fake CLI of a command does
+        # on attach for the same reason. The temporary client of a command does
         # not: nobody is using that terminal, and it is gone before the
         # answer comes back.
         if not temporary:
