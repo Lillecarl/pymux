@@ -369,6 +369,15 @@ let
   latencyRows = builtins.getEnv "PYMUX_LATENCY_ROWS";
   latencyColumns = builtins.getEnv "PYMUX_LATENCY_COLUMNS";
 
+  # The wheel measurement's knobs: steps each way, the terminal, how
+  # fast the agent beside the viewer streams, the pause between steps.
+  # `PYMUX_SCROLLING_STEPS=200 nix build --file . checks.pymux-scrolling.run`.
+  scrollingSteps = builtins.getEnv "PYMUX_SCROLLING_STEPS";
+  scrollingRows = builtins.getEnv "PYMUX_SCROLLING_ROWS";
+  scrollingColumns = builtins.getEnv "PYMUX_SCROLLING_COLUMNS";
+  scrollingRate = builtins.getEnv "PYMUX_SCROLLING_RATE";
+  scrollingPace = builtins.getEnv "PYMUX_SCROLLING_PACE";
+
   # How many keystrokes the turn count takes, how far apart, and how
   # many of them name the callback of every turn.
   # `PYMUX_TURNS_SAMPLES=1000 nix build --file . checks.pymux-turns.run`.
@@ -1178,6 +1187,40 @@ in
       }
       ''
         python tests/measure_latency.py
+      '';
+
+  # How long a wheel step takes to show, down and up, with a pane beside
+  # it quiet and streaming. Not a gate, for the reason the latency is
+  # not. `tests/measure_scrolling.py` says what runs.
+  # Lillecarl/pymux#507, Lillecarl/pymux#512.
+  scrolling =
+    runInSandbox
+      {
+        name = "pymux-scrolling";
+        env = {
+          inherit
+            scrollingSteps
+            scrollingRows
+            scrollingColumns
+            scrollingRate
+            scrollingPace
+            latencyRoute
+            ;
+        };
+        setup = ''
+          export PYMUX_SCROLLING_STEPS="$scrollingSteps"
+          export PYMUX_SCROLLING_ROWS="$scrollingRows"
+          export PYMUX_SCROLLING_COLUMNS="$scrollingColumns"
+          export PYMUX_SCROLLING_RATE="$scrollingRate"
+          export PYMUX_SCROLLING_PACE="$scrollingPace"
+          export PYMUX_SCROLLING_OUT="$out"
+          if [ -n "$latencyRoute" ]; then
+            export PYMUX_ROUTE="$latencyRoute"
+          fi
+        '';
+      }
+      ''
+        python tests/measure_scrolling.py
       '';
 
   # The `ssh://` client against a real openssh sshd: the unix socket
