@@ -609,8 +609,11 @@ def rows_of(pymux: Pymux) -> Iterator[Row]:
         yield ForgottenSeedRow(name)
     for name, channel in sorted(pymux.wait_channels.items()):
         yield WaitChannelRow(name, channel.woken, channel.locked)
-    for position, (ours, route) in enumerate(pymux.notifications._incoming.items()):
-        yield NotificationRouteRow(ours, route.pane_id, route.identifier, position, route.reports, route.focuses)
+    routes = pymux.notifications
+    for position, (ours, route) in enumerate(routes._incoming.items()):
+        yield NotificationRouteRow(
+            ours, route.pane_id, route.identifier, position, route.reports, route.focuses, ours in routes._shown
+        )
     for name, value in (
         ("pane", Pane._pane_counter),
         ("window", Window._window_counter),
@@ -1026,6 +1029,8 @@ def _read_notifications(pymux: Pymux, db: apsw.Connection, counters: dict[str, i
         if row.identifier:
             routes._outgoing[route.pane_id, row.identifier] = row.ours
         routes._incoming[row.ours] = route
+        if row.shown:
+            routes._shown[row.ours] = route.pane_id
 
 
 def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:

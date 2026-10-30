@@ -321,6 +321,8 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     center._records[0] = center._records[0]._replace(seen_at=1500.0)
     pymux.notifications.outgoing(pane.pane_id, "i=one;first")
     pymux.notifications.outgoing(strip.panes[0].pane_id, "i=two:a=report,-focus;second")
+    # Unfinished, so not on the terminals yet: no look closes it.
+    pymux.notifications.outgoing(pane.pane_id, "i=three:d=0;partial")
 
     client_state.options.name = "desk"
     client_state.options.full_screen = True
@@ -625,6 +627,10 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                 assert fresh.notification_center._next == pymux.notification_center._next
                 assert fresh.notifications._incoming == pymux.notifications._incoming
                 assert fresh.notifications._outgoing == pymux.notifications._outgoing
+                # A look after the upgrade still closes what is on the
+                # terminals. Lillecarl/pymux#799.
+                assert fresh.notifications._shown == pymux.notifications._shown
+                assert len(pymux.notifications._shown) == 2
                 assert {name: (c.woken, c.locked) for name, c in fresh.wait_channels.items()} == {
                     "done": (True, False),
                     "turn": (False, True),

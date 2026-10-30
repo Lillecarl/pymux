@@ -468,6 +468,9 @@ class NotificationRouteRow:
     position: int = field(metadata=column(unique=True))
     reports: bool = False
     focuses: bool = True
+    #: On the terminals and not seen in pymux yet, so a look at its pane
+    #: closes it there, across an upgrade too. Lillecarl/pymux#799.
+    shown: bool = False
 
 
 @dataclass(frozen=True, slots=True)
