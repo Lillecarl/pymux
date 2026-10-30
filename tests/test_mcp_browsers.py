@@ -314,6 +314,27 @@ LONG_PAGE = (
 )
 
 
+async def test_open_answers_once_the_page_loaded(server):
+    """
+    Chromium listens before the page on its command line begins to load,
+    so a look as soon as it listens finds a blank page: no marks, no tree.
+    """
+    opened = await call(server, "browser.open", name="probe", seat="headless", url=LONG_PAGE, arguments=ARGUMENTS)
+    try:
+        assert opened["page"]["loaded"] and opened["page"]["title"] == "long", opened
+    finally:
+        await call(server, "browser.close", name="probe")
+
+    with pytest.raises(browser.CDPError, match="is open, but"):
+        await call(
+            server, "browser.open", name="probe", seat="headless", url="http://127.0.0.1:9/", arguments=ARGUMENTS
+        )
+    try:
+        assert [one["name"] for one in await call(server, "browser.list")] == ["probe"]
+    finally:
+        await call(server, "browser.close", name="probe")
+
+
 async def test_find_answers_only_the_elements_that_read_the_text(server):
     await call(server, "browser.open", name="probe", seat="headless", url=LONG_PAGE, arguments=ARGUMENTS)
     try:

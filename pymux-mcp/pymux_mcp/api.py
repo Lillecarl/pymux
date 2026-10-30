@@ -631,7 +631,9 @@ async def open_browser(
             )
         ),
     ] = browser.Seat.PANE,
-    url: str = "about:blank",
+    url: Annotated[
+        str, Field(description="What to load; the answer comes once it loaded, or `timeout`.")
+    ] = browser.BLANK,
     session: Annotated[
         str | None, Field(description="For `pane`: the session's name; the oldest session when left out.")
     ] = None,
@@ -665,9 +667,10 @@ async def open_browser(
         float,
         Field(ge=0, description="Close it after this many seconds unused by you or a person; 0 keeps it."),
     ] = browser.DEFAULT_IDLE,
+    timeout: Seconds = 30.0,
 ) -> Json:
     """
-    Start a Chromium to drive, and answer it once it listens.
+    Start a Chromium to drive, and answer it once `url` loaded.
 
     It runs across calls until `browser.close`, or until nobody used it
     for `idle` seconds: no browser operation, and no key or mouse from a
@@ -680,7 +683,6 @@ async def open_browser(
         server,
         name,
         seat,
-        url,
         session,
         executable,
         arguments or (),
@@ -689,7 +691,14 @@ async def open_browser(
         profile_name=profile,
         extensions=extensions or (),
     )
-    return opened.json()
+    if url == browser.BLANK:
+        return opened.json()
+    try:
+        async with browser.tab(server, name) as page:
+            loaded = await browser.goto(page, url, timeout)
+    except cdp.CDPError as error:
+        raise cdp.CDPError("the browser %r is open, but %s; browser.goto tries again" % (name, error)) from error
+    return {**opened.json(), "page": loaded}
 
 
 @operation("browser.list")

@@ -68,6 +68,10 @@ SWEEP_SECONDS: Final = 30.0
 
 #: How long Chromium may take to listen.
 LISTEN_TIMEOUT: Final = 30.0
+#: What a browser starts on; the address asked for loads after, through
+#: `goto`. Chromium listens before a page from its command line has even
+#: begun to load, so a look as soon as it listens finds a blank page.
+BLANK: Final = "about:blank"
 
 #: A kept profile's name: one path part, and no hidden file.
 PROFILE_NAME: Final = re.compile(r"[A-Za-z0-9_-][A-Za-z0-9._-]*")
@@ -242,7 +246,6 @@ async def open_browser(
     server: Server,
     name: str,
     seat: Seat,
-    url: str,
     session: str | None,
     executable: str | None,
     arguments: Sequence[str],
@@ -295,10 +298,10 @@ async def open_browser(
     holder: Job | Window | Pane
     try:
         if seat is Seat.HEADLESS:
-            command = [chromium(executable), "--headless=new", *argv, url]
+            command = [chromium(executable), "--headless=new", *argv, BLANK]
             holder = await server.run_job(shlex.join(command), tags=tags)
         else:
-            command = [chromium(executable), "--ozone-platform=wayland", *argv, url]
+            command = [chromium(executable), "--ozone-platform=wayland", *argv, BLANK]
             if window is None:
                 holder = await _in_a_window(server, name, session, command, tags)
             else:
