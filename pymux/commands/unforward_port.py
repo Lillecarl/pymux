@@ -41,8 +41,8 @@ def unforward_port(pymux: Pymux, args: argparse.Namespace) -> None:
     # No question here, whatever `forward-mode` says. Taking a forward
     # away only ever removes something, so the reason to confirm one
     # does not apply. Lillecarl/pymux#440.
-    pymux.forward_through(
-        pymux.forwarding_client().client_state,
+    pymux.forward_requests.send(
+        pymux.forward_requests.client().client_state,
         {
             Field.CMD: Packet.FORWARD,
             Field.REMOVE: True,

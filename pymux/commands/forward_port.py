@@ -59,7 +59,7 @@ def forward_port(pymux: Pymux, args: argparse.Namespace) -> None:
     if pymux.options.forward_mode == ForwardMode.OFF:
         raise CommandException("forward-mode is off, so pymux forwards nothing.")
 
-    asker = pymux.forwarding_client()
+    asker = pymux.forward_requests.client()
 
     # **`-c` counts only from a person.** It is the answer to a
     # question, and a question is answered at a keyboard. A pane that
@@ -67,7 +67,7 @@ def forward_port(pymux: Pymux, args: argparse.Namespace) -> None:
     # there -- otherwise the gate is one word to walk around.
     confirmed = args.confirmed and asker.in_person
 
-    if not confirmed and pymux.forward_needs_asking(forward, asker.in_person):
+    if not confirmed and pymux.forward_requests.needs_asking(forward, asker.in_person):
         # The question names both ends. "Forward a port?" is not enough
         # to answer safely: what matters is where it listens and what it
         # reaches. A yes runs this same command with -c, so it is asked
@@ -84,7 +84,7 @@ def forward_port(pymux: Pymux, args: argparse.Namespace) -> None:
         )
         return
 
-    pymux.forward_through(
+    pymux.forward_requests.send(
         asker.client_state,
         {
             Field.CMD: Packet.FORWARD,

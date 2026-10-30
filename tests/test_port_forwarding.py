@@ -1852,7 +1852,7 @@ def as_the_person(session):
 
     **This is what makes the request in person.** `ClientState._handle_command`
     runs with that client's application current, so `get_client_state`
-    finds it and `forwarding_client` says a person asked. A test that
+    finds it and `ForwardRequests.client` says a person asked. A test that
     calls `handle_command` bare looks like a program in a pane instead,
     which is a different answer from the gate. Lillecarl/pymux#440.
     """

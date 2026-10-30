@@ -9,12 +9,11 @@ import weakref
 from collections import deque
 from collections.abc import Coroutine, Iterable
 from contextlib import asynccontextmanager, suppress
-from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import anyio
 import anyio.abc
 from libpymux.agentic import CallerContext
-from libpymux.protocol import Message
 from prompt_toolkit.application import Application
 from prompt_toolkit.application.current import get_app, set_app
 from prompt_toolkit.clipboard import InMemoryClipboard
@@ -34,13 +33,12 @@ from .browsers import Browsers
 from .client_state import ClientState
 from .commands import CommandException, call_command_handler, handle_command
 from .enums import (
-    ForwardMode,
     OpenUrlTarget,
     RenderMode,
     Woke,
 )
 from .error_notice import ErrorNotice
-from .forwarding import LOOPBACK_NAMES
+from .forward_requests import ForwardRequests
 from .graphics import OuterImageIds
 from .hooks import Hooks
 from .ids import PaneId, SessionId, WindowIndex
@@ -83,7 +81,6 @@ if TYPE_CHECKING:
     from prompt_toolkit.output import ColorDepth, Output
 
     from .commands.wait_for import WaitChannel
-    from .forwarding import Forward
     from .pipes.posix import PosixSocketListener
 
 __all__ = [
@@ -106,21 +103,6 @@ DEFAULT_UPDATE_ENVIRONMENT = (
     "SSH_CONNECTION WAYLAND_DISPLAY WINDOWID XAUTHORITY XDG_CURRENT_DESKTOP "
     "XDG_SESSION_DESKTOP XDG_SESSION_TYPE"
 )
-
-
-class Asker(NamedTuple):
-    """
-    The client a forward is asked of, and whether a person asked.
-
-    `in_person` is false when the request arrived over the socket,
-    which is how a program in a pane runs a command. The forward still
-    belongs to an attached client -- that is the machine with the SSH
-    connection -- but nobody chose it, so `forward_needs_asking` says
-    it has to be confirmed. Lillecarl/pymux#440.
-    """
-
-    client_state: ClientState
-    in_person: bool
 
 
 class Pymux:
@@ -209,6 +191,7 @@ class Pymux:
         "serving": Keep.REBUILT,
         "planes": Keep.REBUILT,
         "overlays": Keep.REBUILT,
+        "forward_requests": Keep.REBUILT,
         # The running server.
         "connections": Keep.DROPPED,
         "tasks": Keep.DROPPED,
@@ -315,6 +298,7 @@ class Pymux:
         self.terminals = Terminals(self)
         self.planes = Planes(self)
         self.overlays = Overlays(self)
+        self.forward_requests = ForwardRequests(self)
         self.serving = Serving(self)
         self.panes = PaneMaker(self)
         self.outward = Outward(self)
@@ -1445,87 +1429,6 @@ class Pymux:
             return False
 
         return not asking.temporary
-
-    def forwarding_client(self) -> Asker:
-        """
-        The client that a forward is asked of, and who asked.
-
-        **The one that asked, when a client asked.** A forward binds a
-        port on one machine, and the machine a person means is the one
-        they typed the command on. That is different from `open-url`,
-        which a program in a pane triggers and which therefore has to
-        choose a client; here there is nothing to choose while the
-        person is right there.
-
-        A command that arrived over the socket has a temporary client
-        of its own, which is no terminal and holds no SSH connection.
-        Then the one attached client is the answer, and two of them is
-        a question this cannot answer for the person.
-        Lillecarl/pymux#436.
-        """
-        if self.a_person_asked():
-            return self._can_it_forward(Asker(self.get_client_state(), in_person=True))
-
-        attached = self.clients
-        if not attached:
-            raise CommandException("Nobody is attached, so there is nothing to forward through.")
-        if len(attached) > 1:
-            raise CommandException("Several clients are attached. Run this from the one that should forward.")
-        # A temporary client is the fake CLI of a command that arrived
-        # over the socket, which is how a program in a pane runs one.
-        # Nobody typed this.
-        return self._can_it_forward(Asker(attached[0], in_person=False))
-
-    def _can_it_forward(self, asker: Asker) -> Asker:
-        """
-        Refuse a client with no SSH connection, before anything else.
-
-        **Before the question**, because asking somebody whether to
-        make a forward that cannot be made wastes the only answer they
-        can give.
-        """
-        if not asker.client_state.connection.can_forward:
-            raise CommandException(
-                "%s did not reach this server over SSH, so it cannot forward a port."
-                % (asker.client_state.connection.name,)
-            )
-        return asker
-
-    def forward_needs_asking(self, forward: Forward, in_person: bool) -> bool:
-        """
-        Whether this forward has to be confirmed before it is made.
-
-        **"on" is not "never ask".** Two cases ask whatever the option
-        says, because in neither of them did the person at the keyboard
-        choose this forward:
-
-        - A program in a pane asked. Any command a pane runs reaches
-          the server, so without this any program on the far machine
-          could bind a port here.
-        - It listens somewhere other than loopback, which publishes the
-          far machine's service to the network this one is on. openssh
-          makes the same split, through `GatewayPorts`.
-
-        Lillecarl/pymux#440.
-        """
-        if self.options.forward_mode == ForwardMode.ASK:
-            return True
-
-        return not in_person or forward.listen_host not in LOOPBACK_NAMES
-
-    def forward_through(self, client_state: ClientState, packet: Message) -> None:
-        """
-        Ask a client to open or close a forward.
-
-        **The server never forwards anything itself.** It holds no SSH
-        connection: the client does, and it is the machine the person
-        sits at. So this is a request, the way `open-url` is, and the
-        answer comes back as the client's whole table.
-
-        `forwarding_client` has already refused a client that cannot
-        forward at all. Lillecarl/pymux#436.
-        """
-        client_state.connection._send_packet(packet)
 
     def pane_environment(self, base: dict[str, str] | None = None) -> dict[str, str]:
         """

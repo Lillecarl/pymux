@@ -146,7 +146,7 @@ def _send_keys_names(questions: Questions, prefix: str, parsed_args: argparse.Na
 def _forward_listenings(direction: Direction, questions: Questions, **_) -> dict[str, str]:
     "The listening ends `unforward-port` can name, of the client it forwards for."
     try:
-        connection = questions.pymux.forwarding_client().client_state.connection
+        connection = questions.pymux.forward_requests.client().client_state.connection
     except CommandException, ValueError:
         return {}
     return questions.ask("complete-forward", client=connection.client_id or "", direction=direction.value)

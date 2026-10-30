@@ -364,7 +364,7 @@ class ForwardMode(StrEnum):
 
     **`ON` is not "never ask".** A request that binds somewhere other
     than loopback, and one that a program in a pane made rather than
-    the person, are confirmed whatever this says: `Pymux.forward_needs_asking`
+    the person, are confirmed whatever this says: `ForwardRequests.needs_asking`
     holds the two. The port belongs to the machine somebody is sitting
     at. Lillecarl/pymux#440.
     """
