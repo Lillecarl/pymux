@@ -13,8 +13,8 @@ from prompt_toolkit.application.current import set_app
 from session import create_session, once
 
 from pymux import error_notice
-from pymux.layout import Z_INDEX
 from pymux.log import logger
+from pymux.z_index import Z_INDEX
 
 
 @pytest.fixture

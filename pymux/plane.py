@@ -748,7 +748,7 @@ class Plan:
     **These numbers are not prompt_toolkit's `Z_INDEX`.** A plan
     stacks what the *window* owns. The chrome around it -- the status
     bar, the message toolbar, a popup -- floats over the whole layout
-    and keeps the toolkit's own numbering, in `layout.Z_INDEX`.
+    and keeps the toolkit's own numbering, in `z_index.Z_INDEX`.
 
     **The numbers are derived, not held, and focus never changes one.**
     Carl decided this before anything builds a float
