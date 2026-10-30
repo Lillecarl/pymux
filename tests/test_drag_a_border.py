@@ -230,7 +230,9 @@ def _since(sent: list[str], shape: str) -> str:
     return "".join(sent).rpartition(_shape(shape))[2]
 
 
-@pytest.mark.parametrize(("command", "shape"), [("split-window -h", "col-resize"), ("split-window -v", "row-resize")])
+@pytest.mark.parametrize(
+    ("command", "shape"), [("split-window -h", "sb_h_double_arrow"), ("split-window -v", "sb_v_double_arrow")]
+)
 async def test_the_pointer_takes_the_resize_shape_over_a_line(command, shape):
     "And drops it off the line. Lillecarl/pymux#819."
     async with _client_with_two_panes(command) as (_state, sent, (x, y), report):
@@ -251,7 +253,7 @@ async def test_the_pointer_keeps_the_shape_while_a_drag_lasts():
             10.0,
             "the drag never moved the line",
         )
-        assert _shape("col-resize") in "".join(sent)
-        assert _shape("") not in _since(sent, "col-resize")
+        assert _shape("sb_h_double_arrow") in "".join(sent)
+        assert _shape("") not in _since(sent, "sb_h_double_arrow")
         report(PRESS, x - 5, y, "m")
-        await once(lambda: _shape("") in _since(sent, "col-resize"), 10.0, "the release kept the shape")
+        await once(lambda: _shape("") in _since(sent, "sb_h_double_arrow"), 10.0, "the release kept the shape")

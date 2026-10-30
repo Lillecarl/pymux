@@ -280,9 +280,12 @@ class Line(NamedTuple):
     seam: Seam | None = None
 
 
-#: The pointer shapes of a line a drag moves, as OSC 22 names them.
-COLUMN_RESIZE = "col-resize"
-ROW_RESIZE = "row-resize"
+#: The pointer shapes of a line a drag moves, as OSC 22 names them. The
+#: X11 names, which kitty (`kitty/screen.c`, the css to enum list) and
+#: iTerm2 (`PTYSession.m`, `cursors`) both read. CSS's col-resize is in
+#: neither, and iTerm2 knows no CSS name at all; each drops a name it lacks.
+COLUMN_RESIZE = "sb_h_double_arrow"
+ROW_RESIZE = "sb_v_double_arrow"
 RESIZE_SHAPES = frozenset((COLUMN_RESIZE, ROW_RESIZE))
 
 
