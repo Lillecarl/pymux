@@ -389,7 +389,7 @@ def read_key() -> str:
             event += byte
         parts = event.split(";")
         if len(parts) == 3 and parts[0] in ("64", "65"):
-            return "down" if parts[0] == "64" else "up"
+            return "up" if parts[0] == "64" else "down"
         return "other"
     return {"A": "up", "B": "down", "H": "home", "F": "end"}.get(third, "other")
 
