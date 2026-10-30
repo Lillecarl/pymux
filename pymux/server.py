@@ -51,10 +51,10 @@ from .nearest import NEAREST, nearest_theme, wanted_from
 from .notifications import QUERY as NOTIFICATION_QUERY
 from .notifications import (
     QUERY_IDENTIFIER,
+    can_close,
     is_click,
     read_actions,
     read_identifier,
-    reports_close,
     split_payload,
 )
 from .options import Scope, SetOptionError
@@ -961,7 +961,7 @@ class ServerConnection:
         metadata, _semicolon, text = split_payload(param)
         if read_identifier(metadata) == QUERY_IDENTIFIER:
             self.notification_actions = frozenset(read_actions(text))
-            self.notification_closes = reports_close(text)
+            self.notification_closes = can_close(text)
             return
 
         routed = self.pymux.notifications.incoming(param)

@@ -301,9 +301,18 @@ def is_question(param: str) -> bool:
     return read_payload_type(metadata) in _QUESTIONS
 
 
-def reports_close(answer: str) -> bool:
-    "Whether a `p=?` answer says the terminal can close a notification: `c=1`."
-    return "c=1" in answer.split(":")
+def can_close(answer: str) -> bool:
+    """
+    Whether a `p=?` answer says the terminal can close a notification:
+    `close` among the payload types of its `p` key. Not `c=1`, which
+    says it reports a close a person made. kitty 0.49.2 answers
+    `p=title,body,?,close,icon,alive,buttons` and no `c`.
+    """
+    for part in answer.split(":"):
+        key, _equals, values = part.partition("=")
+        if key == "p":
+            return "close" in values.split(",")
+    return False
 
 
 def close_of(identifier: str) -> str:

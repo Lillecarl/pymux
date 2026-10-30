@@ -444,13 +444,21 @@ async def test_a_terminal_that_reports_clicks_gets_osc_777_as_osc_99():
 
 
 def test_the_query_answer_says_whether_the_terminal_closes():
-    "Lillecarl/pymux#799."
+    """
+    `close` among its payload types, as kitty 0.49.2 answers on Carl's
+    Mac. `c=1` says the terminal reports a close a person made, which is
+    another thing. Lillecarl/pymux#799.
+    """
     from pymux.server import ServerConnection
 
+    kitty = (
+        "a=focus,report:o=always,unfocused,invisible:u=0,1,2:p=title,body,?,close,icon,alive,buttons"
+        ":w=1:s=system,silent,error,info,question,warn,warning"
+    )
     connection = SimpleNamespace(notification_actions=frozenset(), notification_closes=False)
-    ServerConnection._route_notification(connection, "i=pymux:p=?;a=focus,report:c=1:o=always")
+    ServerConnection._route_notification(connection, "i=pymux:p=?;" + kitty)
     assert connection.notification_closes
-    ServerConnection._route_notification(connection, "i=pymux:p=?;a=focus,report:o=always")
+    ServerConnection._route_notification(connection, "i=pymux:p=?;a=focus,report:c=1:o=always:p=title,body")
     assert not connection.notification_closes
 
 
