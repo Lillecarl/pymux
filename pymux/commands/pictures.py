@@ -13,7 +13,7 @@ import anyio
 from pymux import screenshot
 from pymux.commands import CommandException
 
-__all__ = ["add_picture_arguments", "cell_from", "drawn", "fitted_cell", "refuse_picture_flags"]
+__all__ = ["add_picture_arguments", "cell_from", "drawn", "drawn_png", "fitted_cell", "refuse_picture_flags"]
 
 
 def add_picture_arguments(parser: argparse.ArgumentParser, what: str) -> None:
@@ -83,15 +83,19 @@ def fitted_cell(cell: tuple[int, int], columns: int, rows: int, fit: int | None)
 
 
 async def drawn(grid: screenshot.Grid, args: argparse.Namespace, cell: tuple[int, int], command: str) -> str:
-    "The grid as a PNG in base64, drawn in a thread with the fonts the flags name or the system's."
+    "The grid as a PNG in base64."
+    return base64.b64encode(await drawn_png(grid, args, cell, command)).decode("ascii")
+
+
+async def drawn_png(grid: screenshot.Grid, args: argparse.Namespace, cell: tuple[int, int], command: str) -> bytes:
+    "The grid as a PNG, drawn in a thread with the fonts the flags name or the system's."
     paths = args.fonts or await screenshot.system_fonts()
     if not paths:
         raise CommandException("%s: no font to draw with: pass --font, or put fontconfig's fc-match on PATH" % command)
     try:
-        picture = await anyio.to_thread.run_sync(_drawn, grid, paths, args.fallbacks, cell)
+        return await anyio.to_thread.run_sync(_drawn, grid, paths, args.fallbacks, cell)
     except ValueError as error:
         raise CommandException("%s: %s" % (command, error))
-    return base64.b64encode(picture).decode("ascii")
 
 
 def _drawn(grid: screenshot.Grid, paths: list[str], fallbacks: list[str], cell: tuple[int, int]) -> bytes:

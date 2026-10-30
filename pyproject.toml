@@ -91,6 +91,9 @@ dependencies = [
     "resvg-py",
     # And asks libmagic what a file is, so each reader gets only its own.
     "python-magic",
+    # `capture-client -o` saves to the pictures directory: XDG user-dirs
+    # on Linux, ~/Pictures on macOS. Lillecarl/pymux#813.
+    "platformdirs",
     # `@override` on every override: the type check asks for it.
     # `typing` carries it from 3.12, so on this floor the shim is
     # vestigial; it stays until somebody rewrites the imports that

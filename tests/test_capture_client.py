@@ -11,6 +11,7 @@ from __future__ import annotations
 import base64
 import io
 
+import pytest
 from PIL import Image
 from test_a_session_on_a_pyte_screen import COLUMNS, ROWS, attached, pymux, settled, shows  # noqa: F401
 from test_capture_pane_as_png import FALLBACK, FONTS, KITTY_RED, RED, pytestmark  # noqa: F401
@@ -98,3 +99,35 @@ async def test_without_print_it_says_so(pymux):
         pymux.show_message = lambda _message: None
         call_command_handler("capture-client", pymux, [])
     assert errors and "needs -p" in errors[0], errors
+
+
+@pytest.fixture
+def pictures(tmp_path, monkeypatch):
+    "A pictures directory that xdg-user-dirs names, as a desktop sets it up."
+    shots = tmp_path / "shots"
+    (tmp_path / "user-dirs.dirs").write_text('XDG_PICTURES_DIR="%s"\n' % (shots,))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    return shots
+
+
+async def test_o_saves_a_new_picture_in_the_pictures_directory(pymux, pictures):
+    "Lillecarl/pymux#813."
+    fonts = [word for path in FONTS for word in ("--font", path)]
+    async with pymux.running(), attached(pymux) as session:
+        await shows(session, "$")
+        printed, errors = await run(pymux, "-o", *fonts, "--cell", "%dx%d" % CELL)
+    assert not errors, errors
+    (saved,) = pictures.iterdir()
+    assert printed == str(saved)
+    assert saved.name.startswith("pymux-") and saved.suffix == ".png"
+    assert Image.open(saved).size == (COLUMNS * CELL[0], ROWS * CELL[1])
+
+
+async def test_o_takes_a_name_in_the_pictures_directory(pymux, pictures):
+    fonts = [word for path in FONTS for word in ("--font", path)]
+    async with pymux.running(), attached(pymux) as session:
+        await shows(session, "$")
+        printed, errors = await run(pymux, "-o", "desk.png", *fonts, "--cell", "%dx%d" % CELL)
+    assert not errors, errors
+    assert printed == str(pictures / "desk.png")
+    assert (pictures / "desk.png").read_bytes().startswith(b"\x89PNG")

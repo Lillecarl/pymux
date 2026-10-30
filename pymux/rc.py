@@ -75,6 +75,9 @@ bind-key [ copy-mode
 bind-key ] paste-buffer
 bind-key ? list-keys
 bind-key PPage copy-mode -u
+# tmux binds nothing on P. A picture of what this client shows, in the
+# pictures directory of the server's machine. Lillecarl/pymux#813.
+bind-key P capture-client -o
 
 # The strip. tmux has none of these, so there is no muscle memory to
 # keep and the keys are a choice. Lillecarl/pymux#212.
