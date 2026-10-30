@@ -244,6 +244,30 @@ async def test_a_marked_picture_names_what_it_shows_by_ref(server):
         await call(server, "browser.close", name="probe")
 
 
+async def test_a_point_on_the_picture_names_the_element_there(server):
+    await call(server, "browser.open", name="probe", seat="headless", url=PAGE, arguments=ARGUMENTS)
+    try:
+        async with browser.tab(server, "probe") as page:
+            (button,) = [mark for mark in await browser.marks(page) if mark.role == "button"]
+        x, y = button.x + button.width / 2, button.y + button.height / 2
+        found = await call(server, "browser.at", name="probe", x=x, y=y)
+        assert (found["ref"], found["role"], found["name"]) == (button.ref, "button", "Go"), found
+
+        # Read off a picture drawn at a quarter of the page's size.
+        shot = await call(server, "browser.screenshot", name="probe", fit=300)
+        size = Image.open(io.BytesIO(shot.data)).size
+        async with browser.tab(server, "probe") as page:
+            view = (await page.send("Page.getLayoutMetrics"))["cssVisualViewport"]
+        scale = size[0] / view["clientWidth"]
+        found = await call(server, "browser.at", name="probe", x=x * scale, y=y * scale, of=list(size))
+        assert found["ref"] == button.ref, found
+
+        with pytest.raises(LookupError, match="nothing the page names"):
+            await call(server, "browser.at", name="probe", x=view["clientWidth"] - 5, y=view["clientHeight"] - 5)
+    finally:
+        await call(server, "browser.close", name="probe")
+
+
 async def test_a_profile_name_is_one_path_part(server):
     with pytest.raises(ValueError, match="not a profile name"):
         await call(server, "browser.open", name="probe", seat="headless", profile="../escape", arguments=ARGUMENTS)

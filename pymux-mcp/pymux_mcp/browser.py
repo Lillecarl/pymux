@@ -626,6 +626,66 @@ async def snapshot(page: Page, limit: int) -> str:
     return "\n".join(lines)
 
 
+async def point(page: Page, x: float, y: float, of: Sequence[float] | None) -> tuple[float, float]:
+    """
+    A point in the viewport's CSS pixels: as given, or read off a picture
+    of the viewport `of` = (width, height) pixels, which `fit` and a
+    harness shrink.
+    """
+    if of is None:
+        return x, y
+    width, height = of
+    view = (await page.send("Page.getLayoutMetrics"))["cssVisualViewport"]
+    return x * view["clientWidth"] / width, y * view["clientHeight"] / height
+
+
+async def at(page: Page, x: float, y: float) -> dict[str, Any]:
+    """
+    What is at a point of the viewport, in CSS pixels: the nearest
+    element a person acts on that holds it, else the nearest that the
+    accessibility tree names.
+    """
+    await page.send("DOM.enable")
+    try:
+        found = await page.send(
+            "DOM.getNodeForLocation", {"x": round(x), "y": round(y), "ignorePointerEventsNone": True}
+        )
+    except CDPError:
+        raise LookupError("nothing at %g, %g: it is outside the page" % (x, y)) from None
+    await page.send("Accessibility.enable")
+    nodes = (
+        await page.send(
+            "Accessibility.getPartialAXTree", {"backendNodeId": found["backendNodeId"], "fetchRelatives": True}
+        )
+    )["nodes"]
+    by_id = {node["nodeId"]: node for node in nodes}
+    chain = []
+    node = next((node for node in nodes if node.get("backendDOMNodeId") == found["backendNodeId"]), None)
+    while node is not None:
+        chain.append(node)
+        node = by_id.get(node.get("parentId", ""))
+
+    def role(node: Mapping[str, Any]) -> str:
+        return str((node.get("role") or {}).get("value", ""))
+
+    named = [
+        node
+        for node in chain
+        if not node.get("ignored") and "backendDOMNodeId" in node and role(node) not in _SKIPPED_ROLES | _NO_REF_ROLES
+    ]
+    acted = [node for node in named if role(node) in ACTIONABLE]
+    if not (acted or named):
+        raise LookupError("nothing the page names at %g, %g" % (x, y))
+    node = (acted or named)[0]
+    return {
+        "ref": "%s%d" % (REF_PREFIX, node["backendDOMNodeId"]),
+        "role": role(node),
+        "name": str((node.get("name") or {}).get("value", "")),
+        "x": x,
+        "y": y,
+    }
+
+
 async def _element(page: Page, ref: str | None, selector: str | None) -> str:
     "The remote object id of the node a ref or a CSS selector names."
     if (ref is None) == (selector is None):

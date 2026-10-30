@@ -605,6 +605,17 @@ BrowserName = Annotated[str, Field(description="The browser's name, as `browser.
 Tab = Annotated[str | None, Field(description="A tab's target id from `browser.tabs`; the first tab when left out.")]
 Ref = Annotated[str | None, Field(description="A ref from `browser.snapshot`: `e12`.")]
 Selector = Annotated[str | None, Field(description="A CSS selector, for an element no snapshot named.")]
+Of = Annotated[
+    list[float] | None,
+    Field(
+        min_length=2,
+        max_length=2,
+        description=(
+            "[width, height] of the picture x and y were read off, which is drawn smaller than the page;"
+            " left out, x and y are the page's CSS pixels."
+        ),
+    ),
+]
 
 
 @operation("browser.open")
@@ -755,6 +766,24 @@ async def browser_snapshot(
     """
     async with browser.tab(server, name, tab) as page:
         return await browser.snapshot(page, limit)
+
+
+@operation("browser.at")
+async def browser_at(
+    server: Server,
+    x: Annotated[float, Field(description="Across, from the left of what the tab shows.")],
+    y: Annotated[float, Field(description="Down, from the top of what the tab shows.")],
+    of: Of = None,
+    name: BrowserName = "browser",
+    tab: Tab = None,
+) -> Json:
+    """
+    What is at a point of a tab, as a ref, a role and a name: the
+    element to act on that holds the point. Read the point off
+    `browser.screenshot`.
+    """
+    async with browser.tab(server, name, tab) as page:
+        return await browser.at(page, *await browser.point(page, x, y, of))
 
 
 @operation("browser.click")
