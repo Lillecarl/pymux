@@ -57,6 +57,9 @@ browser at a time can have a profile open.
 
 `extensions` loads unpacked extensions at launch, and
 `browser.extension` loads one into a browser that runs.
+`browser.setting` reads or sets a preference, such as
+`translate_blocked_languages`, in a settings tab opened in the
+background and closed after.
 
 A browser lives across calls until `browser.close`, or until it was
 unused for its `idle` seconds, half an hour unless `browser.open` says

@@ -409,6 +409,45 @@ async def load_extension(browser: Browser, directory: str) -> str:
     return answer["id"]
 
 
+#: The page whose script may read and set every preference, through
+#: `chrome.settingsPrivate`; no DevTools method reaches them.
+SETTINGS_PAGE: Final = "chrome://settings/"
+SETTINGS_TIMEOUT: Final = 10.0
+
+
+async def setting(browser: Browser, key: str, value: Any = None, change: bool = False) -> Any:
+    """
+    A preference of the running browser by its key, such as
+    `translate_blocked_languages`; set to `value` first when `change`.
+
+    In a tab opened in the background and closed after, so the tab a
+    person reads stays in front.
+    """
+    endpoint = browser.endpoint()
+    if endpoint is None:
+        raise BrowserGone("the browser %r is not listening" % (browser.name,))
+    async with connected(endpoint) as connection:
+        opened = await connection.send("Target.createTarget", {"url": SETTINGS_PAGE, "background": True})
+        try:
+            page = await Page.attach(connection, opened["targetId"])
+            ready = "typeof chrome === 'object' && !!chrome.settingsPrivate"
+            with anyio.fail_after(SETTINGS_TIMEOUT):
+                while not await evaluate(page, ready):
+                    await anyio.sleep(0.1)
+            if change:
+                done = await evaluate(
+                    page, "chrome.settingsPrivate.setPref(%s, %s)" % (json.dumps(key), json.dumps(value))
+                )
+                if not done:
+                    raise ValueError("Chromium would not set %s to %s" % (key, json.dumps(value)))
+            found = await evaluate(page, "chrome.settingsPrivate.getPref(%s)" % (json.dumps(key),))
+            if not found:
+                raise LookupError("Chromium has no setting %s" % (key,))
+            return found["value"]
+        finally:
+            await connection.send("Target.closeTarget", {"targetId": opened["targetId"]})
+
+
 def _forget(profile: Path) -> None:
     if not kept(profile):
         shutil.rmtree(profile, ignore_errors=True)

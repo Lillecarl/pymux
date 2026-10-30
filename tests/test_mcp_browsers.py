@@ -200,6 +200,21 @@ async def test_an_extension_loads_at_launch_and_into_a_running_browser(server, t
         await call(server, "browser.close", name="probe")
 
 
+async def test_a_setting_is_read_and_set_without_taking_the_front(server):
+    await call(server, "browser.open", name="probe", seat="headless", url=PAGE, arguments=ARGUMENTS)
+    try:
+        key = "translate_blocked_languages"
+        assert "sv" not in await call(server, "browser.setting", name="probe", key=key)
+        assert await call(server, "browser.setting", name="probe", key=key, value=["en", "sv"]) == ["en", "sv"]
+        assert await call(server, "browser.setting", name="probe", key=key) == ["en", "sv"]
+        with pytest.raises((LookupError, browser.CDPError)):
+            await call(server, "browser.setting", name="probe", key="no.such.setting")
+        # The settings tab came and went; the page is the one tab.
+        assert [tab["title"] for tab in await call(server, "browser.tabs", name="probe")] == ["probe"]
+    finally:
+        await call(server, "browser.close", name="probe")
+
+
 async def test_a_profile_name_is_one_path_part(server):
     with pytest.raises(ValueError, match="not a profile name"):
         await call(server, "browser.open", name="probe", seat="headless", profile="../escape", arguments=ARGUMENTS)

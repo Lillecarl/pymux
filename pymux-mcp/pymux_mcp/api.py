@@ -703,6 +703,19 @@ async def browser_extension(
     return {"id": await browser.load_extension(await browser.find(server, name), directory)}
 
 
+@operation("browser.setting")
+async def browser_setting(
+    server: Server,
+    key: Annotated[
+        str, Field(description="A preference's key, as chrome://settings names it: `translate_blocked_languages`.")
+    ],
+    value: Annotated[Any, Field(description="What to set it to, as JSON; left out, the setting is only read.")] = None,
+    name: BrowserName = "browser",
+) -> Any:
+    "Read a preference of a running browser, or set it first, and answer its value."
+    return await browser.setting(await browser.find(server, name), key, value, change=value is not None)
+
+
 @operation("browser.tabs")
 async def browser_tabs(server: Server, name: BrowserName = "browser") -> list[Json]:
     "A browser's tabs: each one's target id, title and address."
