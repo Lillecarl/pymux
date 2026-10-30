@@ -142,7 +142,7 @@ def placeholder_placements(view: PaneView, cell_width: int, cell_height: int) ->
     with the matching piece of the image.
     """
     screen = view.screen
-    if screen is None or not hasattr(screen, "placeholder_runs"):
+    if screen is None:
         return
 
     first_row = view.vertical_scroll

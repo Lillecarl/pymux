@@ -36,12 +36,12 @@ import random
 import re
 import zlib
 from collections.abc import Callable, Coroutine, Iterable, Iterator, Sequence
-from typing import Any, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 import anyio
 from prompt_toolkit.output import ColorDepth
 from pyte import escape
-from pyte.images import GraphicsImage, GraphicsPlacement, PixelFormat
+from pyte.images import GraphicsImage, GraphicsPlacement, GraphicsState, PixelFormat
 from pyte.sequences import Csi, csi, esc
 from pyte.terminfo import DeviceExtension
 
@@ -55,6 +55,9 @@ from .cell_images import CellImages
 from .kitty_frames import SHM_PROBE_ID
 from .placements import Placed, Scroll, Source, drawn_size, moved_by, pane_placements, put_command, visible_placements
 from .window_frames import WindowFrames
+
+if TYPE_CHECKING:
+    from pyte.screen import Screen
 
 __all__ = [
     "CELL_SIZE_QUERY",
@@ -157,10 +160,10 @@ class PaneView(NamedTuple):
     height: int
     vertical_scroll: int
     horizontal_scroll: int
-    graphics: Any
+    graphics: GraphicsState
     #: The screen of the pane. The unicode placeholders live in its
     #: cells, so drawing them needs the text and not only the images.
-    screen: Any = None
+    screen: Screen | None = None
     #: What the client drew over the pane, in cells of its screen: a
     #: popup, a menu, the which-key box. An image is cut around them.
     #: `layout.pane_covers`. Lillecarl/pymux#816.
@@ -605,7 +608,7 @@ class ClientGraphics:
         has no position: the cells of the pane are where it draws.
         """
         screen = view.screen
-        if screen is None or not hasattr(screen, "placeholder_runs"):
+        if screen is None:
             return
         first_row = view.vertical_scroll
         shown = {run.image_id for run in screen.placeholder_runs(first_row, first_row + view.height - 1)}
