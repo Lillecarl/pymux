@@ -127,7 +127,7 @@ async def test_completions_of_palette_stop_above_status_line():
     async with create_session() as (pymux, state):
         manager = state.layout_manager
         with set_app(state.app):
-            rows = manager._palette_rows()
+            rows = manager.palette_rows()
 
         # The box starts five rows down and holds a title and the
         # input, so what is left of the screen is what the menu may

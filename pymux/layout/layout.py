@@ -665,7 +665,7 @@ class LayoutManager:
                 ),
                 Window(
                     content=FormattedTextControl(self._which_key_tokens),
-                    height=lambda: D(min=1, max=self._palette_rows() - 1),
+                    height=lambda: D(min=1, max=self.palette_rows() - 1),
                     style="class:commandpalette",
                 ),
             ],
@@ -709,7 +709,7 @@ class LayoutManager:
 
     def _popups_show(self, top_right: bool) -> bool:
         "Whether the boxes draw in this corner. The list goes first: it is empty on almost every frame."
-        return bool(self.client_state.popups) and self._cursor_is_in_top_right() is not top_right
+        return bool(self.client_state.popups) and self.cursor_is_in_top_right() is not top_right
 
     def _popup_width(self) -> int:
         return max(MIN_POPUP_WIDTH, min(POPUP_WIDTH, self.room_this_client_has.columns - 2))
@@ -748,7 +748,7 @@ class LayoutManager:
 
         return click
 
-    def _cursor_on_view(self) -> Point:
+    def cursor_on_view(self) -> Point:
         """
         Where the cursor of the focused pane sits on this client's
         view, in the coordinates a float is placed in.
@@ -769,18 +769,18 @@ class LayoutManager:
         window = app.layout.current_window
         return screen.get_cursor_position(window)
 
-    def _cursor_is_in_top_right(self) -> bool:
+    def cursor_is_in_top_right(self) -> bool:
         """
         Whether the cursor sits in the quadrant the box would rather
         draw in. The half the status bar takes is part of the lower
         half; it is where a cursor below the middle sits either way.
         Lillecarl/pymux#29.
         """
-        point = self._cursor_on_view()
+        point = self.cursor_on_view()
         room = self.room_this_client_has
         return point.y * 2 < room.rows and point.x * 2 >= room.columns
 
-    def _palette_rows(self) -> int:
+    def palette_rows(self) -> int:
         """
         How many rows of completions fit under the box.
 
@@ -807,7 +807,7 @@ class LayoutManager:
         return ConditionalContainer(
             content=Window(
                 content=CompletionsMenuControl(),
-                height=lambda: D(min=1, max=self._palette_rows()),
+                height=lambda: D(min=1, max=self.palette_rows()),
                 scroll_offsets=ScrollOffsets(top=1, bottom=1),
                 right_margins=[ScrollbarMargin(display_arrows=True)],
                 style="class:completion-menu",
@@ -866,7 +866,7 @@ class LayoutManager:
             Float(
                 content=ConditionalContainer(
                     content=DynamicContainer(self._which_key_box),
-                    filter=which_key_shows & Condition(lambda: self._cursor_is_in_top_right()),
+                    filter=which_key_shows & Condition(lambda: self.cursor_is_in_top_right()),
                 ),
                 # A row clear of the status line.
                 bottom=1,
@@ -1110,7 +1110,7 @@ class LayoutManager:
                 Float(
                     content=ConditionalContainer(
                         content=DynamicContainer(self._which_key_box),
-                        filter=which_key_shows & Condition(lambda: not self._cursor_is_in_top_right()),
+                        filter=which_key_shows & Condition(lambda: not self.cursor_is_in_top_right()),
                     ),
                     top=0,
                     right=1,
