@@ -44,6 +44,17 @@ accessibility tree, with a ref on each element that `browser.click` and
 `browser.screenshot`, `browser.console`, `browser.tabs`, `browser.list`
 and `browser.close` do the rest.
 
+A `pane` browser opens in a window of its own, or with `window` as a
+split of a window somebody works in; closing it then takes only its own
+panes away. Every browser prefers reduced motion, so a watched one
+sends fewer frames.
+
+A browser's profile is thrown away when it closes, unless `profile`
+names one: a kept profile lives in
+`$XDG_STATE_HOME/pymux/browsers/<name>` and keeps its logins,
+extensions and settings for the next browser that names it. One
+browser at a time can have a profile open.
+
 A browser lives across calls until `browser.close`, or until it was
 unused for its `idle` seconds, half an hour unless `browser.open` says
 otherwise. A browser operation is use, and so is a key or the mouse at a

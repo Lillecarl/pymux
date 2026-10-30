@@ -137,6 +137,38 @@ async def test_a_browser_beside_a_persons_work_takes_only_its_own_panes_away(ser
     await call(server, "browser.close", name="probe")
     assert await server.panes({"browser": "probe"}) == []
     assert [pane.id for pane in await window.panes()] == [work.id]
+
+
+async def test_a_kept_profile_outlives_its_browser(server, tmp_path, monkeypatch):
+    "What the browser stored is there the next time, and one profile takes one browser at a time."
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    opened = await call(server, "browser.open", name="probe", seat="headless", profile="work", arguments=ARGUMENTS)
+    assert opened["kept"] and opened["profile"] == str(tmp_path / "state" / "pymux" / "browsers" / "work")
+    cookie = {"name": "kept", "value": "yes", "domain": "example.com", "path": "/", "expires": 2e9}
+    try:
+        with pytest.raises(ValueError, match="has the profile"):
+            await call(server, "browser.open", name="other", seat="headless", profile="work", arguments=ARGUMENTS)
+        async with browser.tab(server, "probe") as page:
+            await page.send("Network.setCookie", cookie)
+    finally:
+        await call(server, "browser.close", name="probe")
+    assert Path(opened["profile"]).is_dir()
+
+    await call(server, "browser.open", name="probe", seat="headless", profile="work", arguments=ARGUMENTS)
+    try:
+        async with browser.tab(server, "probe") as page:
+            cookies = (await page.send("Network.getCookies", {"urls": ["https://example.com/"]}))["cookies"]
+        assert [(one["name"], one["value"]) for one in cookies] == [("kept", "yes")]
+    finally:
+        await call(server, "browser.close", name="probe")
+
+
+async def test_a_profile_name_is_one_path_part(server):
+    with pytest.raises(ValueError, match="not a profile name"):
+        await call(server, "browser.open", name="probe", seat="headless", profile="../escape", arguments=ARGUMENTS)
+
+
+async def test_a_second_browser_of_the_same_name_is_refused(server):
     await call(server, "browser.open", name="probe", seat="headless", arguments=ARGUMENTS)
     try:
         with pytest.raises(ValueError, match="is open"):

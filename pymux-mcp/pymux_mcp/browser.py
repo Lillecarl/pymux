@@ -28,6 +28,7 @@ import base64
 import contextlib
 import json
 import os
+import re
 import shlex
 import shutil
 import tempfile
@@ -64,6 +65,11 @@ SWEEP_SECONDS: Final = 30.0
 
 #: How long Chromium may take to listen.
 LISTEN_TIMEOUT: Final = 30.0
+
+#: A kept profile's name: one path part, and no hidden file.
+PROFILE_NAME: Final = re.compile(r"[A-Za-z0-9_-][A-Za-z0-9._-]*")
+#: Where Chromium writes the port it listens on, in its profile.
+PORT_FILE: Final = "DevToolsActivePort"
 
 #: Every request home and first-run page off: a page an agent did not
 #: ask for covers the one it did.
@@ -122,6 +128,7 @@ class Browser:
             "profile": str(self.profile),
             "used": int(self.used),
             "idle": self.idle,
+            "kept": kept(self.profile),
         }
         if isinstance(self.holder, Job):
             found["job"] = self.holder.id
@@ -142,10 +149,21 @@ class Browser:
     def endpoint(self) -> str | None:
         "The browser's WebSocket, or None before it listens."
         try:
-            port, path = (self.profile / "DevToolsActivePort").read_text().split()
+            port, path = (self.profile / PORT_FILE).read_text().split()
         except OSError, ValueError:
             return None
         return "ws://127.0.0.1:%s%s" % (port, path)
+
+
+def profiles() -> Path:
+    "Where kept profiles live."
+    state = os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state"
+    return Path(state) / "pymux" / "browsers"
+
+
+def kept(profile: Path) -> bool:
+    "A profile `close` leaves where it is: one with a name."
+    return profile.parent == profiles()
 
 
 def chromium(executable: str | None) -> str:
@@ -223,14 +241,30 @@ async def open_browser(
     arguments: Sequence[str],
     idle: float = DEFAULT_IDLE,
     window: str | None = None,
+    profile_name: str | None = None,
 ) -> Browser:
-    "Start a browser in `seat`, and answer it once it listens: in a split of `window` when one is named."
+    """
+    Start a browser in `seat`, and answer it once it listens: in a split
+    of `window` when one is named, and on the kept profile `profile_name`
+    when one is named.
+    """
     if window is not None and seat is not Seat.PANE:
         raise ValueError("only a `pane` browser opens in a window")
+    if profile_name is not None and not PROFILE_NAME.fullmatch(profile_name):
+        raise ValueError("%r is not a profile name: letters, digits, `.`, `_` and `-`" % (profile_name,))
+    profile = None if profile_name is None else profiles() / profile_name
     for existing in await every(server):
         if existing.name == name:
             raise ValueError("a browser named %r is open; close it or pick another name" % (name,))
-    profile = Path(tempfile.mkdtemp(prefix="pymux-browser-"))
+        # A second Chromium on a profile hands its launch to the first and ends.
+        if existing.profile == profile:
+            raise ValueError("the browser %r has the profile %r open" % (existing.name, profile_name))
+    if profile is None:
+        profile = Path(tempfile.mkdtemp(prefix="pymux-browser-"))
+    else:
+        profile.mkdir(parents=True, exist_ok=True)
+        # The last run's port, which would read as listening at once.
+        (profile / PORT_FILE).unlink(missing_ok=True)
     used = time.time()
     tags = {
         NAME_TAG: name,
@@ -260,7 +294,7 @@ async def open_browser(
         browser = Browser(name, seat, profile, holder, used, idle)
         await _listening(browser)
     except BaseException:
-        shutil.rmtree(profile, ignore_errors=True)
+        _forget(profile)
         raise
     return browser
 
@@ -321,7 +355,8 @@ QUIT_TIMEOUT: Final = 10.0
 
 async def close(browser: Browser) -> None:
     """
-    Stop the browser, and take its holder and its profile away.
+    Stop the browser, and take its holder away, and its profile unless
+    it is kept.
 
     Chromium is asked to quit first. Killing a window pane closes one of
     its windows and nothing more, and the next one opens in its place.
@@ -344,7 +379,12 @@ async def close(browser: Browser) -> None:
         elif await _held(browser):
             await browser.holder.kill()
     finally:
-        shutil.rmtree(browser.profile, ignore_errors=True)
+        _forget(browser.profile)
+
+
+def _forget(profile: Path) -> None:
+    if not kept(profile):
+        shutil.rmtree(profile, ignore_errors=True)
 
 
 async def sweep(server: Server, now: float | None = None) -> list[str]:

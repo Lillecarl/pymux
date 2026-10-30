@@ -631,6 +631,15 @@ async def open_browser(
             )
         ),
     ] = None,
+    profile: Annotated[
+        str | None,
+        Field(
+            description=(
+                "A kept profile, by name: its logins, extensions and settings outlive the browser."
+                " A throwaway profile when left out."
+            )
+        ),
+    ] = None,
     executable: Annotated[
         str | None, Field(description="Chromium to run; PYMUX_MCP_CHROMIUM or `chromium` on the PATH when left out.")
     ] = None,
@@ -651,7 +660,7 @@ async def open_browser(
     it then takes its panes away and leaves the window.
     """
     opened = await browser.open_browser(
-        server, name, seat, url, session, executable, arguments or (), idle, window=window
+        server, name, seat, url, session, executable, arguments or (), idle, window=window, profile_name=profile
     )
     return opened.json()
 
