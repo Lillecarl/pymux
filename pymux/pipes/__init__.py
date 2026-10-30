@@ -7,23 +7,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .base import BrokenPipeError, PipeConnection
-from .memory import MemoryConnection, connect_in_memory
-
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from .base import PipeConnection
     from .posix import PosixSocketListener
 
-__all__ = [
-    "BrokenPipeError",
-    "MemoryConnection",
-    # Base.
-    "PipeConnection",
-    "bind_and_listen_on_socket",
-    # In memory, for a server and a client in one process.
-    "connect_in_memory",
-]
+__all__ = ["bind_and_listen_on_socket"]
 
 
 def bind_and_listen_on_socket(

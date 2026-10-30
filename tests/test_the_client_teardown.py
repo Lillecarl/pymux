@@ -25,7 +25,7 @@ import pytest
 from pymux.client.memory import MemoryClient
 from pymux.client.posix import PosixClient
 from pymux.client.terminal import TerminalClient
-from pymux.pipes import BrokenPipeError as ServerHungUp
+from pymux.pipes.base import BrokenPipeError as ServerHungUp
 
 
 class FakeSocket:

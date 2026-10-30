@@ -21,14 +21,15 @@ import anyio
 from . import introspect
 from .client.memory import MemoryClient
 from .log import logger
-from .pipes import bind_and_listen_on_socket, connect_in_memory
+from .pipes import bind_and_listen_on_socket
+from .pipes.memory import connect_in_memory
 from .server import ServerConnection
 
 if TYPE_CHECKING:
     from prompt_toolkit.output import ColorDepth
 
     from .main import Pymux
-    from .pipes import PipeConnection
+    from .pipes.base import PipeConnection
 
 __all__ = ["Serving"]
 

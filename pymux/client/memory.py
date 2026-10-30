@@ -45,7 +45,8 @@ import anyio
 from libpymux.protocol import Field, Message, Packet
 from prompt_toolkit.input.vt100 import raw_mode
 
-from ..pipes import BrokenPipeError, MemoryConnection
+from ..pipes.base import BrokenPipeError
+from ..pipes.memory import MemoryConnection
 from .terminal import TerminalClient
 
 if TYPE_CHECKING:

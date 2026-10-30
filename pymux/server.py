@@ -40,7 +40,7 @@ from .options import Scope, SetOptionError
 from .osc import NO_PROGRESS, Progress
 from .pacing import FramePacing
 from .packet_table import PacketTable
-from .pipes import BrokenPipeError
+from .pipes.base import BrokenPipeError
 from .rate import Rate
 from .replies import TerminalReplies
 from .uploads import LIST_SECONDS, Listing, Upload
@@ -48,7 +48,7 @@ from .uploads import LIST_SECONDS, Listing, Upload
 if TYPE_CHECKING:
     from pymux.client_state import ClientState
     from pymux.main import Pymux
-    from pymux.pipes import PipeConnection
+    from pymux.pipes.base import PipeConnection
     from pymux.recording import Recording
     from pymux.session import Session
     from pymux.web.stream import PaneStream

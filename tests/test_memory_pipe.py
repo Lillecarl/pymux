@@ -13,7 +13,8 @@ import anyio
 import pytest
 from libpymux.wire import MSGPACK, encode_json, encode_msgpack
 
-from pymux.pipes import BrokenPipeError, connect_in_memory
+from pymux.pipes.base import BrokenPipeError
+from pymux.pipes.memory import connect_in_memory
 
 
 def run(func, *args):
