@@ -135,7 +135,7 @@ def attach_over_a_socket(pymux: Pymux, offer: dict) -> tuple[socket.socket, obje
     "A client's socket, and the server's connection for it."
     server_sock, client_sock = socket.socketpair()
     before = set(pymux.connections)
-    pymux._accept_connection(PosixSocketConnection(server_sock))
+    pymux.serving.accept_connection(PosixSocketConnection(server_sock))
     (connection,) = set(pymux.connections) - before
     client_sock.sendall(
         encode_json({"cmd": "size", "data": [SIZE.rows, SIZE.columns]})

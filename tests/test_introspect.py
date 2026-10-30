@@ -33,6 +33,7 @@ from pymux.client_io import SocketStdout
 from pymux.commands import handle_command
 from pymux.enums import Woke
 from pymux.main import Pymux
+from pymux.serving import Serving
 
 SIZE = Size(rows=24, columns=80)
 
@@ -301,7 +302,7 @@ async def test_every_route_that_starts_create_server_takes_signal():
     Two routes start a server, and a person sending a signal does not
     know which one this is.
     """
-    source = inspect.getsource(Pymux)
+    source = inspect.getsource(Serving)
 
-    assert source.count("self.server_starts()") == 2
+    assert source.count("self.pymux.server_starts()") == 2
     assert "introspect.answer_signal()" in inspect.getsource(Pymux.server_starts)

@@ -487,7 +487,7 @@ class ServerConnection:
         # The progress this client's terminal was told, the same way.
         self._progress_sent = NO_PROGRESS
 
-        self.pymux.serve_connection(self)
+        self.pymux.serving.serve_connection(self)
 
     def _spawn(self, coro: Coroutine[Any, Any, object]) -> None:
         """

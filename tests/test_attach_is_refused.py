@@ -183,7 +183,7 @@ async def test_the_socket_of_an_integrated_server_refuses_an_attach(tmp_path):
     """
     pymux = _server()
     pymux._serves_one_terminal = True
-    pymux.listen_on_socket(str(tmp_path / "pymux.sock"))
+    pymux.serving.listen_on_socket(str(tmp_path / "pymux.sock"))
 
     async with pymux.running():
         client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)

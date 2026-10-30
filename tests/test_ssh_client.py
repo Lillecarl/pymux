@@ -251,7 +251,7 @@ async def live_servers(socket_path: str, **server_options):
     where = Path(tempfile.mkdtemp())
 
     pymux = Pymux()
-    pymux.listen_on_socket(socket_path)
+    pymux.serving.listen_on_socket(socket_path)
 
     # The bind is what names the server; the accepting is a task of
     # `running()`. A server that binds and does not serve takes no

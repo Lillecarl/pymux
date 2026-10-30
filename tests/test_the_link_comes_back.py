@@ -523,7 +523,7 @@ async def attached(monkeypatch, pymux=None, client_setup=None, **how):
     monkeypatch.setattr(sys, "stdout", terminal.stdout)
 
     pymux = pymux if pymux is not None else Pymux()
-    pymux.listen_on_socket(socket_path)
+    pymux.serving.listen_on_socket(socket_path)
 
     async with pymux.running():
         await pymux.create_window(PANE_COMMAND)

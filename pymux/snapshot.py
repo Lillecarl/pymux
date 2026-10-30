@@ -960,7 +960,7 @@ def load(pymux: Pymux, path: str | os.PathLike[str], takeover: Takeover | None =
 
     Returns the fd of the listening socket, or None when the server had
     none. An exec carries it under the same number, and adopting it is
-    the caller's: `Pymux.adopt_listener`.
+    the caller's: `Serving.adopt_listener`.
     """
     db = _open(path)
     try:

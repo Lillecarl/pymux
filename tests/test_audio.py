@@ -218,7 +218,7 @@ async def serving(tmp_path, mode=AudioServerMode.PRIVATE, name="pymux.sock"):
     pymux = Pymux()
     pymux.options.test_mode = True
     pymux.options.audio_server = mode
-    pymux.listen_on_socket(str(tmp_path / name))
+    pymux.serving.listen_on_socket(str(tmp_path / name))
     async with pymux.running():
         try:
             with anyio.fail_after(20):

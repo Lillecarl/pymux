@@ -646,12 +646,12 @@ def run() -> None:
             # over it is refused: this server draws on the terminal it runs
             # in. Lillecarl/pymux#159.
             if socket_name:
-                mux.listen_on_socket(socket_name)
+                mux.serving.listen_on_socket(socket_name)
 
             # No depth of its own. Like `attach`, this passes on what the
             # flags asked for, and `None` leaves the answer to the probe of
             # the terminal and to the environment.
-            mux.run_integrated(
+            mux.serving.run_integrated(
                 color_depth=_color_depth(ansi_colors_only, true_color),
                 detach_other_clients=a.detach_others or a.hang_up_others,
                 chosen_name=a.client_name,
@@ -738,9 +738,9 @@ def run() -> None:
             mux = _new_pymux(source_file=filename)
 
             # Run server.
-            socket_name = mux.listen_on_socket(socket_name)
+            socket_name = mux.serving.listen_on_socket(socket_name)
             try:
-                mux.run_server()
+                mux.serving.run_server()
             except KeyboardInterrupt:
                 sys.exit(1)
 
@@ -833,14 +833,14 @@ def _start_and_attach(socket_name: str | None, filename: str | None, attaching: 
     "Start a server on `socket_name`, or on a new one with None, and attach to it."
     rerun_in_a_scope()
     mux = _new_pymux(source_file=filename)
-    socket_name = mux.listen_on_socket(socket_name)
+    socket_name = mux.serving.listen_on_socket(socket_name)
     pid = daemonize()
 
     if pid > 0:
         # Create window. It is important that this happens in the daemon,
         # because the parent of the process running inside should be this
         # daemon. (Otherwise the `waitpid` call won't work.)
-        mux.run_server()
+        mux.serving.run_server()
         sys.exit(0)
     attaching.attach(create_client(socket_name))
 
@@ -1268,12 +1268,12 @@ def _new_session(
         session_name=session_name,
         size_with_no_client=size_with_no_client,
     )
-    socket_name = mux.listen_on_socket(socket_name)
+    socket_name = mux.serving.listen_on_socket(socket_name)
 
     pid = daemonize()
     if pid > 0:
         # This is the daemon. Run the server until all panes are gone.
-        mux.run_server()
+        mux.serving.run_server()
         return 0
 
     # Wait for the server to come up.

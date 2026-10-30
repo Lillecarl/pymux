@@ -396,7 +396,7 @@ async def test_shell_asks_the_server_for_values(tmp_path):
 
     # Before the server runs: it serves the sockets it listens on as it starts.
     pymux = Pymux()
-    pymux.listen_on_socket(socket_name)
+    pymux.serving.listen_on_socket(socket_name)
     async with in_this_process(pymux):
         with anyio.fail_after(30):
             layouts = await completes("pymux -S %s select-layout even-" % socket_name)

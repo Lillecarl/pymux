@@ -52,7 +52,7 @@ def test_an_adopted_listener_takes_the_new_backlog(tmp_path):
     old.listen(0)
     pymux = Pymux()
     pymux.socket_name = path
-    pymux.adopt_listener(old.detach())
+    pymux.serving.adopt_listener(old.detach())
     try:
         for one in connect_without_blocking(path):
             one.close()

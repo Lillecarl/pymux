@@ -161,7 +161,7 @@ def test_a_snapshot_is_private_from_its_first_byte(pymux, tmp_path):
 
 
 def test_a_loaded_server_adopts_the_listener_it_names(pymux, tmp_path):
-    pymux.listen_on_socket(str(tmp_path / "server.sock"))
+    pymux.serving.listen_on_socket(str(tmp_path / "server.sock"))
     path = tmp_path / "snapshot.sqlite"
     snapshot.save(pymux, path)
 
@@ -169,17 +169,17 @@ def test_a_loaded_server_adopts_the_listener_it_names(pymux, tmp_path):
     fd = snapshot.load(fresh, path)
     assert fd == pymux.listener.socket.fileno()
     assert fresh.socket_name == pymux.socket_name
-    fresh.adopt_listener(fd)
+    fresh.serving.adopt_listener(fd)
     # One fd, and the old server's object is the one that closes it.
     fresh.listener.socket.detach()
 
     other = Pymux()
-    other.listen_on_socket(str(tmp_path / "other.sock"))
+    other.serving.listen_on_socket(str(tmp_path / "other.sock"))
     read, write = os.pipe()
     try:
         for wrong in (other.listener.socket.fileno(), read):
             with pytest.raises(OSError):
-                fresh.adopt_listener(wrong)
+                fresh.serving.adopt_listener(wrong)
             os.fstat(wrong)  # a refusal leaves the fd to its owner
     finally:
         other.listener.close()

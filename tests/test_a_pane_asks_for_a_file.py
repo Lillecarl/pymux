@@ -615,7 +615,7 @@ async def test_pymux_receive_gets_a_file_from_the_client(tmp_path, home, config)
     said = tmp_path / "said"
 
     pymux = Pymux()
-    pymux.listen_on_socket(str(tmp_path / "pymux.sock"))
+    pymux.serving.listen_on_socket(str(tmp_path / "pymux.sock"))
     connection_of: list = []
     client = AskedClient(config, send=lambda packet: connection_of[0]._process(packet))
 
@@ -675,7 +675,7 @@ async def test_a_shell_in_a_pane_completes_the_persons_paths(tmp_path, home, con
     said = tmp_path / "said"
 
     pymux = Pymux()
-    pymux.listen_on_socket(str(tmp_path / "pymux.sock"))
+    pymux.serving.listen_on_socket(str(tmp_path / "pymux.sock"))
     connection_of: list = []
     client = AskedClient(config, send=lambda packet: connection_of[0]._process(packet))
     client._grant_until = client.clock.now + 60

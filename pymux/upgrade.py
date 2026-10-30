@@ -331,11 +331,11 @@ def resume(path: str) -> None:
         listener = snapshot.load(pymux, path, snapshot.Inherited())
         if listener is None:
             raise snapshot.SnapshotError("the snapshot names no listening socket")
-        pymux.adopt_listener(listener)
+        pymux.serving.adopt_listener(listener)
         # Nothing this server forks from here on may get one.
         for fd in carried(pymux):
             os.set_inheritable(fd, False)
-        pymux.serve_listener()
+        pymux.serving.serve_listener()
         for pane in strays:
             pane.process.kill()
         await snapshot.start(pymux)
@@ -345,7 +345,7 @@ def resume(path: str) -> None:
 
     # A failure in `resumed` ends the server, and `run_server` writes
     # the crash report, which names the snapshot.
-    pymux.run_server(resumed)
+    pymux.serving.run_server(resumed)
 
 
 def _crashed(error: BaseException, started: float) -> None:

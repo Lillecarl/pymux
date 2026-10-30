@@ -97,6 +97,8 @@ class FakePymux:
         self.removed = []
         self.terminals = FakeTerminals()
         self.outer_image_ids = OuterImageIds()
+        # `Pymux.serving` is where a connection asks to be served.
+        self.serving = self
 
     def serve_connection(self, connection):
         # No task group means a connection that is built to be asked

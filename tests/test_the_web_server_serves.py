@@ -45,7 +45,7 @@ async def pymux(tmp_path):
         await mux.create_window(STAYS)
         pane = mux.arrangement.get_active_window().active_pane
         pane.screen.resize(LINES, COLUMNS)
-        mux.listen_on_socket(str(tmp_path / "s.sock"))
+        mux.serving.listen_on_socket(str(tmp_path / "s.sock"))
         try:
             yield mux
         finally:
