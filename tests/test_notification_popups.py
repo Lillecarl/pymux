@@ -16,22 +16,6 @@ from run_commands import run_as
 from session import create_session, once
 
 from pymux.enums import NotificationPopups
-from pymux.notifications import notification_osc_of
-
-
-@pytest.mark.parametrize(
-    ("version", "shown"),
-    [
-        ("iTerm2 3.6.4", Osc.MESSAGE),
-        ("WezTerm 20240203-110809-5046fc22", Osc.SIMPLE_NOTIFICATION),
-        ("ghostty 1.2.3", Osc.SIMPLE_NOTIFICATION),
-        ("foot(1.28.0)", Osc.SIMPLE_NOTIFICATION),
-        ("XTerm(397)", None),
-        ("", None),
-    ],
-)
-def test_a_terminal_without_the_query_is_known_by_name(version, shown):
-    assert notification_osc_of(version) == shown
 
 
 @asynccontextmanager

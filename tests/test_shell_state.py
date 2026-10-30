@@ -22,7 +22,6 @@ from session import create_session
 
 from pymux.enums import Clipboard, NotificationPopups
 from pymux.format import format_pymux_string
-from pymux.graphics import draws_progress
 from pymux.main import MAX_USER_VARS, Pymux
 from pymux.notifications import Urgency
 from pymux.osc import (
@@ -541,21 +540,6 @@ def test_a_progress_reads_its_state_and_percent(param, wanted):
 def test_a_window_shows_each_state_in_ascii():
     assert [Progress(state, 42).shown() for state in range(5)] == ["", "42%", "!42%", "~", "=42%"]
     assert (Progress(1, 42).sequence, NO_PROGRESS.sequence) == ("4;1;42", "4;0")
-
-
-@pytest.mark.parametrize(
-    ("version", "draws"),
-    [
-        ("kitty(0.44.0)", True),
-        ("kitty(0.43.1)", False),
-        ("ghostty 1.2.3", True),
-        ("iTerm2 3.6.1", True),
-        ("WezTerm 20240203", False),
-        ("", False),
-    ],
-)
-def test_a_progress_goes_to_the_terminals_that_draw_one(version, draws):
-    assert draws_progress(version) is draws
 
 
 async def test_a_pane_s_progress_reaches_the_status_line_and_the_client():

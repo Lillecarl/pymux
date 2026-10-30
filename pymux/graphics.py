@@ -62,8 +62,6 @@ __all__ = [
     "ClientGraphics",
     "OuterImageIds",
     "PaneView",
-    "draws_placeholders",
-    "draws_progress",
     "is_query_reply",
     "pane_placements",
     "source_rgba",
@@ -139,17 +137,6 @@ _SIXEL_ATTRIBUTE = str(int(DeviceExtension.SIXEL))
 
 _VERSION_REPLY_RE = re.compile(r"^\x1bP>\|(.*)\x1b\\$", re.DOTALL)
 
-#: The terminals that draw kitty's unicode placeholders, by what they
-#: answer XTVERSION with, and the first version that does. WezTerm and
-#: Konsole answer the graphics query and draw none.
-#:
-#: - kitty: "kitty(0.39.1)". Placeholders came in 0.28.0.
-#: - Ghostty: "ghostty 1.3.1". `src/terminal/kitty/graphics_unicode.zig`.
-_DRAWS_PLACEHOLDERS = (
-    (re.compile(r"kitty\((\d+(?:\.\d+)*)"), (0, 28, 0)),
-    (re.compile(r"ghostty (\d+(?:\.\d+)*)"), (1, 0, 0)),
-)
-
 # What a sixel payload is made of: printable ASCII, and the line breaks
 # programs wrap it with.
 _SIXEL_TEXT_RE = re.compile(r"[ -~\r\n]*")
@@ -163,45 +150,6 @@ _IMAGE_REPLY_RE = re.compile(r"^\x1b_G(?:[^;]*,)?i=(\d+)(?:,[^;]*)?;")
 def is_query_reply(data: str) -> bool:
     "True when `data` is the reply of `QUERY_SEQUENCE`."
     return bool(_QUERY_REPLY_RE.match(data))
-
-
-def draws_placeholders(version: str, term: str) -> bool:
-    """
-    Whether the terminal that answered XTVERSION with `version` draws
-    kitty's unicode placeholders. No query says so, so this goes by
-    name. A terminal that did not answer is judged by `term`.
-    Lillecarl/pymux#607.
-    """
-    if not version:
-        return "kitty" in term
-    for name, first in _DRAWS_PLACEHOLDERS:
-        match = name.match(version)
-        if match is not None:
-            return tuple(int(part) for part in match.group(1).split(".")) >= first
-    return False
-
-
-#: The terminals that draw ConEmu's progress, "OSC 9 ; 4", by their
-#: XTVERSION and the first version that does. Others may read any OSC
-#: 9 as a notification, so a progress goes to these alone.
-#:
-#: - kitty: the macOS dock in 0.44.0, a bar on the window in 0.47.0.
-#: - Ghostty: 1.2.0.
-#: - iTerm2: 3.6.0.
-_DRAWS_PROGRESS = (
-    (re.compile(r"kitty\((\d+(?:\.\d+)*)"), (0, 44, 0)),
-    (re.compile(r"ghostty (\d+(?:\.\d+)*)"), (1, 2, 0)),
-    (re.compile(r"iTerm2 (\d+(?:\.\d+)*)"), (3, 6, 0)),
-)
-
-
-def draws_progress(version: str) -> bool:
-    "Whether the terminal that answered XTVERSION with `version` draws a progress. Lillecarl/pymux#788."
-    for name, first in _DRAWS_PROGRESS:
-        match = name.match(version)
-        if match is not None:
-            return tuple(int(part) for part in match.group(1).split(".")) >= first
-    return False
 
 
 class PaneView(NamedTuple):

@@ -25,11 +25,8 @@ from functools import lru_cache
 from typing import Final, NamedTuple
 
 from pyte.cells import character_width
-from wcwidth import iter_graphemes, list_term_programs
+from wcwidth import iter_graphemes
 from wcwidth import width as terminal_width
-
-#: Every name and alias wcwidth has measurements for, lowercase.
-_KNOWN: Final = frozenset(list_term_programs())
 
 #: The characters that make a cluster narrower than its pieces: a zero
 #: width joiner, a regional indicator, a skin tone. A frame without one
@@ -120,24 +117,6 @@ class Drawn(NamedTuple):
         if drawn == _parts(probe) != character_width(probe):
             return _parts(cluster)
         return drawn
-
-
-@lru_cache(maxsize=64)
-def term_program_of(version: str, term: str) -> str | None:
-    """
-    The name wcwidth knows the terminal by, or None.
-
-    `version` is the XTVERSION answer: "WezTerm 20240203-110809-5046fc22",
-    "iTerm2 3.7.6", "ghostty 1.4.0", "kitty(0.39.1)". wcwidth reads only
-    the bare name, so the first word goes, cut at its parenthesis. A
-    terminal that did not answer is judged by `term`.
-    """
-    if version.strip():
-        name = version.split(maxsplit=1)[0].split("(", 1)[0].lower()
-        if name in _KNOWN:
-            return name
-    term = term.lower()
-    return term if term in _KNOWN else None
 
 
 def table_width(cluster: str, term_program: str) -> int:

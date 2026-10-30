@@ -34,7 +34,6 @@ from pymux.downloads import (
     file_sequence,
     multipart_sequences,
     route_of,
-    terminal_saves_downloads,
 )
 from pymux.entry_points.run_pymux import Mode, parse_arguments
 from pymux.enums import FileTransfer
@@ -187,14 +186,6 @@ def test_a_multipart_file_too_large_is_refused_and_its_rest_dropped(monkeypatch)
 )
 def test_the_route_of_a_download(chosen, over_ssh, terminal_saves, route):
     assert route_of(chosen, over_ssh, terminal_saves) is route
-
-
-@pytest.mark.parametrize(
-    ("version", "saves"),
-    [("iTerm2 3.5.14", True), ("kitty(0.49.2)", False), ("ghostty 1.3.1", False), ("", False)],
-)
-def test_only_iterm2_saves_a_download(version, saves):
-    assert terminal_saves_downloads(version) is saves
 
 
 def test_the_option_takes_its_words_only():

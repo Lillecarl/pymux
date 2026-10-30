@@ -47,7 +47,7 @@ from ptyhost.backends import Backend
 from ptyhost.backends.posix import GRACE, PosixBackend
 from ptyhost.ending import say_how_it_ends
 from pyte.keep import Keep
-from pyte.keys import KEY_PROFILES, KeyProfile, key_profile_of
+from pyte.keys import KEY_PROFILES, KeyProfile
 from pyte.osc import CLEAR_SCROLLBACK, Osc
 from pyte.page import RowMark
 
@@ -69,7 +69,6 @@ from .downloads import (
     file_packets,
     route_of,
     sequences_of,
-    terminal_saves_downloads,
 )
 from .enums import (
     CHOOSE,
@@ -97,6 +96,7 @@ from .jobs import JOB_SWEEP_EVERY, Job, JobFeed, JobTable, describe
 from .key_bindings import PymuxKeyBindings
 from .key_spelling import why_pane_cannot_read
 from .keys import FOCUS_IN, FOCUS_OUT
+from .known_terminals import identify
 from .layout import LayoutManager, change_pane_size
 from .log import logger
 from .nearest import NEAREST
@@ -4125,7 +4125,7 @@ class Pymux:
             return
         # Only `SshClient` says it can forward, so this is the fact that
         # the client came over SSH.
-        terminal_saves = terminal_saves_downloads(client.connection.graphics.terminal_version)
+        terminal_saves = client.connection.identity.saves_downloads
         route = route_of(client.options.file_transfer, client.connection.can_forward, terminal_saves)
         refused = None
         if route is FileTransfer.PASSTHROUGH and not terminal_saves:
@@ -4264,7 +4264,7 @@ class Pymux:
         version = client.connection.graphics.terminal_version if client is not None else ""
         term = hacks_and_lies.outer_term(client) if client is not None else ""
         options = client.session.options if client is not None else self.session_defaults
-        return KEY_PROFILES[key_profile_of(version, term) or options.key_profile]
+        return KEY_PROFILES[identify(version, term).key_profile or options.key_profile]
 
     def finish_recordings(self, holders: Iterable[Pane | ServerConnection] | None = None) -> None:
         """

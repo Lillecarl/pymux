@@ -40,13 +40,14 @@ from .actions import Origin, started_by
 from .answer import Answer
 from .audio import AudioLink
 from .client_options import ClientOptions
-from .clusters import CLUSTER_WIDTH_PROBE, PROBE_ROWS, PROBES, Drawn, fitted, table_width, term_program_of
+from .clusters import CLUSTER_WIDTH_PROBE, PROBE_ROWS, PROBES, Drawn, fitted, table_width
 from .colors import COLOR_QUERIES, ColorDetection, DefaultColors
 from .commands import handle_command
 from .enums import ExtendedKeys, Woke
-from .graphics import CELL_SIZE_QUERY, ClientGraphics, draws_placeholders, draws_progress
+from .graphics import CELL_SIZE_QUERY, ClientGraphics
 from .ids import PaneId
 from .keys import FOCUS_IN, FOCUS_OUT, KittyVt100Parser
+from .known_terminals import Identity, identify, wcwidth_name
 from .log import logger
 from .nearest import NEAREST, nearest_theme, wanted_from
 from .notifications import QUERY as NOTIFICATION_QUERY
@@ -54,7 +55,6 @@ from .notifications import (
     QUERY_IDENTIFIER,
     can_close,
     is_click,
-    notification_osc_of,
     read_actions,
     read_identifier,
     split_payload,
@@ -388,7 +388,7 @@ class ServerConnection:
             color_depth=lambda: self.colors.depth,
             spawn=self._spawn,
             image_ids=pymux.outer_image_ids,
-            reads_placeholders=lambda: draws_placeholders(self.graphics.terminal_version, self.colors.term),
+            reads_placeholders=lambda: self.identity.draws_placeholders(),
         )
         # The client sent the shared memory probe with its detection,
         # and only the server reads the terminal's replies.
@@ -716,7 +716,7 @@ class ServerConnection:
         at, when it draws one: some terminals take any OSC 9 for a
         notification. Only a change goes out. Lillecarl/pymux#788.
         """
-        if progress == self._progress_sent or not draws_progress(self.graphics.terminal_version):
+        if progress == self._progress_sent or not self.identity.draws_progress():
             return
         self._progress_sent = progress
         self.forward_osc("\x1b]9;%s\x1b\\" % progress.sequence)
@@ -953,6 +953,11 @@ class ServerConnection:
         return self._kitty_supported
 
     @property
+    def identity(self) -> Identity:
+        "This client's terminal, as its answers name it. Lillecarl/pymux#827."
+        return identify(self.graphics.terminal_version, self.colors.term)
+
+    @property
     def notification_osc(self) -> Osc | None:
         """
         The notification OSC this client's terminal shows, or None when
@@ -961,7 +966,7 @@ class ServerConnection:
         """
         if self.answered_notification_query:
             return Osc.NOTIFICATION
-        return notification_osc_of(self.graphics.terminal_version)
+        return self.identity.notification_osc
 
     def _route_notification(self, param: str) -> None:
         """
@@ -1097,12 +1102,12 @@ class ServerConnection:
         """
         if self.clusters_drawn.heard():
             return self.clusters_drawn if self.clusters_drawn.differs() else None
-        return term_program_of(self.graphics.terminal_version, self.colors.term)
+        return wcwidth_name(self.graphics.terminal_version, self.colors.term)
 
     def _compare_with_the_table(self, row: int) -> None:
         # A table that disagrees with the terminal it is named for is
         # worth knowing about: wcwidth's, or a font of the terminal's.
-        named = term_program_of(self.graphics.terminal_version, self.colors.term)
+        named = wcwidth_name(self.graphics.terminal_version, self.colors.term)
         if named is None:
             return
         kind, cluster = PROBES[row]
@@ -1707,8 +1712,7 @@ class ServerConnection:
         "The cell size mouse reports are divided by, while they come in pixels, and their first pixel's number."
         if not self.pixel_mouse or not self.graphics.cell_size_known:
             return None
-        origin = 0 if (self.graphics.terminal_version or "").startswith("kitty") else 1
-        return self.graphics.cell_width, self.graphics.cell_height, origin
+        return self.graphics.cell_width, self.graphics.cell_height, self.identity.first_pixel
 
     def _turn_on_pixel_mouse(self) -> None:
         if self.pixel_mouse:

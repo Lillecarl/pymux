@@ -46,6 +46,7 @@ from prompt_toolkit.output.vt100 import Vt100_Output
 from pymux.colors import ColorDetection, DefaultColors
 from pymux.graphics import ClientGraphics
 from pymux.keys import KittyVt100Parser
+from pymux.known_terminals import Identity, identify
 from pymux.main import Pymux
 from pymux.pipes.memory import connect_in_memory
 from pymux.rate import Rate
@@ -137,6 +138,11 @@ class Connection:
 
     async def read_clipboard(self, selection: str = "c") -> str | None:
         return None
+
+    @property
+    def identity(self) -> Identity:
+        "The same rule as `ServerConnection.identity`."
+        return identify(self.graphics.terminal_version, self.colors.term)
 
     @property
     def name(self) -> str:

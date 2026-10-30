@@ -6,29 +6,11 @@ The XTVERSION answers are the ones four real terminals gave pymux.
 
 from __future__ import annotations
 
-import pytest
-
-from pymux.clusters import CLUSTER_WIDTH_PROBE, PROBES, Drawn, Kind, fitted, kind_of, term_program_of
+from pymux.clusters import CLUSTER_WIDTH_PROBE, PROBES, Drawn, Kind, fitted, kind_of
 
 FAMILY = "\U0001f468\u200d\U0001f469\u200d\U0001f467"
 FLAG = "\U0001f1f8\U0001f1ea"
 THUMB = "\U0001f44d\U0001f3fd"
-
-
-@pytest.mark.parametrize(
-    ("version", "term", "name"),
-    [
-        ("WezTerm 20240203-110809-5046fc22", "xterm-256color", "wezterm"),
-        ("iTerm2 3.7.6", "xterm-256color", "iterm2"),
-        ("ghostty 1.4.0", "xterm-ghostty", "ghostty"),
-        ("kitty(0.39.1)", "xterm-kitty", "kitty"),
-        ("", "xterm-kitty", "xterm-kitty"),
-        ("", "xterm-256color", None),
-        ("SomethingNew 1.0", "screen", None),
-    ],
-)
-def test_the_terminal_is_named_by_its_version_then_by_term(version, term, name):
-    assert term_program_of(version, term) == name
 
 
 def test_a_terminal_that_draws_a_cluster_two_wide_gets_it_as_it_is():

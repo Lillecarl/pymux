@@ -358,21 +358,6 @@ def test_the_version_reply_is_kept():
     assert client.terminal_version == "ghostty 1.3.1"
 
 
-def test_the_terminals_that_draw_placeholders_are_known_by_name():
-    from pymux.graphics import draws_placeholders
-
-    assert draws_placeholders("kitty(0.39.1)", "xterm-256color")
-    assert draws_placeholders("kitty(0.28.0)", "")
-    assert not draws_placeholders("kitty(0.27.1)", "xterm-kitty")
-    assert draws_placeholders("ghostty 1.3.1", "xterm-ghostty")
-    assert draws_placeholders("ghostty 1.3.1-dev+abc", "")
-    # WezTerm answers the graphics query and draws no placeholder.
-    assert not draws_placeholders("WezTerm 20240203", "xterm-kitty")
-    # A terminal that said nothing is judged by TERM.
-    assert draws_placeholders("", "xterm-kitty")
-    assert not draws_placeholders("", "xterm-ghostty")
-
-
 def test_view_without_screen_still_renders_plain_placements():
     "An embedder that gives no screen loses nothing else."
     from pyte.images import GraphicsPlacement
