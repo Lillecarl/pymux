@@ -660,7 +660,7 @@ async def test_pymux_receive_gets_a_file_from_the_client(tmp_path, home, config)
 
 
 def test_the_shell_completion_of_receive_asks_the_person():
-    from pymux.entry_points.run_pymux import _completion_parser, _person_paths
+    from pymux.entry_points.completion import _completion_parser, _person_paths
 
     modes = next(action for action in _completion_parser()._actions if isinstance(action, argparse._SubParsersAction))
     [paths] = [action for action in modes.choices["receive"]._actions if action.dest == "paths"]
@@ -685,7 +685,7 @@ async def test_a_shell_in_a_pane_completes_the_persons_paths(tmp_path, home, con
             client._process(packet)
 
     complete = (
-        "from pymux.entry_points.run_pymux import _person_paths\n"
+        "from pymux.entry_points.completion import _person_paths\n"
         "for prefix in ('~/note', '~/notes/t'):\n"
         "    print([path for path in _person_paths(prefix) if path.startswith(prefix)])\n"
     )
