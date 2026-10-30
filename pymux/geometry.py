@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, cast
 from prompt_toolkit.application import get_app
 from prompt_toolkit.data_structures import Size
 
-from pymux import arrangement
+from pymux import window_tree
 
 from .cut_shade import Hidden, hex_of, hidden_of
 from .divided import Divided
@@ -43,7 +43,7 @@ __all__ = [
 ]
 
 
-def tell_pane_its_size(pane: arrangement.Pane, rect: Rect) -> None:
+def tell_pane_its_size(pane: window_tree.Pane, rect: Rect) -> None:
     """
     Give a pane the size of its rectangle.
 
@@ -58,7 +58,7 @@ def tell_pane_its_size(pane: arrangement.Pane, rect: Rect) -> None:
     pane.terminal.set_size(rect.width, rect.height)
 
 
-def layout_of(pymux: Pymux, window: arrangement.Window) -> Divided | Strip | Zoomed:
+def layout_of(pymux: Pymux, window: window_tree.Window) -> Divided | Strip | Zoomed:
     """
     What says where the panes of this window are.
 
@@ -91,7 +91,7 @@ def layout_of(pymux: Pymux, window: arrangement.Window) -> Divided | Strip | Zoo
     return inner
 
 
-def bar_below_is_drawn(pymux: Pymux, window: arrangement.Window) -> bool:
+def bar_below_is_drawn(pymux: Pymux, window: window_tree.Window) -> bool:
     """
     Whether every pane of this window keeps a row under it.
 
@@ -117,12 +117,12 @@ def bar_below_is_drawn(pymux: Pymux, window: arrangement.Window) -> bool:
     return pymux.show_pane_status and not window.zoom and window.has_stack()
 
 
-def _the_plane_keeps_a_bar_below(pymux: Pymux, window: arrangement.Window) -> bool:
+def _the_plane_keeps_a_bar_below(pymux: Pymux, window: window_tree.Window) -> bool:
     "The same rows, asked of every client watching. Lillecarl/pymux#471."
     return pymux.planes.any_watcher_shows_pane_status(window) and not window.zoom and window.has_stack()
 
 
-def gaps_of(pymux: Pymux, window: arrangement.Window) -> Gaps:
+def gaps_of(pymux: Pymux, window: window_tree.Window) -> Gaps:
     """
     The cells this window leaves between the things in it.
 
@@ -140,7 +140,7 @@ def gaps_of(pymux: Pymux, window: arrangement.Window) -> Gaps:
     )
 
 
-def room_for_panes(pymux: Pymux, window: arrangement.Window) -> Size:
+def room_for_panes(pymux: Pymux, window: window_tree.Window) -> Size:
     """
     How much of the plane the panes get.
 
@@ -170,7 +170,7 @@ def room_for_panes(pymux: Pymux, window: arrangement.Window) -> Size:
     return Size(rows=max(1, rows), columns=size.columns)
 
 
-def plan_of(pymux: Pymux, window: arrangement.Window) -> Plan:
+def plan_of(pymux: Pymux, window: window_tree.Window) -> Plan:
     """
     Where the panes of this window are, in cells.
 
@@ -208,7 +208,7 @@ def plan_of(pymux: Pymux, window: arrangement.Window) -> Plan:
     return plan
 
 
-def size_the_panes_of(pymux: Pymux, window: arrangement.Window) -> None:
+def size_the_panes_of(pymux: Pymux, window: window_tree.Window) -> None:
     """
     Give every pane of this window the size the plan gives it.
 
@@ -227,10 +227,10 @@ def size_the_panes_of(pymux: Pymux, window: arrangement.Window) -> None:
     plan = plan_of(pymux, window)
     for slot, rect in plan.rects.items():
         for pane in slot.panes:
-            tell_pane_its_size(cast(arrangement.Pane, pane), rect)
+            tell_pane_its_size(cast(window_tree.Pane, pane), rect)
 
 
-def hidden_of_pane(pymux: Pymux, pane: arrangement.Pane) -> Hidden | None:
+def hidden_of_pane(pymux: Pymux, pane: window_tree.Pane) -> Hidden | None:
     """
     How much of this pane the view this client has hides, on each side.
 
@@ -289,7 +289,7 @@ def cut_backdrop(pymux: Pymux) -> str | None:
     return hex_of(get_app().renderer.style.get_attrs_for_style_str("class:painted").bgcolor or "")
 
 
-def _frame_plan(manager: LayoutManager, window: arrangement.Window, size: Size) -> Plan | None:
+def _frame_plan(manager: LayoutManager, window: window_tree.Window, size: Size) -> Plan | None:
     """
     The plan the container of this frame measured, when it is still the
     answer.
@@ -319,7 +319,7 @@ def _frame_plan(manager: LayoutManager, window: arrangement.Window, size: Size) 
     return container.plan
 
 
-def write_sizes_into_weights(pymux: Pymux, window: arrangement.Window) -> None:
+def write_sizes_into_weights(pymux: Pymux, window: window_tree.Window) -> None:
     """
     Write the size each thing has now into the weight that decides it.
 
@@ -341,10 +341,10 @@ def write_sizes_into_weights(pymux: Pymux, window: arrangement.Window) -> None:
     plan = plan_of(pymux, window)
 
     for split in window.splits:
-        sideways = isinstance(split, arrangement.VSplit)
+        sideways = isinstance(split, window_tree.VSplit)
 
         for child in split:
-            held = [plan.rect_of(pane) for pane in arrangement.panes_of(child)]
+            held = [plan.rect_of(pane) for pane in window_tree.panes_of(child)]
             if not held:
                 continue
 
@@ -354,8 +354,8 @@ def write_sizes_into_weights(pymux: Pymux, window: arrangement.Window) -> None:
 
 def change_pane_size(
     pymux: Pymux,
-    window: arrangement.Window,
-    pane: arrangement.Pane,
+    window: window_tree.Window,
+    pane: window_tree.Pane,
     up: int = 0,
     right: int = 0,
     down: int = 0,
@@ -374,8 +374,8 @@ def change_pane_size(
 
 
 def pane_beside(
-    pymux: Pymux, window: arrangement.Window, pane: arrangement.Pane, side: Side
-) -> arrangement.Pane | None:
+    pymux: Pymux, window: window_tree.Window, pane: window_tree.Pane, side: Side
+) -> window_tree.Pane | None:
     """
     The pane on one side of this one. **One answer, for one window.**
 
@@ -410,4 +410,4 @@ def pane_beside(
     if beside is None:
         return None
 
-    return cast(arrangement.Pane, beside.shown)
+    return cast(window_tree.Pane, beside.shown)

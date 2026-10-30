@@ -56,7 +56,7 @@ from dataclasses import dataclass, field
 
 from prompt_toolkit.data_structures import Point, Size
 
-from . import arrangement
+from . import window_tree
 from .plane import GROUND, Line, Pane, Plan, Rect, Seam, Slot, View
 from .tiling import BORDER_VERTICAL, Gaps, lay_out
 
@@ -74,7 +74,7 @@ class Strip:
     Lillecarl/pymux#217, and `docs/layout-engine-plan.md`.
 
     **It reads the arrangement, for now.** The tree, the column widths
-    and the weights still live in `arrangement.Window`, so this
+    and the weights still live in `window_tree.Window`, so this
     measures them rather than owning them. `Divided` reads the same
     tree, and the plan file says the tree moves in here later.
 
@@ -84,7 +84,7 @@ class Strip:
     against what was measured.
     """
 
-    window: arrangement.Window
+    window: window_tree.Window
     #: Read on every measure, for the reason `geometry.layout_of` gives.
     gaps: Callable[[], Gaps] = field(default=Gaps, repr=False)
 

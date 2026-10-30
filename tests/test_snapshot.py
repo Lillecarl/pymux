@@ -29,7 +29,6 @@ from test_a_session_on_a_pyte_screen import attached, settled, shows
 from test_every_attribute_has_a_fate import declared, live_objects
 
 from pymux import snapshot, tables
-from pymux.arrangement import LayoutTypes
 from pymux.client_options import ClientOptions
 from pymux.commands.wait_for import WaitChannel
 from pymux.enums import (
@@ -51,6 +50,7 @@ from pymux.query import ask
 from pymux.session_options import SessionOptions
 from pymux.snapshot import _values_of
 from pymux.tables import ClientOptionRow
+from pymux.window_tree import LayoutTypes
 
 
 @pytest.fixture

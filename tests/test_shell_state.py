@@ -75,7 +75,7 @@ class FakePane:
     """
     A pane with the shell-state fields of the real one.
 
-    Keep in sync with `arrangement.Pane`: the directory, the host,
+    Keep in sync with `window_tree.Pane`: the directory, the host,
     the user variables, the zone and the exit status. The marks are
     the screen's.
     """

@@ -288,7 +288,7 @@ def _option_choices(pymux: Pymux, scope: object = None, name: object = None) -> 
 
 
 def _layouts(pymux: Pymux) -> Iterator[LayoutView]:
-    from .arrangement import LayoutTypes
+    from .window_tree import LayoutTypes
 
     for layout in sorted(each.value for each in LayoutTypes):
         yield LayoutView(layout)

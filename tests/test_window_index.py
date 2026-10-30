@@ -9,7 +9,8 @@ from __future__ import annotations
 
 from fake_panes import FakeTerminal
 
-from pymux.arrangement import Arrangement, Pane
+from pymux.arrangement import Arrangement
+from pymux.window_tree import Pane
 
 
 def _arrangement(windows=1, base_index=None):

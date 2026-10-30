@@ -18,9 +18,10 @@ import pytest
 from fake_panes import create_pane
 from run_commands import complaints
 
-from pymux.arrangement import Arrangement, VSplit
+from pymux.arrangement import Arrangement
 from pymux.main import Pymux
 from pymux.options import ALL_OPTIONS, SetOptionError
+from pymux.window_tree import VSplit
 
 
 def create_arrangement(windows=0):

@@ -27,7 +27,7 @@ from pyte.keys import KEY_PROFILES, KeyProfile
 from . import hacks_and_lies, introspect, kernels, log
 from .actions import ActionLog, Origin, awaited_as, started_by
 from .answer import Answer, current_answer
-from .arrangement import Arrangement, Pane, Window
+from .arrangement import Arrangement
 from .audio import AudioServer
 from .browsers import Browsers
 from .client_state import ClientState
@@ -76,6 +76,7 @@ from .terminals import Terminals
 from .waking import Waking
 from .wayland import WaylandServer
 from .window_pane import WindowProcess, WindowScreen
+from .window_tree import Pane, Window
 
 if TYPE_CHECKING:
     from prompt_toolkit.input import Input
@@ -1387,7 +1388,7 @@ class Pymux:
         task_group: anyio.abc.TaskGroup | None = None,
     ) -> Window:
         """
-        Create a new :class:`pymux.arrangement.Window` in the arrangement,
+        Create a new :class:`pymux.window_tree.Window` in the arrangement,
         and answer it.
 
         `index` says where it goes. Without one it takes the lowest

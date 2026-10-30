@@ -25,12 +25,12 @@ from .portal import color_scheme_of, theme_background
 from .style import DEFAULT_THEME
 
 if TYPE_CHECKING:
-    from .arrangement import Pane
     from .client_state import ClientState
     from .ids import SessionId
     from .main import Pymux
     from .server import ServerConnection
     from .session import Session
+    from .window_tree import Pane
 
 __all__ = ["Terminals", "pointer_shape_of"]
 

@@ -26,7 +26,7 @@ from prompt_toolkit.layout.containers import Container
 from prompt_toolkit.layout.dimension import Dimension as D
 from prompt_toolkit.mouse_events import MouseButton, MouseEvent, MouseEventType
 
-from . import arrangement
+from . import window_tree
 from .actions import Kind, Origin, note, started_by
 
 if TYPE_CHECKING:
@@ -45,7 +45,7 @@ __all__ = ["BorderDrag", "DragCapture", "press_on_line"]
 class BorderDrag:
     "One drag of one line, from the press."
 
-    window: arrangement.Window
+    window: window_tree.Window
     seam: Seam
     #: Where the press was, across the line: a column or a row.
     start: int
@@ -56,10 +56,10 @@ class BorderDrag:
     columns: int = 1
 
     @property
-    def split(self) -> arrangement.HSplit | arrangement.VSplit:
+    def split(self) -> window_tree.HSplit | window_tree.VSplit:
         # A plan knows nothing of the arrangement; pymux's layouts put
         # a split there.
-        return cast("arrangement.HSplit | arrangement.VSplit", self.seam.split)
+        return cast("window_tree.HSplit | window_tree.VSplit", self.seam.split)
 
     @property
     def in_strip(self) -> bool:
@@ -80,7 +80,7 @@ class BorderDrag:
         split.set_weight(split[index + 1], after - moved)
 
 
-def press_on_line(pymux: Pymux, window: arrangement.Window, line: Line, event: MouseEvent) -> NotImplementedOrNone:
+def press_on_line(pymux: Pymux, window: window_tree.Window, line: Line, event: MouseEvent) -> NotImplementedOrNone:
     "A press with the left button starts a drag of that line."
     seam = line.seam
     if seam is None or event.event_type is not MouseEventType.MOUSE_DOWN or event.button is not MouseButton.LEFT:
@@ -126,7 +126,7 @@ def _follow(pymux: Pymux, client_state: ClientState, event: MouseEvent) -> NotIm
     return None
 
 
-def holds_window_panes(pymux: Pymux, window: arrangement.Window) -> bool:
+def holds_window_panes(pymux: Pymux, window: window_tree.Window) -> bool:
     """
     Whether a drag of this window is on. A window pane hears its size
     at the release and not on each move: a size is a Wayland configure,

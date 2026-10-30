@@ -29,7 +29,6 @@ from pymux.rate import frames_per_second, per_second
 from pymux.tags import spelled
 
 if TYPE_CHECKING:
-    from pymux.arrangement import Pane, Window
     from pymux.client_state import ClientState
     from pymux.graphics import ClientGraphics
     from pymux.main import Pymux
@@ -37,6 +36,7 @@ if TYPE_CHECKING:
     from pymux.rate import Rate
     from pymux.server import ServerConnection
     from pymux.session import OwnOptions, Session
+    from pymux.window_tree import Pane, Window
 
 __all__ = ["FormatContext", "Language", "format_pymux_string"]
 

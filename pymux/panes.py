@@ -20,7 +20,6 @@ from ptyhost.backends.posix import PosixBackend
 
 from . import hacks_and_lies
 from .actions import Kind, Origin, note, note_keys, started_by
-from .arrangement import Pane, Window
 from .enums import (
     EditingKeys,
     RenderMode,
@@ -31,6 +30,7 @@ from .key_spelling import why_pane_cannot_read
 from .log import logger
 from .session import Session
 from .window_pane import WindowWidget, is_window_pane
+from .window_tree import Pane, Window
 
 if TYPE_CHECKING:
     from pyte.keys import KeyEvent
@@ -82,7 +82,7 @@ class PaneMaker:
         task_group: anyio.abc.TaskGroup | None = None,
     ):
         """
-        Create a new :class:`pymux.arrangement.Pane` instance. (Don't put it in
+        Create a new :class:`pymux.window_tree.Pane` instance. (Don't put it in
         a window yet.)
 
         :param window: If a window is given, take the CWD of the current

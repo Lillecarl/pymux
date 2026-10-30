@@ -4,9 +4,9 @@ import argparse
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pymux.arrangement import Pane
     from pymux.jobs import Job
     from pymux.main import Pymux
+    from pymux.window_tree import Pane
 
 
 from pymux.commands import CommandException, CommandParser, add_command

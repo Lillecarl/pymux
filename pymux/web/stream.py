@@ -31,8 +31,8 @@ if TYPE_CHECKING:
     from ptterm import Terminal
     from pyte.screen import Screen
 
-    from pymux.arrangement import Pane
     from pymux.main import Pymux
+    from pymux.window_tree import Pane
 
 __all__ = ["PaneStream"]
 

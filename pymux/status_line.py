@@ -16,7 +16,7 @@ from prompt_toolkit.layout.containers import (
 from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
 from prompt_toolkit.utils import get_cwidth
 
-from pymux import arrangement
+from pymux import window_tree
 
 from .actions import Kind, Origin, note, started_by
 from .enums import Justify, Woke
@@ -36,7 +36,7 @@ __all__ = ["PASSTHROUGH_MARK", "StatusLine"]
 PASSTHROUGH_MARK = " PASSTHROUGH "
 
 
-def _tab_style(window: arrangement.Window) -> str:
+def _tab_style(window: window_tree.Window) -> str:
     """
     The tab colour of the window's active pane, "OSC 6", as a style to
     add, with black or white over it, whichever reads. Lillecarl/pymux#786.
@@ -73,7 +73,7 @@ class StatusLine:
         self._frame_lines = None
         self._frame_sides = {}
 
-    def _select_window_handler(self, window: arrangement.Window) -> Callable[[MouseEvent], NotImplementedOrNone]:
+    def _select_window_handler(self, window: window_tree.Window) -> Callable[[MouseEvent], NotImplementedOrNone]:
         "Return a mouse handler that selects the given window when clicking."
 
         def handler(mouse_event: MouseEvent) -> NotImplementedOrNone:

@@ -33,7 +33,6 @@ from ptterm import Terminal
 from pyte.keep import Keep
 
 from .actions import Origin, started_by
-from .arrangement import Pane, Window
 from .client_options import ClientOptions
 from .colors import DefaultColors
 from .commands.completer import create_command_completer
@@ -57,6 +56,7 @@ from .plane import RESIZE_SHAPES
 from .session import Session
 from .style import DEFAULT_THEME, theme
 from .window_pane import WindowWidget
+from .window_tree import Pane, Window
 
 if TYPE_CHECKING:
     from prompt_toolkit.input import Input

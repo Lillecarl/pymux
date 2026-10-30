@@ -23,7 +23,7 @@ from prompt_toolkit.layout.screen import Char, Screen
 from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
 from ptterm import Terminal
 
-from pymux import arrangement
+from pymux import window_tree
 
 from .format import format_pymux_string
 from .z_index import Z_INDEX
@@ -288,7 +288,7 @@ class PaneNumber(Container):  # XXX: make FormattedTextControl
     WIDTH = 5
     HEIGHT = 5
 
-    def __init__(self, pymux: Pymux, arrangement_pane: arrangement.Pane) -> None:
+    def __init__(self, pymux: Pymux, arrangement_pane: window_tree.Pane) -> None:
         self.pymux = pymux
         self.arrangement_pane = arrangement_pane
 

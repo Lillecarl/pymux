@@ -13,17 +13,17 @@ from typing import TYPE_CHECKING
 from prompt_toolkit.data_structures import Size
 from ptterm import Terminal
 
-from .arrangement import Window
 from .enums import WindowSize, Woke
 from .geometry import change_pane_size
 from .log import logger
 from .session import DEFAULT_SIZE, Session
 from .window_options import WindowOptions
+from .window_tree import Window
 
 if TYPE_CHECKING:
-    from .arrangement import Pane
     from .client_state import ClientState
     from .main import Pymux
+    from .window_tree import Pane
 
 __all__ = ["Planes", "remember_the_size_made_at"]
 

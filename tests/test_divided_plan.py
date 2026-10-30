@@ -19,10 +19,10 @@ from hypothesis import strategies as st
 from prompt_toolkit.data_structures import Point, Size
 from test_plane import every_promise_holds, everything_is_reachable
 
-from pymux.arrangement import Window
 from pymux.divided import Divided
 from pymux.plane import View
 from pymux.tiling import BORDER_HORIZONTAL, BORDER_VERTICAL, BORDER_WIDTH, Gaps
+from pymux.window_tree import Window
 
 #: A window big enough that a pane is wide and a stack is deep.
 SIZE = Size(rows=24, columns=80)

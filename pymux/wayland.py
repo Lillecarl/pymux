@@ -54,8 +54,8 @@ if TYPE_CHECKING:
     from prompt_toolkit.layout.containers import WritePosition
     from pysmithay import Compositor, Vp9Encoder
 
-    from pymux.arrangement import Pane
     from pymux.main import Pymux
+    from pymux.window_tree import Pane
 
 try:
     import pysmithay

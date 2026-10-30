@@ -27,10 +27,10 @@ from __future__ import annotations
 from fake_panes import create_pane
 from prompt_toolkit.data_structures import Size
 
-from pymux.arrangement import HSplit, VSplit, Window
 from pymux.divided import Divided
 from pymux.plane import Side
 from pymux.strip import Strip
+from pymux.window_tree import HSplit, VSplit, Window
 
 #: A window big enough that every pane of these shapes has cells.
 SIZE = Size(rows=24, columns=80)

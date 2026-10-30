@@ -30,7 +30,7 @@ from dataclasses import dataclass, field
 
 from prompt_toolkit.data_structures import Point, Size
 
-from . import arrangement
+from . import window_tree
 from .plane import GROUND, Line, Pane, Plan, Rect, Slot, View
 from .tiling import Gaps, lay_out
 
@@ -43,7 +43,7 @@ class Divided:
     An exact tiling of the view, and where every pane of it is.
 
     **It reads the arrangement, for now.** The tree and the weights
-    still live in `arrangement.Window`, so this measures them rather
+    still live in `window_tree.Window`, so this measures them rather
     than owning them. `Strip` says the same, and both stop when the
     tree moves in here.
 
@@ -57,7 +57,7 @@ class Divided:
     function.
     """
 
-    window: arrangement.Window
+    window: window_tree.Window
     #: Read on every measure, for the reason `geometry.layout_of` gives.
     gaps: Callable[[], Gaps] = field(default=Gaps, repr=False)
 

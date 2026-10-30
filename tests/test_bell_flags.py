@@ -13,8 +13,9 @@ import anyio
 from prompt_toolkit.application.current import set_app
 from test_a_session_on_a_pyte_screen import attached, pymux, shows  # noqa: F401 -- a fixture
 
-from pymux.arrangement import Arrangement, Pane, Window
+from pymux.arrangement import Arrangement
 from pymux.format import format_pymux_string
+from pymux.window_tree import Pane, Window
 
 
 class _Client:

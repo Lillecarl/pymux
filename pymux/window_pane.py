@@ -38,8 +38,8 @@ if TYPE_CHECKING:
     from prompt_toolkit.layout.screen import Screen
     from pyte.images import GraphicsImage, GraphicsPlacement
 
-    from pymux.arrangement import Pane
     from pymux.wayland import WaylandServer
+    from pymux.window_tree import Pane
 
 #: What a client that cannot draw kitty images sees in the pane.
 NOTICE = "This pane shows a Wayland window; its terminal does not speak the kitty graphics protocol."

@@ -14,10 +14,10 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pymux.arrangement import Pane, Window
     from pymux.main import Pymux
     from pymux.notifications import Notification
     from pymux.session import Session
+    from pymux.window_tree import Pane, Window
 
 __all__ = ["Heading", "Message", "age", "heading_text", "rows_of"]
 

@@ -60,9 +60,9 @@ from .osc import (
 from .window_pane import WindowScreen
 
 if TYPE_CHECKING:
-    from .arrangement import Pane
     from .client_state import ClientState
     from .main import Pymux
+    from .window_tree import Pane
 
 __all__ = ["MAX_USER_VARS", "Outward"]
 

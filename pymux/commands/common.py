@@ -7,11 +7,11 @@ from typing import TYPE_CHECKING, NamedTuple
 
 if TYPE_CHECKING:
     from pymux.answer import Answer
-    from pymux.arrangement import Pane, Window
     from pymux.client_state import ClientState
     from pymux.main import Pymux
     from pymux.options import Holder
     from pymux.session import Session
+    from pymux.window_tree import Pane, Window
 
 
 from prompt_toolkit.application.current import get_app

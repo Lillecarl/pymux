@@ -14,9 +14,10 @@ from typing import TYPE_CHECKING, ClassVar
 from prompt_toolkit.data_structures import Size
 from pyte.keep import Keep
 
-from .arrangement import Arrangement, Pane
+from .arrangement import Arrangement
 from .ids import SessionId
 from .session_options import SessionOptions
+from .window_tree import Pane
 
 if TYPE_CHECKING:
     from .tags import Tags

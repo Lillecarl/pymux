@@ -9,7 +9,6 @@ from collections.abc import Iterable
 from enum import StrEnum
 from typing import TYPE_CHECKING, override
 
-from .arrangement import Window
 from .client_options import ClientOptions
 from .key_mappings import PYMUX_TO_PROMPT_TOOLKIT_KEYS
 from .key_spelling import key_however_it_is_written
@@ -18,6 +17,7 @@ from .server_options import ServerOptions
 from .session import OwnOptions
 from .session_options import SessionOptions
 from .window_options import WindowOptions
+from .window_tree import Window
 
 if TYPE_CHECKING:
     from pymux.client_state import ClientState

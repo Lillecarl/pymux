@@ -16,11 +16,7 @@ from __future__ import annotations
 import pytest
 from fake_panes import create_pane
 
-from pymux.arrangement import (
-    DEFAULT_COLUMN_WIDTH,
-    PRESET_COLUMN_WIDTHS,
-    Window,
-)
+from pymux.window_tree import DEFAULT_COLUMN_WIDTH, PRESET_COLUMN_WIDTHS, Window
 
 
 def create_strip(columns=1):

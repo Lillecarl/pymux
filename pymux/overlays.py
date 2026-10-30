@@ -10,15 +10,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .arrangement import Window
 from .enums import Woke
 from .jobs import Job, describe
 from .planes import remember_the_size_made_at
 from .session import Session
+from .window_tree import Window
 
 if TYPE_CHECKING:
-    from .arrangement import Pane
     from .main import Pymux
+    from .window_tree import Pane
 
 __all__ = ["Overlays"]
 

@@ -5,8 +5,8 @@ from collections.abc import Coroutine
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from pymux.arrangement import Pane
     from pymux.main import Pymux
+    from pymux.window_tree import Pane
 
 
 from prompt_toolkit.application.current import set_app

@@ -7,9 +7,9 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.arrangement import LayoutTypes
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import the_window
+from pymux.window_tree import LayoutTypes
 
 
 def select_layout(pymux: Pymux, args: argparse.Namespace) -> None:

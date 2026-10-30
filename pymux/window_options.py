@@ -13,8 +13,8 @@ from .option_fields import Options, option, options
 from .wayland_scale import DEFAULT_WAYLAND_SCALE, parse_scale
 
 if TYPE_CHECKING:
-    from .arrangement import Window
     from .main import Pymux
+    from .window_tree import Window
 
 __all__ = ["DEFAULT_FRAME_RATE", "WindowOptions"]
 

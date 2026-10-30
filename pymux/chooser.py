@@ -28,7 +28,7 @@ from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
 from prompt_toolkit.layout.dimension import Dimension as D
 from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
 
-from pymux import arrangement
+from pymux import window_tree
 
 from .actions import Kind, Origin, note, started_by
 from .boxes import BOX_BOTTOM, BOX_TOP, PALETTE_HEADER
@@ -113,7 +113,7 @@ class ChooserView:
         self._bar_rows: Window | None = None
         self._bar_search: Container | None = None
 
-    def every_window(self) -> list[arrangement.Window]:
+    def every_window(self) -> list[window_tree.Window]:
         """
         The windows of every session of this server, in session order.
 
@@ -326,7 +326,7 @@ class ChooserView:
 
         self.show_window(matches[state.choose_window_index])
 
-    def show_window(self, window: arrangement.Window) -> None:
+    def show_window(self, window: window_tree.Window) -> None:
         "Move this client onto a window, wherever that window is."
         session = self.pymux.session_of_window(window)
         if session is None:
@@ -454,7 +454,7 @@ class ChooserView:
                 case _:
                     self.choose_pointed_window()
 
-    def _session_name_of(self, window: arrangement.Window) -> str:
+    def _session_name_of(self, window: window_tree.Window) -> str:
         "The name of the session that holds a window, or nothing."
         session = self.pymux.session_of_window(window)
         return session.name if session is not None else ""

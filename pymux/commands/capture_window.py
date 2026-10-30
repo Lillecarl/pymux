@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, cast
 from pyte.screen import Screen
 
 from pymux import screenshot
-from pymux.arrangement import Pane
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import the_window
 from pymux.commands.pictures import (
@@ -21,13 +20,14 @@ from pymux.commands.pictures import (
 )
 from pymux.geometry import plan_of
 from pymux.window_pane import WindowWidget
+from pymux.window_tree import Pane
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable
 
-    from pymux.arrangement import Window
     from pymux.main import Pymux
     from pymux.plane import Rect
+    from pymux.window_tree import Window
 
 
 async def _drawn_again(pymux: Pymux, window: Window) -> None:

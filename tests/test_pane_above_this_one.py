@@ -17,8 +17,8 @@ from __future__ import annotations
 from fake_panes import create_pane
 from test_pane_beside_this_one import beside, create_window
 
-from pymux.arrangement import HSplit, VSplit
 from pymux.plane import Side
+from pymux.window_tree import HSplit, VSplit
 
 
 def above(window, pane):

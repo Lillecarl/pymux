@@ -50,7 +50,6 @@ from pyte.screen import Screen
 from pyte.streams import Stream
 from pyte.titles import Titles
 
-from .arrangement import HSplit, LayoutTypes, Pane, VSplit, Window, _Split, node_key
 from .client_options import ClientOptions
 from .commands.wait_for import WaitChannel
 from .ids import PaneId, SessionId, WindowId, WindowIndex
@@ -114,6 +113,7 @@ from .tables import (
     select,
 )
 from .window_options import WindowOptions
+from .window_tree import HSplit, LayoutTypes, Pane, VSplit, Window, _Split, node_key
 
 #: The options of each scope a snapshot holds.
 _SAVED: dict[type[Options], tuple[Declared, ...]] = {
@@ -220,14 +220,14 @@ WRITES: dict[str, frozenset[str]] = {
             "_window_history_for_cli",
         }
     ),
-    "pymux.arrangement.Window": frozenset(Window.KEEP)
+    "pymux.window_tree.Window": frozenset(Window.KEEP)
     - {"_revisions_seen", "_quiet_since", "_silence_armed", "seen_at"},
     **{
         "%s.%s" % (scope.__module__, scope.__qualname__): frozenset(each.attribute for each in saved)
         for scope, saved in _SAVED.items()
     },
-    "pymux.arrangement._Split": frozenset(_Split.KEEP),
-    "pymux.arrangement.Pane": frozenset(name for name, fate in Pane.KEEP.items() if fate == Keep.SAVED),
+    "pymux.window_tree._Split": frozenset(_Split.KEEP),
+    "pymux.window_tree.Pane": frozenset(name for name, fate in Pane.KEEP.items() if fate == Keep.SAVED),
     "pymux.client_state.ClientState": frozenset(
         {"session", "previous_session", "options", *CLIENT_SETTINGS, *CLIENT_MODES}
     ),

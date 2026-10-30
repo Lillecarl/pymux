@@ -92,13 +92,13 @@ from prompt_toolkit.layout.screen import Screen, WritePosition
 from prompt_toolkit.output import DummyOutput
 from recorded import how_to_record, moved, read_counts, write_list
 
-from pymux.arrangement import Pane
-from pymux.arrangement import Window as ArrangementWindow
 from pymux.divided import Divided
 from pymux.geometry import layout_of, pane_beside, room_for_panes
 from pymux.plan_container import PlanContainer
 from pymux.plane import Side
 from pymux.strip import Strip
+from pymux.window_tree import Pane
+from pymux.window_tree import Window as ArrangementWindow
 from pymux.zoomed import Zoomed
 
 HERE = Path(__file__).parent

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from typing import NamedTuple
 
-from . import arrangement
+from . import window_tree
 from .plane import Line, Rect, Seam, Slot, bounding_box
 
 __all__ = ["BORDER_WIDTH", "Gaps", "lay_out", "shares"]
@@ -51,7 +51,7 @@ class Gaps(NamedTuple):
 
 
 def lay_out(
-    item: arrangement.Node,
+    item: window_tree.Node,
     rect: Rect,
     gaps: Gaps,
     into: list[tuple[Slot, Rect]],
@@ -79,11 +79,11 @@ def lay_out(
     unbounded, so running past the end is allowed and a view is what
     cuts it.
     """
-    if not isinstance(item, (arrangement.VSplit, arrangement.HSplit)):
+    if not isinstance(item, (window_tree.VSplit, window_tree.HSplit)):
         into.append((Slot(item), rect))
         return rect
 
-    sideways = isinstance(item, arrangement.VSplit)
+    sideways = isinstance(item, window_tree.VSplit)
     gap = gaps.between_columns if sideways else gaps.between_panes
     room = (rect.width if sideways else rect.height) - gap * (len(item) - 1)
     parts = shares(room, [item.weight_of(child) for child in item])

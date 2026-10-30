@@ -10,9 +10,10 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from pymux.arrangement import Arrangement, Pane, Window
+from pymux.arrangement import Arrangement
 from pymux.format import marks_of, window_marks
 from pymux.main import Pymux
+from pymux.window_tree import Pane, Window
 
 SYMBOLS = SimpleNamespace(activity_symbol="#", bell_symbol="!", silence_symbol="~", notification_symbol="?")
 

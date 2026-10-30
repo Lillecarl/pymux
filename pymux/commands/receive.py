@@ -6,10 +6,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pymux.arrangement import Pane
     from pymux.main import Pymux
     from pymux.server import ServerConnection
     from pymux.uploads import Upload
+    from pymux.window_tree import Pane
 
 
 from pymux.commands import CommandException, CommandParser, add_command
