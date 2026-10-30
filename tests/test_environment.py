@@ -22,6 +22,7 @@ from session import create_session
 from pymux.commands import CommandException
 from pymux.commands.set_environment import set_environment
 from pymux.commands.show_environment import show_environment
+from pymux.core.environment import pane_environment
 
 
 async def test_set_and_show_make_round_trip():
@@ -62,7 +63,7 @@ async def test_name_unset_in_both_scopes_leaves_environment():
             # And the global scope's own unset.
             pymux.handle_command("set-environment -u -g FOO")
 
-        assert "FOO" not in pymux.pane_environment()
+        assert "FOO" not in pane_environment(pymux)
 
 
 async def test_merged_environment_is_server_over_scopes():
@@ -71,7 +72,7 @@ async def test_merged_environment_is_server_over_scopes():
             pymux.handle_command("set-environment -g HOME overridden")
             pymux.handle_command("set-environment PYMUX_TEST_SCOPE more")
 
-        merged = pymux.pane_environment()
+        merged = pane_environment(pymux)
         assert merged["HOME"] == "overridden"
         # The server's own value stays under a scope that says
         # nothing.

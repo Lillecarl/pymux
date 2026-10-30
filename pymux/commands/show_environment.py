@@ -11,6 +11,8 @@ if TYPE_CHECKING:
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import answer
 
+from ..core.environment import pane_environment
+
 
 def show_environment(pymux: Pymux, args: argparse.Namespace) -> None:
     """
@@ -44,7 +46,7 @@ def show_environment(pymux: Pymux, args: argparse.Namespace) -> None:
         answer(pymux, "\n".join(lines))
         return
 
-    merged = pymux.pane_environment()
+    merged = pane_environment(pymux)
     if name:
         if name not in merged:
             raise CommandException("Can't find variable: %s" % (name,))

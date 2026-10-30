@@ -18,6 +18,7 @@ from prompt_toolkit.data_structures import Size
 from session import in_this_process, over_connection
 
 from pymux.answer import Answer
+from pymux.core.environment import pane_environment
 
 SIZE = Size(rows=24, columns=80)
 
@@ -121,7 +122,7 @@ async def test_a_new_pane_runs_with_what_the_client_brought():
         pymux = session.pymux
         await session.attach("only", SIZE, environment=AT_A_DESK)
 
-        assert pymux.pane_environment()["DISPLAY"] == ":0"
+        assert pane_environment(pymux)["DISPLAY"] == ":0"
 
 
 async def test_the_client_reports_it_over_the_wire():

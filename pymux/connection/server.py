@@ -28,6 +28,7 @@ from pymux.commands.common import find_pane, terminal_of
 from ..answer import Answer
 from ..audio import AudioLink
 from ..commands import handle_command
+from ..core.environment import take_environment_from
 from ..enums import Woke
 from ..graphics.graphics import CELL_SIZE_QUERY, ClientGraphics
 from ..ids import PaneId
@@ -682,7 +683,7 @@ class ServerConnection:
         # sessions; this is the first attach, which does not go
         # through it. Lillecarl/pymux#271.
         if self.client_state is not None:
-            self.pymux.take_environment_from(self.client_state)
+            take_environment_from(self.pymux, self.client_state)
 
         # Sound, on this connection, for a client that plays it.
         # Lillecarl/pymux#657.

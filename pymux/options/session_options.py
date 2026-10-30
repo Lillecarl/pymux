@@ -221,7 +221,7 @@ class SessionOptions(Options):
         DEFAULT_UPDATE_ENVIRONMENT,
         doc=(
             "The names a client brings with it, space separated, each one a pattern. "
-            "`Pymux.take_environment_from` says what happens to them. Lillecarl/pymux#271."
+            "`environment.take_environment_from` says what happens to them. Lillecarl/pymux#271."
         ),
     )
     synthesize_key_events: bool = option(

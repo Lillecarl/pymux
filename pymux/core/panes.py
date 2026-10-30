@@ -29,6 +29,7 @@ from ..keys.actions import Kind, Origin, note, note_keys, started_by
 from ..keys.key_spelling import why_pane_cannot_read
 from ..log import logger
 from ..wayland.window_pane import WindowWidget, is_window_pane
+from .environment import pane_environment
 from .planes import remember_the_size_made_at
 from .session import Session
 from .window_tree import Pane, Window
@@ -153,7 +154,7 @@ class PaneMaker:
             # The sound names go first, so a `set-environment` of the
             # same name wins. Lillecarl/pymux#657.
             self.pymux.audio.pane_environment(environment)
-            merged = self.pymux.pane_environment(environment)
+            merged = pane_environment(self.pymux, environment)
             environment.clear()
             environment.update(merged)
 

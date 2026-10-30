@@ -47,6 +47,7 @@ from pymux.connection.known_terminals import Identity, identify
 from pymux.connection.rate import Rate
 from pymux.connection.server import ServerConnection
 from pymux.connection.terminal_answers import TerminalAnswers
+from pymux.core.environment import take_environment_from
 from pymux.core.main import Pymux
 from pymux.graphics.graphics import ClientGraphics
 from pymux.keys.keys import KittyVt100Parser
@@ -381,7 +382,7 @@ async def in_this_process(pymux=None):
             # The socket route takes these from the `start-gui` packet.
             # This route has no packet, so the attach is here.
             # Lillecarl/pymux#271.
-            pymux.take_environment_from(state)
+            take_environment_from(pymux, state)
             watch("%s client" % name, state)
             watch("%s application" % name, state.app)
             watch("%s layout manager" % name, state.layout_manager)

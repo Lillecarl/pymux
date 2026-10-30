@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import datetime
-import fnmatch
 import os
 import time
 import weakref
@@ -52,6 +51,7 @@ from ..wayland.browsers import Browsers
 from ..wayland.portal import Portal
 from ..wayland.wayland import WaylandServer
 from .arrangement import Arrangement
+from .environment import take_environment_from
 from .focus import Focus
 from .forward_requests import ForwardRequests
 from .hooks import Hooks
@@ -81,16 +81,6 @@ kernels.install()
 #: How often the windows are checked for output and for quiet, in
 #: seconds: a mark goes up within this of what raised it.
 WINDOW_OUTPUT_INTERVAL = 1.0
-
-#: What a client refreshes in the session it attaches to, by default.
-#: tmux's own list, which is every name that points at something on
-#: the machine a person is sitting at: a display, an agent, a session
-#: bus. ("update-environment", `options-table.c`.) Lillecarl/pymux#271.
-DEFAULT_UPDATE_ENVIRONMENT = (
-    "DISPLAY KRB5CCNAME MSYSTEM SSH_ASKPASS SSH_AUTH_SOCK SSH_AGENT_PID "
-    "SSH_CONNECTION WAYLAND_DISPLAY WINDOWID XAUTHORITY XDG_CURRENT_DESKTOP "
-    "XDG_SESSION_DESKTOP XDG_SESSION_TYPE"
-)
 
 
 class Pymux:
@@ -470,42 +460,6 @@ class Pymux:
 
         self.invalidate(Woke.SESSION_CLOSED)
 
-    def take_environment_from(self, client_state: ClientState) -> None:
-        """
-        Refresh the named variables of a session from the client that
-        just attached to it. ("update-environment".)
-
-        **The machine a person attaches from is the machine their panes
-        should talk to.** `DISPLAY`, `SSH_AUTH_SOCK` and `WAYLAND_DISPLAY`
-        name things that live on that machine, and a server outlives the
-        client that started it: over ssh (Lillecarl/pymux#90) an old
-        `DISPLAY` from the server's own start is worse than none, because
-        a pane then opens a window nobody is looking at.
-
-        A name the client does not carry is taken out of the session
-        rather than left behind, which is what tmux does
-        (`environ_update` in its `environ.c`) and for the same reason:
-        the point is that these follow the client.
-
-        `set-environment` writes the same dictionary and is not touched
-        here, except for the names this option lists -- those belong to
-        whoever attached. Lillecarl/pymux#271, Lillecarl/pymux#270.
-        """
-        reported = client_state.connection.environment
-        environment = client_state.session.environment
-
-        for pattern in client_state.session.options.update_environment.split():
-            # A pattern, because tmux matches one: `XDG_*` is how a
-            # person takes a family of them without naming each.
-            found = False
-            for name, value in reported.items():
-                if fnmatch.fnmatchcase(name, pattern):
-                    environment[name] = value
-                    found = True
-
-            if not found:
-                environment.pop(pattern, None)
-
     def welcome_back(self, client_state: ClientState, client_id: str) -> None:
         """
         Give a client that attaches again after `upgrade-server` the
@@ -561,7 +515,7 @@ class Pymux:
         client_state.session = session
         # The session this client now watches takes what the client
         # reported when it attached. Lillecarl/pymux#271.
-        self.take_environment_from(client_state)
+        take_environment_from(self, client_state)
         self.client_was_used(client_state)
         client_state.sync_focus()
         self.invalidate(Woke.SESSION_CHANGED)
@@ -1104,32 +1058,6 @@ class Pymux:
             return False
 
         return not asking.temporary
-
-    def pane_environment(self, base: dict[str, str] | None = None) -> dict[str, str]:
-        """
-        The environment a new pane runs under, merged: `base`, or the
-        server's own, with what `set-environment -g` set and then what
-        a plain `set-environment` set over it. An unset takes the name out of
-        its scope only: a session unset of a name the global set
-        falls through to the global value, and a name no scope says
-        anything about leaves entirely. Lillecarl/pymux#270.
-        """
-        merged = dict(os.environ if base is None else base)
-        for name, value in self.global_environment.items():
-            if value is None:
-                merged.pop(name, None)
-            else:
-                merged[name] = value
-        for name, value in self.session_environment.items():
-            if value is None:
-                # A session unset does not reach past the global
-                # scope: what the global set stays, and a name the
-                # global says nothing about leaves.
-                if name not in self.global_environment:
-                    merged.pop(name, None)
-            else:
-                merged[name] = value
-        return merged
 
     def latest_client(self):
         """
