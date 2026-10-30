@@ -235,6 +235,7 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     stacked.zoom = True
     stacked.options.synchronize_panes = True
     stacked.manual_size = Size(rows=30, columns=100)
+    stacked.size_when_made = Size(rows=33, columns=111)
     stacked.options.window_size = WindowSize.LARGEST
     stacked.previous_selected_layout = LayoutTypes.TILED
     stacked.options.frame_rate = 60

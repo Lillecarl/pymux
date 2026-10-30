@@ -636,8 +636,8 @@ def rows_of(pymux: Pymux) -> Iterator[Row]:
             position=position,
             session_created=session.created,
             last_used=session.last_used,
-            default_height=session.default_size.rows,
-            default_width=session.default_size.columns,
+            default_height=session.default_size.rows if session.default_size is not None else None,
+            default_width=session.default_size.columns if session.default_size is not None else None,
             last_active_window_id=last.window_id if last is not None else None,
             overlay_pane_id=_optional_id(session.overlay_pane),
             overlay_title=session.overlay_title,
@@ -665,6 +665,7 @@ def _window_rows(session: Session, window: Window, linked: bool, place: int) -> 
     # The newest of the history: a restored window can go back one step.
     previous = window.previous_active_pane
     manual = window.manual_size
+    made = window.size_when_made
     yield WindowRow(
         window_id=window.window_id,
         session_id=session.session_id,
@@ -678,6 +679,8 @@ def _window_rows(session: Session, window: Window, linked: bool, place: int) -> 
         previous_layout=_value(window.previous_selected_layout),
         manual_height=manual.rows if manual is not None else None,
         manual_width=manual.columns if manual is not None else None,
+        made_height=made.rows if made is not None else None,
+        made_width=made.columns if made is not None else None,
         zoom=window.zoom,
         frame_rate_set=window.frame_rate_set,
         bell=window.bell,
@@ -1112,7 +1115,8 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
         session = Session(SessionId(row.session_id), row.session_name, defaults=pymux.session_defaults)
         session.created = row.session_created
         session.last_used = row.last_used
-        session.default_size = Size(rows=row.default_height, columns=row.default_width)
+        if row.default_height is not None and row.default_width is not None:
+            session.default_size = Size(rows=row.default_height, columns=row.default_width)
         session.overlay_title = row.overlay_title
         session.overlay_width = row.overlay_width
         session.overlay_height = row.overlay_height
@@ -1150,6 +1154,8 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
                     setattr(window.options, attribute, value)
             if window_row.manual_height is not None and window_row.manual_width is not None:
                 window.manual_size = Size(rows=window_row.manual_height, columns=window_row.manual_width)
+            if window_row.made_height is not None and window_row.made_width is not None:
+                window.size_when_made = Size(rows=window_row.made_height, columns=window_row.made_width)
             window.zoom = bool(window_row.zoom)
             window.frame_rate_set = bool(window_row.frame_rate_set)
             window.bell = bool(window_row.bell)

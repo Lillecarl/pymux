@@ -39,8 +39,13 @@ def _axis(given: str | None, standing: int, watching: int) -> int:
     return wanted
 
 
-def _size_with_no_client(pymux: Pymux, args: argparse.Namespace) -> Size:
-    "What `-x` and `-y` say about a session nobody is watching."
+def _size_with_no_client(pymux: Pymux, args: argparse.Namespace) -> Size | None:
+    """
+    What `-x` and `-y` say about a session nobody is watching, or `None`
+    when they say nothing: the clients' `window-size` decides then.
+    """
+    if args.columns is None and args.rows is None:
+        return None
     watching = None
     try:
         client_state = pymux.get_client_state()

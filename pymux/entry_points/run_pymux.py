@@ -1233,11 +1233,11 @@ def _new_session(
     # leaves no server behind. The standing answer is tmux's, and
     # `pymux.session.DEFAULT_SIZE` is the same two numbers; it is not
     # imported here because that would import the server.
-    # Lillecarl/pymux#459.
+    # Lillecarl/pymux#459. Neither flag names nothing, and the clients'
+    # `window-size` decides. Lillecarl/pymux#817.
     try:
         size_with_no_client = (
-            _axis_of(values, "x", 80),
-            _axis_of(values, "y", 24),
+            None if "x" not in values and "y" not in values else (_axis_of(values, "x", 80), _axis_of(values, "y", 24))
         )
     except ValueError as unreadable:
         sys.stderr.write("pymux: %s\n" % (unreadable,))

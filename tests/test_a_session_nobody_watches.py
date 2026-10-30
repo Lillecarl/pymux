@@ -81,10 +81,11 @@ def size_of(pane):
 
 
 async def test_a_session_nobody_named_a_size_for_is_the_standing_answer(pymux):
+    "With no client on the server, nothing else can say. Lillecarl/pymux#817."
     await new_session(pymux)
     session, pane = one_pane(pymux)
 
-    assert session.default_size == DEFAULT_SIZE
+    assert session.default_size is None
     assert size_of(pane) == (DEFAULT_SIZE.columns, DEFAULT_SIZE.rows)
 
 
@@ -146,7 +147,11 @@ async def test_each_session_has_its_own(pymux):
     await new_session(pymux, "-s", "wide", "-x", "200", "-y", "50")
     await new_session(pymux, "-s", "narrow")
 
-    sizes = {session.name: session.default_size for session in pymux.sessions}
+    sizes = {
+        session.name: pymux.plane_size(session.arrangement.windows[0])
+        for session in pymux.sessions
+        if session.name in ("wide", "narrow")
+    }
     assert sizes["wide"].columns == 200
     assert sizes["narrow"].columns == DEFAULT_SIZE.columns
 

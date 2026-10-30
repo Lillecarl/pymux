@@ -387,6 +387,7 @@ class Window:
         "options": Keep.SAVED,
         "column_widths": Keep.SAVED,
         "manual_size": Keep.SAVED,
+        "size_when_made": Keep.SAVED,
         "zoom": Keep.SAVED,
         "frame_rate_set": Keep.SAVED,
         "bell": Keep.SAVED,
@@ -429,6 +430,11 @@ class Window:
         #: `MANUAL`; nothing reads it under any other policy. It is the
         #: window's own size, so no status row comes off it.
         self.manual_size: Size | None = None
+
+        #: How big this window is while nobody watches it, when its
+        #: session named no size: what the clients gave it when it was
+        #: made. Lillecarl/pymux#817.
+        self.size_when_made: Size | None = None
 
         #: When true, the current pane is zoomed in.
         self.zoom = False

@@ -234,8 +234,8 @@ class SessionRow:
     position: int
     session_created: float
     last_used: int
-    default_height: int
-    default_width: int
+    default_height: int | None
+    default_width: int | None
     last_active_window_id: int | None
     overlay_pane_id: int | None
     overlay_title: str
@@ -277,6 +277,8 @@ class WindowRow:
     previous_layout: str | None
     manual_height: int | None
     manual_width: int | None
+    made_height: int | None
+    made_width: int | None
     zoom: int
     frame_rate_set: int
     bell: int = 0

@@ -152,15 +152,17 @@ class Session:
         self.overlay_height: str | None = None
 
         #: How big a window of this session is while nobody is watching
-        #: it. `new-session -x -y` is what names it, and it is the only
-        #: size a session that nothing ever attaches to has.
+        #: it, when `new-session -x -y` named a size. `None` when nothing
+        #: did: each window then keeps the size the clients' `window-size`
+        #: gave it when it was made (`Window.size_when_made`), and with
+        #: no client, `DEFAULT_SIZE`. Lillecarl/pymux#817.
         #:
         #: **Not `window.manual_size`.** A manual size says a person
         #: means that size to stay, so a client that attaches keeps it
         #: and scrolls. This one gives way to the client, which is what
         #: `window-size` is for and what tmux does with the same flags.
         #: Lillecarl/pymux#459.
-        self.default_size = DEFAULT_SIZE
+        self.default_size: Size | None = None
 
         self.created = time.time()
 
