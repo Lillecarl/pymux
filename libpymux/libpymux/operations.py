@@ -326,10 +326,26 @@ def capture_client_png(
     return base64.b64decode((yield Ask(arguments)).stdout)
 
 
+def capture_window(window_id: str) -> Operation[str]:
+    "A window as text, as its layout lays it out, whether a client shows it or not."
+    return (yield Ask(["capture-window", "-p", "-t", window_id])).stdout
+
+
+def capture_window_png(
+    window_id: str,
+    fonts: Sequence[str] = (),
+    fallbacks: Sequence[str] = (),
+    cell: tuple[int, int] | None = None,
+    fit: int | None = None,
+) -> Operation[bytes]:
+    arguments = ["capture-window", *_picture(fonts, fallbacks, cell, fit), "-t", window_id]
+    return base64.b64decode((yield Ask(arguments)).stdout)
+
+
 def _picture(
     fonts: Sequence[str], fallbacks: Sequence[str], cell: tuple[int, int] | None, fit: int | None
 ) -> list[str]:
-    "The flags of a picture, as `capture-pane` and `capture-client` share them."
+    "The flags of a picture, as the three capture commands share them."
     arguments = ["-p", "--png"]
     if fit is not None:
         arguments += ["--fit", str(fit)]

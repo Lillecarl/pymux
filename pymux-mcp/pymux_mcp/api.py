@@ -290,6 +290,36 @@ async def capture_client(
     return await server.capture_client(client)
 
 
+@operation("window.capture")
+async def capture_window(
+    server: Server,
+    window: Annotated[str, Field(description="The window's id: `@3`.")],
+    format: Annotated[
+        Literal["text", "png"],
+        Field(description="`png` is a picture of the window's panes and borders, in their own colours."),
+    ] = "text",
+    cell: Annotated[
+        tuple[int, int] | None,
+        Field(description="For `png`: one cell's width and height in pixels; the attached terminal's when left out."),
+    ] = None,
+    fit: Annotated[
+        int | None,
+        Field(gt=0, description="For `png`: the longest edge in pixels; the cell shrinks to fit. null for none."),
+    ] = PNG_FIT,
+) -> str | Png:
+    """
+    A window as its layout lays it out: every pane at its place and the
+    borders between them, whether a person looks at it or not.
+
+    Use it on a window in a session of your own, where `client.capture`
+    has nobody to ask. It has no status line, which is a client's.
+    """
+    target = Window(server, {"window_id": window})
+    if format == "png":
+        return await _drawn(lambda faces, fallbacks: target.capture_png(faces, fallbacks, cell, fit))
+    return await target.capture()
+
+
 class SendWait(BaseModel):
     "What `pane.send` waits for after its last key: one condition, and a timeout."
 

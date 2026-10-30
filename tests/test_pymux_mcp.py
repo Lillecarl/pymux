@@ -41,6 +41,7 @@ def test_every_operation_has_a_summary_and_a_schema():
         "job.tail",
         "job.view",
         "client.capture",
+        "window.capture",
         "tag.set",
         "tag.unset",
         "tag.find",

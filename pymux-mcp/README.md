@@ -28,8 +28,9 @@ ids that the other operations take.
 ## The operations
 
 `tree`, `sql`, `command`, `session.new`, `window.new`, `window.split`,
-`pane.capture`, `pane.send`, `pane.wait`, `pane.kill`, `job.run`,
-`job.tail`, `job.list`, `job.output` and `job.kill`.
+`window.capture`, `pane.capture`, `pane.send`, `pane.wait`, `pane.kill`,
+`client.capture`, `job.run`, `job.tail`, `job.list`, `job.output` and
+`job.kill`.
 
 `command` runs any pymux command line, for what the rest do not cover.
 

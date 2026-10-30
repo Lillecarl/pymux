@@ -1,12 +1,8 @@
 from __future__ import annotations
 
 import argparse
-import os
-import time
 from typing import TYPE_CHECKING
 
-import anyio
-from platformdirs import user_pictures_dir
 from pyte.osc import COLOR_BASE, ColorOverrides
 
 from pymux import screenshot
@@ -14,21 +10,19 @@ from pymux.colors import theme_color_base
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import the_client
 from pymux.commands.pictures import (
+    add_output_argument,
     add_picture_arguments,
     cell_from,
     drawn,
-    drawn_png,
     fitted_cell,
     refuse_picture_flags,
+    save_png,
 )
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable
 
     from pymux.main import ClientState, Pymux
-
-#: What `-o` with no path writes: a new name in the pictures directory.
-IN_PICTURES = ""
 
 
 def _colors_of(pymux: Pymux, client_state: ClientState) -> ColorOverrides:
@@ -62,18 +56,6 @@ def _grid_of(pymux: Pymux, client_state: ClientState, cell: tuple[int, int]) -> 
         raise CommandException("capture-client: %s" % (error,))
 
 
-def output_path(given: str) -> str:
-    """
-    Where `-o` writes. A relative path, and no path at all, are in the
-    pictures directory of the server's user: the server has no working
-    directory of the person who typed the command.
-    """
-    pictures = user_pictures_dir()
-    if given == IN_PICTURES:
-        given = time.strftime("pymux-%Y%m%d-%H%M%S.png")
-    return os.path.join(pictures, os.path.expanduser(given))
-
-
 def capture_client(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None] | None:
     """
     Capture the whole of what a client is shown, as text or a picture.
@@ -93,14 +75,11 @@ def capture_client(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None] | 
     person sees, and a change a command just made shows once pymux has
     drawn it.
     """
-    if args.output is not None:
-        client_state = the_client(pymux, args.target_client, "capture-client")
-        return _save_png(pymux, client_state, args)
-    if not args.p:
+    if args.output is None and not args.p:
         raise CommandException("capture-client: it prints, so it needs -p or -o")
     client_state = the_client(pymux, args.target_client, "capture-client")
-    if args.png:
-        return _print_png(pymux, client_state, args)
+    if args.output is not None or args.png:
+        return _png(pymux, client_state, args)
     refuse_picture_flags(args, "capture-client")
     size = client_state.app.output.get_size()
     grid = _grid_of(pymux, client_state, _cell_of(pymux, client_state))
@@ -108,43 +87,20 @@ def capture_client(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None] | 
     return None
 
 
-def _picture_grid(
-    pymux: Pymux, client_state: ClientState, args: argparse.Namespace
-) -> tuple[screenshot.Grid, tuple[int, int]]:
+async def _png(pymux: Pymux, client_state: ClientState, args: argparse.Namespace) -> None:
     size = client_state.app.output.get_size()
     cell = cell_from(args.cell, _cell_of(pymux, client_state), "capture-client")
     cell = fitted_cell(cell, size.columns, size.rows, args.fit)
-    return _grid_of(pymux, client_state, cell), cell
-
-
-async def _print_png(pymux: Pymux, client_state: ClientState, args: argparse.Namespace) -> None:
-    grid, cell = _picture_grid(pymux, client_state, args)
-    pymux.print_command_line(await drawn(grid, args, cell, "capture-client"))
-
-
-async def _save_png(pymux: Pymux, client_state: ClientState, args: argparse.Namespace) -> None:
-    grid, cell = _picture_grid(pymux, client_state, args)
-    picture = await drawn_png(grid, args, cell, "capture-client")
-    path = anyio.Path(output_path(args.output))
-    try:
-        await path.parent.mkdir(parents=True, exist_ok=True)
-        await path.write_bytes(picture)
-    except OSError as error:
-        raise CommandException("capture-client: %s" % (error,))
-    pymux.print_command_line(str(path))
-    pymux.show_message("Saved %s" % (path,))
+    grid = _grid_of(pymux, client_state, cell)
+    if args.output is not None:
+        await save_png(pymux, grid, args, cell, "capture-client")
+    else:
+        pymux.print_command_line(await drawn(grid, args, cell, "capture-client"))
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, capture_client)
     parser.add_argument("-p", dest="p", action="store_true", help="Print to the output of the command line.")
-    parser.add_argument(
-        "-o",
-        dest="output",
-        nargs="?",
-        const=IN_PICTURES,
-        metavar="<file>",
-        help="Write a PNG to <file>, relative to the pictures directory; a new file there without <file>.",
-    )
+    add_output_argument(parser)
     add_picture_arguments(parser, "whole client screen")
     parser.add_argument("-t", dest="target_client", metavar="<target-client>", help="The client to capture.")

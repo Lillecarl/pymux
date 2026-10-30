@@ -283,6 +283,24 @@ class Window(WindowFields):
         )
         return None if row is None else Pane(self.server, row)
 
+    async def capture(self) -> str:
+        """
+        This window as text, as its layout lays it out: every pane at its
+        place and the border lines between them, whether a client shows
+        it or not. No status line: that is a client's.
+        """
+        return await self.server.run(operations.capture_window(self.id))
+
+    async def capture_png(
+        self,
+        fonts: Sequence[str] = (),
+        fallbacks: Sequence[str] = (),
+        cell: tuple[int, int] | None = None,
+        fit: int | None = None,
+    ) -> bytes:
+        "This window as PNG bytes. The fonts, `cell` and `fit` are `Pane.capture_png`'s."
+        return await self.server.run(operations.capture_window_png(self.id, fonts, fallbacks, cell, fit))
+
     async def select(self) -> None:
         "Show this window."
         await self.server.run(operations.select_window(self.index))

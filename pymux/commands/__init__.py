@@ -129,6 +129,7 @@ MODULES = [
     "close_popup",
     "capture_pane",
     "capture_client",
+    "capture_window",
     "show_buffer",
     "set_buffer",
     "list_buffers",

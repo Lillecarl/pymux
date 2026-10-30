@@ -417,6 +417,15 @@ async def test_a_client_is_captured_by_its_name_or_the_one_used_last(fake):
     assert server.asked == ["capture-client -p", "capture-client -p --png --fit 800 --cell 9x18 -t desk"]
 
 
+async def test_a_window_is_captured_by_its_id(fake):
+    "Lillecarl/pymux#818."
+    server = fake([("drawn\n", "", 0), (base64.b64encode(b"\x89PNG").decode() + "\n", "", 0)])
+    window = Window(Server(server.path), {"window_id": "@3"})
+    assert await window.capture() == "drawn\n"
+    assert await window.capture_png(cell=(9, 18)) == b"\x89PNG"
+    assert server.asked == ["capture-window -p -t @3", "capture-window -p --png --cell 9x18 -t @3"]
+
+
 async def test_compact_html_asks_for_the_spelling_a_reader_reads(fake):
     server = fake([("", "", 0)])
     await Pane(Server(server.path), {"pane_id": "%5"}).capture_html(compact=True)

@@ -40,7 +40,7 @@ import io
 import math
 import shutil
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import cache
 from typing import TYPE_CHECKING, Any, Final, NamedTuple
 
@@ -62,8 +62,20 @@ if TYPE_CHECKING:
     from pyte.screen import Screen
 
     from .main import ClientState
+    from .plane import Line, Rect
 
-__all__ = ["Faces", "Grid", "Look", "client_grid_of", "draw", "faces_of", "grid_of", "system_fonts"]
+__all__ = [
+    "Faces",
+    "Grid",
+    "Look",
+    "client_grid_of",
+    "draw",
+    "faces_of",
+    "grid_of",
+    "system_fallbacks",
+    "system_fonts",
+    "window_grid_of",
+]
 
 #: The faces a picture draws with, by the words of a font's own style
 #: name, with the spaces gone and in lower case.
@@ -277,6 +289,53 @@ def grid_of(screen: Screen, first: int, last: int, colors: ColorOverrides | None
     ]
     foreground, background = paint.shown(PLAIN_APPEARANCE, reverse_video)
     return Grid(rows, columns, foreground, background, cursor, images)
+
+
+def window_grid_of(
+    panes: Sequence[tuple[Rect, Screen | None]],
+    lines: Sequence[Line],
+    focused: Screen | None,
+    colors: ColorOverrides | None,
+    cell: tuple[int, int],
+) -> Grid:
+    """
+    A window as its plan lays it out, with no client: each pane's visible
+    rows at its rectangle, and the layout's border lines in the gaps.
+    `capture-window`. Lillecarl/pymux#818.
+
+    `panes` pairs each shown pane's rectangle with its screen, `None` for
+    one that has no cells (a Wayland window pane), which stays blank.
+    `colors` paint what no pane covers. The cursor is `focused`'s.
+    """
+    boxes = [rect for rect, _screen in panes] + [line.rect for line in lines]
+    left = min((box.x for box in boxes), default=0)
+    top = min((box.y for box in boxes), default=0)
+    columns = max((box.right for box in boxes), default=0) - left
+    height = max((box.bottom for box in boxes), default=0) - top
+    paint = Paint.of(colors)
+    plain = Look(paint.foreground, paint.background)
+    rows = [[(" ", plain)] * columns for _row in range(height)]
+    for line in lines:
+        for y in range(line.rect.y, line.rect.bottom):
+            for x in range(line.rect.x, line.rect.right):
+                rows[y - top][x - left] = (line.char, plain)
+
+    cursor = None
+    images: list[Shown] = []
+    for rect, screen in panes:
+        if screen is None:
+            continue
+        first = screen.line_offset
+        pane = grid_of(screen, first, first + screen.lines - 1, screen.colors, cell)
+        at_x, at_y = rect.x - left, rect.y - top
+        for y, row in enumerate(pane.rows[: rect.height]):
+            rows[at_y + y][at_x : at_x + min(len(row), rect.width)] = row[: rect.width]
+        images.extend(replace(shown, column=shown.column + at_x, row=shown.row + at_y) for shown in pane.images)
+        if screen is focused and pane.cursor is not None:
+            x, y = pane.cursor
+            if x < rect.width and y < rect.height:
+                cursor = (at_x + x, at_y + y)
+    return Grid(rows, columns, paint.foreground, paint.background, cursor, images)
 
 
 def _ansi_index(name: str) -> int | None:

@@ -1,20 +1,38 @@
 """
-The half of `capture-pane --png` and `capture-client --png` that is the
-same: the flags, the cell, and the drawing in a thread.
+What `capture-pane --png`, `capture-client --png` and `capture-window
+--png` share: the flags, the cell, the drawing in a thread, and `-o`.
 """
 
 from __future__ import annotations
 
 import argparse
 import base64
+import os
+import time
 from dataclasses import replace
+from typing import TYPE_CHECKING
 
 import anyio
+from platformdirs import user_pictures_dir
 
 from pymux import screenshot
 from pymux.commands import CommandException
 
-__all__ = ["add_picture_arguments", "cell_from", "drawn", "drawn_png", "fitted_cell", "refuse_picture_flags"]
+if TYPE_CHECKING:
+    from pymux.main import Pymux
+
+__all__ = [
+    "IN_PICTURES",
+    "add_output_argument",
+    "add_picture_arguments",
+    "cell_from",
+    "drawn",
+    "drawn_png",
+    "fitted_cell",
+    "output_path",
+    "refuse_picture_flags",
+    "save_png",
+]
 
 
 def add_picture_arguments(parser: argparse.ArgumentParser, what: str) -> None:
@@ -51,6 +69,48 @@ def add_picture_arguments(parser: argparse.ArgumentParser, what: str) -> None:
         metavar="<pixels>",
         help="Shrink the cell of --png until the picture's longest edge is at most this.",
     )
+
+
+#: What `-o` with no path writes: a new name in the pictures directory.
+IN_PICTURES = ""
+
+
+def add_output_argument(parser: argparse.ArgumentParser) -> None:
+    "The `-o` a picture takes, to write it to a file instead of printing it."
+    parser.add_argument(
+        "-o",
+        dest="output",
+        nargs="?",
+        const=IN_PICTURES,
+        metavar="<file>",
+        help="Write a PNG to <file>, relative to the pictures directory; a new file there without <file>.",
+    )
+
+
+def output_path(given: str) -> str:
+    """
+    Where `-o` writes. A relative path, and no path at all, are in the
+    pictures directory of the server's user: the server has no working
+    directory of the person who typed the command.
+    """
+    if given == IN_PICTURES:
+        given = time.strftime("pymux-%Y%m%d-%H%M%S.png")
+    return os.path.join(user_pictures_dir(), os.path.expanduser(given))
+
+
+async def save_png(
+    pymux: Pymux, grid: screenshot.Grid, args: argparse.Namespace, cell: tuple[int, int], command: str
+) -> None:
+    "Draw the grid into the file `-o` names, and say where."
+    picture = await drawn_png(grid, args, cell, command)
+    path = anyio.Path(output_path(args.output))
+    try:
+        await path.parent.mkdir(parents=True, exist_ok=True)
+        await path.write_bytes(picture)
+    except OSError as error:
+        raise CommandException("%s: %s" % (command, error))
+    pymux.print_command_line(str(path))
+    pymux.show_message("Saved %s" % (path,))
 
 
 def refuse_picture_flags(args: argparse.Namespace, command: str) -> None:
