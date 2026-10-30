@@ -46,11 +46,11 @@ def sequence(code, param):
 class FakeConnection:
     "A client connection that collects what pymux writes to it."
 
-    def __init__(self, notification_actions=frozenset()):
+    def __init__(self):
         self.written = []
         # An iTerm2: it shows OSC 9, and an attention request as it came.
         # Lillecarl/pymux#497.
-        self.replies = SimpleNamespace(notification_actions=notification_actions, notification_osc=Osc.MESSAGE)
+        self.replies = SimpleNamespace(notification_osc=Osc.MESSAGE)
 
     def forward_osc(self, data):
         self.written.append(data)

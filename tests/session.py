@@ -85,7 +85,6 @@ class _NoReplies:
     def __init__(self, connection: Connection) -> None:
         self.connection = connection
         self.terminal_said = TerminalAnswers()
-        self.notification_actions: frozenset[str] = frozenset()
         self.notification_closes = False
         self.notification_osc = None
 

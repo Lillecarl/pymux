@@ -20,7 +20,7 @@ from ..enums import ExtendedKeys, Woke
 from ..keys.keys import FOCUS_IN, FOCUS_OUT
 from ..log import logger
 from ..notify.notifications import QUERY as NOTIFICATION_QUERY
-from ..notify.notifications import QUERY_IDENTIFIER, can_close, is_click, read_actions, read_identifier, split_payload
+from ..notify.notifications import QUERY_IDENTIFIER, can_close, is_click, read_identifier, split_payload
 from ..style.colors import COLOR_QUERIES
 from ..style.nearest import NEAREST, nearest_theme, wanted_from
 from .client_io import PIXEL_MOUSE_ON
@@ -79,7 +79,6 @@ class TerminalReplies:
         # Asked again of the terminal the client reattaches from.
         "kitty_source_flags": Keep.REBUILT,
         "_kitty_supported": Keep.REBUILT,
-        "notification_actions": Keep.REBUILT,
         "notification_closes": Keep.REBUILT,
         "answered_notification_query": Keep.REBUILT,
         "detection_pending": Keep.DROPPED,
@@ -121,11 +120,6 @@ class TerminalReplies:
         #: asks for every flag, so the reply says which ones the
         #: terminal took. Zero means the legacy encoding only.
         self.kitty_source_flags = 0
-        #: The click actions of desktop notifications (OSC 99) that the
-        #: outer terminal says it takes, from the detection's `p=?`.
-        #: With `report`, a notification pymux makes itself goes out as
-        #: OSC 99, so a click on it shows its pane. Lillecarl/pymux#779.
-        self.notification_actions: frozenset[str] = frozenset()
         #: Whether the outer terminal can take a notification back off
         #: its screen (`close` in `p=`), which pymux does once one is
         #: seen. Lillecarl/pymux#799.
@@ -395,7 +389,6 @@ class TerminalReplies:
         """
         metadata, _semicolon, text = split_payload(param)
         if read_identifier(metadata) == QUERY_IDENTIFIER:
-            self.notification_actions = frozenset(read_actions(text))
             self.notification_closes = can_close(text)
             self.answered_notification_query = True
             return

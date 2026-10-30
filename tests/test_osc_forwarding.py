@@ -111,7 +111,7 @@ class FakeConnection:
         self.written = []
         self._pointer_shape_sent = ""
         # A kitty: it shows OSC 99. Lillecarl/pymux#497.
-        self.replies = SimpleNamespace(notification_actions=frozenset(), notification_osc=Osc.NOTIFICATION)
+        self.replies = SimpleNamespace(notification_osc=Osc.NOTIFICATION)
         self.pointer_cell = None
 
     def forward_osc(self, data):
