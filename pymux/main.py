@@ -732,35 +732,43 @@ class ClientState:
 
     def should_skip_render(self) -> bool:
         """
-        Whether a frame this client asked for is already stale.
+        Whether a frame this client asked for is not wanted now, and
+        when the next one is: the renderer skips it and asks for none.
 
-        Equality is the steady state: every scheduled redraw records
-        the tick, so input that has been handled reads equal and the
-        frame draws. Lillecarl/pymux#524.
+        **A frame input arrived after is stale**, and the next one is
+        asked for at once. Equality is the steady state: every scheduled
+        redraw records the tick, so input that has been handled reads
+        equal and the frame draws. Lillecarl/pymux#524.
 
-        **A terminal that fell behind gets no frame either**, on a
-        route where the bytes would pile up in this process. The next
-        frame is a diff against the last one drawn, so a skipped one
-        loses nothing. A skip asks for the frame again, and an unpaced
-        client would ask on every turn of the loop, so it is paced
-        until the terminal caught up. Lillecarl/pymux#585.
+        **The terminal has not read the last frame**, on any route.
+        Over ssh the bytes wait where no route sees them, in sshd's
+        buffers and the link, and only the terminal's answer to the
+        status report behind the frame says they arrived. So a slow
+        link carries the newest screen, a little late, and never a
+        backlog of old ones; a keystroke's frame waits for one frame and
+        not for thirty. Lillecarl/pymux#259. Nothing asks again here:
+        the answer asks for the next frame. A skip that asked again
+        spun the loop for as long as a key's urgency outran the pacing,
+        a frame's cost each turn, and the request the answer made then
+        waited for the pacing's timer. Lillecarl/pymux#824.
+
+        **A terminal that fell behind on a route where the bytes pile up
+        in this process** has no answer to wait for, so its skip asks
+        again, paced until it caught up. The next frame is a diff
+        against the last one drawn, so a skipped one loses nothing.
+        Lillecarl/pymux#585.
         """
         if self.input_tick != self.schedule_tick:
+            self.app.invalidate()
+            return True
+        if self.connection.waits_for_terminal:
             return True
         pipe = self.connection.pipe_connection
-        behind = pipe.holds_frames_while_behind and pipe.outstanding
-        # **The terminal has not read the last frame**, on any route.
-        # Over ssh the bytes wait where no route sees them, in sshd's
-        # buffers and the link, and only the terminal's answer to the
-        # status report behind the frame says they arrived. So a slow
-        # link carries the newest screen, a little late, and never a
-        # backlog of old ones; a keystroke's frame waits for one frame
-        # and not for thirty. The answer asks for the frame at once,
-        # and the pacing below is the fallback. Lillecarl/pymux#259.
-        if behind or self.connection.waits_for_terminal:
+        if pipe.holds_frames_while_behind and pipe.outstanding:
             if not self._paced_while_behind:
                 self._paced_while_behind = True
                 self.pace()
+            self.app.invalidate()
             return True
         if self._paced_while_behind:
             self._paced_while_behind = False

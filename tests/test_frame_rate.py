@@ -152,19 +152,37 @@ async def test_client_follows_window_it_looks_at():
 async def test_a_pane_that_draws_keeps_the_pacing_of_a_terminal_behind(rate):
     """
     Every invalidate syncs the frame rate, and a pane that animates
-    invalidates many times a second. The pacing of a terminal that has
-    not read the last frame must survive that, or the client asks for a
-    frame on every turn of the loop. Lillecarl/pymux#811.
+    invalidates many times a second. The pacing of a terminal whose
+    bytes pile up in this process must survive that, or the client asks
+    for a frame on every turn of the loop. Lillecarl/pymux#811.
     """
     async with create_session() as (mux, state):
         with set_app(state.app):
             mux.handle_command("set-window-option frame-rate %d" % rate)
-        state.connection.waits_for_terminal = True
+        pipe = state.connection.pipe_connection
+        pipe.holds_frames_while_behind, pipe.outstanding = True, 1
         assert state.should_skip_render()
 
         mux.invalidate()
         assert state.app.min_redraw_interval == pytest.approx(BEHIND_INTERVAL)
 
-        state.connection.waits_for_terminal = False
+        pipe.outstanding = 0
         assert not state.should_skip_render()
         assert state.app.min_redraw_interval == (1 / rate if rate else None)
+
+
+async def test_a_frame_held_for_the_terminals_answer_asks_for_no_other():
+    """
+    The answer asks for the next frame, so a skip asks for none and sets
+    no pacing whose timer the answer would then wait for.
+    Lillecarl/pymux#824.
+    """
+    async with create_session() as (mux, state):
+        asked = []
+        state.app.invalidate = lambda: asked.append(True)
+        before = state.app.min_redraw_interval
+        state.connection.waits_for_terminal = True
+
+        assert state.should_skip_render()
+        assert asked == []
+        assert state.app.min_redraw_interval == before
