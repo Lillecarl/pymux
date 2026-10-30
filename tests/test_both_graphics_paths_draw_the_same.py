@@ -43,7 +43,8 @@ from pyte.images import PixelFormat
 from pyte.sixel import decode_sixel
 from test_graphics_output import make_state, placement, view
 
-from pymux.graphics import ClientGraphics, _crop_rgba
+from pymux.graphics import ClientGraphics
+from pymux.placements import _crop_rgba
 from pymux.sixel import scale_rgba, to_rgba
 
 #: What sixel's three percentages cost a channel. The same number

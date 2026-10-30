@@ -66,7 +66,8 @@ from pyte.streams import Stream
 from recorded import how_to_record, moved, read_counts, write_list
 
 from pymux import kernels, sixel
-from pymux.graphics import ClientGraphics, PaneView, visible_placements
+from pymux.graphics import ClientGraphics, PaneView
+from pymux.placements import visible_placements
 
 HERE = Path(__file__).parent
 

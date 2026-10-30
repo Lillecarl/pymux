@@ -45,7 +45,7 @@ from pyte.html import CSS, href_of, runs_of_row, style_of, theme_css
 from pyte.images import PixelFormat
 from pyte.png import encode_png
 
-from pymux import graphics, sixel
+from pymux import graphics, placements, sixel
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -346,7 +346,7 @@ class PaneView:
         return (row, position.x)
 
 
-def _placed(screen: Screen) -> Iterator[graphics.Placed]:
+def _placed(screen: Screen) -> Iterator[placements.Placed]:
     view = graphics.PaneView(
         pane_id=0,
         x=0,
@@ -358,7 +358,7 @@ def _placed(screen: Screen) -> Iterator[graphics.Placed]:
         graphics=screen.graphics,
         screen=screen,
     )
-    return graphics.pane_placements(view, screen.cell_width, screen.cell_height)
+    return placements.pane_placements(view, screen.cell_width, screen.cell_height)
 
 
 @functools.lru_cache(maxsize=64)
