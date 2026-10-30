@@ -178,7 +178,7 @@ class Planes:
         watchers = self.pymux.clients_watching(window)
 
         if not watchers:
-            return self.size_with_no_client(self.pymux.session_showing(window), window)
+            return self.size_with_no_client(self.pymux.session_of_window(window), window)
 
         return _plane_of_clients(watchers, window.options.window_size)
 

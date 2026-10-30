@@ -973,13 +973,6 @@ class Pymux:
             return "%s - Pymux" % (title,)
         return "Pymux"
 
-    def session_showing(self, window: Window) -> Session | None:
-        "The session whose windows hold this one, or None when it is gone."
-        for session in self.sessions:
-            if window in session.arrangement.windows:
-                return session
-        return None
-
     def client_was_used(self, client_state: ClientState) -> None:
         """
         Note that a person just used this client.
@@ -1428,7 +1421,7 @@ class Pymux:
             window,
             command,
             start_directory=start_directory,
-            session=self.session_showing(window),
+            session=self.session_of_window(window),
             task_group=task_group,
         )
         window.add_pane(pane, vsplit=vsplit, select=select)
