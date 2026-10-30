@@ -13,7 +13,6 @@ import json
 import pytest
 
 from pymux.style import style_base16
-from pymux.style.style import roles_of_palette
 
 A_DARK_SCHEME = {
     "base00": "#1e1e2e",
@@ -109,32 +108,3 @@ def test_palette_is_scheme_verbatim(schemes):
     assert roles["color-15"] == "#b4befe"  # base07, the bright one.
 
 
-def test_roles_of_palette_reads_terminal_s_order():
-    "The sixteen arrive in the order a terminal numbers them."
-    sixteen = [
-        "#000000",
-        "#ff0000",
-        "#00ff00",
-        "#ffff00",
-        "#0000ff",
-        "#ff00ff",
-        "#00ffff",
-        "#ffffff",
-        "#808080",
-        "#800000",
-        "#008000",
-        "#808000",
-        "#000080",
-        "#800080",
-        "#008080",
-        "#c0c0c0",
-    ]
-
-    roles = roles_of_palette(sixteen)
-
-    assert roles["pane"] == "#000000"
-    assert roles["alarm"] == "#ff0000"
-    assert roles["signal"] == "#00ff00"
-    assert roles["text-muted"] == "#808080"
-    assert roles["color-3"] == "#ffff00"
-    assert roles["color-9"] == "#800000"

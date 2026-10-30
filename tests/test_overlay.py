@@ -123,9 +123,9 @@ async def test_every_client_of_the_session_looks_at_overlay():
     async with pymux.running():
         pane = await pymux.overlays.display(command="%s -c pass" % _python())
         try:
-            assert pymux._has_focus(FakeClientState(here), pane) is True
-            assert pymux._has_focus(FakeClientState(here), FakePane()) is False
-            assert pymux._has_focus(FakeClientState(elsewhere), pane) is False
+            assert pymux.focused_pane_of(FakeClientState(here)) is pane
+            assert pymux.focused_pane_of(FakeClientState(here)) is not FakePane()
+            assert pymux.focused_pane_of(FakeClientState(elsewhere)) is not pane
         finally:
             pymux.overlays.close()
 

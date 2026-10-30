@@ -549,8 +549,8 @@ async def test_an_overlay_stays_in_its_own_session():
 
         # And only the client on that session is focused into it.
         popup = here.session.overlay_pane
-        assert pymux._has_focus(here, popup) is True
-        assert pymux._has_focus(there, popup) is False
+        assert pymux.focused_pane_of(here) is popup
+        assert pymux.focused_pane_of(there) is not popup
 
         await _command(pymux, here, "close-popup")
         assert here.session.overlay_pane is None

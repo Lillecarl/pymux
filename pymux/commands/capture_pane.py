@@ -187,7 +187,6 @@ def capture_pane(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None] | No
         return _print_window_png(pymux, pane.terminal, args)
     terminal = terminal_of(pane)
 
-    process = terminal.process
     screen = terminal.screen
     page = screen.page
 

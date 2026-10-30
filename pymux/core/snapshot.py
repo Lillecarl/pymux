@@ -280,17 +280,6 @@ def _value(value: Any) -> Any:
     raise TypeError("a snapshot cannot hold %r" % (value,))
 
 
-def _like(default: Any, value: Any) -> Any:
-    "A value read back, in the type of the fresh object's own default."
-    if value is None:
-        return None
-    if isinstance(default, bool):
-        return bool(value)
-    if isinstance(default, Enum):
-        return type(default)(value)
-    return value
-
-
 def _stored_options(scope: type[Options], values: dict[str, Any]) -> dict[str, Any]:
     "Options by attribute, as their columns hold them."
     return {each.attribute: each.stored(values[each.attribute]) for each in _SAVED[scope] if each.attribute in values}

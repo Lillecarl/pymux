@@ -392,9 +392,9 @@ def test_broken_connection_does_not_stop_pane():
 
 
 def test_client_without_focus_information_gets_no_pointer_shape():
-    "`_has_focus` needs a running application, and says False without one."
+    "`focused_pane_of` needs a running application, and says None without one."
     pymux = Pymux()
-    assert pymux._has_focus(FakeClientState(), FakePane()) is False
+    assert pymux.focused_pane_of(FakeClientState()) is None
 
 
 # ----------------------------------------------------------------------

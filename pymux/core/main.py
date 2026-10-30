@@ -721,18 +721,6 @@ class Pymux:
             return self.last_used_session.options, False
         return state.session.options, state.options.full_screen
 
-    def _asking_is_full_screen(self) -> bool:
-        """
-        Whether the client this frame is for wants no chrome.
-
-        No client is no, not the server's own answer: a client is what
-        holds the flag now, so with nobody there nobody asked for it.
-        """
-        try:
-            return self.get_client_state().options.full_screen
-        except ValueError:
-            return False
-
     def server_starts(self) -> None:
         """
         What every route does before its loop turns.
@@ -1255,10 +1243,6 @@ class Pymux:
             else:
                 merged[name] = value
         return merged
-
-    def _has_focus(self, client_state: ClientState, pane: Pane) -> bool:
-        "True when this client looks at this pane."
-        return self.focused_pane_of(client_state) is pane
 
     def focused_pane_of(self, client_state: ClientState) -> Pane | None:
         """

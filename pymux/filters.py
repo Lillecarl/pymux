@@ -146,15 +146,6 @@ class WaitsForPrompt(Filter):
         return bool(client_state.prompt_command) and not client_state.confirm_command
 
 
-def _confirm_or_prompt_or_command(pymux: Pymux) -> bool:
-    "True when we are waiting for a command, prompt or confirmation."
-    try:
-        client_state = pymux.get_client_state()
-    except ValueError:
-        return False
-    return bool(client_state.confirm_text or client_state.prompt_command or client_state.command_mode)
-
-
 # Three filters for copy mode stood here: `InScrollBuffer`,
 # `InScrollBufferNotSearching` and `InScrollBufferSearching`. Each one
 # read `pane.display_scroll_buffer`, and nothing had set that since
