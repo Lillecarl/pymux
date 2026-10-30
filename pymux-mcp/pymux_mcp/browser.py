@@ -563,6 +563,8 @@ REF_PREFIX: Final = "e"
 
 _SKIPPED_ROLES: Final = frozenset({"none", "generic"})
 _NO_REF_ROLES: Final = frozenset({"RootWebArea", "StaticText", "InlineTextBox"})
+#: What `find_text` climbs past to the element holding a match.
+_CLIMBED: Final = _NO_REF_ROLES | {"none"}
 
 #: Keys by their DOM name: the Windows virtual key code Chromium wants,
 #: and the text the key types.
@@ -617,10 +619,11 @@ async def evaluate(page: Page, expression: str, timeout: float = 30.0) -> Any:
     return answer.get("result", {}).get("value")
 
 
-async def snapshot(page: Page, limit: int) -> str:
+async def snapshot(page: Page, limit: int, within: str | None = None) -> str:
     """
     The page as its accessibility tree: one line a node, indented, with a
-    ref on each node an operation can act on.
+    ref on each node an operation can act on. `within` is a ref whose
+    subtree alone is answered.
     """
     await page.send("Accessibility.enable")
     nodes = (await page.send("Accessibility.getFullAXTree"))["nodes"]
@@ -648,7 +651,13 @@ async def snapshot(page: Page, limit: int) -> str:
             if child in by_id:
                 walk(by_id[child], depth + 1 if shown else depth)
 
-    roots = [node for node in nodes if not node.get("parentId")]
+    if within is None:
+        roots = [node for node in nodes if not node.get("parentId")]
+    else:
+        backend = _backend(within)
+        roots = [node for node in nodes if node.get("backendDOMNodeId") == backend]
+        if not roots:
+            raise LookupError("the ref %s is gone, or the accessibility tree has no node for it" % (within,))
     for root in roots:
         walk(root, 0)
     if len(lines) >= limit:
@@ -716,16 +725,58 @@ async def at(page: Page, x: float, y: float) -> dict[str, Any]:
     }
 
 
+def _backend(ref: str) -> int:
+    "The `backendDOMNodeId` a ref names."
+    if not ref.startswith(REF_PREFIX) or not ref[len(REF_PREFIX) :].isdigit():
+        raise ValueError("%r is not a ref; browser.snapshot answers them, as e12" % (ref,))
+    return int(ref[len(REF_PREFIX) :])
+
+
+async def find_text(page: Page, text: str, limit: int) -> list[str]:
+    """
+    The elements whose name or value holds `text`, any case, one line
+    each as `browser.snapshot` writes it, without the rest of the tree.
+    A match in running text answers the element that holds the text.
+    """
+    await page.send("Accessibility.enable")
+    nodes = (await page.send("Accessibility.getFullAXTree"))["nodes"]
+    by_id = {node["nodeId"]: node for node in nodes}
+    wanted = text.casefold()
+    lines: list[str] = []
+    seen: set[int] = set()
+
+    def value(node: Mapping[str, Any], key: str) -> str:
+        return str((node.get(key) or {}).get("value", ""))
+
+    for node in nodes:
+        said = value(node, "name") or value(node, "value")
+        if node.get("ignored") or wanted not in said.casefold():
+            continue
+        holder: Mapping[str, Any] | None = node
+        # Up from a text run to its element; the page's own node climbs to nothing.
+        while holder is not None and (value(holder, "role") in _CLIMBED or "backendDOMNodeId" not in holder):
+            holder = by_id.get(holder.get("parentId", ""))
+        if holder is None or holder["backendDOMNodeId"] in seen:
+            continue
+        seen.add(holder["backendDOMNodeId"])
+        lines.append(
+            "- %s %s [ref=%s%d]"
+            % (value(holder, "role"), json.dumps(said, ensure_ascii=False), REF_PREFIX, holder["backendDOMNodeId"])
+        )
+        if len(lines) >= limit:
+            break
+    return lines
+
+
 async def _element(page: Page, ref: str | None, selector: str | None) -> str:
     "The remote object id of the node a ref or a CSS selector names."
     if (ref is None) == (selector is None):
         raise ValueError("name the element by `ref` or by `selector`, one of them")
     if ref is not None:
-        if not ref.startswith(REF_PREFIX) or not ref[len(REF_PREFIX) :].isdigit():
-            raise ValueError("%r is not a ref; browser.snapshot answers them, as e12" % (ref,))
+        backend = _backend(ref)
         await page.send("DOM.enable")
         try:
-            resolved = await page.send("DOM.resolveNode", {"backendNodeId": int(ref[len(REF_PREFIX) :])})
+            resolved = await page.send("DOM.resolveNode", {"backendNodeId": backend})
         except CDPError:
             raise LookupError("the ref %s is gone; take a new browser.snapshot" % (ref,)) from None
         return resolved["object"]["objectId"]

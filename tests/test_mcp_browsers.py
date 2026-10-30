@@ -280,6 +280,38 @@ async def test_a_point_on_the_picture_names_the_element_there(server):
         await call(server, "browser.close", name="probe")
 
 
+LONG_PAGE = (
+    "data:text/html;base64,"
+    + base64.b64encode(
+        b"<title>long</title><nav><a href='#a'>Home</a>"
+        b" <a href='#b' onclick=\"document.title = 'contact'; return false\">Contact us</a></nav>"
+        + b"".join(b"<p>Filler paragraph %d.</p>" % (number,) for number in range(200))
+        + b"<form aria-label=order><input aria-label=email><button>Order now</button></form>"
+    ).decode()
+)
+
+
+async def test_find_answers_only_the_elements_that_read_the_text(server):
+    await call(server, "browser.open", name="probe", seat="headless", url=LONG_PAGE, arguments=ARGUMENTS)
+    try:
+        found = (await call(server, "browser.find", name="probe", text="contact")).splitlines()
+        assert len(found) == 1 and found[0].startswith('- link "Contact us" [ref=e'), found
+        # A match in running text answers the element holding it.
+        (filler,) = (await call(server, "browser.find", name="probe", text="paragraph 150.")).splitlines()
+        assert filler.startswith('- paragraph "Filler paragraph 150."'), filler
+        assert await call(server, "browser.find", name="probe", text="nowhere") == 'nothing reads "nowhere"'
+
+        await call(server, "browser.click", name="probe", ref=ref(found[0]))
+        assert await call(server, "browser.evaluate", name="probe", expression="document.title") == "contact"
+
+        # One form of a long page, without the two hundred paragraphs.
+        (form,) = (await call(server, "browser.find", name="probe", text="order")).splitlines()[:1]
+        part = await call(server, "browser.snapshot", name="probe", within=ref(form))
+        assert '"Order now"' in part and "email" in part and "Filler" not in part, part
+    finally:
+        await call(server, "browser.close", name="probe")
+
+
 async def test_a_profile_name_is_one_path_part(server):
     with pytest.raises(ValueError, match="not a profile name"):
         await call(server, "browser.open", name="probe", seat="headless", profile="../escape", arguments=ARGUMENTS)

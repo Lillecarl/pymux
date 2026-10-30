@@ -9,6 +9,7 @@ with those ids as its targets.
 from __future__ import annotations
 
 import dataclasses
+import json
 from collections.abc import Awaitable, Callable, Sequence
 from typing import Annotated, Any, Final, Literal
 
@@ -756,16 +757,33 @@ async def browser_snapshot(
     name: BrowserName = "browser",
     tab: Tab = None,
     limit: Annotated[int, Field(gt=0, description="The most lines to answer.")] = 400,
+    within: Annotated[str | None, Field(description="A ref: answer only its part of the tree.")] = None,
 ) -> str:
     """
     What a tab shows, as its accessibility tree: one line a node.
 
     Each node an operation can act on carries a ref, `[ref=e12]`, which
     `browser.click` and `browser.type` take. A ref stays good until the
-    page drops that element.
+    page drops that element. A large page reads cheaper by
+    `browser.find`, by `within` a ref, or by `browser.screenshot` with
+    `marks`.
     """
     async with browser.tab(server, name, tab) as page:
-        return await browser.snapshot(page, limit)
+        return await browser.snapshot(page, limit, within)
+
+
+@operation("browser.find")
+async def browser_find(
+    server: Server,
+    text: Annotated[str, Field(description="Text to look for in each element's name or value, any case.")],
+    name: BrowserName = "browser",
+    tab: Tab = None,
+    limit: Annotated[int, Field(gt=0, description="The most elements to answer.")] = 30,
+) -> str:
+    "The elements of a tab that read `text`, as `browser.snapshot` lines with refs, without the rest of the tree."
+    async with browser.tab(server, name, tab) as page:
+        lines = await browser.find_text(page, text, limit)
+    return "\n".join(lines) if lines else "nothing reads %s" % (json.dumps(text, ensure_ascii=False),)
 
 
 @operation("browser.at")
