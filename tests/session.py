@@ -101,6 +101,7 @@ class Connection:
         #: Lillecarl/pymux#335.
         self.ttyname = ttyname
         self.created = time.time()
+        self.activity = self.created
         #: What a client reports of the machine it runs on.
         #: Lillecarl/pymux#271.
         self.environment = environment or {}

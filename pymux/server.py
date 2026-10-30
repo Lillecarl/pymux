@@ -64,6 +64,8 @@ from .terminal_answers import SURVEY, TerminalAnswers
 from .uploads import LIST_SECONDS, Listing, Upload
 
 if TYPE_CHECKING:
+    from prompt_toolkit.key_binding import KeyPress
+
     from pymux.introspect import Counters
     from pymux.main import ClientState, Pymux
     from pymux.pipes import PipeConnection
@@ -1706,6 +1708,11 @@ class ServerConnection:
         return self._pipeinput.pointer_cell
 
     @property
+    def activity(self) -> float:
+        "When a person last pressed a key or used the mouse at this client."
+        return self._pipeinput.activity
+
+    @property
     def pointer_shape_sent(self) -> str:
         return self._pointer_shape_sent
 
@@ -2206,8 +2213,16 @@ class _ClientInput:
         # and routes terminal replies (keyboard flags query, device
         # attributes) to the given callback.
         vt100_input = cast(Vt100Input, self._input)
+        #: When a person last pressed a key or used the mouse here: the
+        #: parser hands terminal replies elsewhere, so they do not count.
+        self.activity = time.time()
+
+        def typed(key_press: KeyPress) -> None:
+            self.activity = time.time()
+            vt100_input._buffer.append(key_press)
+
         self._parser = KittyVt100Parser(
-            lambda key_press: vt100_input._buffer.append(key_press),
+            typed,
             reply_callback=kitty_reply_callback,
             speaks_protocol=speaks_protocol,
             pixel_cell=pixel_cell,

@@ -747,6 +747,12 @@ def _client_created(context: FormatContext) -> str:
     return str(int(connection.created)) if connection is not None else ""
 
 
+def _client_activity(context: FormatContext) -> str:
+    "When a person last pressed a key or used the mouse at this client, in seconds. tmux's own."
+    connection = _connection_of(context)
+    return str(int(connection.activity)) if connection is not None else ""
+
+
 def _client_id(context: FormatContext) -> str:
     connection = _connection_of(context)
     return connection.client_id if connection is not None else ""
@@ -934,6 +940,7 @@ tmux_variables: dict[str, Callable[[FormatContext], str]] = {
     "client_name": _client_name,
     "client_tty": _client_tty,
     "client_created": _client_created,
+    "client_activity": _client_activity,
     # Not tmux's: the token a client keeps across reattaches to a
     # restarted server. Lillecarl/pymux#399.
     "client_id": _client_id,
