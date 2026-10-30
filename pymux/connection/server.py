@@ -474,17 +474,13 @@ class ServerConnection:
 
         The sixel output needs this: those pixels sit in the cells, so
         the text under an image that moved has to be written once more.
-        Dropping the last screen of the renderer makes the next render
-        a full one. (There is no public way to ask for that.)
+        Not `Renderer.reset`, which switches the mouse and bracketed
+        paste off and on again around every such frame.
         """
         if self.client_state is None:
             return
         app = self.client_state.app
-        try:
-            app.renderer._last_screen = None
-        except Exception:
-            logger.exception("Could not ask for a full repaint.")
-            return
+        app.renderer.request_full_redraw()
         # Named here and not through `Pymux.invalidate`, because this
         # wakes the one client that asked and not all of them.
         logger.debug("Drawing 1 of the clients: it asked for a full repaint")

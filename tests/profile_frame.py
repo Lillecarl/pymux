@@ -541,7 +541,7 @@ def redraw(pymux, state, frames: int):
 
     def work() -> None:
         for _ in range(frames):
-            state.app.renderer._last_screen = None
+            state.app.renderer.request_full_redraw()
             draw()
 
     return work
