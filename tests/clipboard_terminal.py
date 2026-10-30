@@ -1,6 +1,6 @@
 """
 A client's terminal that keeps a clipboard and answers OSC 52, for the
-suites that read one through `ServerConnection.read_clipboard`.
+suites that read one through `ClipboardReader.read`.
 """
 
 from __future__ import annotations

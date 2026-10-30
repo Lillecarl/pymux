@@ -14,6 +14,7 @@ from __future__ import annotations
 from libpymux.protocol import Field, Packet
 from profile_frame import server
 
+from pymux.clipboard_reads import ClipboardReader
 from pymux.server import ServerConnection
 
 
@@ -49,8 +50,7 @@ async def test_input_from_the_client_moves_the_tick() -> None:
         connection._pipeinput = newcomer
         connection.client_state = state
         connection.recording = None
-        connection._clipboard_asked = False
-        connection._clipboard_partial = ""
+        connection.clipboard = ClipboardReader(connection)
         connection._process({Field.CMD: Packet.IN, Field.DATA: "x"})
         assert newcomer.sent == ["x"]
         assert state.should_skip_render()

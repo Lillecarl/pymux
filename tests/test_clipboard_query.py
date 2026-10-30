@@ -15,7 +15,7 @@ from clipboard_terminal import ClipboardTerminal
 from prompt_toolkit.data_structures import Size
 from session import over_connection
 
-from pymux.server import CLIPBOARD_READ_SECONDS
+from pymux.clipboard_reads import CLIPBOARD_READ_SECONDS
 
 SIZE = Size(rows=24, columns=80)
 
@@ -34,8 +34,8 @@ async def test_the_terminal_answers_with_its_clipboard():
     terminal = ClipboardTerminal()
     terminal.selections["c"] = "from the desktop"
     async with attached(terminal) as state:
-        assert await state.connection.read_clipboard("c") == "from the desktop"
-        assert state.connection.clipboard_answers is True
+        assert await state.connection.clipboard.read("c") == "from the desktop"
+        assert state.connection.clipboard.answers is True
 
 
 async def test_an_empty_clipboard_answers_at_once_with_nothing():
@@ -43,8 +43,8 @@ async def test_an_empty_clipboard_answers_at_once_with_nothing():
     terminal = ClipboardTerminal()
     async with attached(terminal) as state:
         with anyio.fail_after(CLIPBOARD_READ_SECONDS / 2):
-            assert await state.connection.read_clipboard("c") is None
-        assert state.connection.clipboard_answers is True
+            assert await state.connection.clipboard.read("c") is None
+        assert state.connection.clipboard.answers is True
 
 
 async def test_the_primary_is_its_own_selection():
@@ -52,7 +52,7 @@ async def test_the_primary_is_its_own_selection():
     terminal.selections["c"] = "clipboard"
     terminal.selections["p"] = "primary"
     async with attached(terminal) as state:
-        assert await state.connection.read_clipboard("p") == "primary"
+        assert await state.connection.clipboard.read("p") == "primary"
 
 
 async def test_a_long_answer_in_pieces_arrives_whole():
@@ -60,24 +60,24 @@ async def test_a_long_answer_in_pieces_arrives_whole():
     terminal = ClipboardTerminal(chunk=997)
     terminal.selections["c"] = "0123456789" * 20_000
     async with attached(terminal) as state:
-        assert await state.connection.read_clipboard("c") == "0123456789" * 20_000
+        assert await state.connection.clipboard.read("c") == "0123456789" * 20_000
 
 
 async def test_keys_around_an_answer_still_reach_the_parser():
     async with attached(ClipboardTerminal()) as state:
         connection = state.connection
-        connection._clipboard_asked = True
-        assert connection._take_clipboard_answer("a\x1b]52;c;aGk=\x07b") == "ab"
-        assert connection._take_clipboard_answer("x\x1b]52;c;aG") == "x"
-        assert connection._take_clipboard_answer("k=\x1b\\y") == "y"
+        connection.clipboard._asked = True
+        assert connection.clipboard.take_answer("a\x1b]52;c;aGk=\x07b") == "ab"
+        assert connection.clipboard.take_answer("x\x1b]52;c;aG") == "x"
+        assert connection.clipboard.take_answer("k=\x1b\\y") == "y"
 
 
 async def test_a_silent_terminal_is_asked_once():
     terminal = ClipboardTerminal(answers=False)
     async with attached(terminal) as state:
-        assert await state.connection.read_clipboard("c") is None
-        assert state.connection.clipboard_answers is False
+        assert await state.connection.clipboard.read("c") is None
+        assert state.connection.clipboard.answers is False
 
         with anyio.fail_after(CLIPBOARD_READ_SECONDS / 2):
-            assert await state.connection.read_clipboard("c") is None
+            assert await state.connection.clipboard.read("c") is None
         assert terminal.queries == 1

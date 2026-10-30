@@ -63,6 +63,13 @@ class _NoPipe:
     bytes_out = 0
 
 
+class _NoClipboard:
+    "A terminal that never answers a clipboard query."
+
+    async def read(self, selection: str = "c") -> str | None:
+        return None
+
+
 class Connection:
     """
     What `Pymux` asks a connection for, and nothing else.
@@ -135,9 +142,7 @@ class Connection:
         self.notification_actions: frozenset[str] = frozenset()
         self.notification_closes = False
         self.notification_osc = None
-
-    async def read_clipboard(self, selection: str = "c") -> str | None:
-        return None
+        self.clipboard = _NoClipboard()
 
     @property
     def identity(self) -> Identity:

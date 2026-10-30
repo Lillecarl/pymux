@@ -711,7 +711,7 @@ class WaylandServer:
         client = self.pymux.latest_client()
         if client is None:
             return None
-        return await client.connection.read_clipboard(OSC52_LETTER[target])
+        return await client.connection.clipboard.read(OSC52_LETTER[target])
 
     def _fallback(self, target: str) -> str:
         "What pymux itself knows was copied last."
