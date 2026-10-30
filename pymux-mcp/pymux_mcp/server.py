@@ -12,14 +12,17 @@ from __future__ import annotations
 
 import base64
 import json
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from typing import Any
 
+import anyio
 from libpymux import CommandError, Server, ServerNotRunning
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ImageContent
 
+from . import browser
 from .api import OPERATIONS, Png
 from .cdp import CDPError
 
@@ -65,8 +68,19 @@ def build(server_for: Callable[[], Awaitable[Server]]) -> FastMCP:
     acts on. It asks every call, so a pymux server that restarted is
     found again.
     """
+
+    @asynccontextmanager
+    async def collecting(_app: FastMCP) -> AsyncIterator[None]:
+        "The collector of idle browsers, for as long as this serves."
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(browser.collect, server_for)
+            try:
+                yield None
+            finally:
+                tasks.cancel_scope.cancel()
+
     # At INFO the SDK writes a line to stderr for every request.
-    mcp = FastMCP("pymux", instructions=INSTRUCTIONS, log_level="WARNING")
+    mcp = FastMCP("pymux", instructions=INSTRUCTIONS, log_level="WARNING", lifespan=collecting)
 
     async def pymux(op: str, args: dict[str, Any] | None = None) -> str | ImageContent:
         "Run one pymux operation. `pymux_describe` lists them; start with `tree`."

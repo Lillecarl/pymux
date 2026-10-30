@@ -44,6 +44,13 @@ accessibility tree, with a ref on each element that `browser.click` and
 `browser.screenshot`, `browser.console`, `browser.tabs`, `browser.list`
 and `browser.close` do the rest.
 
+A browser lives across calls until `browser.close`, or until it was
+unused for its `idle` seconds, half an hour unless `browser.open` says
+otherwise. A browser operation is use, and so is a key or the mouse at a
+client that shows the browser's window. A collector in this process
+looks every thirty seconds, so nothing is collected while no pymux-mcp
+runs.
+
 pymux holds each browser, so it outlives this process. Every operation
 connects to the browser again, through the port Chromium writes into
 its profile. That port listens on the server machine's loopback, so

@@ -24,12 +24,14 @@ on that machine.
 from __future__ import annotations
 
 import base64
+import contextlib
 import json
 import os
 import shlex
 import shutil
 import tempfile
-from collections.abc import AsyncIterator, Mapping, Sequence
+import time
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
 from enum import StrEnum
 from pathlib import Path
@@ -40,13 +42,24 @@ from libpymux import Job, Server, Window
 
 from .cdp import CDPError, Connection, Page, connected
 
-__all__ = ["Browser", "Seat", "close", "find", "open_browser", "tab"]
+__all__ = ["Browser", "Seat", "close", "collect", "find", "open_browser", "sweep", "tab"]
 
 #: The tag a browser's job or pane carries, with the browser's name.
 NAME_TAG: Final = "browser"
 #: The tag holding the profile, where the port is written.
 PROFILE_TAG: Final = "browser-profile"
 SEAT_TAG: Final = "browser-seat"
+#: When an agent or a person last used it, in Unix seconds.
+USED_TAG: Final = "browser-used"
+#: How many seconds unused before the collector closes it; 0 for never.
+IDLE_TAG: Final = "browser-idle"
+
+#: What a browser left unused for longer than this is closed by default:
+#: long enough to read a page beside an agent, short enough that a
+#: browser an agent forgot does not run for a day.
+DEFAULT_IDLE: Final = 1800.0
+#: How often the collector looks.
+SWEEP_SECONDS: Final = 30.0
 
 #: How long Chromium may take to listen.
 LISTEN_TIMEOUT: Final = 30.0
@@ -80,14 +93,22 @@ class Browser:
     it in the same window.
     """
 
-    def __init__(self, name: str, seat: Seat, profile: Path, holder: Job | Window) -> None:
+    def __init__(self, name: str, seat: Seat, profile: Path, holder: Job | Window, used: float, idle: float) -> None:
         self.name = name
         self.seat = seat
         self.profile = profile
         self.holder = holder
+        self.used = used
+        self.idle = idle
 
     def json(self) -> dict[str, Any]:
-        found: dict[str, Any] = {"name": self.name, "seat": self.seat.value, "profile": str(self.profile)}
+        found: dict[str, Any] = {
+            "name": self.name,
+            "seat": self.seat.value,
+            "profile": str(self.profile),
+            "used": int(self.used),
+            "idle": self.idle,
+        }
         if isinstance(self.holder, Job):
             found["job"] = self.holder.id
         else:
@@ -128,7 +149,22 @@ async def every(server: Server) -> list[Browser]:
 
 async def _browser(server: Server, holder: Job | Window) -> Browser:
     tags = holder.tags if isinstance(holder, Job) else (await server.tags()).get(holder.id, {})
-    return Browser(tags[NAME_TAG] or "", Seat(tags[SEAT_TAG]), Path(tags[PROFILE_TAG] or ""), holder)
+    return Browser(
+        tags[NAME_TAG] or "",
+        Seat(tags[SEAT_TAG]),
+        Path(tags[PROFILE_TAG] or ""),
+        holder,
+        # A browser with no mark of use counts as used now, rather than
+        # as unused since 1970.
+        float(tags.get(USED_TAG) or time.time()),
+        float(tags.get(IDLE_TAG) or DEFAULT_IDLE),
+    )
+
+
+async def touch(server: Server, browser: Browser, when: float | None = None) -> None:
+    "Mark the browser used, at `when` or now."
+    browser.used = time.time() if when is None else when
+    await server.set_tags(browser.holder.id, {USED_TAG: str(int(browser.used))})
 
 
 async def open_browser(
@@ -139,13 +175,21 @@ async def open_browser(
     session: str | None,
     executable: str | None,
     arguments: Sequence[str],
+    idle: float = DEFAULT_IDLE,
 ) -> Browser:
     "Start a browser in `seat`, and answer it once it listens."
     for existing in await every(server):
         if existing.name == name:
             raise ValueError("a browser named %r is open; close it or pick another name" % (name,))
     profile = Path(tempfile.mkdtemp(prefix="pymux-browser-"))
-    tags = {NAME_TAG: name, SEAT_TAG: seat.value, PROFILE_TAG: str(profile)}
+    used = time.time()
+    tags = {
+        NAME_TAG: name,
+        SEAT_TAG: seat.value,
+        PROFILE_TAG: str(profile),
+        USED_TAG: str(int(used)),
+        IDLE_TAG: "%g" % (idle,),
+    }
     argv = [
         "--remote-debugging-port=0",
         "--user-data-dir=%s" % (profile,),
@@ -160,7 +204,7 @@ async def open_browser(
         else:
             command = [chromium(executable), "--ozone-platform=wayland", *argv, url]
             holder = await _in_a_window(server, name, session, command, tags)
-        browser = Browser(name, seat, profile, holder)
+        browser = Browser(name, seat, profile, holder, used, idle)
         await _listening(browser)
     except BaseException:
         shutil.rmtree(profile, ignore_errors=True)
@@ -232,6 +276,43 @@ async def close(browser: Browser) -> None:
         shutil.rmtree(browser.profile, ignore_errors=True)
 
 
+async def sweep(server: Server, now: float | None = None) -> list[str]:
+    """
+    Close every browser unused for longer than its idle limit, and
+    answer their names.
+
+    A window a client shows counts as used when a person pressed a key
+    or moved the mouse at that client: it is somebody's companion, not
+    the agent's alone.
+    """
+    now = time.time() if now is None else now
+    shown: dict[str, float] = {}
+    listed = await server.cmd(["list-clients", "-F", "#{window_id} #{client_activity}"], check=False)
+    for line in listed.stdout.splitlines():
+        window, _, activity = line.partition(" ")
+        if activity.isdigit():
+            shown[window] = max(shown.get(window, 0.0), float(activity))
+    closed = []
+    for browser in await every(server):
+        seen = shown.get(browser.holder.id, 0.0) if isinstance(browser.holder, Window) else 0.0
+        if seen > browser.used:
+            await touch(server, browser, seen)
+        if browser.idle and now - browser.used > browser.idle:
+            await close(browser)
+            closed.append(browser.name)
+    return closed
+
+
+async def collect(server_for: Callable[[], Awaitable[Server]]) -> None:
+    "Sweep every `SWEEP_SECONDS`, for as long as this process serves."
+    while True:
+        await anyio.sleep(SWEEP_SECONDS)
+        # A server that is gone now is the next sweep's to find again; a
+        # sweep that failed must not end the ones after it.
+        with contextlib.suppress(Exception):
+            await sweep(await server_for())
+
+
 async def _held(browser: Browser) -> bool:
     try:
         await browser.holder.refresh()
@@ -247,6 +328,7 @@ async def tab(server: Server, name: str, target: str | None = None) -> AsyncIter
     endpoint = browser.endpoint()
     if endpoint is None:
         raise BrowserGone("the browser %r is not listening" % (name,))
+    await touch(server, browser)
     async with connected(endpoint) as connection:
         found = await tabs(connection)
         if target is not None:

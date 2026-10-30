@@ -626,15 +626,20 @@ async def open_browser(
         str | None, Field(description="Chromium to run; PYMUX_MCP_CHROMIUM or `chromium` on the PATH when left out.")
     ] = None,
     arguments: Annotated[list[str] | None, Field(description="More command line for Chromium.")] = None,
+    idle: Annotated[
+        float,
+        Field(ge=0, description="Close it after this many seconds unused by you or a person; 0 keeps it."),
+    ] = browser.DEFAULT_IDLE,
 ) -> Json:
     """
     Start a Chromium to drive, and answer it once it listens.
 
-    It runs until `browser.close`, whether this server goes or not:
-    pymux holds it, as a window pane or a job. A `pane` browser opens in
-    a window that is not in front.
+    It runs across calls until `browser.close`, or until nobody used it
+    for `idle` seconds: no browser operation, and no key or mouse from a
+    person looking at its window. pymux holds it, as a window pane or a
+    job. A `pane` browser opens in a window that is not in front.
     """
-    opened = await browser.open_browser(server, name, seat, url, session, executable, arguments or ())
+    opened = await browser.open_browser(server, name, seat, url, session, executable, arguments or (), idle)
     return opened.json()
 
 

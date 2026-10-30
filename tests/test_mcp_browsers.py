@@ -23,6 +23,8 @@ pytest.importorskip("pysmithay")
 CHROMIUM = shutil.which("chromium")
 pytestmark = pytest.mark.skipif(CHROMIUM is None, reason="no chromium on the PATH")
 
+from libpymux.connection import CommandResult
+from pymux_mcp import browser
 from pymux_mcp.api import OPERATIONS, Png
 
 #: A build sandbox has no room for Chromium's own sandbox.
@@ -119,6 +121,57 @@ async def test_a_ref_that_is_not_one_says_where_refs_come_from(server):
         with pytest.raises(ValueError, match=r"browser\.snapshot"):
             await call(server, "browser.click", name="probe", ref="button")
     finally:
+        await call(server, "browser.close", name="probe")
+
+
+async def test_the_collector_closes_a_browser_nobody_used(server):
+    opened = await call(server, "browser.open", name="probe", seat="headless", arguments=ARGUMENTS, idle=60)
+    assert await browser.sweep(server, now=opened["used"] + 30) == []
+    assert await browser.sweep(server, now=opened["used"] + 90) == ["probe"]
+    assert await call(server, "browser.list") == []
+    assert not Path(opened["profile"]).exists()
+
+
+async def test_a_browser_operation_is_use(server):
+    opened = await call(server, "browser.open", name="probe", seat="headless", arguments=ARGUMENTS, idle=60)
+    try:
+        await anyio.sleep(1.5)
+        await call(server, "browser.evaluate", name="probe", expression="1")
+        (listed,) = await call(server, "browser.list")
+        assert listed["used"] > opened["used"], (listed, opened)
+    finally:
+        await call(server, "browser.close", name="probe")
+
+
+async def test_an_idle_of_nothing_is_kept_for_ever(server):
+    opened = await call(server, "browser.open", name="probe", seat="headless", arguments=ARGUMENTS, idle=0)
+    try:
+        assert await browser.sweep(server, now=opened["used"] + 10**6) == []
+    finally:
+        await call(server, "browser.close", name="probe")
+
+
+async def test_a_person_at_the_window_keeps_the_browser(server, monkeypatch):
+    """
+    A client that shows the browser's window and had a key or the mouse
+    since: the companion of a person, though no agent called.
+    """
+    opened = await call(server, "browser.open", name="probe", seat="pane", url=PAGE, arguments=ARGUMENTS, idle=60)
+    try:
+        later = opened["used"] + 50
+        cmd = server.cmd
+
+        async def a_client_at_the_window(command, *args, **kwargs):
+            if list(command)[:1] == ["list-clients"]:
+                return CommandResult("@0 1\n%s %d\n" % (opened["window"], later), "", 0)
+            return await cmd(command, *args, **kwargs)
+
+        monkeypatch.setattr(server, "cmd", a_client_at_the_window)
+        assert await browser.sweep(server, now=later + 30) == []
+        (listed,) = await call(server, "browser.list")
+        assert listed["used"] == later, listed
+    finally:
+        monkeypatch.undo()
         await call(server, "browser.close", name="probe")
 
 
