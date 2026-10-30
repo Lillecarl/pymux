@@ -643,12 +643,12 @@ class PymuxKeyBindings:
                     url = target.link.url
                     if letter.isupper():
                         event.app.clipboard.set_text(url)
-                        pymux.write_user_clipboard(url)
+                        pymux.outward.write_user_clipboard(url)
                         pymux.show_message("Copied %s" % url)
                     else:
                         # The person picked it, which is the question
                         # `open-url-mode ask` would put.
-                        pymux.open_url(url, confirmed=True)
+                        pymux.outward.open_url(url, confirmed=True)
             pymux.invalidate()
 
         @Condition

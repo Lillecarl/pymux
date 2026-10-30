@@ -67,7 +67,7 @@ async def test_an_inline_image_is_placed_at_the_cursor():
             cursor = screen.pt_cursor_position
             start = (cursor.x, cursor.y)
             payload = base64.b64encode(_image("GIF")).decode("ascii")
-            pymux.forward_osc(pane, "1337", "File=inline=1;width=6:" + payload)
+            pymux.outward.forward_osc(pane, "1337", "File=inline=1;width=6:" + payload)
 
             (placement,) = screen.graphics.placements
             assert (placement.x, placement.y, placement.columns, placement.rows) == (*start, 6, 2)
@@ -79,5 +79,5 @@ async def test_what_is_no_image_draws_nothing():
     async with create_session() as (pymux, state):
         with set_app(state.app):
             pane = pymux.arrangement.get_active_pane()
-            pymux.forward_osc(pane, "1337", "File=inline=1:" + base64.b64encode(b"plain text").decode("ascii"))
+            pymux.outward.forward_osc(pane, "1337", "File=inline=1:" + base64.b64encode(b"plain text").decode("ascii"))
             assert pane.screen.graphics.placements == []

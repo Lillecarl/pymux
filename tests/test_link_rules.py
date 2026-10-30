@@ -57,7 +57,7 @@ async def test_show_urls_labels_an_issue_number_and_opens_it(pymux, monkeypatch,
     (tmp_path / ".git").mkdir()
     (tmp_path / "pymux.toml").write_text(ISSUES)
     opened = []
-    monkeypatch.setattr(pymux, "open_url", lambda url, confirmed=False: opened.append(url))
+    monkeypatch.setattr(pymux.outward, "open_url", lambda url, confirmed=False: opened.append(url))
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
         with set_app(pymux.connections[-1].client_state.app):

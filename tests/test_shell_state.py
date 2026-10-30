@@ -22,7 +22,7 @@ from session import create_session
 
 from pymux.enums import Clipboard, NotificationPopups
 from pymux.format import format_pymux_string
-from pymux.main import MAX_USER_VARS, Pymux
+from pymux.main import Pymux
 from pymux.notifications import Urgency
 from pymux.osc import (
     NO_PROGRESS,
@@ -36,6 +36,7 @@ from pymux.osc import (
     request_attention_of,
     set_user_var_of,
 )
+from pymux.outward import MAX_USER_VARS
 
 
 def sequence(code, param):
@@ -281,7 +282,7 @@ def test_ftcs_rejects_the_rest(param):
 def test_osc7_stores_host_and_directory_and_travels_on():
     pymux, connections = make_pymux()
     pane = FakePane()
-    pymux.forward_osc(pane, "7", "file://host/home/you")
+    pymux.outward.forward_osc(pane, "7", "file://host/home/you")
     assert (pane.current_host, pane.current_directory) == ("host", "/home/you")
     for connection in connections:
         assert connection.written == [sequence("7", "file://host/home/you")]
@@ -290,7 +291,7 @@ def test_osc7_stores_host_and_directory_and_travels_on():
 def test_osc7_without_url_stores_nothing_but_travels_on():
     pymux, connections = make_pymux()
     pane = FakePane()
-    pymux.forward_osc(pane, "7", "not a url")
+    pymux.outward.forward_osc(pane, "7", "not a url")
     assert (pane.current_host, pane.current_directory) == (None, None)
     for connection in connections:
         assert connection.written == [sequence("7", "not a url")]
@@ -300,7 +301,7 @@ def test_current_dir_updates_directory_and_keeps_host():
     pymux, connections = make_pymux()
     pane = FakePane()
     pane.current_host = "host"
-    pymux.forward_osc(pane, "1337", "CurrentDir=/home/me")
+    pymux.outward.forward_osc(pane, "1337", "CurrentDir=/home/me")
     assert (pane.current_host, pane.current_directory) == ("host", "/home/me")
     for connection in connections:
         assert connection.written == [sequence("1337", "CurrentDir=/home/me")]
@@ -310,9 +311,9 @@ def test_remote_host_names_the_user_and_the_host():
     "Lillecarl/pymux#784."
     pymux, connections = make_pymux()
     pane = FakePane()
-    pymux.forward_osc(pane, "1337", "RemoteHost=carl@dynhetz")
+    pymux.outward.forward_osc(pane, "1337", "RemoteHost=carl@dynhetz")
     assert (pane.current_user, pane.current_host) == ("carl", "dynhetz")
-    pymux.forward_osc(pane, "1337", "RemoteHost=")
+    pymux.outward.forward_osc(pane, "1337", "RemoteHost=")
     assert (pane.current_user, pane.current_host) == ("carl", "dynhetz")
     for connection in connections:
         assert connection.written == [sequence("1337", "RemoteHost=carl@dynhetz")]
@@ -321,16 +322,16 @@ def test_remote_host_names_the_user_and_the_host():
 def test_shell_integration_names_the_shell_and_its_version():
     pymux, _connections = make_pymux()
     pane = FakePane()
-    pymux.forward_osc(pane, "1337", "ShellIntegrationVersion=14;shell=fish")
+    pymux.outward.forward_osc(pane, "1337", "ShellIntegrationVersion=14;shell=fish")
     assert (pane.shell_integration_version, pane.shell) == ("14", "fish")
-    pymux.forward_osc(pane, "1337", "ShellIntegrationVersion=5")
+    pymux.outward.forward_osc(pane, "1337", "ShellIntegrationVersion=5")
     assert (pane.shell_integration_version, pane.shell) == ("5", None)
 
 
 def test_current_dir_with_nothing_in_it_is_dropped():
     pymux, connections = make_pymux()
     pane = FakePane()
-    pymux.forward_osc(pane, "1337", "CurrentDir=")
+    pymux.outward.forward_osc(pane, "1337", "CurrentDir=")
     assert pane.current_directory is None
     for connection in connections:
         assert connection.written == []
@@ -343,7 +344,7 @@ def test_current_dir_with_nothing_in_it_is_dropped():
 def test_set_user_var_stores_decoded_and_travels_on():
     pymux, connections = make_pymux()
     pane = FakePane()
-    pymux.forward_osc(pane, "1337", "SetUserVar=BRANCH=TWFpbg==")
+    pymux.outward.forward_osc(pane, "1337", "SetUserVar=BRANCH=TWFpbg==")
     assert pane.user_vars == {"BRANCH": "Main"}
     for connection in connections:
         assert connection.written == [sequence("1337", "SetUserVar=BRANCH=TWFpbg==")]
@@ -352,7 +353,7 @@ def test_set_user_var_stores_decoded_and_travels_on():
 def test_set_user_var_with_bad_value_is_dropped():
     pymux, connections = make_pymux()
     pane = FakePane()
-    pymux.forward_osc(pane, "1337", "SetUserVar=BRANCH=!")
+    pymux.outward.forward_osc(pane, "1337", "SetUserVar=BRANCH=!")
     assert pane.user_vars == {}
     for connection in connections:
         assert connection.written == []
@@ -363,7 +364,7 @@ def test_user_vars_forget_oldest_first():
     pymux._client_states = {}
     pane = FakePane()
     for number in range(MAX_USER_VARS + 1):
-        pymux.forward_osc(pane, "1337", "SetUserVar=K%d=eA==" % number)
+        pymux.outward.forward_osc(pane, "1337", "SetUserVar=K%d=eA==" % number)
     assert len(pane.user_vars) == MAX_USER_VARS
     assert "K0" not in pane.user_vars
     assert pane.user_vars["K%d" % MAX_USER_VARS] == "x"
@@ -376,7 +377,7 @@ def test_user_vars_forget_oldest_first():
 def test_set_mark_marks_a_prompt_and_travels_on():
     pymux, connections = make_pymux()
     pane = FakePane(cursor_y=5)
-    pymux.forward_osc(pane, "1337", "SetMark")
+    pymux.outward.forward_osc(pane, "1337", "SetMark")
     assert pane.screen.marks == [RowMark.PROMPT]
     for connection in connections:
         assert connection.written == [sequence("1337", "SetMark")]
@@ -385,7 +386,7 @@ def test_set_mark_marks_a_prompt_and_travels_on():
 def test_set_mark_with_arguments_is_dropped():
     pymux, connections = make_pymux()
     pane = FakePane()
-    pymux.forward_osc(pane, "1337", "SetMark=x")
+    pymux.outward.forward_osc(pane, "1337", "SetMark=x")
     assert pane.screen.marks == []
     for connection in connections:
         assert connection.written == []
@@ -395,7 +396,7 @@ def test_zones_track_prompt_command_output():
     pymux, connections = make_pymux()
     pane = FakePane()
     for letter in "ABC":
-        pymux.forward_osc(pane, "133", letter)
+        pymux.outward.forward_osc(pane, "133", letter)
         assert pane.command_zone == letter
     # A prompt and the start of the output mark their rows, as tmux's
     # `input_osc_133` does; the command typed at the prompt does not.
@@ -410,7 +411,7 @@ def test_zone_end_records_exit_status():
     pymux, _connections = make_pymux()
     pane = FakePane()
     pane.command_zone = "C"
-    pymux.forward_osc(pane, "133", "D;3")
+    pymux.outward.forward_osc(pane, "133", "D;3")
     assert pane.command_zone is None
     assert pane.last_exit_status == 3
 
@@ -420,7 +421,7 @@ def test_zone_abort_clears_zone_and_status():
     pane = FakePane()
     pane.command_zone = "B"
     pane.last_exit_status = 3
-    pymux.forward_osc(pane, "133", "D")
+    pymux.outward.forward_osc(pane, "133", "D")
     assert pane.command_zone is None
     assert pane.last_exit_status is None
 
@@ -428,7 +429,7 @@ def test_zone_abort_clears_zone_and_status():
 def test_zone_garbage_stores_nothing_and_stays_inside():
     pymux, connections = make_pymux()
     pane = FakePane()
-    pymux.forward_osc(pane, "133", "E")
+    pymux.outward.forward_osc(pane, "133", "E")
     assert (pane.command_zone, pane.last_exit_status) == (None, None)
     for connection in connections:
         assert connection.written == []
@@ -449,7 +450,7 @@ def test_zone_garbage_stores_nothing_and_stays_inside():
 def test_attention_ask_records_hub_and_travels_on(value, urgency):
     pymux, connections = make_pymux()
     pane = FakePane(pane_id=7)
-    pymux.forward_osc(pane, "1337", "RequestAttention=" + value)
+    pymux.outward.forward_osc(pane, "1337", "RequestAttention=" + value)
     (record,) = pymux.notification_center.notifications()
     assert record.urgency == urgency
     assert record.pane_id == 7
@@ -460,7 +461,7 @@ def test_attention_ask_records_hub_and_travels_on(value, urgency):
 def test_attention_withdrawal_records_nothing_but_travels_on():
     pymux, connections = make_pymux()
     pane = FakePane()
-    pymux.forward_osc(pane, "1337", "RequestAttention=no")
+    pymux.outward.forward_osc(pane, "1337", "RequestAttention=no")
     assert pymux.notification_center.notifications() == []
     for connection in connections:
         assert connection.written == [sequence("1337", "RequestAttention=no")]
@@ -469,7 +470,7 @@ def test_attention_withdrawal_records_nothing_but_travels_on():
 def test_attention_with_bad_value_is_dropped():
     pymux, connections = make_pymux()
     pane = FakePane()
-    pymux.forward_osc(pane, "1337", "RequestAttention=maybe")
+    pymux.outward.forward_osc(pane, "1337", "RequestAttention=maybe")
     assert pymux.notification_center.notifications() == []
     for connection in connections:
         assert connection.written == []
@@ -478,7 +479,7 @@ def test_attention_with_bad_value_is_dropped():
 def test_a_simple_notification_records_hub_and_travels_on():
     "urxvt's plain form, which foot, kitty and WezTerm read. Lillecarl/pymux#495."
     pymux, connections = make_pymux()
-    pymux.forward_osc(FakePane(pane_id=7), "777", "notify;Build;done; 3 warnings")
+    pymux.outward.forward_osc(FakePane(pane_id=7), "777", "notify;Build;done; 3 warnings")
     (record,) = pymux.notification_center.notifications()
     assert (record.title, record.body, record.pane_id) == ("Build", "done; 3 warnings", 7)
     # Spelled for iTerm2, which shows OSC 9. Lillecarl/pymux#497.
@@ -490,7 +491,7 @@ def test_a_simple_notification_records_hub_and_travels_on():
 def test_the_rest_of_777_stays_inside(param):
     "The other verbs drive urxvt's perl extensions, and an empty notice says nothing."
     pymux, connections = make_pymux()
-    pymux.forward_osc(FakePane(), "777", param)
+    pymux.outward.forward_osc(FakePane(), "777", param)
     assert pymux.notification_center.notifications() == []
     for connection in connections:
         assert connection.written == []
@@ -499,7 +500,7 @@ def test_the_rest_of_777_stays_inside(param):
 def test_osc_9_is_a_notice_for_the_hub_and_the_clients():
     "iTerm2's message. Lillecarl/pymux#787."
     pymux, connections = make_pymux()
-    pymux.forward_osc(FakePane(pane_id=7), "9", "Build done; 3 warnings")
+    pymux.outward.forward_osc(FakePane(pane_id=7), "9", "Build done; 3 warnings")
     (record,) = pymux.notification_center.notifications()
     assert (record.title, record.pane_id, record.source) == ("Build done; 3 warnings", 7, "osc 9")
     for connection in connections:
@@ -509,7 +510,7 @@ def test_osc_9_is_a_notice_for_the_hub_and_the_clients():
 @pytest.mark.parametrize("param", ["", "4;1;50", "9;/home/me", "12"])
 def test_conemu_s_commands_under_osc_9_are_no_notice(param):
     pymux, connections = make_pymux()
-    pymux.forward_osc(FakePane(), "9", param)
+    pymux.outward.forward_osc(FakePane(), "9", param)
     assert pymux.notification_center.notifications() == []
     for connection in connections:
         assert connection.written == []
@@ -547,14 +548,14 @@ async def test_a_pane_s_progress_reaches_the_status_line_and_the_client():
         (connection,) = [each for each, value in pymux._client_states.items() if value is state]
         with set_app(state.app):
             pane = pymux.arrangement.get_active_pane()
-            pymux.forward_osc(pane, "9", "4;1;42")
+            pymux.outward.forward_osc(pane, "9", "4;1;42")
             assert pane.progress == Progress(1, 42)
             assert connection.progress == Progress(1, 42)
             assert format_pymux_string(pymux, "#{window_progress}") == "42%"
             # tmux's default window list reads it through #F.
             assert format_pymux_string(pymux, "#F") == "* 42%"
 
-            pymux.forward_osc(pane, "9", "4;0")
+            pymux.outward.forward_osc(pane, "9", "4;0")
             assert connection.progress == NO_PROGRESS
             assert format_pymux_string(pymux, "#{window_progress}") == ""
         assert pymux.notification_center.notifications() == []
@@ -562,7 +563,7 @@ async def test_a_pane_s_progress_reaches_the_status_line_and_the_client():
 
 def test_copy_reaches_paste_buffer_and_clients():
     pymux, connections = make_pymux()
-    pymux.forward_osc(FakePane(), "1337", "Copy=:aGVsbG8=")
+    pymux.outward.forward_osc(FakePane(), "1337", "Copy=:aGVsbG8=")
     assert pymux.clipboard.get_data().text == "hello"
     for connection in connections:
         assert connection.written == [sequence("1337", "Copy=:aGVsbG8=")]
@@ -571,7 +572,7 @@ def test_copy_reaches_paste_buffer_and_clients():
 @pytest.mark.parametrize("mode", [Clipboard.OFF, Clipboard.EXTERNAL])
 def test_copy_follows_clipboard_option(mode):
     pymux, connections = make_pymux(clipboard=mode)
-    pymux.forward_osc(FakePane(), "1337", "Copy=:aGVsbG8=")
+    pymux.outward.forward_osc(FakePane(), "1337", "Copy=:aGVsbG8=")
     assert pymux.clipboard.get_data().text == ""
     for connection in connections:
         assert connection.written == []
@@ -580,14 +581,14 @@ def test_copy_follows_clipboard_option(mode):
 def test_clear_scrollback_travels_on():
     "The pane's screen clears its own history. Lillecarl/pymux#504."
     pymux, connections = make_pymux()
-    pymux.forward_osc(FakePane(), "1337", "ClearScrollback")
+    pymux.outward.forward_osc(FakePane(), "1337", "ClearScrollback")
     for connection in connections:
         assert connection.written == [sequence("1337", "ClearScrollback")]
 
 
 def test_clear_scrollback_with_arguments_is_dropped():
     pymux, connections = make_pymux()
-    pymux.forward_osc(FakePane(), "1337", "ClearScrollback=x")
+    pymux.outward.forward_osc(FakePane(), "1337", "ClearScrollback=x")
     for connection in connections:
         assert connection.written == []
 
@@ -610,7 +611,7 @@ def test_unparsed_namespace_stays_inside(param):
     "Images wait for their slice; the rest is unchecked."
     pymux, connections = make_pymux()
     pane = FakePane()
-    pymux.forward_osc(pane, "1337", param)
+    pymux.outward.forward_osc(pane, "1337", param)
     assert pane.user_vars == {}
     assert pane.screen.marks == []
     assert pane.current_directory is None

@@ -43,7 +43,7 @@ async def labelled(pymux, session, copying=False):
 
 async def test_a_lower_case_label_opens_its_link(pymux, monkeypatch):
     opened = []
-    monkeypatch.setattr(pymux, "open_url", lambda url, confirmed=False: opened.append((url, confirmed)))
+    monkeypatch.setattr(pymux.outward, "open_url", lambda url, confirmed=False: opened.append((url, confirmed)))
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
         await labelled(pymux, session)
@@ -73,7 +73,7 @@ async def test_the_labels_show_over_a_pane_beside_another(pymux):
 
 async def test_an_upper_case_label_copies_in_copy_mode(pymux, monkeypatch):
     copied = []
-    monkeypatch.setattr(pymux, "write_user_clipboard", copied.append)
+    monkeypatch.setattr(pymux.outward, "write_user_clipboard", copied.append)
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
         await labelled(pymux, session, copying=True)

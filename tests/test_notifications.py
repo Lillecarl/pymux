@@ -88,9 +88,9 @@ def test_osc99_is_collected_for_the_hub():
     pymux = Pymux()
     pymux._client_states = {}
     pane = FakePane()
-    pymux.forward_osc(pane, "99", "i=7:p=title:d=0;Part one")
+    pymux.outward.forward_osc(pane, "99", "i=7:p=title:d=0;Part one")
     assert pymux.notification_center.notifications() == []
-    pymux.forward_osc(pane, "99", "i=7:p=body;Part two")
+    pymux.outward.forward_osc(pane, "99", "i=7:p=body;Part two")
     (record,) = pymux.notification_center.notifications()
     assert (record.title, record.body, record.pane_id) == (
         "Part one",
@@ -393,7 +393,7 @@ async def test_the_option_keeps_the_client_where_it_is():
     async with create_session() as (pymux, state):
         with set_app(state.app):
             first = pymux.current_session.arrangement.get_active_window()
-            pymux.forward_osc(first.active_pane, "99", "i=a;Built")
+            pymux.outward.forward_osc(first.active_pane, "99", "i=a;Built")
             await run_as(pymux, state, "set-option notification-click-shows-pane off")
             await run_as(pymux, state, "new-window")
             second = pymux.current_session.arrangement.get_active_window()
@@ -412,11 +412,11 @@ async def test_steal_focus_shows_the_pane_when_the_session_allows_it():
             await run_as(pymux, state, "new-window")
             second = pymux.current_session.arrangement.get_active_window()
 
-            pymux.forward_osc(pane, "1337", "StealFocus")
+            pymux.outward.forward_osc(pane, "1337", "StealFocus")
             assert pymux.current_session.arrangement.get_active_window() is second
 
             await run_as(pymux, state, "set-option steal-focus on")
-            pymux.forward_osc(pane, "1337", "StealFocus")
+            pymux.outward.forward_osc(pane, "1337", "StealFocus")
             assert pymux.current_session.arrangement.get_active_window() is first
 
 
@@ -439,7 +439,7 @@ async def test_a_terminal_that_reports_clicks_gets_osc_777_as_osc_99():
         state.terminal_focused = False
         with set_app(state.app):
             pane = pymux.arrangement.get_active_pane()
-            pymux.forward_osc(pane, "777", "notify;Build;done")
+            pymux.outward.forward_osc(pane, "777", "notify;Build;done")
         assert [each.split(";")[1] for each in sent] == [
             "i=1:a=report:u=1:e=1:d=0:p=title",
             "i=1:a=report:u=1:e=1:p=body",
@@ -489,7 +489,7 @@ async def test_a_look_at_the_window_closes_its_notification_on_the_terminal():
         with set_app(state.app):
             first = pymux.current_session.arrangement.get_active_window()
             await run_as(pymux, state, "new-window")
-            pymux.forward_osc(first.active_pane, "99", "i=a;Built")
+            pymux.outward.forward_osc(first.active_pane, "99", "i=a;Built")
             state.terminal_focused = False
             pymux.current_session.arrangement.set_active_window(first)
             pymux.sync_pane_focus()
@@ -513,7 +513,7 @@ async def test_the_window_chooser_closes_only_what_was_chosen():
             first = pymux.current_session.arrangement.get_active_window()
             await run_as(pymux, state, "new-window")
             state.terminal_focused = False
-            pymux.forward_osc(first.active_pane, "99", "i=a;Built")
+            pymux.outward.forward_osc(first.active_pane, "99", "i=a;Built")
             state.terminal_focused = True
             await run_as(pymux, state, "choose-window")
             chooser.point_at(chooser.chooser_matches().index(first))
@@ -536,16 +536,16 @@ async def test_a_window_in_sight_sends_no_notification_out():
         connection.forward_osc = sent.append
         with set_app(state.app):
             pane = pymux.arrangement.get_active_pane()
-            pymux.forward_osc(pane, "99", "i=a;Built")
-            pymux.forward_osc(pane, "777", "notify;Build;done")
-            pymux.forward_osc(pane, "9", "Built")
+            pymux.outward.forward_osc(pane, "99", "i=a;Built")
+            pymux.outward.forward_osc(pane, "777", "notify;Build;done")
+            pymux.outward.forward_osc(pane, "9", "Built")
             assert sent == []
             # A question is not a notification.
-            pymux.forward_osc(pane, "99", "i=q:p=?;")
+            pymux.outward.forward_osc(pane, "99", "i=q:p=?;")
             assert len(sent) == 1
 
             state.terminal_focused = False
-            pymux.forward_osc(pane, "9", "Built")
+            pymux.outward.forward_osc(pane, "9", "Built")
             assert len(sent) == 2
         assert pymux.notification_center.notifications()[-1].title == "Built"
 

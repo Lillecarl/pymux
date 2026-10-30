@@ -18,7 +18,7 @@ def open_url(pymux: Pymux, args: argparse.Namespace) -> None:
     asks first follows `open-url-mode`. "-c" is the answer of a
     confirmation: it opens without asking again.
     """
-    pymux.open_url(args.url, confirmed=bool(args.c))
+    pymux.outward.open_url(args.url, confirmed=bool(args.c))
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):

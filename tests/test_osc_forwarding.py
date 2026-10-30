@@ -188,7 +188,7 @@ def make_pymux(focused=(), pane=None, clipboard=Clipboard.ON):
 def test_clipboard_write_reaches_every_client():
     pymux, connections = make_pymux()
     pymux.options.set_clipboard = Clipboard.ON
-    pymux.forward_osc(FakePane(), "52", "c;aGVsbG8=")
+    pymux.outward.forward_osc(FakePane(), "52", "c;aGVsbG8=")
     for connection in connections:
         assert connection.written == [sequence("52", "c;aGVsbG8=")]
 
@@ -196,7 +196,7 @@ def test_clipboard_write_reaches_every_client():
 def test_notification_reaches_every_client():
     "A pane out of sight is exactly what a notification is for."
     pymux, connections = make_pymux()
-    pymux.forward_osc(FakePane(), "99", "i=mine;done")
+    pymux.outward.forward_osc(FakePane(), "99", "i=mine;done")
     # The identifier is replaced by one that names the pane, so that
     # the answer of the terminal finds its way back, and a click is
     # asked for.
@@ -208,7 +208,7 @@ def test_notification_skips_client_with_no_connection():
     "The same temporary client as in `test_shape_skips_client_with_no_connection`."
     pymux, connections = make_pymux()
     pymux._client_states = {None: FakeClientState(), **pymux._client_states}
-    pymux.forward_osc(FakePane(), "99", "i=mine;done")
+    pymux.outward.forward_osc(FakePane(), "99", "i=mine;done")
     for connection in connections:
         assert connection.written == [sequence("99", "i=1:a=report;done")]
 
@@ -217,7 +217,7 @@ def test_clipboard_write_skips_client_with_no_connection():
     "Copy mode fans out the same way `forward_osc` does."
     pymux, connections = make_pymux()
     pymux._client_states = {None: FakeClientState(), **pymux._client_states}
-    pymux.write_user_clipboard("hello")
+    pymux.outward.write_user_clipboard("hello")
     for connection in connections:
         assert connection.written == [sequence("52", "c;aGVsbG8=")]
 
@@ -225,7 +225,7 @@ def test_clipboard_write_skips_client_with_no_connection():
 def test_notification_without_identifier_gets_one():
     "So a click on it can be routed. Lillecarl/pymux#779."
     pymux, connections = make_pymux()
-    pymux.forward_osc(FakePane(), "99", "d=0;half a message")
+    pymux.outward.forward_osc(FakePane(), "99", "d=0;half a message")
     assert connections[0].written == [sequence("99", "i=1:d=0:a=report;half a message")]
 
 
@@ -257,13 +257,13 @@ def test_each_terminal_gets_a_notification_in_the_osc_it_shows(source, shows, wa
     pymux, (connection, _other) = make_pymux()
     connection.notification_osc = shows
     for code, param in FROM[source]:
-        pymux.forward_osc(FakePane(), code, param)
+        pymux.outward.forward_osc(FakePane(), code, param)
     assert connection.written == [sequence(*one) for one in wanted]
 
 
 def test_a_kitty_gets_osc_777_as_osc_99():
     pymux, (connection, _other) = make_pymux()
-    pymux.forward_osc(FakePane(), "777", "notify;Build;done")
+    pymux.outward.forward_osc(FakePane(), "777", "notify;Build;done")
     assert connection.written == [
         sequence("99", "i=1:a=report:u=1:e=1:d=0:p=title;QnVpbGQ="),
         sequence("99", "i=1:a=report:u=1:e=1:p=body;ZG9uZQ=="),
@@ -272,7 +272,7 @@ def test_a_kitty_gets_osc_777_as_osc_99():
 
 def test_answer_finds_pane_that_asked():
     pymux, _connections = make_pymux()
-    pymux.forward_osc(FakePane(pane_id=7), "99", "i=mine:a=report;done")
+    pymux.outward.forward_osc(FakePane(pane_id=7), "99", "i=mine:a=report;done")
     route, param = pymux.notifications.incoming("i=1")
     assert (route.pane_id, route.reports, param) == (7, True, "i=mine")
 
@@ -288,7 +288,7 @@ def test_answer_finds_pane_that_asked():
 def test_shape_reaches_client_that_looks_at_pane():
     pane = FakePane(pointer_shape="pointer")
     pymux, connections = make_pymux(focused=[1], pane=pane)
-    pymux.forward_osc(pane, "22", "pointer")
+    pymux.outward.forward_osc(pane, "22", "pointer")
     assert connections[0].written == []
     assert connections[1].written == [sequence("22", "pointer")]
 
@@ -346,7 +346,7 @@ def test_no_pane_asks_for_no_shape():
 
 def test_unsafe_payload_reaches_nobody():
     pymux, connections = make_pymux()
-    pymux.forward_osc(FakePane(), "99", ("i=1;done" + osc("0", "owned", end=Terminator.BEL)))
+    pymux.outward.forward_osc(FakePane(), "99", ("i=1;done" + osc("0", "owned", end=Terminator.BEL)))
     for connection in connections:
         assert connection.written == []
 
@@ -356,17 +356,17 @@ def test_clipboard_option_stops_clipboard_only(mode):
     pymux, connections = make_pymux()
     pymux.options.set_clipboard = mode
 
-    pymux.forward_osc(FakePane(), "52", "c;aGVsbG8=")
+    pymux.outward.forward_osc(FakePane(), "52", "c;aGVsbG8=")
     assert connections[0].written == []
 
-    pymux.forward_osc(FakePane(), "99", "i=1;done")
+    pymux.outward.forward_osc(FakePane(), "99", "i=1;done")
     assert connections[0].written == [sequence("99", "i=1:a=report;done")]
 
 
 def test_a_pane_reaches_the_clipboard_when_the_option_says_on():
     pymux, connections = make_pymux()
     pymux.options.set_clipboard = Clipboard.ON
-    pymux.forward_osc(FakePane(), "52", "c;aGVsbG8=")
+    pymux.outward.forward_osc(FakePane(), "52", "c;aGVsbG8=")
     assert connections[0].written == [sequence("52", "c;aGVsbG8=")]
 
 
@@ -389,7 +389,7 @@ def test_broken_connection_does_not_stop_pane():
 
     pymux = Pymux()
     pymux._client_states = {BrokenConnection(): FakeClientState()}
-    pymux.forward_osc(FakePane(), "99", "i=1;done")  # Does not raise.
+    pymux.outward.forward_osc(FakePane(), "99", "i=1;done")  # Does not raise.
 
 
 def test_client_without_focus_information_gets_no_pointer_shape():
@@ -404,27 +404,27 @@ def test_client_without_focus_information_gets_no_pointer_shape():
 
 def test_what_pane_copies_reaches_paste_buffer():
     pymux, _connections = make_pymux()
-    pymux.forward_osc(FakePane(), "52", "c;aGVsbG8=")
+    pymux.outward.forward_osc(FakePane(), "52", "c;aGVsbG8=")
     assert pymux.clipboard.get_data().text == "hello"
 
 
 def test_text_of_user_survives_way_back():
     pymux, _connections = make_pymux()
-    pymux.forward_osc(FakePane(), "52", "c;QnlnZ2V0IMOkciBrbGFydA==")
+    pymux.outward.forward_osc(FakePane(), "52", "c;QnlnZ2V0IMOkciBrbGFydA==")
     assert pymux.clipboard.get_data().text == "Bygget är klart"
 
 
 def test_selection_that_is_cleared_keeps_buffer():
     "An empty payload clears a selection of the user, not the buffer."
     pymux, _connections = make_pymux()
-    pymux.forward_osc(FakePane(), "52", "c;aGVsbG8=")
-    pymux.forward_osc(FakePane(), "52", "p;")
+    pymux.outward.forward_osc(FakePane(), "52", "c;aGVsbG8=")
+    pymux.outward.forward_osc(FakePane(), "52", "p;")
     assert pymux.clipboard.get_data().text == "hello"
 
 
 def test_payload_that_is_not_base64_reaches_nothing():
     pymux, connections = make_pymux()
-    pymux.forward_osc(FakePane(), "52", "c;not base64!")
+    pymux.outward.forward_osc(FakePane(), "52", "c;not base64!")
     assert pymux.clipboard.get_data().text == ""
     assert connections[0].written == []
 
@@ -433,7 +433,7 @@ def test_payload_that_is_not_base64_reaches_nothing():
 def test_clipboard_option_stops_paste_buffer_as_well(mode):
     "A pane that may not reach the clipboard may not reach the buffer."
     pymux, _connections = make_pymux(clipboard=mode)
-    pymux.forward_osc(FakePane(), "52", "c;aGVsbG8=")
+    pymux.outward.forward_osc(FakePane(), "52", "c;aGVsbG8=")
     assert pymux.clipboard.get_data().text == ""
 
 

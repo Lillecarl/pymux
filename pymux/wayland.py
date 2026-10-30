@@ -693,7 +693,7 @@ class WaylandServer:
             return
         if target == "clipboard":
             self.pymux.clipboard.set_data(ClipboardData(text))
-        self.pymux.write_user_clipboard(text, OSC52_LETTER[target])
+        self.pymux.outward.write_user_clipboard(text, OSC52_LETTER[target])
         # The terminal holds it now, and the next paste asks there.
         _hold(compositor, target)
 

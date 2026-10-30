@@ -47,7 +47,7 @@ def _sender(pymux: Pymux) -> tuple[Pane, ServerConnection]:
     pane = find_pane(pymux, None)
     if pane is None:
         raise CommandException("There is no pane to ask from.")
-    client = pymux.download_client(pane)
+    client = pymux.outward.download_client(pane)
     if client is None:
         raise CommandException("Nobody is attached to the session of this pane, so nobody can send a file.")
     if client.options.file_transfer is FileTransfer.PASSTHROUGH:

@@ -226,7 +226,7 @@ async def a_pane(pymux, state):
 def send(pymux, pane, sequences) -> None:
     "The sequences as the pane's screen hands them over."
     for sequence in sequences:
-        pymux.forward_osc(pane, "1337", payload_of(sequence))
+        pymux.outward.forward_osc(pane, "1337", payload_of(sequence))
 
 
 def saved(packets: list[dict]) -> bytes:

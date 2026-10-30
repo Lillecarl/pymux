@@ -9,7 +9,7 @@ image to draw, which is not a download: this module reads it the same
 way and marks it, and the pane draws it (Lillecarl/pymux#789).
 
 `DownloadReader` reads the sequences of one pane and gives back each
-finished file. `Pymux.send_download` decides who saves it, and
+finished file. `Outward.send_download` decides who saves it, and
 `pymux send` writes the multipart form with `multipart_sequences`.
 Lillecarl/pymux#743.
 

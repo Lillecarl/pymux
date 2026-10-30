@@ -232,6 +232,6 @@ async def test_forwarding_asks_for_a_frame(pymux):
     pymux.options.set_clipboard = Clipboard.ON
     pane = pymux.arrangement.get_active_window().active_pane
 
-    pymux.forward_osc(pane, "52", "c;aGVsbG8=")
+    pymux.outward.forward_osc(pane, "52", "c;aGVsbG8=")
 
     assert [one for one in woke if one and "escape" in one]

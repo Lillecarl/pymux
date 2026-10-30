@@ -342,7 +342,7 @@ async def test_openurl_of_pane_opens():
         pane = await create_pane(pymux, state)
 
         payload = "OpenURL=:" + base64.b64encode(URL.encode()).decode()
-        pymux.forward_osc(pane, "1337", payload)
+        pymux.outward.forward_osc(pane, "1337", payload)
 
         await once(lambda: opens(packets), 5.0, "the pane's request never arrived")
         assert opens(packets) == [{"cmd": "open", "data": URL}]
@@ -355,7 +355,7 @@ async def test_another_subcommand_of_1337_opens_nothing():
         state, _ = await session.attach("only", SIZE)
         pane = await create_pane(pymux, state)
 
-        pymux.forward_osc(pane, "1337", "File=name=t.png;inline=1:AAAA")
+        pymux.outward.forward_osc(pane, "1337", "File=name=t.png;inline=1:AAAA")
         await anyio.sleep(0.3)
 
         assert opens(packets) == []
