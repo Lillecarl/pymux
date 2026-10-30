@@ -4206,10 +4206,12 @@ class Pymux:
         start_directory: str | None = None,
         window: Window | None = None,
         task_group: anyio.abc.TaskGroup | None = None,
+        select: bool = True,
     ) -> Pane:
         """
         Add a new process to the given window (or the active window).
-        (vsplit/hsplit). Answers the new pane.
+        (vsplit/hsplit). Answers the new pane. Without `select` the
+        focus stays where it was: `split-window -d`.
         """
         if window is None:
             window = self.arrangement.get_active_window()
@@ -4223,8 +4225,9 @@ class Pymux:
             session=self.session_showing(window),
             task_group=task_group,
         )
-        window.add_pane(pane, vsplit=vsplit)
-        pane.focus()
+        window.add_pane(pane, vsplit=vsplit, select=select)
+        if select:
+            pane.focus()
         self.invalidate(Woke.PANE_WAS_SPLIT_OFF)
         return pane
 

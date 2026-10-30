@@ -213,7 +213,7 @@ def server(tmp_path):
     assert started.returncode == 0, started.stderr.decode()
     _wait_for_server(sock)
     try:
-        _answer(sock, "split-window", "-d", "sh")
+        _answer(sock, "split-window", "-d", "--tag", "shell", "sh")
         _answer(sock, "set-buffer", "-b", "kept", "pasted after the upgrade")
         _answer(sock, "bind-key", "-n", "F5", "display-message", "bound at run time")
         _answer(sock, "sql", "--save", "kept", "SELECT id FROM jobs")
@@ -224,6 +224,10 @@ def server(tmp_path):
 
 def _pane(sock, which: int) -> str:
     "The id of the counting pane (0) or the shell (1)."
+    if which == 1:
+        # By its tag: a later `split-window -d` goes beside the counting
+        # pane, which stays active, and so before the shell.
+        return _answer(sock, "list-panes", "--tag", "shell", "-F", "#{pane_id}").split()[0]
     return _answer(sock, "list-panes", "-F", "#{pane_id}").split()[which]
 
 

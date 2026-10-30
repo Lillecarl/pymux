@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from pymux.tags import Tags
 
 
-from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands import CommandParser, add_command
 from pymux.commands.common import (
     add_format_arguments,
     add_tag_arguments,
@@ -50,16 +50,13 @@ async def _split(
         vsplit=args.h,
         start_directory=start_directory,
         window=target_window,
+        select=not args.d,
     )
     pane.tags.update(tags)
 
     if args.P:
-        window = the_window(pymux, None)
-        if target_window is not None:
-            window = target_window
-        pane = window.active_pane
-        if pane is None:
-            raise CommandException("no current pane")
+        # The new pane, which `-d` leaves inactive: not the window's active one.
+        window = target_window if target_window is not None else the_window(pymux, None)
         print_object_format(pymux, args, window=window, pane=pane)
 
 

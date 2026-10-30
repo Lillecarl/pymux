@@ -698,7 +698,7 @@ class Window:
 
         return ""
 
-    def add_pane(self, pane: Pane, vsplit: bool = False) -> None:
+    def add_pane(self, pane: Pane, vsplit: bool = False, select: bool = True) -> None:
         """
         Add another pane to this Window.
 
@@ -708,6 +708,10 @@ class Window:
         keep their widths and the row grows past the edge of the
         screen. A vertical split still stacks inside the column, which
         is what a niri column holds. Lillecarl/pymux#198.
+
+        `select` makes the new pane the active one. Without it the
+        active pane and the pane history stay as they were, which is
+        `split-window -d`.
         """
         split_cls = VSplit if vsplit else HSplit
         active = self.active_pane
@@ -717,7 +721,8 @@ class Window:
         elif self.options.strip and vsplit:
             column = self._column_of(active)
             self.root.insert(self.root.index(column) + 1, pane)
-            self.active_pane = pane
+            if select:
+                self.active_pane = pane
             self.zoom = False
             return
         else:
@@ -743,7 +748,8 @@ class Window:
                 if self.options.strip and parent is self.root:
                     self.set_column_width(new_split, self.column_width(active))
 
-        self.active_pane = pane
+        if select or active is None:
+            self.active_pane = pane
         self.zoom = False
 
     def remove_pane(self, pane: Pane) -> None:
