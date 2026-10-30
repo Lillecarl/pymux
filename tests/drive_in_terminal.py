@@ -101,7 +101,7 @@ from pathlib import Path
 # The fence, its quiet window and its first-byte bound are
 # middleman's, and the relay adopts them: `middleman.py` says what
 # each one is for.
-from middleman import FENCE, FIRST_BYTE, QUIET, fence_sequence
+from middleman import FENCE, FIRST_BYTE, QUIET, SHOWS_OSC_99, fence_sequence
 
 #: How much to move at once.
 CHUNK = 65536
@@ -248,7 +248,9 @@ class TerminalStream:
         for byte in data:
             self._step(byte)
         if self.looking_away and self.state == "ground":
-            os.write(master, FOCUS_OUT)
+            # And says it shows OSC 99, which a fence is: xterm shows
+            # none, and pymux would keep the fence. Lillecarl/pymux#497.
+            os.write(master, FOCUS_OUT + SHOWS_OSC_99)
             self.looking_away = False
 
     def look_away(self, master: int) -> None:

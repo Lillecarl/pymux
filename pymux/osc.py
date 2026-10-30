@@ -38,6 +38,7 @@ __all__ = [
     "extension_key_of",
     "file_url_dir_of",
     "ftcs_of",
+    "message",
     "message_of",
     "open_url_of",
     "progress_of",
@@ -46,6 +47,7 @@ __all__ = [
     "set_user_var",
     "set_user_var_of",
     "shell_integration_of",
+    "simple_notification",
     "simple_notification_of",
 ]
 
@@ -287,6 +289,11 @@ def simple_notification_of(param: str) -> tuple[str, str] | None:
     return title, body
 
 
+def simple_notification(title: str, body: str) -> str:
+    "The parameter of `OSC 777 ; notify ; title ; body`. A semicolon would end the title, so it becomes a comma."
+    return "notify;%s;%s" % (title.replace(";", ","), body)
+
+
 #: ConEmu's commands under OSC 9 start with a number: "4;1;50" is a
 #: progress bar, "9;path" a directory. iTerm2's message is any other text.
 _CONEMU_COMMAND = re.compile(r"^\d+(?:;|$)")
@@ -327,6 +334,16 @@ def message_of(param: str) -> str | None:
     if not param or _CONEMU_COMMAND.match(param):
         return None
     return param
+
+
+def message(title: str, body: str) -> str:
+    """
+    The parameter of iTerm2's `OSC 9 ; text`, which has one line for
+    both. A text that starts like one of ConEmu's commands ("4;" is a
+    progress) gets a space in front, so it stays a message.
+    """
+    text = "%s: %s" % (title, body) if title and body else title or body
+    return " " + text if _CONEMU_COMMAND.match(text) else text
 
 
 def copy_data_of(param: str) -> str | None:

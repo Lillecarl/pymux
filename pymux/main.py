@@ -124,6 +124,7 @@ from .osc import (
     extension_key_of,
     file_url_dir_of,
     ftcs_of,
+    message,
     message_of,
     open_url_of,
     progress_of,
@@ -131,6 +132,7 @@ from .osc import (
     request_attention_of,
     set_user_var_of,
     shell_integration_of,
+    simple_notification,
     simple_notification_of,
 )
 from .pipes import bind_and_listen_on_socket, connect_in_memory
@@ -239,6 +241,15 @@ MAX_KEYS_TO_REMEMBER = 512
 #: program that mints names without end loses the oldest, the way the
 #: notification hub does.
 MAX_USER_VARS = 64
+
+#: The notifications a terminal got as the program wrote them, in the
+#: forward of the pane's OSC: nothing is spelled again for it.
+_WENT_AS_IT_CAME = frozenset(
+    {
+        (Osc.NOTIFICATION, NotificationSource.OSC_99),
+        (Osc.MESSAGE, NotificationSource.ATTENTION),
+    }
+)
 
 #: How many notification boxes one client stacks; a new one pushes the
 #: oldest off. Lillecarl/pymux#826.
@@ -2160,16 +2171,15 @@ class Pymux:
                 logger.exception("Checking the windows for output failed.")
 
     def _notified(self, record: Notification) -> None:
-        "Mark the window a notification came from. Lillecarl/pymux#767."
+        "Mark the window a notification came from, and tell each client. Lillecarl/pymux#767."
         self._pop_up(record)
+        self._emit(record)
         found = self.window_of_pane(record.pane_id)
         if found is None:
             return
-        session, window, pane = found
+        session, window, _pane = found
         if session.arrangement.notify(window, self.apps):
             self.invalidate(Woke.WINDOW_MARKED)
-        if record.source not in (NotificationSource.OSC_99, NotificationSource.UNKNOWN):
-            self._send_clickable(record, pane)
 
     def _pop_up(self, record: Notification) -> None:
         """
@@ -2218,28 +2228,43 @@ class Pymux:
                 if record.pane_id in seen:
                     self.drop_popup(client_state, record)
 
-    def _send_clickable(self, record: Notification, pane: Pane) -> None:
+    def _emit(self, record: Notification) -> None:
         """
-        Send a notification pymux recorded, from OSC 777, `pymux notify`
-        or an attention request, as OSC 99 to each terminal that reports
-        a click, so the click shows `pane`. Lillecarl/pymux#779.
+        Send a finished notification to each client's terminal, spelled
+        in the OSC that terminal shows, whichever OSC the program used.
+        OSC 99 to an OSC 99 terminal already went as it came, chunk by
+        chunk, with everything the program asked of it; and iTerm2 got
+        an attention request as it came. Lillecarl/pymux#497.
+
+        As OSC 99 it carries an identifier of pymux's own, so a click
+        shows the pane. Lillecarl/pymux#779.
         """
-        clickers = [
-            connection
-            for connection in self._client_states
-            if connection is not None and "report" in connection.notification_actions
-        ]
-        if not clickers or pane.pane_id in self._panes_in_sight():
+        if record.pane_id is not None and record.pane_id in self._panes_in_sight():
             return
-        ours = self.notifications.own(pane.pane_id)
-        sequences = [
-            build_osc(Osc.NOTIFICATION, param) for param in osc99_of(ours, record.title, record.body, record.urgency)
-        ]
-        for connection in clickers:
-            for sequence in sequences:
-                if sequence is not None:
-                    connection.forward_osc(sequence)
-        self.invalidate(Woke.NOTIFICATION_SENT)
+        spelled: dict[Osc, list[str]] = {}
+        for connection, client_state in self._client_states.items():
+            if connection is None or client_state.temporary:
+                continue
+            osc = connection.notification_osc
+            if osc is None or (osc, record.source) in _WENT_AS_IT_CAME:
+                continue
+            if osc not in spelled:
+                spelled[osc] = self._spell(osc, record)
+            for sequence in spelled[osc]:
+                connection.forward_osc(sequence)
+        if spelled:
+            self.invalidate(Woke.NOTIFICATION_SENT)
+
+    def _spell(self, osc: Osc, record: Notification) -> list[str]:
+        "The sequences that say `record` in `osc`."
+        if osc is Osc.NOTIFICATION:
+            ours = self.notifications.own(record.pane_id)
+            params = osc99_of(ours, record.title, record.body, record.urgency)
+        elif osc is Osc.SIMPLE_NOTIFICATION:
+            params = [simple_notification(record.title, record.body)]
+        else:
+            params = [message(record.title, record.body)]
+        return [sequence for param in params if (sequence := build_osc(osc, param)) is not None]
 
     def show_pane_on_click(self, client_state: ClientState, pane: Pane) -> None:
         "Take this client to the pane a clicked notification came from, unless its session says no."
@@ -3828,10 +3853,18 @@ class Pymux:
             # The clipboard and a notification come from any pane: a
             # build that ends in a pane out of sight is exactly what a
             # notification is for.
+            #
+            # A notification reaches each terminal in the OSC that
+            # terminal shows, and `_emit` spells it once it is
+            # finished. Only OSC 99 to a terminal that shows OSC 99 goes
+            # as it came: chunks, buttons, closes and all.
+            # Lillecarl/pymux#497.
             for connection in self._client_states:
                 # No connection is a socket command's temporary
                 # client: nothing to send to. Lillecarl/pymux#493.
-                if connection is None or (recorded and "report" in connection.notification_actions):
+                if connection is None or code in (Osc.SIMPLE_NOTIFICATION, Osc.MESSAGE):
+                    continue
+                if code == Osc.NOTIFICATION and connection.notification_osc is not Osc.NOTIFICATION:
                     continue
                 connection.forward_osc(sequence)
 

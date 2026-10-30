@@ -16,6 +16,7 @@ from types import SimpleNamespace
 
 import pytest
 from prompt_toolkit.application.current import set_app
+from pyte.osc import Osc
 from pyte.page import RowMark
 from session import create_session
 
@@ -48,6 +49,9 @@ class FakeConnection:
     def __init__(self, notification_actions=frozenset()):
         self.written = []
         self.notification_actions = notification_actions
+        # An iTerm2: it shows OSC 9, and an attention request as it came.
+        # Lillecarl/pymux#497.
+        self.notification_osc = Osc.MESSAGE
 
     def forward_osc(self, data):
         self.written.append(data)
@@ -478,8 +482,9 @@ def test_a_simple_notification_records_hub_and_travels_on():
     pymux.forward_osc(FakePane(pane_id=7), "777", "notify;Build;done; 3 warnings")
     (record,) = pymux.notification_center.notifications()
     assert (record.title, record.body, record.pane_id) == ("Build", "done; 3 warnings", 7)
+    # Spelled for iTerm2, which shows OSC 9. Lillecarl/pymux#497.
     for connection in connections:
-        assert connection.written == [sequence("777", "notify;Build;done; 3 warnings")]
+        assert connection.written == [sequence("9", "Build: done; 3 warnings")]
 
 
 @pytest.mark.parametrize("param", ["preexec", "notify", "notify;", "notify;;"])

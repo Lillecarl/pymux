@@ -13,7 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 from pyte import escape
-from pyte.osc import PointerShapes
+from pyte.osc import Osc, PointerShapes
 from pyte.sequences import Terminator, csi, osc
 
 from pymux.enums import Clipboard, NotificationPopups
@@ -111,6 +111,8 @@ class FakeConnection:
         self.written = []
         self._pointer_shape_sent = ""
         self.notification_actions = frozenset()
+        # A kitty: it shows OSC 99. Lillecarl/pymux#497.
+        self.notification_osc = Osc.NOTIFICATION
         self.pointer_cell = None
 
     def forward_osc(self, data):
@@ -225,6 +227,47 @@ def test_notification_without_identifier_gets_one():
     pymux, connections = make_pymux()
     pymux.forward_osc(FakePane(), "99", "d=0;half a message")
     assert connections[0].written == [sequence("99", "i=1:d=0:a=report;half a message")]
+
+
+#: What a program writes, as (code, parameter) chunks. OSC 99 comes in
+#: two, so the second is a body: `d=0` says more follows.
+FROM = {
+    "osc 99": [("99", "i=mine:d=0:p=title;Build"), ("99", "i=mine:p=body;done")],
+    "osc 777": [("777", "notify;Build;done")],
+    "osc 9": [("9", "Build done")],
+}
+
+
+@pytest.mark.parametrize(
+    ("source", "shows", "wanted"),
+    [
+        ("osc 99", Osc.SIMPLE_NOTIFICATION, [("777", "notify;Build;done")]),
+        ("osc 99", Osc.MESSAGE, [("9", "Build: done")]),
+        ("osc 777", Osc.SIMPLE_NOTIFICATION, [("777", "notify;Build;done")]),
+        ("osc 777", Osc.MESSAGE, [("9", "Build: done")]),
+        ("osc 9", Osc.SIMPLE_NOTIFICATION, [("777", "notify;Build done;")]),
+        ("osc 9", Osc.MESSAGE, [("9", "Build done")]),
+        ("osc 99", None, []),
+        ("osc 777", None, []),
+        ("osc 9", None, []),
+    ],
+)
+def test_each_terminal_gets_a_notification_in_the_osc_it_shows(source, shows, wanted):
+    "Every notification OSC in, every one out, per client. Lillecarl/pymux#497."
+    pymux, (connection, _other) = make_pymux()
+    connection.notification_osc = shows
+    for code, param in FROM[source]:
+        pymux.forward_osc(FakePane(), code, param)
+    assert connection.written == [sequence(*one) for one in wanted]
+
+
+def test_a_kitty_gets_osc_777_as_osc_99():
+    pymux, (connection, _other) = make_pymux()
+    pymux.forward_osc(FakePane(), "777", "notify;Build;done")
+    assert connection.written == [
+        sequence("99", "i=1:a=report:u=1:e=1:d=0:p=title;QnVpbGQ="),
+        sequence("99", "i=1:a=report:u=1:e=1:p=body;ZG9uZQ=="),
+    ]
 
 
 def test_answer_finds_pane_that_asked():

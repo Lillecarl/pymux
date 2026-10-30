@@ -16,6 +16,7 @@ import re
 from types import SimpleNamespace
 
 from prompt_toolkit.application.current import set_app
+from pyte.osc import Osc
 from run_commands import run_as
 from session import create_session
 
@@ -369,6 +370,7 @@ async def test_a_click_on_a_notification_shows_its_pane():
     async with create_session() as (pymux, state):
         (connection,) = [each for each, value in pymux._client_states.items() if value is state]
         connection.notification_actions = frozenset({"focus", "report"})
+        connection.notification_osc = Osc.NOTIFICATION
         sent = []
         connection.forward_osc = sent.append
         # Out of sight, so the notification goes out. Lillecarl/pymux#799.
@@ -427,10 +429,11 @@ def test_the_query_answer_says_what_the_terminal_takes():
 
 
 async def test_a_terminal_that_reports_clicks_gets_osc_777_as_osc_99():
-    "Only that one: a terminal that speaks OSC 777 alone gets it as it was (`test_shell_state`)."
+    "A terminal that shows OSC 99 gets every notification as one, so a click shows the pane."
     async with create_session() as (pymux, state):
         (connection,) = [each for each, value in pymux._client_states.items() if value is state]
         connection.notification_actions = frozenset({"report"})
+        connection.notification_osc = Osc.NOTIFICATION
         sent = []
         connection.forward_osc = sent.append
         state.terminal_focused = False
@@ -528,6 +531,7 @@ async def test_a_window_in_sight_sends_no_notification_out():
     """
     async with create_session() as (pymux, state):
         (connection,) = [each for each, value in pymux._client_states.items() if value is state]
+        connection.notification_osc = Osc.NOTIFICATION
         sent = []
         connection.forward_osc = sent.append
         with set_app(state.app):

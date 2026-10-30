@@ -70,7 +70,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from pyterm_pytest.deadline import Deadline
 
-from tests.drive_with_pty import Terminal, run_cli
+from tests.drive_with_pty import SHOWS_OSC_99, Terminal, run_cli
 
 #: How long the wire has to stay quiet before `settle` stops reading,
 #: in seconds. `settle` reads the wire while `wait_for_size` waits, and
@@ -215,7 +215,7 @@ class Pane:
         # The fence is a notification, and one from the window a person
         # looks at stays inside pymux. A terminal has the focus until it
         # says otherwise, so this one looks away. Lillecarl/pymux#799.
-        self.terminal.write(b"\x1b[O")
+        self.terminal.write(b"\x1b[O" + SHOWS_OSC_99)
         self.terminal.drain(0.5)
         self.wait_for_size()
 

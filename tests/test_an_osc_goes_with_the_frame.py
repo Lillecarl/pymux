@@ -182,6 +182,8 @@ async def test_a_real_client_holds_it_through_a_flush_between_frames():
             # A notification of a window in sight stays inside.
             # Lillecarl/pymux#799.
             connection.client_state.terminal_focused = False
+            # A kitty, so the fence goes as it came. Lillecarl/pymux#497.
+            connection.answered_notification_query = True
 
             # The fence is a notification, and its box would cover the line.
             connection.client_state.options.notification_popups = NotificationPopups.OFF

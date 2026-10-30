@@ -451,9 +451,11 @@ class NotificationRoutes:
         self._forget_old()
         return replace_identifier(metadata, ours) + semicolon + text
 
-    def own(self, pane_id: PaneId) -> str:
-        "An identifier for a notification pymux sends itself, about this pane."
+    def own(self, pane_id: PaneId | None) -> str:
+        "An identifier for a notification pymux sends itself, about this pane; one about no pane routes nowhere."
         ours = self._mint()
+        if pane_id is None:
+            return ours
         self._incoming[ours] = Route(pane_id, "")
         self._shown[ours] = pane_id
         self._forget_old()

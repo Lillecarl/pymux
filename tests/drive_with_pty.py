@@ -78,6 +78,7 @@ from pymux.blocks import LOWER_HALF, UPPER_HALF
 from pymux.colors import TRUECOLOR_PROBE
 from pymux.graphics import CELL_SIZE_QUERY
 from pymux.graphics import QUERY_SEQUENCE as GRAPHICS_QUERY
+from pymux.notifications import QUERY_IDENTIFIER
 
 REPO_ROOT = Path(__file__).parent.parent
 
@@ -850,6 +851,15 @@ class Terminal(Attached):
 # ----------------------------------------------------------------------
 
 
+#: What kitty 0.49.2 answers pymux's OSC 99 query. A check says it for
+#: the terminal it plays, because pymux passes an OSC 99 on as it came
+#: only to a terminal that shows OSC 99. Lillecarl/pymux#497.
+SHOWS_OSC_99 = (
+    b"\x1b]99;i=%s:p=?;a=focus,report:o=always,unfocused,invisible:u=0,1,2:p=title,body,?,close,icon,alive,buttons\x1b\\"
+    % QUERY_IDENTIFIER.encode()
+)
+
+
 def check_osc_sequences(terminal, mark):
     """
     The OSC sequences of the pane that reach the terminal, and the two
@@ -873,7 +883,7 @@ def check_osc_sequences(terminal, mark):
     assert OSC_CLIPBOARD_QUERY.encode() not in tail, "the pane read the clipboard of the user"
 
     away = terminal.mark()
-    terminal.write(b"\x1b[O")
+    terminal.write(b"\x1b[O" + SHOWS_OSC_99)
     terminal.write(b"N")
     terminal.wait_for(b"\x1b]99;i=", since=away)
     found = re.search(OSC_NOTIFICATION_RE, terminal.since(away))
