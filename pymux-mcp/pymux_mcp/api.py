@@ -17,6 +17,7 @@ from libpymux import CommandError, Job, Pane, Server, Session, Window
 from libpymux.operations import WaitFor
 from pydantic import BaseModel, ConfigDict, Field
 
+from . import browser, cdp
 from .fonts import bundled
 from .registry import Registry
 
@@ -595,3 +596,170 @@ async def _job(server: Server, job_id: int) -> Job:
     if found is None:
         raise LookupError("no job %d; job.list shows the ones there are" % (job_id,))
     return found
+
+
+# -- browsers --------------------------------------------------------------
+
+BrowserName = Annotated[str, Field(description="The browser's name, as `browser.open` was given it.")]
+Tab = Annotated[str | None, Field(description="A tab's target id from `browser.tabs`; the first tab when left out.")]
+Ref = Annotated[str | None, Field(description="A ref from `browser.snapshot`: `e12`.")]
+Selector = Annotated[str | None, Field(description="A CSS selector, for an element no snapshot named.")]
+
+
+@operation("browser.open")
+async def open_browser(
+    server: Server,
+    name: Annotated[str, Field(description="What the other browser operations call it.")] = "browser",
+    seat: Annotated[
+        browser.Seat,
+        Field(
+            description=(
+                "`pane`: a window of this server that a person attached can watch. `headless`: nothing to watch."
+            )
+        ),
+    ] = browser.Seat.PANE,
+    url: str = "about:blank",
+    session: Annotated[
+        str | None, Field(description="For `pane`: the session's name; the oldest session when left out.")
+    ] = None,
+    executable: Annotated[
+        str | None, Field(description="Chromium to run; PYMUX_MCP_CHROMIUM or `chromium` on the PATH when left out.")
+    ] = None,
+    arguments: Annotated[list[str] | None, Field(description="More command line for Chromium.")] = None,
+) -> Json:
+    """
+    Start a Chromium to drive, and answer it once it listens.
+
+    It runs until `browser.close`, whether this server goes or not:
+    pymux holds it, as a window pane or a job. A `pane` browser opens in
+    a window that is not in front.
+    """
+    opened = await browser.open_browser(server, name, seat, url, session, executable, arguments or ())
+    return opened.json()
+
+
+@operation("browser.list")
+async def list_browsers(server: Server) -> list[Json]:
+    "Every browser open, with what holds it."
+    return [one.json() for one in await browser.every(server)]
+
+
+@operation("browser.close")
+async def close_browser(server: Server, name: BrowserName = "browser") -> None:
+    "Stop a browser, and take its window or job and its profile away."
+    await browser.close(await browser.find(server, name))
+
+
+@operation("browser.tabs")
+async def browser_tabs(server: Server, name: BrowserName = "browser") -> list[Json]:
+    "A browser's tabs: each one's target id, title and address."
+    found = await browser.find(server, name)
+    endpoint = found.endpoint()
+    if endpoint is None:
+        raise browser.BrowserGone("the browser %r is not listening" % (name,))
+    async with cdp.connected(endpoint) as connection:
+        return [
+            {"tab": one["targetId"], "title": one["title"], "url": one["url"]} for one in await browser.tabs(connection)
+        ]
+
+
+@operation("browser.goto")
+async def browser_goto(
+    server: Server, url: str, name: BrowserName = "browser", tab: Tab = None, timeout: Seconds = 30.0
+) -> Json:
+    "Load an address in a tab, and wait for it to load or `timeout`."
+    async with browser.tab(server, name, tab) as page:
+        return await browser.goto(page, url, timeout)
+
+
+@operation("browser.snapshot")
+async def browser_snapshot(
+    server: Server,
+    name: BrowserName = "browser",
+    tab: Tab = None,
+    limit: Annotated[int, Field(gt=0, description="The most lines to answer.")] = 400,
+) -> str:
+    """
+    What a tab shows, as its accessibility tree: one line a node.
+
+    Each node an operation can act on carries a ref, `[ref=e12]`, which
+    `browser.click` and `browser.type` take. A ref stays good until the
+    page drops that element.
+    """
+    async with browser.tab(server, name, tab) as page:
+        return await browser.snapshot(page, limit)
+
+
+@operation("browser.click")
+async def browser_click(
+    server: Server, name: BrowserName = "browser", ref: Ref = None, selector: Selector = None, tab: Tab = None
+) -> Json:
+    "Click an element, named by a ref or a CSS selector, at its centre."
+    async with browser.tab(server, name, tab) as page:
+        return await browser.click(page, ref, selector)
+
+
+@operation("browser.type")
+async def browser_type(
+    server: Server,
+    text: str,
+    name: BrowserName = "browser",
+    ref: Ref = None,
+    selector: Selector = None,
+    clear: Annotated[bool, Field(description="Empty the element first.")] = False,
+    enter: Annotated[bool, Field(description="Press Enter after the text.")] = False,
+    tab: Tab = None,
+) -> None:
+    "Type text into an element, or where the focus is when none is named."
+    async with browser.tab(server, name, tab) as page:
+        await browser.type_text(page, text, ref, selector, clear)
+        if enter:
+            await browser.press(page, "Enter")
+
+
+@operation("browser.press")
+async def browser_press(
+    server: Server,
+    key: Annotated[str, Field(description='A character, or a key by its DOM name: "Enter", "Escape", "ArrowDown".')],
+    name: BrowserName = "browser",
+    tab: Tab = None,
+) -> None:
+    "Press one key where the focus is."
+    async with browser.tab(server, name, tab) as page:
+        await browser.press(page, key)
+
+
+@operation("browser.evaluate")
+async def browser_evaluate(
+    server: Server,
+    expression: Annotated[str, Field(description="JavaScript; a promise is awaited.")],
+    name: BrowserName = "browser",
+    tab: Tab = None,
+) -> Any:
+    "Run JavaScript in a tab, and answer its value as JSON."
+    async with browser.tab(server, name, tab) as page:
+        return await browser.evaluate(page, expression)
+
+
+@operation("browser.screenshot")
+async def browser_screenshot(
+    server: Server,
+    name: BrowserName = "browser",
+    tab: Tab = None,
+    full_page: Annotated[bool, Field(description="The whole page, not only what the window shows.")] = False,
+) -> Png:
+    "A picture of a tab."
+    async with browser.tab(server, name, tab) as page:
+        return Png(await browser.screenshot(page, full_page))
+
+
+@operation("browser.console")
+async def browser_console(
+    server: Server,
+    name: BrowserName = "browser",
+    tab: Tab = None,
+    limit: Annotated[int, Field(gt=0, description="The most messages to answer, the latest ones.")] = 50,
+) -> list[Json]:
+    "What a tab logged to its console, and the exceptions it threw, oldest first."
+    async with browser.tab(server, name, tab) as page:
+        return await browser.console(page, limit)

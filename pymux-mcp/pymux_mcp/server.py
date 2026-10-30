@@ -15,26 +15,27 @@ import json
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-import pydantic
 from libpymux import CommandError, Server, ServerNotRunning
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ImageContent
 
 from .api import OPERATIONS, Png
+from .cdp import CDPError
 
 __all__ = ["build", "describe", "render"]
 
 INSTRUCTIONS = """\
-Drive the pymux terminal multiplexer: sessions, windows, panes, and jobs
-that run without a pane. Call `pymux` with an operation and its
+Drive the pymux terminal multiplexer: sessions, windows, panes, jobs
+that run without a pane, and Chromium browsers a person can watch
+(`browser.open`). Call `pymux` with an operation and its
 arguments; `pymux_describe` lists the operations, and with one name
 answers its arguments as JSON Schema. Start with the operation `tree`.
 """
 
 #: The errors an agent can act on. Anything else is a bug in this server
-#: and stays a traceback.
-_ANSWERABLE = (LookupError, CommandError, ServerNotRunning, pydantic.ValidationError)
+#: and stays a traceback. pydantic's `ValidationError` is a `ValueError`.
+_ANSWERABLE = (LookupError, ValueError, CommandError, ServerNotRunning, CDPError)
 
 
 def render(result: Any) -> str | ImageContent:

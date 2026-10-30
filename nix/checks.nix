@@ -34,6 +34,8 @@
   xclip,
   # A real browser in a window pane.
   firefox,
+  # The browser pymux-mcp drives over the DevTools protocol.
+  chromium,
   waylandProtocols,
   callPackage,
   xorg-server,
@@ -757,6 +759,21 @@ in
           -o faulthandler_timeout=120 \
           ${lib.optionalString (firefoxTests != "") "-k ${lib.escapeShellArg firefoxTests}"} \
           tests/test_firefox_in_a_window_pane.py
+      '';
+
+  # pymux-mcp's browsers against a real server: Chromium headless as a
+  # job, and headful in a window pane. Lillecarl/pymux#822.
+  browsers =
+    runInSandbox
+      {
+        name = "pymux-browsers";
+        inputs = [ chromium ];
+      }
+      ''
+        # Chromium aborts in Skia at its first text with no fontconfig.
+        export FONTCONFIG_FILE=${makeFontsConf { fontDirectories = [ dejavu_fonts ]; }}
+        ${waylandTestEnv}/bin/python -m pytest -q -p no:cacheprovider \
+          -o faulthandler_timeout=120 tests/test_mcp_browsers.py
       '';
 
   # Sound between panes and a client, through a real PipeWire and a

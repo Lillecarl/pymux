@@ -34,6 +34,24 @@ ids that the other operations take.
 
 `command` runs any pymux command line, for what the rest do not cover.
 
+## Browsers
+
+`browser.open` starts a Chromium for an agent to drive over the DevTools
+protocol: `headless` as a job, or `pane` in a window pane that anybody
+attached can watch. `browser.snapshot` answers the page as its
+accessibility tree, with a ref on each element that `browser.click` and
+`browser.type` take. `browser.goto`, `browser.press`, `browser.evaluate`,
+`browser.screenshot`, `browser.console`, `browser.tabs`, `browser.list`
+and `browser.close` do the rest.
+
+pymux holds each browser, so it outlives this process. Every operation
+connects to the browser again, through the port Chromium writes into
+its profile. That port listens on the server machine's loopback, so
+pymux-mcp has to run on that machine.
+
+Chromium comes from `executable`, then `PYMUX_MCP_CHROMIUM`, then
+`chromium` on the PATH.
+
 ## One place for each argument
 
 Each operation is a typed async function over libpymux, in
@@ -53,3 +71,5 @@ environment stamps the job.
 `tests/test_pymux_mcp.py` in pymux checks the registry and the schemas
 with no server. `check_pymux_mcp` in `tests/drive_with_pty.py` drives the
 two tools through an MCP client against a server that is really there.
+`tests/test_mcp_browsers.py` drives a real Chromium in both seats, in
+`checks.pymux-browsers`.

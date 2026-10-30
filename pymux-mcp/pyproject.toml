@@ -24,6 +24,8 @@ dependencies = [
     # sent, and its JSON Schema is what `pymux_describe` answers and what
     # the OpenAPI document is built from.
     "pydantic>=2.0.0",
+    # The DevTools protocol of the browsers it drives.
+    "websockets>=13.0",
 ]
 
 [project.urls]
