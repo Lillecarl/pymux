@@ -249,6 +249,29 @@ async def test_a_marked_picture_names_what_it_shows_by_ref(server):
         await call(server, "browser.close", name="probe")
 
 
+COVERED_PAGE = (
+    "data:text/html;base64,"
+    + base64.b64encode(
+        b"<title>covered</title><style>button{display:block;margin:40px}</style>"
+        b"<button>Under</button><div style='height:200px'></div><button>Clear</button>"
+        b"<div role=dialog style='position:fixed;top:0;left:0;right:0;height:150px;background:#fff'>"
+        b"<button>Accept</button></div>"
+    ).decode()
+)
+
+
+async def test_a_mark_goes_only_on_what_a_click_reaches(server):
+    "A dialog over the page covers the button under it: a click there goes to the dialog."
+    await call(server, "browser.open", name="probe", seat="headless", url=COVERED_PAGE, arguments=ARGUMENTS)
+    try:
+        shot = await call(server, "browser.screenshot", name="probe", marks=True, fit=None)
+        named = [line.split(" ", 2)[2] for line in shot.caption.splitlines()]
+        assert '"Accept"' in named and '"Clear"' in named, named
+        assert '"Under"' not in named, named
+    finally:
+        await call(server, "browser.close", name="probe")
+
+
 async def test_a_point_on_the_picture_names_the_element_there(server):
     await call(server, "browser.open", name="probe", seat="headless", url=PAGE, arguments=ARGUMENTS)
     try:

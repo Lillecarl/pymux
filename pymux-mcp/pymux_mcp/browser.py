@@ -997,6 +997,37 @@ async def marks(page: Page) -> list[Mark]:
     return list(found.values())
 
 
+async def reachable(page: Page, found: Sequence[Mark]) -> list[Mark]:
+    """
+    The marks a click at their centre reaches: what is topmost there is
+    the element or inside it. A dialog over the page covers the links
+    under it, and a mark on one would send a click into the dialog.
+    The marks must be in the viewport, where a hit test answers.
+    """
+    if not found:
+        return []
+    snapshot = await page.send("DOMSnapshot.captureSnapshot", {"computedStyles": []})
+    (top, *_frames) = snapshot["documents"]
+    backend, parents = top["nodes"]["backendNodeId"], top["nodes"]["parentIndex"]
+    parent_of = {backend[index]: backend[parent] for index, parent in enumerate(parents) if parent >= 0}
+    await page.send("DOM.enable")
+    kept = []
+    for mark in found:
+        try:
+            hit = await page.send(
+                "DOM.getNodeForLocation",
+                {"x": round(mark.x + mark.width / 2), "y": round(mark.y + mark.height / 2)},
+            )
+        except CDPError:
+            continue
+        wanted, node = _backend(mark.ref), hit["backendNodeId"]
+        while node is not None and node != wanted:
+            node = parent_of.get(node)
+        if node is not None:
+            kept.append(mark)
+    return kept
+
+
 def _within(mark: Mark, clip: Mapping[str, float]) -> bool:
     return (
         mark.x < clip["x"] + clip["width"]
@@ -1057,7 +1088,7 @@ async def screenshot(page: Page, full_page: bool, fit: int | None, marked: bool 
     png = base64.b64decode(answer["data"])
     if not marked:
         return png, []
-    found = [mark for mark in found if _within(mark, clip)]
+    found = await reachable(page, [mark for mark in found if _within(mark, clip)])
     return draw_marks(png, clip, found), found
 
 
