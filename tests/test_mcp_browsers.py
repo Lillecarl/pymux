@@ -8,6 +8,7 @@ Runs in `checks.pymux-browsers`, which puts Chromium on the PATH.
 from __future__ import annotations
 
 import base64
+import io
 import json
 import os
 import shutil
@@ -25,6 +26,7 @@ CHROMIUM = shutil.which("chromium")
 pytestmark = pytest.mark.skipif(CHROMIUM is None, reason="no chromium on the PATH")
 
 from libpymux.connection import CommandResult
+from PIL import Image, ImageColor
 from pymux_mcp import browser
 from pymux_mcp.api import OPERATIONS, Png
 
@@ -211,6 +213,33 @@ async def test_a_setting_is_read_and_set_without_taking_the_front(server):
             await call(server, "browser.setting", name="probe", key="no.such.setting")
         # The settings tab came and went; the page is the one tab.
         assert [tab["title"] for tab in await call(server, "browser.tabs", name="probe")] == ["probe"]
+    finally:
+        await call(server, "browser.close", name="probe")
+
+
+async def test_a_marked_picture_names_what_it_shows_by_ref(server):
+    "An agent picks a ref off the picture, and click takes it: no snapshot of the page."
+    await call(server, "browser.open", name="probe", seat="headless", url=PAGE, arguments=ARGUMENTS)
+    try:
+        shot = await call(server, "browser.screenshot", name="probe", marks=True, fit=None)
+        lines = shot.caption.splitlines()
+        snapshot = await call(server, "browser.snapshot", name="probe")
+        go = ref(next(line for line in snapshot.splitlines() if '"Go"' in line))
+        word = ref(next(line for line in snapshot.splitlines() if "textbox" in line))
+        assert '%s button "Go"' % (go,) in lines, lines
+        assert '%s textbox "word"' % (word,) in lines, lines
+
+        # The box is drawn where the button is, in a mark colour.
+        async with browser.tab(server, "probe") as page:
+            (button,) = [mark for mark in await browser.marks(page) if mark.ref == go]
+        picture = Image.open(io.BytesIO(shot.data)).convert("RGB")
+        colours = {ImageColor.getrgb(colour) for colour in browser.MARK_COLOURS}
+        assert picture.getpixel((int(button.x) + 1, int(button.y + button.height / 2))) in colours
+
+        await call(server, "browser.click", name="probe", ref=go)
+        assert await call(server, "browser.evaluate", name="probe", expression="document.title") == "done"
+        plain = await call(server, "browser.screenshot", name="probe", fit=None)
+        assert plain.caption == ""
     finally:
         await call(server, "browser.close", name="probe")
 

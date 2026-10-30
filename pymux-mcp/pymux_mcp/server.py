@@ -20,7 +20,7 @@ import anyio
 from libpymux import CommandError, Server, ServerNotRunning
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
-from mcp.types import ImageContent
+from mcp.types import ImageContent, TextContent
 
 from . import browser
 from .api import OPERATIONS, Png
@@ -41,12 +41,13 @@ answers its arguments as JSON Schema. Start with the operation `tree`.
 _ANSWERABLE = (LookupError, ValueError, CommandError, ServerNotRunning, CDPError)
 
 
-def render(result: Any) -> str | ImageContent:
+def render(result: Any) -> str | ImageContent | list[ImageContent | TextContent]:
     "An operation's answer as the agent reads it: text as it is, a picture as an image, anything else as JSON."
     if isinstance(result, str):
         return result
     if isinstance(result, Png):
-        return ImageContent(type="image", data=base64.b64encode(result.data).decode("ascii"), mimeType="image/png")
+        image = ImageContent(type="image", data=base64.b64encode(result.data).decode("ascii"), mimeType="image/png")
+        return [image, TextContent(type="text", text=result.caption)] if result.caption else image
     if result is None:
         return "ok"
     return json.dumps(result, ensure_ascii=False)
@@ -82,7 +83,9 @@ def build(server_for: Callable[[], Awaitable[Server]]) -> FastMCP:
     # At INFO the SDK writes a line to stderr for every request.
     mcp = FastMCP("pymux", instructions=INSTRUCTIONS, log_level="WARNING", lifespan=collecting)
 
-    async def pymux(op: str, args: dict[str, Any] | None = None) -> str | ImageContent:
+    async def pymux(
+        op: str, args: dict[str, Any] | None = None
+    ) -> str | ImageContent | list[ImageContent | TextContent]:
         "Run one pymux operation. `pymux_describe` lists them; start with `tree`."
         try:
             return render(await OPERATIONS.call(await server_for(), op, args or {}))

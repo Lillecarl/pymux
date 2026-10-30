@@ -26,6 +26,8 @@ dependencies = [
     "pydantic>=2.0.0",
     # The DevTools protocol of the browsers it drives.
     "websockets>=13.0",
+    # Refs drawn on a browser's picture.
+    "pillow>=10.1.0",
 ]
 
 [project.urls]

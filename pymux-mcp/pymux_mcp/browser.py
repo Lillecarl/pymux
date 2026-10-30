@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import base64
 import contextlib
+import io
 import json
 import os
 import re
@@ -37,10 +38,11 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequenc
 from contextlib import asynccontextmanager
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, NamedTuple
 
 import anyio
 from libpymux import Job, Pane, Server, Window
+from PIL import Image, ImageDraw, ImageFont
 
 from .cdp import CDPError, Connection, Page, connected
 
@@ -678,13 +680,117 @@ async def press(page: Page, key: str) -> None:
     await page.send("Input.dispatchKeyEvent", {**common, "type": "keyUp"})
 
 
-async def screenshot(page: Page, full_page: bool, fit: int | None) -> bytes:
+#: The roles a person acts on: what `marks` labels on a picture.
+ACTIONABLE: Final = frozenset(
+    {
+        "button",
+        "link",
+        "textbox",
+        "searchbox",
+        "combobox",
+        "checkbox",
+        "radio",
+        "switch",
+        "slider",
+        "spinbutton",
+        "menuitem",
+        "menuitemcheckbox",
+        "menuitemradio",
+        "tab",
+        "option",
+        "listbox",
+        "treeitem",
+    }
+)
+#: Mark colours in turn, so neighbours differ; each carries white text.
+MARK_COLOURS: Final = ("#d7263d", "#1b6ca8", "#2e8540", "#8e44ad", "#c45500")
+LABEL_SIZE: Final = 12
+
+
+class Mark(NamedTuple):
+    "An element a person can act on, and where it is on the page, in CSS pixels."
+
+    ref: str
+    role: str
+    name: str
+    x: float
+    y: float
+    width: float
+    height: float
+
+    def line(self) -> str:
+        return "%s %s %s" % (self.ref, self.role, json.dumps(self.name, ensure_ascii=False))
+
+
+async def marks(page: Page) -> list[Mark]:
     """
-    A PNG of the tab, its longest edge `fit` pixels at most.
+    Every element of the top document a person can act on that has a
+    box: its role and name from the accessibility tree, and its box from
+    one `DOMSnapshot.captureSnapshot`, which holds every box at once.
+    An element inside a frame is left out, since its box counts from
+    the frame.
+    """
+    await page.send("Accessibility.enable")
+    wanted: dict[int, tuple[str, str]] = {}
+    for node in (await page.send("Accessibility.getFullAXTree"))["nodes"]:
+        role = str((node.get("role") or {}).get("value", ""))
+        if node.get("ignored") or role not in ACTIONABLE or "backendDOMNodeId" not in node:
+            continue
+        wanted[node["backendDOMNodeId"]] = (role, str((node.get("name") or {}).get("value", "")))
+    snapshot = await page.send("DOMSnapshot.captureSnapshot", {"computedStyles": []})
+    (top, *_frames) = snapshot["documents"]
+    backend = top["nodes"]["backendNodeId"]
+    found: dict[int, Mark] = {}
+    for index, (x, y, width, height) in zip(top["layout"]["nodeIndex"], top["layout"]["bounds"], strict=True):
+        node = backend[index]
+        if node in wanted and node not in found and width > 0 and height > 0:
+            role, name = wanted[node]
+            found[node] = Mark("%s%d" % (REF_PREFIX, node), role, name, x, y, width, height)
+    return list(found.values())
+
+
+def _within(mark: Mark, clip: Mapping[str, float]) -> bool:
+    return (
+        mark.x < clip["x"] + clip["width"]
+        and mark.x + mark.width > clip["x"]
+        and mark.y < clip["y"] + clip["height"]
+        and mark.y + mark.height > clip["y"]
+    )
+
+
+def draw_marks(png: bytes, clip: Mapping[str, float], found: Sequence[Mark]) -> bytes:
+    """
+    The picture with each mark boxed and labelled with its ref, at its
+    top left. Drawn on the picture and not on the page, so a person
+    watching sees no flash, and the page's own scripts see nothing.
+    """
+    picture = Image.open(io.BytesIO(png)).convert("RGB")
+    scale = picture.width / clip["width"]
+    pen = ImageDraw.Draw(picture)
+    font = ImageFont.load_default(size=LABEL_SIZE)
+    for number, mark in enumerate(found):
+        colour = MARK_COLOURS[number % len(MARK_COLOURS)]
+        left, top = (mark.x - clip["x"]) * scale, (mark.y - clip["y"]) * scale
+        pen.rectangle((left, top, left + mark.width * scale, top + mark.height * scale), outline=colour, width=2)
+        x0, y0, x1, y1 = pen.textbbox((0, 0), mark.ref, font=font)
+        at = (max(0.0, left), max(0.0, top - (y1 - y0) - 2))
+        pen.rectangle((at[0], at[1], at[0] + x1 - x0 + 4, at[1] + y1 - y0 + 2), fill=colour)
+        pen.text((at[0] + 2 - x0, at[1] + 1 - y0), mark.ref, font=font, fill="white")
+    out = io.BytesIO()
+    picture.save(out, "PNG")
+    return out.getvalue()
+
+
+async def screenshot(page: Page, full_page: bool, fit: int | None, marked: bool = False) -> tuple[bytes, list[Mark]]:
+    """
+    A PNG of the tab, its longest edge `fit` pixels at most, and when
+    `marked` each element a person acts on boxed with its ref, which
+    the marks answered beside it name.
 
     The clip's scale shrinks what Chromium draws, so a window on a
     high-density screen answers fewer pixels and not a resample.
     """
+    found = await marks(page) if marked else []
     metrics = await page.send("Page.getLayoutMetrics")
     if full_page:
         size = metrics["cssContentSize"]
@@ -700,7 +806,11 @@ async def screenshot(page: Page, full_page: bool, fit: int | None) -> bytes:
         {"format": "png", "clip": clip, "captureBeyondViewport": full_page},
         timeout=60.0,
     )
-    return base64.b64decode(answer["data"])
+    png = base64.b64decode(answer["data"])
+    if not marked:
+        return png, []
+    found = [mark for mark in found if _within(mark, clip)]
+    return draw_marks(png, clip, found), found
 
 
 async def console(page: Page, limit: int) -> list[dict[str, Any]]:

@@ -50,9 +50,10 @@ NO_FONT: Final = "no font to draw with"
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class Png:
-    "A picture an operation answers: `server.render` sends it as image content."
+    "A picture an operation answers: `server.render` sends it as image content, and `caption` as text after it."
 
     data: bytes
+    caption: str = ""
 
 
 def pane_json(pane: Pane) -> Json:
@@ -817,10 +818,23 @@ async def browser_screenshot(
         int | None,
         Field(gt=0, description="The longest edge in pixels; the page is drawn smaller to fit. null for none."),
     ] = PNG_FIT,
+    marks: Annotated[
+        bool,
+        Field(
+            description=(
+                "Box each element you can act on and label it with its ref, which click and type take;"
+                " a line for each follows the picture."
+            )
+        ),
+    ] = False,
 ) -> Png:
-    "A picture of a tab."
+    """
+    A picture of a tab. With `marks`, act on what you see by its ref,
+    with no snapshot of the whole page.
+    """
     async with browser.tab(server, name, tab) as page:
-        return Png(await browser.screenshot(page, full_page, fit))
+        png, found = await browser.screenshot(page, full_page, fit, marks)
+    return Png(png, "\n".join(mark.line() for mark in found))
 
 
 @operation("browser.console")
