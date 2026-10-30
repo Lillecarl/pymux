@@ -26,8 +26,9 @@ from .style import DEFAULT_THEME
 
 if TYPE_CHECKING:
     from .arrangement import Pane
+    from .client_state import ClientState
     from .ids import SessionId
-    from .main import ClientState, Pymux
+    from .main import Pymux
     from .server import ServerConnection
     from .session import Session
 

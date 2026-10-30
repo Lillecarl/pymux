@@ -19,7 +19,8 @@ from .option_fields import Options, option, options
 from .style import THEMES
 
 if TYPE_CHECKING:
-    from .main import ClientState, Pymux
+    from .client_state import ClientState
+    from .main import Pymux
 
 __all__ = ["AUDIO_BITRATES", "ClientOptions", "theme_names"]
 

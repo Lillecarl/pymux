@@ -23,7 +23,8 @@ from pymux.commands.pictures import (
 if TYPE_CHECKING:
     from collections.abc import Awaitable
 
-    from pymux.main import ClientState, Pymux
+    from pymux.client_state import ClientState
+    from pymux.main import Pymux
 
 
 def _colors_of(pymux: Pymux, client_state: ClientState) -> ColorOverrides:

@@ -27,7 +27,8 @@ import anyio
 from libpymux.protocol import Field, Message, Packet
 
 if TYPE_CHECKING:
-    from pymux.main import ClientState, Pymux
+    from pymux.client_state import ClientState
+    from pymux.main import Pymux
 
 __all__ = ["ANSWER_SECONDS", "START_SECONDS", "BrowserRefused", "Browsers", "Launch"]
 

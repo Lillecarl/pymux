@@ -122,7 +122,8 @@ _SAVED: dict[type[Options], tuple[Declared, ...]] = {
 }
 
 if TYPE_CHECKING:
-    from .main import ClientState, Pymux
+    from .client_state import ClientState
+    from .main import Pymux
 
 __all__ = [
     "SNAPSHOT_VERSION",
@@ -227,7 +228,9 @@ WRITES: dict[str, frozenset[str]] = {
     },
     "pymux.arrangement._Split": frozenset(_Split.KEEP),
     "pymux.arrangement.Pane": frozenset(name for name, fate in Pane.KEEP.items() if fate == Keep.SAVED),
-    "pymux.main.ClientState": frozenset({"session", "previous_session", "options", *CLIENT_SETTINGS, *CLIENT_MODES}),
+    "pymux.client_state.ClientState": frozenset(
+        {"session", "previous_session", "options", *CLIENT_SETTINGS, *CLIENT_MODES}
+    ),
     # The record goes by the client's id, in `clients`.
     "pymux.server.ServerConnection": frozenset({"client_state", "created"}),
     # In `hooks`, one row per command.

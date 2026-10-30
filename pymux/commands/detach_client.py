@@ -4,7 +4,8 @@ import argparse
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pymux.main import ClientState, Pymux
+    from pymux.client_state import ClientState
+    from pymux.main import Pymux
 
 
 from pymux.commands import (

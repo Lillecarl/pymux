@@ -63,7 +63,8 @@ from .terminal_answers import SURVEY, TerminalAnswers
 from .uploads import LIST_SECONDS, Listing, Upload
 
 if TYPE_CHECKING:
-    from pymux.main import ClientState, Pymux
+    from pymux.client_state import ClientState
+    from pymux.main import Pymux
     from pymux.pipes import PipeConnection
     from pymux.recording import Recording
     from pymux.session import Session

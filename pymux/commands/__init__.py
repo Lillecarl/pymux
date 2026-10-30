@@ -23,7 +23,8 @@ from pymux.enums import Woke
 from pymux.log import logger
 
 if TYPE_CHECKING:
-    from pymux.main import ClientState, Pymux
+    from pymux.client_state import ClientState
+    from pymux.main import Pymux
 
 __all__ = [
     "CommandException",

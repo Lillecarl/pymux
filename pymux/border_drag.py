@@ -34,7 +34,8 @@ if TYPE_CHECKING:
     from prompt_toolkit.layout.mouse_handlers import MouseHandlers
     from prompt_toolkit.layout.screen import Screen, WritePosition
 
-    from .main import ClientState, Pymux
+    from .client_state import ClientState
+    from .main import Pymux
     from .plane import Line, Seam
 
 __all__ = ["BorderDrag", "DragCapture", "press_on_line"]

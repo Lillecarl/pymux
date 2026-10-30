@@ -81,7 +81,8 @@ if TYPE_CHECKING:
     from prompt_toolkit.key_binding.key_bindings import NotImplementedOrNone
     from prompt_toolkit.layout.controls import BufferControl
 
-    from pymux.main import ClientState, Pymux
+    from pymux.client_state import ClientState
+    from pymux.main import Pymux
     from pymux.notifications import Notification
 
 __all__ = ["LayoutManager"]

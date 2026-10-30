@@ -30,8 +30,9 @@ from pymux.tags import spelled
 
 if TYPE_CHECKING:
     from pymux.arrangement import Pane, Window
+    from pymux.client_state import ClientState
     from pymux.graphics import ClientGraphics
-    from pymux.main import ClientState, Pymux
+    from pymux.main import Pymux
     from pymux.pipes.base import PipeConnection
     from pymux.rate import Rate
     from pymux.server import ServerConnection

@@ -61,7 +61,7 @@ if TYPE_CHECKING:
     from pyte.osc import ColorOverrides
     from pyte.screen import Screen
 
-    from .main import ClientState
+    from .client_state import ClientState
     from .plane import Line, Rect
 
 __all__ = [

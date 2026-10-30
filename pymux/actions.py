@@ -41,7 +41,8 @@ import apsw
 if TYPE_CHECKING:
     import argparse
 
-    from .main import ClientState, Pymux
+    from .client_state import ClientState
+    from .main import Pymux
 
 __all__ = [
     "Action",

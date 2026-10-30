@@ -20,7 +20,8 @@ from .session_options import SessionOptions
 from .window_options import WindowOptions
 
 if TYPE_CHECKING:
-    from pymux.main import ClientState, Pymux
+    from pymux.client_state import ClientState
+    from pymux.main import Pymux
 
     #: What an option is written on and read from: a client, one
     #: session's own values, or the server's, which hold the defaults.

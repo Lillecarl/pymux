@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import pytest
 
+from pymux.client_state import ClientState
 from pymux.format import (
     FormatContext,
     compact_path,
@@ -19,7 +20,6 @@ from pymux.format import (
     symbol_variables,
     tmux_variables,
 )
-from pymux.main import ClientState
 
 
 def _context(pymux, client=None) -> FormatContext:
