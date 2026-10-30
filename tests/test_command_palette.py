@@ -61,7 +61,7 @@ def float_of(state, name: str) -> Float:
 
 def palette_float(state) -> Float:
     "The float that holds the box in the middle."
-    return float_of(state, "_command_palette")
+    return float_of(state, "palette")
 
 
 def cursor_menu_float(state) -> Float:
@@ -146,5 +146,5 @@ async def test_command_line_window_is_built_once():
     async with create_session() as (pymux, state):
         manager = state.layout_manager
 
-        assert manager._command_line_window() is manager._command_line_window()
-        assert manager._command_palette() is manager._command_palette()
+        assert manager.command_line.window() is manager.command_line.window()
+        assert manager.command_line.palette() is manager.command_line.palette()

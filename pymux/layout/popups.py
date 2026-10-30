@@ -48,7 +48,7 @@ class Popups:
     def box(self) -> Container:
         """
         The notifications this client shows as boxes, newest on top.
-        Built once, for the reason `_command_line_window` gives.
+        Built once, for the reason `CommandLine.window` gives.
         Lillecarl/pymux#826.
         """
         if self._box is None:

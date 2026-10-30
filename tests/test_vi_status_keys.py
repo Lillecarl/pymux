@@ -34,7 +34,7 @@ from test_command_mode import in_command_mode, leaves_command_mode
 def mode_tag(state) -> str:
     "What the line says about the mode it is in."
     with set_app(state.app):
-        return fragment_list_to_text(state.layout_manager._vi_mode_tokens())
+        return fragment_list_to_text(state.layout_manager.command_line.mode_tokens())
 
 
 def _vi(pymux, state) -> None:
@@ -150,7 +150,7 @@ async def test_the_tag_stands_before_the_colon():
         state.app.vi_state.input_mode = InputMode.NAVIGATION
 
         with set_app(state.app):
-            before = fragment_list_to_text(state.layout_manager._before_command_tokens())
+            before = fragment_list_to_text(state.layout_manager.command_line.before_command_tokens())
 
         assert before.endswith(":")
         assert "NORMAL" in before
@@ -164,7 +164,7 @@ async def test_the_prompt_says_it_too():
         state.app.vi_state.input_mode = InputMode.NAVIGATION
 
         with set_app(state.app):
-            before = fragment_list_to_text(state.layout_manager._before_prompt_command_tokens())
+            before = fragment_list_to_text(state.layout_manager.command_line.before_prompt_tokens())
 
         assert "NORMAL" in before
         assert "Rename to" in before

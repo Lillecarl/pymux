@@ -5,21 +5,16 @@ The layout engine. This builds the prompt_toolkit layout.
 from __future__ import annotations
 
 import weakref
-from collections.abc import Callable
 from functools import partial
 from typing import TYPE_CHECKING, Any, cast, override
 
 from prompt_toolkit.application import Application, get_app
 from prompt_toolkit.data_structures import Point, Size
-from prompt_toolkit.enums import EditingMode
 from prompt_toolkit.filters import (
     Condition,
-    has_completions,
     has_focus,
-    is_done,
 )
 from prompt_toolkit.formatted_text import HTML, StyleAndTextTuples
-from prompt_toolkit.key_binding.vi_state import InputMode
 from prompt_toolkit.layout.containers import (
     AnyContainer,
     ConditionalContainer,
@@ -28,37 +23,30 @@ from prompt_toolkit.layout.containers import (
     Float,
     FloatContainer,
     HSplit,
-    ScrollOffsets,
     VSplit,
     Window,
     WindowAlign,
     WritePosition,
 )
-from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
+from prompt_toolkit.layout.controls import FormattedTextControl
 from prompt_toolkit.layout.dimension import Dimension as D
 from prompt_toolkit.layout.layout import walk
-from prompt_toolkit.layout.margins import ScrollbarMargin
-from prompt_toolkit.layout.menus import CompletionsMenu, CompletionsMenuControl
+from prompt_toolkit.layout.menus import CompletionsMenu
 from prompt_toolkit.layout.mouse_handlers import MouseHandlers
-from prompt_toolkit.layout.processors import (
-    AppendAutoSuggestion,
-    BeforeInput,
-    HighlightSelectionProcessor,
-    ShowArg,
-)
 from prompt_toolkit.layout.screen import Screen
 from prompt_toolkit.widgets import Dialog, SearchToolbar, TextArea
 
 from pymux.core import window_tree
 
 from ..chooser import ChooserView
-from ..enums import Chooser, EditingKeys
+from ..enums import Chooser
 from ..filters import WaitsForConfirmation
 from ..format import format_pymux_string
 from ..log import logger
 from ..wayland.window_pane import WindowWidget
 from .border_drag import DragCapture, holds_window_panes, press_on_line
 from .boxes import BOX_BOTTOM, BOX_SIDE, BOX_TOP, PALETTE_HEADER
+from .command_line import CommandLine
 from .geometry import bar_below_is_drawn, layout_of, pane_beside, room_for_panes, tell_pane_its_size
 from .menu import Menu
 from .pane_container import TracePaneWritePosition, create_container_for_process, pane_containers, pane_write_positions
@@ -72,7 +60,6 @@ from .z_index import Z_INDEX
 
 if TYPE_CHECKING:
     from prompt_toolkit.filters import Filter
-    from prompt_toolkit.layout.controls import BufferControl
 
     from pymux.connection.client_state import ClientState
     from pymux.core.main import Pymux
@@ -185,23 +172,11 @@ class LayoutManager:
         #: Lillecarl/pymux#233.
         self._nothing_to_draw = Window()
 
-        # The window a person types a command into, and the box that
-        # holds it when the palette is on. Both are built once and kept.
-        # A fresh `BufferControl` on every render is one that the layout
-        # never focused, so the cursor is drawn nowhere and the person
-        # cannot see where they are typing. Lillecarl/pymux#158.
-        self._command_window: Window | None = None
-        self._palette: Container | None = None
+        self.command_line = CommandLine(self)
 
         self.which_key = WhichKey(self)
 
         self.popups = Popups(self)
-
-        # And the same two for the prompt: the line a person answers a
-        # question on, and the box that holds it when the question
-        # knows its answers. Lillecarl/pymux#220.
-        self._prompt_window_container: Window | None = None
-        self._key_prompt: Container | None = None
 
         # The part of the screen that holds the windows. It is kept
         # because it is what knows the container that drew the panes,
@@ -400,67 +375,6 @@ class LayoutManager:
 
         return tuple(parts)
 
-    def _vi_mode_tokens(self) -> StyleAndTextTuples:
-        """
-        Which vi mode the line a person types on is in.
-
-        Nothing with emacs status keys: there is one mode there, and a
-        tag that never changes says nothing.
-
-        **With vi status keys the mode decides what a key does**, and
-        Escape most of all: the first one leaves insert mode and the
-        second closes the line. A person has to be able to see which
-        press they are about to make. Lillecarl/pymux#255.
-
-        The tag is one width whatever it says, so the line a person is
-        typing on never moves under them.
-        """
-        if self.client_state.session.options.status_keys is EditingKeys.HELIX:
-            return self._helix_mode_tokens()
-        if self.client_state.session.options.status_keys is not EditingKeys.VI:
-            return []
-
-        app = get_app()
-        if app.editing_mode is not EditingMode.VI:
-            return []
-
-        mode = app.vi_state.input_mode
-        if mode in (InputMode.REPLACE, InputMode.REPLACE_SINGLE):
-            name = "REPLACE"
-        elif mode is InputMode.NAVIGATION:
-            name = "NORMAL"
-        else:
-            name = "INSERT"
-
-        return [("class:commandline.mode", " %-7s " % (name,))]
-
-    def _helix_mode_tokens(self) -> StyleAndTextTuples:
-        """
-        Helix's mode, as Helix spells it, and what is half typed: a
-        count, a menu key, or the regex `s` reads, which shows nowhere
-        else. The mode is one width; the half-typed part grows only
-        while it is typed. Lillecarl/pymux#749.
-        """
-        helix = self.pymux.key_bindings_manager.helix
-        buffer = get_app().current_buffer
-        tokens: StyleAndTextTuples = [("class:commandline.mode", " %s " % (helix.mode_of(buffer).label,))]
-        pending = helix.pending_of(buffer)
-        if pending:
-            tokens.append(("class:commandline.pending", " %s " % (pending,)))
-        return tokens
-
-    def _before_command_tokens(self) -> StyleAndTextTuples:
-        'What stands before what a person types after ":".'
-        return [*self._vi_mode_tokens(), ("class:commandline-prompt", ":")]
-
-    def _before_prompt_command_tokens(self) -> StyleAndTextTuples:
-        if self.client_state.prompt_completer is not None:
-            # The box says what it is asking for, on the row above the
-            # line. Saying it twice is one row wasted and one thing to
-            # read. Lillecarl/pymux#220.
-            return []
-        return [*self._vi_mode_tokens(), ("class:commandline.prompt", "%s " % (self.client_state.prompt_text,))]
-
     def _overlay_container(self) -> Container:
         """
         The overlay pane of this client, with a title bar above it.
@@ -494,145 +408,6 @@ class LayoutManager:
 
         self._overlay_for_pane = (pane, container)
         return container
-
-    def _command_line_window(self) -> Window:
-        """
-        The window that holds what a person types after ":".
-
-        The bar at the bottom and the palette in the middle draw the
-        same window. Only where it is drawn differs, so the key
-        bindings of command mode and everything that reads the buffer
-        stay as they were. Lillecarl/pymux#158.
-
-        **It is built once.** The layout focuses a control, and a fresh
-        one on every render is one it never focused: the cursor lands
-        nowhere and a person cannot see where they are typing. Only one
-        of the two places draws it, because the filter of each reads
-        the option.
-        """
-        if self._command_window is not None:
-            return self._command_window
-
-        self._command_window = Window(
-            # Can be more if the command is multiline.
-            height=D(min=1),
-            style="class:commandline",
-            dont_extend_height=True,
-            content=BufferControl(
-                buffer=self.client_state.command_buffer,
-                preview_search=True,
-                input_processors=[
-                    AppendAutoSuggestion(),
-                    BeforeInput(self._before_command_tokens),
-                    ShowArg(),
-                    HighlightSelectionProcessor(),
-                    # Paints nothing unless the status keys are Helix's.
-                    self.pymux.key_bindings_manager.helix.processor(),
-                ],
-            ),
-            z_index=Z_INDEX.COMMAND_LINE,
-        )
-        return self._command_window
-
-    def _prompt_window(self) -> Container:
-        """
-        The window that holds the answer to a `command-prompt`.
-
-        The bar at the bottom and the box in the middle draw the same
-        window, for the same reason the ":" line does, and it is built
-        once for the same reason as well.
-        """
-        if self._prompt_window_container is not None:
-            return self._prompt_window_container
-
-        self._prompt_window_container = Window(
-            height=1,
-            style="class:commandline",
-            content=BufferControl(
-                buffer=self.client_state.prompt_buffer,
-                input_processors=[
-                    BeforeInput(self._before_prompt_command_tokens),
-                    AppendAutoSuggestion(),
-                    HighlightSelectionProcessor(),
-                    self.pymux.key_bindings_manager.helix.processor(),
-                ],
-            ),
-            z_index=Z_INDEX.COMMAND_LINE,
-        )
-        return self._prompt_window_container
-
-    def _command_palette(self) -> Container:
-        """
-        The ":" command line as a box in the middle of the screen.
-
-        **The completions are inside the box.** The menu that a bottom
-        bar uses hangs off the cursor and stops at twelve rows, so a
-        palette that only moved the text would be a nicer box around
-        the same thin content. In here the menu takes the height of the
-        box, which is what makes the room worth having.
-
-        A title row says what the box is, the way the overlay pane says
-        what it holds. tmux has no such thing; this is the room that
-        Lillecarl/pymux#147, #148 and #48 are asking for.
-
-        Built once, for the reason `_command_line_window` gives.
-        """
-        if self._palette is not None:
-            return self._palette
-
-        self._palette = self._box(lambda: " Command ", self._command_line_window())
-        return self._palette
-
-    def _box(self, title: Callable[[], str], window: Container) -> Container:
-        """
-        A box in the middle of the screen: a title, a line to type in,
-        and the completions filling what is left.
-
-        Two things draw one. The ":" command line does, when a person
-        asked for a palette; and a prompt that knows its answers does,
-        which today is the box that composes a key.
-        Lillecarl/pymux#220.
-
-        `title` is asked each frame, so a box can say what it is asking
-        for rather than what kind of box it is.
-        """
-
-        def get_title() -> StyleAndTextTuples:
-            return [("class:commandpalette.title", title())]
-
-        return HSplit(
-            [
-                Window(
-                    height=1,
-                    align=WindowAlign.CENTER,
-                    content=FormattedTextControl(get_title),
-                    style="class:commandpalette.titlebar",
-                ),
-                window,
-                self._palette_completions(),
-            ],
-            style="class:commandpalette",
-        )
-
-    def _key_box(self) -> Container:
-        """
-        The prompt as a box, for a question that knows its answers.
-
-        The line inside it is the same `prompt_buffer` the bottom
-        toolbar uses. Only the room around it is different, and the
-        room is what the completions need: a person composing
-        "ctrl+shift+f5" is reading the list, not typing from memory.
-
-        Built once, for the reason `_command_line_window` gives.
-        """
-        if self._key_prompt is not None:
-            return self._key_prompt
-
-        self._key_prompt = self._box(
-            lambda: " %s " % (self.client_state.prompt_text or "Key",),
-            self._prompt_window(),
-        )
-        return self._key_prompt
 
     def cursor_on_view(self) -> Point:
         """
@@ -677,30 +452,6 @@ class LayoutManager:
         """
         rows = self.room_this_client_has.rows
         return max(1, rows - BOX_TOP - PALETTE_HEADER)
-
-    def _palette_completions(self) -> Container:
-        """
-        The completions of the palette, filling the box.
-
-        This is `CompletionsMenu` with two of its numbers changed, so
-        it is written out rather than wrapped. That widget draws for a
-        menu that hangs under the cursor: as narrow as its longest
-        completion, and twelve rows at the most. Both are wrong in a
-        box. The box has a width to fill, which is where a completion
-        and what it means will sit side by side, and it has to stop
-        above the status line rather than run off the screen.
-        """
-        return ConditionalContainer(
-            content=Window(
-                content=CompletionsMenuControl(),
-                height=lambda: D(min=1, max=self.palette_rows()),
-                scroll_offsets=ScrollOffsets(top=1, bottom=1),
-                right_margins=[ScrollbarMargin(display_arrows=True)],
-                style="class:completion-menu",
-                z_index=Z_INDEX.POPUP,
-            ),
-            filter=has_completions & ~is_done,
-        )
 
     def _floats_above_the_status_line(self, waits_for_confirmation: Filter, which_key_shows: Filter) -> list[Float]:
         "The floats placed from the bottom of the body, which is the top of the status line."
@@ -869,12 +620,12 @@ class LayoutManager:
                         [
                             # ':' prompt toolbar.
                             ConditionalContainer(
-                                content=self._command_line_window(),
+                                content=self.command_line.window(),
                                 filter=has_focus(self.client_state.command_buffer) & ~palette,
                             ),
                             # Other command-prompt commands toolbar.
                             ConditionalContainer(
-                                content=self._prompt_window(),
+                                content=self.command_line.prompt_window(),
                                 filter=has_focus(self.client_state.prompt_buffer) & ~asks_for_key,
                             ),
                         ]
@@ -898,7 +649,7 @@ class LayoutManager:
                 # Lillecarl/pymux#158.
                 Float(
                     content=ConditionalContainer(
-                        content=DynamicContainer(self._command_palette),
+                        content=DynamicContainer(self.command_line.palette),
                         filter=has_focus(self.client_state.command_buffer) & palette,
                     ),
                     left=BOX_SIDE,
@@ -918,7 +669,7 @@ class LayoutManager:
                 # Lillecarl/pymux#220.
                 Float(
                     content=ConditionalContainer(
-                        content=DynamicContainer(self._key_box),
+                        content=DynamicContainer(self.command_line.key_box),
                         filter=has_focus(self.client_state.prompt_buffer) & asks_for_key,
                     ),
                     left=BOX_SIDE,

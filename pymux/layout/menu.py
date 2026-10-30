@@ -113,7 +113,7 @@ class Menu:
     def box(self) -> Container:
         """
         The menu, in a box. Built once, for the reason
-        `LayoutManager._command_line_window` gives; the title is asked each frame,
+        `CommandLine.window` gives; the title is asked each frame,
         because the command that opened the menu names it.
         Lillecarl/pymux#297.
         """

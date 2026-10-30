@@ -59,7 +59,7 @@ def is_drawn(state, wanted) -> bool:
 def bottom_prompt(state) -> ConditionalContainer:
     "The one row version of the prompt, along the bottom."
     manager = state.layout_manager
-    window = manager._prompt_window()
+    window = manager.command_line.prompt_window()
     for one in state.layout_manager.layout.floats:
         for child in getattr(one.content, "children", []):
             if isinstance(child, ConditionalContainer) and child.content is window:
@@ -106,12 +106,12 @@ async def test_it_asks_in_box():
     async with create_session() as (pymux, state):
         compose(pymux, state)
 
-        assert is_drawn(state, float_of(state, "_key_box"))
+        assert is_drawn(state, float_of(state, "key_box"))
 
 
 async def test_nothing_is_drawn_until_it_is_asked_for():
     async with create_session() as (pymux, state):
-        assert not is_drawn(state, float_of(state, "_key_box"))
+        assert not is_drawn(state, float_of(state, "key_box"))
 
 
 async def test_ordinary_prompt_still_uses_bottom_row():
@@ -124,7 +124,7 @@ async def test_ordinary_prompt_still_uses_bottom_row():
         with set_app(state.app):
             call_command_handler("command-prompt", pymux, ["-p", "Name", "rename-window %%"])
 
-        assert not is_drawn(state, float_of(state, "_key_box"))
+        assert not is_drawn(state, float_of(state, "key_box"))
         assert is_drawn(state, bottom_prompt(state))
 
 
@@ -154,8 +154,8 @@ async def test_prompt_window_is_built_once():
     async with create_session() as (pymux, state):
         manager = state.layout_manager
 
-        assert manager._prompt_window() is manager._prompt_window()
-        assert manager._key_box() is manager._key_box()
+        assert manager.command_line.prompt_window() is manager.command_line.prompt_window()
+        assert manager.command_line.key_box() is manager.command_line.key_box()
 
 
 async def test_box_says_what_it_is_asking_for_once():
@@ -167,11 +167,11 @@ async def test_box_says_what_it_is_asking_for_once():
         manager = state.layout_manager
 
         compose(pymux, state)
-        assert manager._before_prompt_command_tokens() == []
+        assert manager.command_line.before_prompt_tokens() == []
 
         leave(pymux, state)
         state.prompt_text = "Name"
-        assert manager._before_prompt_command_tokens() != []
+        assert manager.command_line.before_prompt_tokens() != []
 
 
 # ----------------------------------------------------------------------
@@ -205,7 +205,7 @@ async def test_it_closes_when_key_has_gone():
         answer(pymux, state, "ctrl+home")
 
         assert state.prompt_completer is None
-        assert not is_drawn(state, float_of(state, "_key_box"))
+        assert not is_drawn(state, float_of(state, "key_box"))
 
 
 async def test_leaving_it_puts_completer_back():

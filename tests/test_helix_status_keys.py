@@ -33,7 +33,7 @@ def mode(pymux, state) -> Mode:
 
 def tag(state) -> str:
     with set_app(state.app):
-        return fragment_list_to_text(state.layout_manager._before_command_tokens())
+        return fragment_list_to_text(state.layout_manager.command_line.before_command_tokens())
 
 
 async def test_the_first_escape_goes_to_normal_mode_and_keeps_the_line():

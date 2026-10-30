@@ -40,7 +40,7 @@ class WhichKey:
         """
         The keys the prefix leads to, in a box.
 
-        Built once, for the reason `_command_line_window` gives.
+        Built once, for the reason `CommandLine.window` gives.
         Lillecarl/pymux#29.
         """
         if self._box is not None:

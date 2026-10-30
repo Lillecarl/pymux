@@ -616,7 +616,7 @@ class ChooserView:
         rows say and what taking a row does differ.
         Lillecarl/pymux#295. Lillecarl/pymux#304. Lillecarl/pymux#297.
 
-        Built once, for the reason `_command_line_window` gives.
+        Built once, for the reason `CommandLine.window` gives.
         """
         if self._chooser is not None:
             return self._chooser
@@ -676,7 +676,7 @@ class ChooserView:
         what is under it is the window the bar points at, running.
         Lillecarl/pymux#327.
 
-        Built once, for the reason `_command_line_window` gives.
+        Built once, for the reason `CommandLine.window` gives.
         """
         if self._bar is not None:
             return self._bar
