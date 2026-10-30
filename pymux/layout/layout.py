@@ -4,7 +4,6 @@ The layout engine. This builds the prompt_toolkit layout.
 
 from __future__ import annotations
 
-import textwrap
 import weakref
 from collections.abc import Callable
 from functools import partial
@@ -48,7 +47,6 @@ from prompt_toolkit.layout.processors import (
     ShowArg,
 )
 from prompt_toolkit.layout.screen import Screen
-from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
 from prompt_toolkit.widgets import Dialog, SearchToolbar, TextArea
 
 from pymux.core import window_tree
@@ -66,26 +64,19 @@ from .menu import Menu
 from .pane_container import TracePaneWritePosition, create_container_for_process, pane_containers, pane_write_positions
 from .plan_container import PlanContainer
 from .plane import Plan, Rect, Side, View
+from .popups import Popups
 from .status_line import StatusLine
 from .widgets import Background, ConfirmationToolbar, MessageToolbar, UrlLabels
 from .z_index import Z_INDEX
 
 if TYPE_CHECKING:
     from prompt_toolkit.filters import Filter
-    from prompt_toolkit.key_binding.key_bindings import NotImplementedOrNone
     from prompt_toolkit.layout.controls import BufferControl
 
     from pymux.connection.client_state import ClientState
     from pymux.core.main import Pymux
-    from pymux.notify.notifications import Notification
 
 __all__ = ["LayoutManager"]
-
-#: A notification box, in cells: a width that fits a title, and the
-#: rows of body it shows. Lillecarl/pymux#826.
-POPUP_WIDTH = 44
-MIN_POPUP_WIDTH = 12
-POPUP_BODY_ROWS = 3
 
 #: What `clock-mode` draws inside a pane, as text. `BigClock` paints the
 #: hour and the minute in big numbers, and nothing else of it moves.
@@ -206,7 +197,7 @@ class LayoutManager:
         # one the layout never focused. Nothing here takes focus, but
         # the same rule keeps the box one object. Lillecarl/pymux#29.
         self._which_key: Container | None = None
-        self._popups: Window | None = None
+        self.popups = Popups(self)
 
         # And the same two for the prompt: the line a person answers a
         # question on, and the box that holds it when the question
@@ -692,62 +683,6 @@ class LayoutManager:
             tokens.append(("class:commandpalette", meaning + "\n"))
         return tokens
 
-    def _popups_box(self) -> Container:
-        """
-        The notifications this client shows as boxes, newest on top.
-        Built once, for the reason `_command_line_window` gives.
-        Lillecarl/pymux#826.
-        """
-        if self._popups is None:
-            self._popups = Window(
-                FormattedTextControl(self._popup_tokens, focusable=False),
-                width=lambda: D.exact(self._popup_width()),
-                dont_extend_height=True,
-                style="class:notification-popup",
-            )
-        return self._popups
-
-    def _popups_show(self, top_right: bool) -> bool:
-        "Whether the boxes draw in this corner. The list goes first: it is empty on almost every frame."
-        return bool(self.client_state.popups) and self.cursor_is_in_top_right() is not top_right
-
-    def _popup_width(self) -> int:
-        return max(MIN_POPUP_WIDTH, min(POPUP_WIDTH, self.room_this_client_has.columns - 2))
-
-    def _popup_tokens(self) -> StyleAndTextTuples:
-        """
-        One box per notification: the title, then up to `POPUP_BODY_ROWS`
-        rows of the body. A click shows the pane it came from, as a
-        click on a desktop notification does, and closes the box.
-        """
-        inner = self._popup_width() - 4
-        tokens: StyleAndTextTuples = []
-        border = "class:notification-popup.border"
-        for number, record in enumerate(reversed(self.client_state.popups)):
-            click = self._popup_click(record)
-            rows: list[str] = textwrap.wrap(record.body, inner)[:POPUP_BODY_ROWS]
-            if number:
-                tokens.append((border, "\n", click))
-            tokens.append((border, "╭" + "─" * (inner + 2) + "╮\n", click))
-            for style, text in [("class:notification-popup.title", record.title[:inner])] + [("", row) for row in rows]:
-                tokens.append((border, "│ ", click))
-                tokens.append((style, text.ljust(inner), click))
-                tokens.append((border, " │\n", click))
-            tokens.append((border, "╰" + "─" * (inner + 2) + "╯", click))
-        return tokens
-
-    def _popup_click(self, record: Notification) -> Callable[[MouseEvent], NotImplementedOrNone]:
-        def click(mouse_event: MouseEvent) -> NotImplementedOrNone:
-            if mouse_event.event_type != MouseEventType.MOUSE_UP:
-                return NotImplemented
-            pane = self.pymux.panes_by_id.get(record.pane_id) if record.pane_id is not None else None
-            if pane is not None:
-                self.pymux.show_pane_on_click(self.client_state, pane)
-            self.pymux.notifier.drop_popup(self.client_state, record)
-            return None
-
-        return click
-
     def cursor_on_view(self) -> Point:
         """
         Where the cursor of the focused pane sits on this client's
@@ -853,8 +788,8 @@ class LayoutManager:
             # below, for the same reason. Lillecarl/pymux#826.
             Float(
                 content=ConditionalContainer(
-                    content=DynamicContainer(self._popups_box),
-                    filter=Condition(lambda: self._popups_show(top_right=False)),
+                    content=DynamicContainer(self.popups.box),
+                    filter=Condition(lambda: self.popups.show(top_right=False)),
                 ),
                 bottom=1,
                 left=1,
@@ -1120,8 +1055,8 @@ class LayoutManager:
                 # under them: away from the cursor. Lillecarl/pymux#826.
                 Float(
                     content=ConditionalContainer(
-                        content=DynamicContainer(self._popups_box),
-                        filter=Condition(lambda: self._popups_show(top_right=True)),
+                        content=DynamicContainer(self.popups.box),
+                        filter=Condition(lambda: self.popups.show(top_right=True)),
                     ),
                     top=0,
                     right=1,

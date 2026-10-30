@@ -32,7 +32,7 @@ async def away_from_a_pane(shows_notifications=False):
 
 
 def text_of(state) -> str:
-    return "".join(fragment[1] for fragment in state.layout_manager._popup_tokens())
+    return "".join(fragment[1] for fragment in state.layout_manager.popups.tokens())
 
 
 @pytest.mark.parametrize(
@@ -88,7 +88,7 @@ async def test_a_box_goes_once_its_pane_is_seen():
 async def test_a_click_shows_the_pane_and_closes_the_box():
     async with away_from_a_pane() as (pymux, state, pane):
         pymux.notification_center.add("Build", "Ready", pane_id=pane.pane_id)
-        (_style, _text, click) = state.layout_manager._popup_tokens()[0]
+        (_style, _text, click) = state.layout_manager.popups.tokens()[0]
         with set_app(state.app):
             click(MouseEvent(Point(0, 0), MouseEventType.MOUSE_UP, MouseButton.LEFT, frozenset()))
             assert pymux.arrangement.get_active_pane() is pane
