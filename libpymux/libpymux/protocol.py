@@ -92,7 +92,10 @@ class Packet(StrEnum):
     RUN_COMMAND = "run-command"
     IN = "in"
     SIZE = "size"
-    KITTY_DETECT = "kitty-detect"
+    # The client queried its terminal; the server asks the rest and
+    # reads every reply. The wire keeps the old word: a client of an
+    # older build reconnects to a newer server and still says it.
+    DETECT = "kitty-detect"
     # "Send me this pane as frames, and take what I send as input." A
     # stream is not a command that prints: it holds the connection and
     # writes many packets. Lillecarl/pymux#461.

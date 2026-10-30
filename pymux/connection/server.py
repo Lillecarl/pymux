@@ -299,10 +299,10 @@ class ServerConnection:
         # The client input is parsed by the application that reads from
         # the pipe input (see `ClientInput`). Give that input a parser
         # that also understands the kitty keyboard protocol, and route
-        # terminal replies to `_handle_kitty_reply`.
+        # terminal replies to `TerminalReplies.arrived`.
         self._pipeinput = ClientInput(
             self.send_packet,
-            kitty_reply_callback=self.replies.arrived,
+            reply_callback=self.replies.arrived,
             # Whether this client's terminal counts the modifiers the
             # way the protocol does. It is asked when a key arrives and
             # not now, because the detection has not answered yet.
@@ -573,8 +573,8 @@ class ServerConnection:
         if self.client_state is not None:
             self.client_state.input_tick += 1
 
-    @_PACKETS.handles(Packet.KITTY_DETECT)
-    def _on_kitty_detect(self, packet: Message) -> None:
+    @_PACKETS.handles(Packet.DETECT)
+    def _on_detect(self, packet: Message) -> None:
         self.replies.start_detection()
 
     @_PACKETS.handles(Packet.SIZE)

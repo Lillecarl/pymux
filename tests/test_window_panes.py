@@ -23,6 +23,8 @@ from session import once, over_connection
 
 pytest.importorskip("pysmithay")
 
+from libpymux.protocol import Field, Packet
+
 from pymux.core.main import Pymux
 from pymux.enums import WindowCodec, WindowScroll, Woke
 from pymux.graphics.window_frames import WINDOW_Z
@@ -713,7 +715,7 @@ async def test_a_terminal_that_reports_pixels_puts_the_pointer_on_the_pixel(tmp_
         # kitty, which numbers its first pixel 0.
         state.connection.graphics.terminal_version = "kitty(0.49.2)"
         # What a client sends after it queried its terminal.
-        state.connection._process({"cmd": "kitty-detect"})
+        state.connection._process({Field.CMD: Packet.DETECT})
         await once(lambda: "\x1b[?1016$p" in recorder.out, 10.0, "the terminal was never asked")
         state.connection._process({"cmd": "in", "data": "\x1b[?1016;2$y"})
         await once(lambda: "\x1b[?1016h" in recorder.out, 10.0, "pixel mode was never turned on")
@@ -736,7 +738,7 @@ async def test_a_terminal_that_can_never_report_pixels_keeps_the_mouse_in_cells(
     async with with_a_window(tmp_path, cell=(10, 20)) as (_pymux, state, _pane, _recorder, log, _probe):
         await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
         state.connection.graphics.terminal_version = "iTerm2 3.7.6"
-        state.connection._process({"cmd": "kitty-detect"})
+        state.connection._process({Field.CMD: Packet.DETECT})
         state.connection._process({"cmd": "in", "data": "\x1b[?1016;4$y"})
         state.connection._process({"cmd": "in", "data": "\x1b[0n"})
         assert not state.connection.replies.pixel_mouse
@@ -747,7 +749,7 @@ async def test_a_terminal_that_keeps_its_cell_size_keeps_the_mouse_in_cells(tmp_
     async with with_a_window(tmp_path) as (pymux, state, pane, _recorder, log, _probe):
         await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
         pymux.session_defaults.mouse = True
-        state.connection._process({"cmd": "kitty-detect"})
+        state.connection._process({Field.CMD: Packet.DETECT})
         state.connection._process({"cmd": "in", "data": "\x1b[?1016;2$y"})
         where = await once(
             lambda: state.layout_manager.pane_write_positions.get(pane), 10.0, "the pane was never drawn"

@@ -9,6 +9,7 @@ Lillecarl/pymux#539, and deviation 27 in `ptterm/tests/DEVIATIONS.md`.
 
 from __future__ import annotations
 
+from libpymux.protocol import Field, Packet
 from prompt_toolkit.data_structures import Size
 from session import once, over_connection
 
@@ -39,7 +40,7 @@ async def _answered(answer: str, drawn: str) -> tuple[str, bool]:
     async with over_connection(pymux=Pymux(startup_command=command), read_packet=recorder) as session:
         state, _ = await session.attach("one", SIZE)
         await once(lambda: "X" in recorder.out, 10.0, "the pane never drew")
-        state.connection._process({"cmd": "kitty-detect"})
+        state.connection._process({Field.CMD: Packet.DETECT})
         await once(lambda: EMOJI_WIDTH_PROBE in recorder.out, 10.0, "the terminal was never asked")
         before = len(recorder.out)
         state.connection._process({"cmd": "in", "data": answer})
@@ -62,7 +63,7 @@ async def test_a_terminal_that_keeps_it_narrow_changes_nothing():
     command = 'sh -c \'printf "%sX\\n"; sleep 0.5; printf "%sY\\n"; sleep 30\'' % (EMOJI, EMOJI)
     async with over_connection(pymux=Pymux(startup_command=command), read_packet=recorder) as session:
         state, _ = await session.attach("one", SIZE)
-        state.connection._process({"cmd": "kitty-detect"})
+        state.connection._process({Field.CMD: Packet.DETECT})
         await once(lambda: EMOJI_WIDTH_PROBE in recorder.out, 10.0, "the terminal was never asked")
         before = len(recorder.out)
         state.connection._process({"cmd": "in", "data": "\x1b[2;2R"})

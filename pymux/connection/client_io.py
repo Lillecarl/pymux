@@ -212,7 +212,7 @@ class ClientInput:
     def __init__(
         self,
         send_packet: Callable[[Message], None],
-        kitty_reply_callback: Callable[[str], None] | None = None,
+        reply_callback: Callable[[str], None] | None = None,
         speaks_protocol: Callable[[], bool | None] | None = None,
         pixel_cell: Callable[[], tuple[int, int, int] | None] | None = None,
         pointer_moved: Callable[[], None] | None = None,
@@ -239,7 +239,7 @@ class ClientInput:
 
         self._parser = KittyVt100Parser(
             typed,
-            reply_callback=kitty_reply_callback,
+            reply_callback=reply_callback,
             speaks_protocol=speaks_protocol,
             pixel_cell=pixel_cell,
             pointer_moved=pointer_moved,

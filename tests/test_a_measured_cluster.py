@@ -8,6 +8,7 @@ Lillecarl/pymux#801.
 
 from __future__ import annotations
 
+from libpymux.protocol import Field, Packet
 from prompt_toolkit.data_structures import Size
 from session import once, over_connection
 
@@ -33,7 +34,7 @@ async def test_a_flag_the_terminal_draws_one_column_wide_is_padded():
     async with over_connection(pymux=Pymux(startup_command=command), read_packet=recorder) as session:
         state, _ = await session.attach("one", SIZE)
         await once(lambda: "X" in recorder.out, 10.0, "the pane never drew")
-        state.connection._process({"cmd": "kitty-detect"})
+        state.connection._process({Field.CMD: Packet.DETECT})
         await once(lambda: CLUSTER_WIDTH_PROBE in recorder.out, 10.0, "the terminal was never asked")
         before = len(recorder.out)
         state.connection._process({"cmd": "in", "data": "\x1b[4;2R"})
@@ -48,7 +49,7 @@ async def test_the_answers_outrank_the_table_of_the_terminal():
     async with over_connection(pymux=Pymux(startup_command="sleep 30")) as session:
         state, _ = await session.attach("one", SIZE)
         connection = state.connection
-        connection._process({"cmd": "kitty-detect"})
+        connection._process({Field.CMD: Packet.DETECT})
         connection._process({"cmd": "in", "data": "\x1bP>|WezTerm 20240203-110809-5046fc22\x1b\\"})
         await once(
             lambda: connection.replies.cluster_fit() == "wezterm",
@@ -67,7 +68,7 @@ async def test_what_the_probes_erase_is_drawn_again():
     async with over_connection(pymux=Pymux(startup_command=command), read_packet=recorder) as session:
         state, _ = await session.attach("one", SIZE)
         await once(lambda: "row5" in recorder.out, 10.0, "the pane never drew")
-        state.connection._process({"cmd": "kitty-detect"})
+        state.connection._process({Field.CMD: Packet.DETECT})
         await once(lambda: CLUSTER_WIDTH_PROBE in recorder.out, 10.0, "the terminal was never asked")
         after = recorder.out.index(CLUSTER_WIDTH_PROBE) + len(CLUSTER_WIDTH_PROBE)
         state.connection._process({"cmd": "in", "data": "\x1b[?62c"})
@@ -79,6 +80,6 @@ async def test_a_terminal_too_short_for_the_probe_is_not_asked():
     recorder = Recorder()
     async with over_connection(pymux=Pymux(startup_command="sleep 30"), read_packet=recorder) as session:
         state, _ = await session.attach("one", Size(rows=4, columns=40))
-        state.connection._process({"cmd": "kitty-detect"})
+        state.connection._process({Field.CMD: Packet.DETECT})
         await once(lambda: "\x1b]99;" in recorder.out, 10.0, "the survey never went out")
         assert CLUSTER_WIDTH_PROBE not in recorder.out

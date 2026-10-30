@@ -102,7 +102,7 @@ class SessionScreen:
         # screen answers as it is fed, so the packet goes first. Without
         # the queries the server never learns that this terminal draws
         # images. Lillecarl/pymux#718.
-        self._send({Field.CMD: Packet.KITTY_DETECT})
+        self._send({Field.CMD: Packet.DETECT})
         self._ground_timer.feed(DETECTION_QUERIES.decode("ascii"))
 
     def take_packet(self, packet: dict[str, Any]) -> bool:

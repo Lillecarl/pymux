@@ -110,7 +110,7 @@ class TerminalReplies:
         #: Every reply this client's terminal gave. Lillecarl/pymux#725.
         self.terminal_said = TerminalAnswers()
         #: Set from `start_detection` until the device attributes reply,
-        #: which closes the detection. The client sends "kitty-detect"
+        #: which closes the detection. The client sends `Packet.DETECT`
         #: right after it queried its terminal, and the replies pass
         #: through this connection.
         self.detection_pending = False

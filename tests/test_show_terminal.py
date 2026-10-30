@@ -9,6 +9,7 @@ them back.
 
 from __future__ import annotations
 
+from libpymux.protocol import Field, Packet
 from prompt_toolkit.data_structures import Size
 from session import once, over_connection
 
@@ -58,7 +59,7 @@ async def test_the_survey_goes_out_with_the_detection():
     async with over_connection(read_packet=packets.append) as session:
         state, _ = await session.attach("phone", SIZE)
 
-        state.connection._process({"cmd": "kitty-detect"})
+        state.connection._process({Field.CMD: Packet.DETECT})
 
         await once(lambda: SURVEY in frames_of(packets), 5.0, "the survey was not asked")
 

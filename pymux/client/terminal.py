@@ -448,7 +448,7 @@ class TerminalClient(Client):
         self._decoders.clear()
         self._pictures.clear()
         self._write_terminal(detection_queries(self._shm_probe()))
-        self._send_packet({Field.CMD: Packet.KITTY_DETECT})
+        self._send_packet({Field.CMD: Packet.DETECT})
 
     def _shm_probe(self) -> str:
         "The shared memory probe, or nothing where no shared memory can be made."
