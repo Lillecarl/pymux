@@ -643,6 +643,10 @@ async def open_browser(
     executable: Annotated[
         str | None, Field(description="Chromium to run; PYMUX_MCP_CHROMIUM or `chromium` on the PATH when left out.")
     ] = None,
+    extensions: Annotated[
+        list[str] | None,
+        Field(description="Unpacked extensions to load: absolute directories, each with its manifest.json."),
+    ] = None,
     arguments: Annotated[list[str] | None, Field(description="More command line for Chromium.")] = None,
     idle: Annotated[
         float,
@@ -660,7 +664,17 @@ async def open_browser(
     it then takes its panes away and leaves the window.
     """
     opened = await browser.open_browser(
-        server, name, seat, url, session, executable, arguments or (), idle, window=window, profile_name=profile
+        server,
+        name,
+        seat,
+        url,
+        session,
+        executable,
+        arguments or (),
+        idle,
+        window=window,
+        profile_name=profile,
+        extensions=extensions or (),
     )
     return opened.json()
 
@@ -675,6 +689,18 @@ async def list_browsers(server: Server) -> list[Json]:
 async def close_browser(server: Server, name: BrowserName = "browser") -> None:
     "Stop a browser, and take its window or job and its profile away."
     await browser.close(await browser.find(server, name))
+
+
+@operation("browser.extension")
+async def browser_extension(
+    server: Server,
+    directory: Annotated[
+        str, Field(description="An unpacked extension: an absolute directory with its manifest.json.")
+    ],
+    name: BrowserName = "browser",
+) -> Json:
+    "Load an unpacked extension into a running browser, and answer its id."
+    return {"id": await browser.load_extension(await browser.find(server, name), directory)}
 
 
 @operation("browser.tabs")

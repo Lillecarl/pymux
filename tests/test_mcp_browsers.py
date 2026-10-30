@@ -163,6 +163,43 @@ async def test_a_kept_profile_outlives_its_browser(server, tmp_path, monkeypatch
         await call(server, "browser.close", name="probe")
 
 
+def an_extension(directory: Path, name: str) -> str:
+    "An unpacked extension whose service worker runs as long as it is loaded."
+    directory.mkdir()
+    manifest = {"manifest_version": 3, "name": name, "version": "1", "background": {"service_worker": "worker.js"}}
+    (directory / "manifest.json").write_text(json.dumps(manifest))
+    (directory / "worker.js").write_text("self.addEventListener('install', () => {});\n")
+    return str(directory)
+
+
+async def workers(server: Server) -> list[str]:
+    "The address of each extension's service worker, once each runs."
+    endpoint = (await browser.find(server, "probe")).endpoint()
+    async with browser.connected(endpoint) as connection:
+        found = (await connection.send("Target.getTargets"))["targetInfos"]
+    return sorted(one["url"] for one in found if one["type"] == "service_worker")
+
+
+async def test_an_extension_loads_at_launch_and_into_a_running_browser(server, tmp_path):
+    first = an_extension(tmp_path / "first", "first")
+    await call(server, "browser.open", name="probe", seat="headless", extensions=[first], arguments=ARGUMENTS)
+    try:
+        with anyio.fail_after(20):
+            while len(await workers(server)) < 1:
+                await anyio.sleep(0.1)
+        loaded = await call(
+            server, "browser.extension", name="probe", directory=an_extension(tmp_path / "second", "second")
+        )
+        with anyio.fail_after(20):
+            while len(await workers(server)) < 2:
+                await anyio.sleep(0.1)
+        assert "chrome-extension://%s/worker.js" % (loaded["id"],) in await workers(server)
+        with pytest.raises(ValueError, match="not an unpacked extension"):
+            await call(server, "browser.extension", name="probe", directory=str(tmp_path))
+    finally:
+        await call(server, "browser.close", name="probe")
+
+
 async def test_a_profile_name_is_one_path_part(server):
     with pytest.raises(ValueError, match="not a profile name"):
         await call(server, "browser.open", name="probe", seat="headless", profile="../escape", arguments=ARGUMENTS)

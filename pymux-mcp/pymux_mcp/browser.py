@@ -90,6 +90,10 @@ CALM: Final = (
     "--disable-smooth-scrolling",
 )
 
+#: What lets `Extensions.loadUnpacked` load an extension into a running
+#: browser; without it the method is not there. Measured on Chromium 155.
+EXTENSIBLE: Final = ("--enable-unsafe-extension-debugging",)
+
 
 class Seat(StrEnum):
     HEADLESS = "headless"
@@ -242,12 +246,15 @@ async def open_browser(
     idle: float = DEFAULT_IDLE,
     window: str | None = None,
     profile_name: str | None = None,
+    extensions: Sequence[str] = (),
 ) -> Browser:
     """
     Start a browser in `seat`, and answer it once it listens: in a split
-    of `window` when one is named, and on the kept profile `profile_name`
-    when one is named.
+    of `window` when one is named, on the kept profile `profile_name`
+    when one is named, and with the unpacked `extensions` loaded.
     """
+    for directory in extensions:
+        _an_extension(directory)
     if window is not None and seat is not Seat.PANE:
         raise ValueError("only a `pane` browser opens in a window")
     if profile_name is not None and not PROFILE_NAME.fullmatch(profile_name):
@@ -278,6 +285,8 @@ async def open_browser(
         "--user-data-dir=%s" % (profile,),
         *QUIET,
         *CALM,
+        *EXTENSIBLE,
+        *(["--load-extension=%s" % (",".join(extensions),)] if extensions else []),
         *arguments,
     ]
     holder: Job | Window | Pane
@@ -380,6 +389,24 @@ async def close(browser: Browser) -> None:
             await browser.holder.kill()
     finally:
         _forget(browser.profile)
+
+
+def _an_extension(directory: str) -> None:
+    if not os.path.isabs(directory) or not os.path.isfile(os.path.join(directory, "manifest.json")):
+        raise ValueError("%r is not an unpacked extension: an absolute directory with a manifest.json" % (directory,))
+    if "," in directory:
+        raise ValueError("%r: Chromium reads a comma as the end of an extension's directory" % (directory,))
+
+
+async def load_extension(browser: Browser, directory: str) -> str:
+    "Load an unpacked extension into the running browser, and answer its id."
+    _an_extension(directory)
+    endpoint = browser.endpoint()
+    if endpoint is None:
+        raise BrowserGone("the browser %r is not listening" % (browser.name,))
+    async with connected(endpoint) as connection:
+        answer = await connection.send("Extensions.loadUnpacked", {"path": directory})
+    return answer["id"]
 
 
 def _forget(profile: Path) -> None:

@@ -55,6 +55,9 @@ names one: a kept profile lives in
 extensions and settings for the next browser that names it. One
 browser at a time can have a profile open.
 
+`extensions` loads unpacked extensions at launch, and
+`browser.extension` loads one into a browser that runs.
+
 A browser lives across calls until `browser.close`, or until it was
 unused for its `idle` seconds, half an hour unless `browser.open` says
 otherwise. A browser operation is use, and so is a key or the mouse at a
