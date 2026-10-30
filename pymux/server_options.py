@@ -12,7 +12,7 @@ from pyte.environment import terminal_name
 from pyte.keep import Keep
 
 from . import introspect, log
-from .enums import AudioServerMode, Clipboard, ExtendedKeys, ForwardMode, RenderMode
+from .enums import AudioServerMode, Clipboard, ExtendedKeys, ForwardMode, RenderMode, WaylandPortal
 from .log import logger
 from .option_fields import Options, option, options
 
@@ -44,6 +44,10 @@ def _to_the_kernel(pymux: Pymux) -> None:
 
 def _wayland_changed(pymux: Pymux, owner: object) -> None:
     pymux.wayland.option_changed()
+
+
+def _portal_changed(pymux: Pymux, owner: object) -> None:
+    pymux.portal.option_changed()
 
 
 def _audio_changed(pymux: Pymux, owner: object) -> None:
@@ -96,6 +100,15 @@ class ServerOptions(Options):
             "that runs already keeps its environment. Lillecarl/pymux#383."
         ),
         on_set=_wayland_changed,
+    )
+    wayland_portal: WaylandPortal = option(
+        WaylandPortal.HOST,
+        doc=(
+            "Where programs in window panes learn whether the theme is light or dark, from a desktop "
+            "portal pymux serves. `WaylandPortal` says what each means. Needs the `wayland` extra. "
+            "Lillecarl/pymux#812."
+        ),
+        on_set=_portal_changed,
     )
     audio_server: AudioServerMode = option(
         AudioServerMode.AUTO,

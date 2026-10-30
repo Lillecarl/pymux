@@ -133,6 +133,7 @@ from .osc import (
     simple_notification_of,
 )
 from .pipes import bind_and_listen_on_socket, connect_in_memory
+from .portal import Portal
 from .rc import STARTUP_COMMANDS
 from .server import ServerConnection
 from .server_options import ServerOptions
@@ -1285,6 +1286,7 @@ class Pymux:
         "actions": Keep.REBUILT,
         # The compositor's task starts again in `running`.
         "wayland": Keep.REBUILT,
+        "portal": Keep.REBUILT,
         "audio": Keep.REBUILT,
         "browsers": Keep.DROPPED,  # each one goes with its program, which the upgrade ends
         # Tables, indexes and what the server last pushed.
@@ -1350,6 +1352,9 @@ class Pymux:
         # A Wayland compositor for the panes that have no display, when
         # pysmithay is installed and `wayland-server` is on. `wayland.py` says why.
         self.wayland = WaylandServer(self)
+        # The light or dark scheme those panes' programs read. `portal.py`
+        # says where. Lillecarl/pymux#812.
+        self.portal = Portal(self)
         # Sound to and from the client used last. `audio.py` says what
         # each mode costs. Lillecarl/pymux#657.
         self.audio = AudioServer(self)
@@ -2002,6 +2007,7 @@ class Pymux:
             tasks.start_soon(self._sweep_jobs)
             tasks.start_soon(self.actions.keep, lambda: self.options.action_log_limit)
             tasks.start_soon(self.wayland.keep)
+            tasks.start_soon(self.portal.keep)
             tasks.start_soon(self.audio.keep)
             if self.listener is not None:
                 self.serve_listener()
@@ -2387,6 +2393,7 @@ class Pymux:
         client_state.session.last_used = self._uses
         # The panes take this client's cell. Lillecarl/pymux#753.
         self.terminals.sync_cell_size()
+        self.terminals.sync_color_scheme()
 
     def sync_pane_focus(self) -> None:
         """
@@ -4646,6 +4653,7 @@ class Pymux:
         # and only once its terminal has answered the cell size query.
         # Both are why the reply calls this again.
         self.terminals.sync_cell_size()
+        self.terminals.sync_color_scheme()
 
         return client_state
 
@@ -4672,3 +4680,4 @@ class Pymux:
         self.terminals.sync_keyboard_source_flags()
         # And the client that spoke for the panes may be the one gone.
         self.terminals.sync_cell_size()
+        self.terminals.sync_color_scheme()

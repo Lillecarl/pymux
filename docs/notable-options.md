@@ -43,6 +43,7 @@ The build switch: the root `default.nix` passes `pipewire` and `wireplumber` to 
 | option | scope | default | why |
 | --- | --- | --- | --- |
 | `wayland-server` | session | on | Panes get a Wayland display, so `pymux wl` and the clipboard tools work. Absent where pysmithay is not, for example on macOS. |
+| `wayland-portal` | server | `host` | Programs in window panes draw light or dark the way the theme in front of you does, live. `host` serves the portal on the host's session bus only where no real portal runs or can start, so programs keep `systemctl --user` and notifications. `private` works beside a real portal, but `pymux wl` programs lose the host's bus. |
 | `window-codec` | window | `lossless` | Exact pixels. `vp9` sends far fewer bytes over a slow link, at some sharpness, and smooths video. |
 | `wayland-scale` | window | `auto` | A window draws at the density of the client's cells. |
 | `window-scroll` | client | `smooth` | One scroll event moves one cell of pixels, which follows a trackpad. `notch` is a mouse wheel's step. The terminal does not say which device it has. |

@@ -102,6 +102,20 @@ class AudioServerMode(StrEnum):
     OFF = "off"
 
 
+class WaylandPortal(StrEnum):
+    """
+    Where the desktop portal's appearance settings for the programs in
+    window panes are served. `pymux/portal.py` says what each costs.
+    Lillecarl/pymux#812.
+    """
+
+    #: The host's session bus, while no real portal holds or can start there.
+    HOST = "host"
+    #: A bus of this server's own, which only `pymux wl` programs are given.
+    PRIVATE = "private"
+    OFF = "off"
+
+
 class ClientAudio(StrEnum):
     "What a client does with the sound of the server. Lillecarl/pymux#657."
 

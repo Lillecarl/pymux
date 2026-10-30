@@ -15,9 +15,11 @@ import pytest
 from pyte.keys import KeyboardFlag
 from session import Connection
 
+from pymux.client_options import ClientOptions
 from pymux.enums import ExtendedKeys
 from pymux.main import Pymux
 from pymux.options import ALL_SERVER_OPTIONS, SetOptionError
+from pymux.style import DEFAULT_THEME
 
 
 class FakeConnection(Connection):
@@ -47,8 +49,14 @@ class FakeClientState:
 
     terminal_focused = True
 
+    #: What `latest_client` and the portal's scheme read of every
+    #: client. Lillecarl/pymux#812.
+    last_used = 0
+    theme_in_use = DEFAULT_THEME
+
     def __init__(self, session):
         self.session = session
+        self.options = ClientOptions()
 
 
 class FakeScreen:

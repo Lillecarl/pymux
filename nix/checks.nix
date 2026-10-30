@@ -44,6 +44,7 @@
   # neither a bus nor the daemon's configuration. The seat runs no
   # session anyway.
   sway-unwrapped,
+  dbus,
   swaybg,
   foot,
   kitty,
@@ -698,12 +699,17 @@ in
     runInSandbox
       {
         name = "pymux-wayland";
-        inputs = [ wl-clipboard ];
+        # dbus-daemon, for the portal's buses. Lillecarl/pymux#812.
+        inputs = [
+          wl-clipboard
+          dbus
+        ];
       }
       ''
         ${waylandTestEnv}/bin/python -m pytest -q -p no:cacheprovider \
           -o faulthandler_timeout=60 \
-          tests/test_wayland_server.py tests/test_wayland_absent.py tests/test_window_panes.py
+          tests/test_wayland_server.py tests/test_wayland_absent.py tests/test_window_panes.py \
+          tests/test_portal.py
       '';
 
   # How long the loop stalls while mpv plays in a window pane, and what

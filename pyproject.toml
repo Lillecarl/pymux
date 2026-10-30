@@ -116,7 +116,10 @@ web = ["websockets>=13.0"]
 # work there (`wayland-server`). Rust and Linux only, and pymux runs the
 # same without it: `pymux/wayland.py` imports it or does nothing.
 # Lillecarl/pymux#383.
-wayland = ["pysmithay; sys_platform == 'linux'"]
+#
+# dbus-fast serves the desktop portal those programs read light or dark
+# from (`wayland-portal`). Lillecarl/pymux#812.
+wayland = ["pysmithay; sys_platform == 'linux'", "dbus-fast; sys_platform == 'linux'"]
 # What the suites need on top of what pymux needs. It is an extra and not a
 # `[dependency-groups]` entry because only an extra reaches a resolver: Nix
 # builds the test environment from this list.

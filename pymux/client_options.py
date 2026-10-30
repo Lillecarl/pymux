@@ -71,6 +71,10 @@ def _theme_chosen(pymux: Pymux, client: ClientState) -> None:
     pymux.invalidate(Woke.THEME_WAS_CHOSEN)
 
 
+def _swapped(pymux: Pymux, client: ClientState) -> None:
+    pymux.terminals.sync_color_scheme()
+
+
 def _theme_shown(value: str, client: ClientState | None) -> str:
     # `nearest` alone says nothing about what is on the screen.
     matched = getattr(client, "matched", None)
@@ -116,7 +120,9 @@ class ClientOptions(Options):
         show=_theme_shown,
     )
     swap_light_and_dark_colors: bool = option(
-        False, doc="The theme is the other way round from this terminal: draw it swapped."
+        False,
+        doc="The theme is the other way round from this terminal: draw it swapped.",
+        on_set=_swapped,
     )
     full_screen: bool = option(
         False,

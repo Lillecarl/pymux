@@ -24,6 +24,7 @@ def list_processes(pymux: Pymux, args: argparse.Namespace) -> None:
     here = socket.gethostname()
     lines = ["server %d" % os.getpid()]
     lines.extend("sound %d" % pid for pid in pymux.audio.pids())
+    lines.extend("portal %d" % pid for pid in pymux.portal.pids())
     for connection in pymux.connections:
         # A client of another machine says a pid of that machine.
         if connection.pid and connection.hostname == here:

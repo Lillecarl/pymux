@@ -367,6 +367,9 @@ class WaylandServer:
         where it otherwise hunts for a GPU first. Qt Quick draws without
         OpenGL, for a machine with no Mesa at all: there qutebrowser
         found no EGL and drew black.
+
+        Under `wayland-portal private` the session bus is the portal's own,
+        where it answers light or dark. Lillecarl/pymux#812.
         """
         compositor, tasks = self.compositor, self._tasks
         if compositor is None or tasks is None or self.display is None:
@@ -374,6 +377,8 @@ class WaylandServer:
         tag, fd = compositor.connect()
         env = {key: value for key, value in env.items() if key not in ("DISPLAY", "WAYLAND_SOCKET")}
         env.update(WAYLAND_SOCKET=str(fd), WAYLAND_DISPLAY=self.display, XDG_SESSION_TYPE="wayland")
+        if self.pymux.portal.private_address is not None:
+            env["DBUS_SESSION_BUS_ADDRESS"] = self.pymux.portal.private_address
         env.setdefault("LIBGL_ALWAYS_SOFTWARE", "1")
         env.setdefault("QT_QUICK_BACKEND", "software")
         launch = Launch(pane)

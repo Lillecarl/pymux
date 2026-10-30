@@ -21,6 +21,7 @@ from .colors import theme_color_base
 from .enums import ExtendedKeys
 from .log import logger
 from .osc import NO_PROGRESS
+from .portal import color_scheme_of, theme_background
 from .style import DEFAULT_THEME
 
 if TYPE_CHECKING:
@@ -54,6 +55,7 @@ class Terminals:
         "_kitty_flags_sent": Keep.REBUILT,
         "_keyboard_state_sent": Keep.REBUILT,
         "_cell_size_sent": Keep.REBUILT,
+        "_scheme_from": Keep.REBUILT,
     }
 
     def __init__(self, pymux: Pymux) -> None:
@@ -71,6 +73,9 @@ class Terminals:
 
         # The cell size the panes were last told. (None: nothing yet.)
         self._cell_size_sent: tuple[int, int] | None = None
+
+        # What the portal's scheme was last worked out from.
+        self._scheme_from: tuple[object, ...] | None = None
 
     def sync_pointer_shape(self) -> None:
         """
@@ -299,6 +304,37 @@ class Terminals:
         """
         for pane in list(self.pymux.panes_by_id.values()):
             self.tell_pane_about_colours(pane)
+        self.sync_color_scheme()
+
+    def sync_color_scheme(self) -> None:
+        """
+        Tell the portal whether the screen of the client used last is
+        light or dark, for the programs in window panes.
+        Lillecarl/pymux#812.
+
+        The background decides: the theme's under `paint-screen`, drawn
+        swapped under `swap-light-and-dark-colors`, and the terminal's own
+        otherwise, since that is what shows behind the panes. Nothing
+        attached leaves the last answer standing. A client's every key
+        reaches this, so the answer is worked out again only when what it
+        is worked out from moved.
+        """
+        latest = self.pymux.latest_client()
+        if latest is None:
+            return
+        painted = latest.session.options.paint_screen
+        theme = latest.theme_in_use
+        swapped = painted and latest.options.swap_light_and_dark_colors
+        background = None
+        if not painted:
+            # The in-process connection never asked its terminal.
+            with suppress(AttributeError):
+                background = latest.default_colors.background
+        source = (theme, painted, swapped, background)
+        if source == self._scheme_from:
+            return
+        self._scheme_from = source
+        self.pymux.portal.scheme_is(color_scheme_of(background or theme_background(theme), swapped))
 
     def latest_theme(self) -> str:
         """
