@@ -2927,6 +2927,9 @@ class Pymux:
             return None
 
         pane = self._window_pane_of(widget)
+        if beside is not None:
+            # One program, one set of tags: a caller finds all its windows by them.
+            pane.tags.update(beside.tags)
         window.add_pane(pane, vsplit=True)
         self._window_pane_shown()
         return pane
@@ -2944,6 +2947,7 @@ class Pymux:
         if session is None:
             return None
         pane = self._window_pane_of(widget)
+        pane.tags.update(old.tags)
         # The swap first: an ended program takes its pane out of the
         # session, and a session left with none stops the server.
         session.arrangement.replace_pane(old, pane)

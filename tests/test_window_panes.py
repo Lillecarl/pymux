@@ -451,6 +451,7 @@ async def test_wl_turns_the_pane_it_ran_in_into_the_window(tmp_path, monkeypatch
     log = tmp_path / "probe.log"
     log.touch()
     async with with_a_shell(tmp_path, monkeypatch) as (pymux, session, window, shell):
+        shell.tags["browser"] = "probe"
         got = await session.command(
             "wl -- %s %s %s" % (sys.executable, PROBE, log), pane_id=shell.pane_id, environment=dict(os.environ)
         )
@@ -459,6 +460,8 @@ async def test_wl_turns_the_pane_it_ran_in_into_the_window(tmp_path, monkeypatch
         # In the shell's place, and the shell is gone: one pane, not two.
         assert window.panes == [pane]
         assert window.active_pane is pane
+        # A caller that tagged the pane finds the window by the same tags.
+        assert pane.tags == {"browser": "probe"}
         await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
         # Its window opened, so `wl` has nothing to say.
         await once(lambda: answered(got)["exit"] is not None, 10.0, "wl never answered")
