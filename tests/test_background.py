@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from prompt_toolkit.layout.screen import Screen, WritePosition
 
-from pymux.layout import Background
+from pymux.widgets import Background
 
 
 def _draw(xpos, ypos, width, height):

@@ -21,7 +21,7 @@ from __future__ import annotations
 from prompt_toolkit.layout import walk
 from test_strip_draws import ROWS, create_client
 
-from pymux.layout import MessageToolbar
+from pymux.widgets import MessageToolbar
 
 #: Two complaints of the shape a configuration file makes, each long
 #: enough that the pair cannot fit on one row of the test's screen.
