@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+from dataclasses import replace
 
 import anyio
 
@@ -88,15 +89,18 @@ async def drawn(grid: screenshot.Grid, args: argparse.Namespace, cell: tuple[int
 
 
 async def drawn_png(grid: screenshot.Grid, args: argparse.Namespace, cell: tuple[int, int], command: str) -> bytes:
-    "The grid as a PNG, drawn in a thread with the fonts the flags name or the system's."
+    """
+    The grid as a PNG, drawn in a thread with the fonts the flags name or
+    the system's. The system's font takes the system's fallbacks too, when
+    no `--fallback` names any; a caller's font takes only the caller's.
+    """
     paths = args.fonts or await screenshot.system_fonts()
     if not paths:
         raise CommandException("%s: no font to draw with: pass --font, or put fontconfig's fc-match on PATH" % command)
     try:
-        return await anyio.to_thread.run_sync(_drawn, grid, paths, args.fallbacks, cell)
+        faces = await anyio.to_thread.run_sync(screenshot.faces_of, paths, args.fallbacks)
+        if not args.fonts and not args.fallbacks:
+            faces = replace(faces, fallbacks=tuple(await screenshot.system_fallbacks(grid, faces.regular)))
+        return await anyio.to_thread.run_sync(screenshot.draw, grid, faces, *cell)
     except ValueError as error:
         raise CommandException("%s: %s" % (command, error))
-
-
-def _drawn(grid: screenshot.Grid, paths: list[str], fallbacks: list[str], cell: tuple[int, int]) -> bytes:
-    return screenshot.draw(grid, screenshot.faces_of(paths, fallbacks), *cell)

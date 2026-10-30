@@ -62,6 +62,7 @@
   grim,
   imagemagick,
   makeFontsConf,
+  fontconfig,
   runtimeShell,
   dejavu_fonts,
   # The fonts pymux-mcp bundles, which `capture-pane --png` is judged with.
@@ -650,6 +651,7 @@ in
     runInSandbox
       {
         name = "pymux-unit";
+        inputs = [ fontconfig ];
         env = {
           inherit selection durations;
           PYMUX_CPU = cpuNames;
@@ -660,6 +662,15 @@ in
           # Nerd Font pymux-mcp hands pymux.
           PYMUX_TEST_FONT_DIR = "${nerd-fonts.jetbrains-mono}/share/fonts/truetype/NerdFonts/JetBrainsMono";
           PYMUX_TEST_FALLBACK = "${unifont.out}/share/fonts/opentype/unifont/unifont.otf";
+          # What fontconfig finds when a picture draws with the system's
+          # font, and falls back to for a glyph it lacks.
+          # Lillecarl/pymux#815.
+          FONTCONFIG_FILE = makeFontsConf {
+            fontDirectories = [
+              nerd-fonts.jetbrains-mono
+              unifont
+            ];
+          };
           # The policy `pymux/entry_points/__init__.py` installs, so the
           # suite judges the lazy program a person runs.
           DEFERIMPORT_POLICY = "deny=hypothesis,asyncssh,olefile";

@@ -23,9 +23,10 @@ ships no font: pymux-mcp bundles one and passes it.
 
 **A glyph the font lacks comes from a fallback**, as a terminal does
 it: `--fallback` files are tried in order, each by its own character
-map. Without one a missing glyph is the font's box. The person's
-terminal draws its own fallbacks on its own machine, and none of its
-fonts reach the server.
+map. Without one, the system's font takes fontconfig's answer for each
+character it lacks, and a caller's font draws the font's box. The
+person's terminal draws its own fallbacks on its own machine, and none
+of its fonts reach the server. Lillecarl/pymux#815.
 
 **Images are placed as a client would place them**: `graphics.
 pane_placements` answers each one's cells and crop, kitty's and
@@ -44,7 +45,7 @@ from functools import cache
 from typing import TYPE_CHECKING, Any, Final, NamedTuple
 
 import anyio
-from fontTools.ttLib import TTFont
+from fontTools.ttLib import TTFont, TTLibError
 from PIL import Image, ImageDraw, ImageFont
 from prompt_toolkit.output.vt100_colors import FG_ANSI_COLORS
 from pyte.cells import PLAIN_APPEARANCE
@@ -138,6 +139,42 @@ async def system_fonts() -> list[str]:
         path = found.stdout.decode(errors="replace").strip()
         if found.returncode == 0 and path and path not in paths:
             paths.append(path)
+    return paths
+
+
+async def system_fallbacks(grid: Grid, regular: str) -> list[str]:
+    """
+    fontconfig's font for each character the grid shows and `regular`
+    lacks, as a terminal asks it, or nothing without `fc-match`.
+
+    Not a colour font: Pillow draws a bitmap emoji font at one size only.
+    fontconfig answers its best font even when that font lacks the
+    character too, so each answer's own map has the last word.
+    """
+    fc_match = shutil.which("fc-match")
+    if fc_match is None:
+        return []
+    known = await anyio.to_thread.run_sync(_characters, regular)
+    shown = {ord(char) for row in grid.rows for glyph, _look in row for char in glyph if char not in _SELECTORS}
+    paths: list[str] = []
+    covered: set[int] = set()
+    for code in sorted(shown - known):
+        if code < 0x20 or code in covered:
+            continue
+        found = await anyio.run_process(
+            [fc_match, "--format", "%{file}", "monospace:color=false:charset=%x" % code], check=False
+        )
+        path = found.stdout.decode(errors="replace").strip()
+        if found.returncode != 0 or not path or path in paths:
+            continue
+        try:
+            has = await anyio.to_thread.run_sync(_characters, path)
+        except OSError, TTLibError:
+            # A bitmap font, which fontconfig knows and fontTools cannot read.
+            continue
+        if code in has:
+            paths.append(path)
+            covered |= has
     return paths
 
 

@@ -282,3 +282,12 @@ async def test_a_cell_that_is_not_a_size_is_refused(pymux):
 @pytest.mark.skipif(shutil.which("fc-match") is None, reason="no fontconfig on PATH")
 async def test_without_a_font_fontconfig_answers():
     assert await screenshot.system_fonts()
+
+
+@pytest.mark.skipif(shutil.which("fc-match") is None, reason="no fontconfig on PATH")
+async def test_the_system_font_falls_back_where_fontconfig_says():
+    "The check's fontconfig knows Unifont, which has U+23BF. Lillecarl/pymux#815."
+    look = screenshot.Look("#ffffff", "#000000")
+    grid = screenshot.Grid([[("⎿", look), ("a", look)]], 2, "#ffffff", "#000000", None)
+    (found,) = await screenshot.system_fallbacks(grid, FONTS[0])
+    assert 0x23BF in screenshot._characters(found)
