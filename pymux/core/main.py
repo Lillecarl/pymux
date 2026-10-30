@@ -34,12 +34,12 @@ from ..enums import OpenUrlTarget, RenderMode, Woke
 from ..graphics import kernels
 from ..graphics.graphics import OuterImageIds
 from ..ids import PaneId, SessionId
-from ..jobs import JOB_SWEEP_EVERY, JobTable
+from ..jobs import JobTable
 from ..keys.actions import ActionLog, Origin, awaited_as, started_by
 from ..keys.key_bindings import PymuxKeyBindings
 from ..layout.error_notice import ErrorNotice
 from ..log import logger
-from ..notify.notifications import Notification, NotificationCenter, NotificationRoutes
+from ..notify.notifications import NotificationCenter, NotificationRoutes
 from ..notify.notifier import Notifier
 from ..options.options import ALL_CLIENT_OPTIONS, ALL_OPTIONS, ALL_SERVER_OPTIONS, ALL_WINDOW_OPTIONS, Scope
 from ..options.server_options import ServerOptions
@@ -51,6 +51,7 @@ from ..wayland.browsers import Browsers
 from ..wayland.portal import Portal
 from ..wayland.wayland import WaylandServer
 from .arrangement import Arrangement
+from .chores import sweep, watch_window_output
 from .environment import take_environment_from
 from .focus import Focus
 from .forward_requests import ForwardRequests
@@ -76,11 +77,6 @@ __all__ = [
 ]
 
 kernels.install()
-
-
-#: How often the windows are checked for output and for quiet, in
-#: seconds: a mark goes up within this of what raised it.
-WINDOW_OUTPUT_INTERVAL = 1.0
 
 
 class Pymux:
@@ -634,8 +630,8 @@ class Pymux:
             self.loop = asyncio.get_running_loop()
             self.error_notice.install()
             tasks.start_soon(self.waking.auto_refresh)
-            tasks.start_soon(self._watch_window_output)
-            tasks.start_soon(self._sweep_jobs)
+            tasks.start_soon(watch_window_output, self)
+            tasks.start_soon(sweep, self)
             tasks.start_soon(self.actions.keep, lambda: self.options.action_log_limit)
             tasks.start_soon(self.wayland.keep)
             tasks.start_soon(self.portal.keep)
@@ -651,21 +647,6 @@ class Pymux:
                 tasks.cancel_scope.cancel()
                 self.tasks = None
                 self.error_notice.uninstall()
-
-    async def _watch_window_output(self) -> None:
-        "Raise the activity and silence marks, once a second. Lillecarl/pymux#767."
-        while True:
-            await anyio.sleep(WINDOW_OUTPUT_INTERVAL)
-            now = anyio.current_time()
-            try:
-                raised = False
-                for session in self.sessions:
-                    raised |= session.arrangement.check_output(self.apps, now)
-                if raised:
-                    self.invalidate(Woke.WINDOW_MARKED)
-            except Exception:
-                # Like the clock: this must not take the server with it.
-                logger.exception("Checking the windows for output failed.")
 
     def show_pane_on_click(self, client_state: ClientState, pane: Pane) -> None:
         "Take this client to the pane a clicked notification came from, unless its session says no."
@@ -687,40 +668,6 @@ class Pymux:
         window.active_pane = pane
         self.invalidate(Woke.CLICK_CHOSE_A_WINDOW)
         return True
-
-    async def _sweep_jobs(self) -> None:
-        """
-        Forget the jobs idle past `job_ttl`, on a slow clock.
-
-        The time to live is read each turn, so a `set-option job-ttl`
-        reaches the sweep after this one. A sweep that failed must not
-        take the server with it, for the same reason the refresh
-        above says the same.
-        """
-        while True:
-            await anyio.sleep(JOB_SWEEP_EVERY)
-            try:
-                if self.options.job_ttl:
-                    self.jobs.sweep(self.options.job_ttl)
-            except Exception:
-                logger.exception("The sweep of idle jobs failed.")
-            try:
-                self.notification_center.sweep(self._seen_of, self.options.notification_keep_seen, time.time())
-            except Exception:
-                logger.exception("The sweep of seen notifications failed.")
-
-    def _seen_of(self, record: Notification) -> float | None:
-        """
-        When a client saw the window a notification came from, or None.
-        One with no window to look at is seen now, so it goes in time.
-        """
-        found = self.place_of_pane_id(record.pane_id)
-        if found is None:
-            return time.time()
-        session, window, _pane = found
-        if window.seen_at >= record.at:
-            return window.seen_at
-        return time.time() if session.arrangement.watched(window, self.apps) else None
 
     @property
     def apps(self):

@@ -20,6 +20,7 @@ from pyte.osc import Osc
 from run_commands import run_as
 from session import create_session
 
+from pymux.core.chores import seen_of
 from pymux.core.main import Pymux
 from pymux.enums import Chooser
 from pymux.notify.hub import Heading, age
@@ -289,17 +290,17 @@ async def test_a_notification_is_seen_when_a_client_looks_at_its_window():
             pane = first.active_pane
             await run_as(pymux, state, "new-window")
             away = pymux.notification_center.add("Away", pane_id=pane.pane_id)
-            assert pymux._seen_of(away) is None
+            assert seen_of(pymux, away) is None
 
             pymux.current_session.arrangement.set_active_window(first)
-            assert pymux._seen_of(away) == first.seen_at
+            assert seen_of(pymux, away) == first.seen_at
 
             # One that comes while a client looks is seen at once.
             here = pymux.notification_center.add("Here", pane_id=pane.pane_id)
-            assert pymux._seen_of(here) is not None
+            assert seen_of(pymux, here) is not None
 
         # One with no pane has no window to look at.
-        assert pymux._seen_of(pymux.notification_center.add("Script")) is not None
+        assert seen_of(pymux, pymux.notification_center.add("Script")) is not None
 
 
 # ----------------------------------------------------------------------
