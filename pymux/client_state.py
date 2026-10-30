@@ -797,7 +797,7 @@ class ClientState:
                 SwapLightAndDarkStyleTransformation(),
                 Condition(lambda: self.options.swap_light_and_dark_colors),
             ),
-            on_invalidate=pymux.client_asked_for_frame,
+            on_invalidate=pymux.waking.client_asked_for_frame,
         )
 
         # Synchronize the Vi state with the CLI object.

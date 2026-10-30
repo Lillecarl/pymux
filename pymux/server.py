@@ -734,7 +734,7 @@ class ServerConnection:
     def _on_redraw(self, packet: Message) -> None:
         # The client drew a question over the frame, and it is gone.
         if self.client_state is not None:
-            self.pymux.redraw(self.client_state)
+            self.pymux.waking.redraw(self.client_state)
 
     @_PACKETS.handles(Packet.OPEN_FAILED)
     def _on_open_failed(self, packet: Message) -> None:

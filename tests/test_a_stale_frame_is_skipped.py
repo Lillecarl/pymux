@@ -38,7 +38,7 @@ async def test_a_stale_frame_is_skipped_and_asked_for_again() -> None:
         state.input_tick += 1
         assert state.should_skip_render()
         # ...and the schedule it brings draws again.
-        pymux.client_asked_for_frame(state.app)
+        pymux.waking.client_asked_for_frame(state.app)
         assert not state.should_skip_render()
         assert state.schedule_tick == state.input_tick
 

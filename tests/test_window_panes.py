@@ -160,7 +160,7 @@ async def test_a_redraw_places_the_window_again(tmp_path, frames):
         await once(placed, 10.0, "the window was never placed")
         await anyio.sleep(0.3)
         recorder.out, recorder.frames = "", []
-        pymux.redraw(state)
+        pymux.waking.redraw(state)
         await once(placed, 10.0, "the redraw left the window unplaced")
 
 

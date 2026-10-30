@@ -11,7 +11,7 @@ Lillecarl/pymux#154.
 A session with `full-screen on` draws no status line and no pane
 titlebar, so its text is empty and never differs. Lillecarl/pymux#151.
 
-The tests call the refresh. What runs it is `Pymux._auto_refresh`, one
+The tests call the refresh. What runs it is `Waking.auto_refresh`, one
 task of the server's own task group, and it is on the loop rather than
 on a thread for the reason in Lillecarl/pymux#155.
 """
@@ -121,7 +121,7 @@ async def test_first_refresh_draws_what_no_frame_drew(session):
     "Nothing has drawn the status line yet, so it has something to say."
     pymux, state, frames = session
 
-    pymux.refresh_what_time_moves()
+    pymux.waking.refresh_what_time_moves()
 
     assert len(frames) == 1
 
@@ -130,11 +130,11 @@ async def test_refresh_that_finds_same_text_asks_for_no_frame(session):
     "The clock says the same minute for fourteen of every fifteen ticks."
     pymux, state, frames = session
     set_option(pymux, "status-right", NO_CLOCK)
-    pymux.refresh_what_time_moves()
+    pymux.waking.refresh_what_time_moves()
     assert len(frames) == 1
 
-    pymux.refresh_what_time_moves()
-    pymux.refresh_what_time_moves()
+    pymux.waking.refresh_what_time_moves()
+    pymux.waking.refresh_what_time_moves()
 
     assert len(frames) == 1
 
@@ -143,11 +143,11 @@ async def test_refresh_asks_for_frame_when_text_changed(session):
     "`#W` in the window list names a window, so a rename shows."
     pymux, state, frames = session
     set_option(pymux, "status-right", NO_CLOCK)
-    pymux.refresh_what_time_moves()
+    pymux.waking.refresh_what_time_moves()
     assert len(frames) == 1
 
     pymux.arrangement.windows[0].chosen_name = "renamed"
-    pymux.refresh_what_time_moves()
+    pymux.waking.refresh_what_time_moves()
 
     assert len(frames) == 2
 
@@ -158,8 +158,8 @@ async def test_full_screen_session_asks_for_no_frame_at_all(session):
     set_option(pymux, "full-screen", "on", state)
 
     assert text(state) == ()
-    pymux.refresh_what_time_moves()
-    pymux.refresh_what_time_moves()
+    pymux.waking.refresh_what_time_moves()
+    pymux.waking.refresh_what_time_moves()
 
     assert frames == []
 
@@ -172,7 +172,7 @@ async def test_clock_inside_pane_asks_for_frames(session):
     """
     pymux, state, frames = session
     set_option(pymux, "full-screen", "on", state)
-    pymux.refresh_what_time_moves()
+    pymux.waking.refresh_what_time_moves()
     assert frames == []
 
     # **The window this client looks at**, and not `windows[0]`.
@@ -181,7 +181,7 @@ async def test_clock_inside_pane_asks_for_frames(session):
     # looking at. This test used to set the clock there and pass,
     # because the refresh read every window. Lillecarl/pymux#251.
     in_view(pymux, state).panes[0].clock_mode = True
-    pymux.refresh_what_time_moves()
+    pymux.waking.refresh_what_time_moves()
 
     assert len(frames) == 1
     assert text(state) != ()
@@ -268,11 +268,11 @@ async def test_clock_in_window_out_of_view_asks_for_nothing(session):
     set_option(pymux, "full-screen", "on", state)
     other = out_of_view(pymux, state)
 
-    pymux.refresh_what_time_moves()
+    pymux.waking.refresh_what_time_moves()
     frames.clear()
 
     other.panes[0].clock_mode = True
-    pymux.refresh_what_time_moves()
+    pymux.waking.refresh_what_time_moves()
 
     assert frames == []
 
@@ -290,7 +290,7 @@ async def test_clock_of_pane_shows_pinned_time(session):
     set_option(pymux, "full-screen", "on", state)
     set_option(pymux, "test-mode", "on")
     in_view(pymux, state).panes[0].clock_mode = True
-    pymux.refresh_what_time_moves()
+    pymux.waking.refresh_what_time_moves()
 
     said = text(state)
     assert any("13:37" in part for part in said), said
@@ -302,11 +302,11 @@ async def test_pinned_clock_asks_for_one_frame_and_then_no_more(session):
     set_option(pymux, "test-mode", "on")
     in_view(pymux, state).panes[0].clock_mode = True
 
-    pymux.refresh_what_time_moves()
+    pymux.waking.refresh_what_time_moves()
     assert len(frames) == 1
 
     frames.clear()
-    pymux.refresh_what_time_moves()
+    pymux.waking.refresh_what_time_moves()
     assert frames == []
 
 

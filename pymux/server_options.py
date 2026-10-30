@@ -60,7 +60,7 @@ def _keyboard_changed(pymux: Pymux, owner: object) -> None:
 
 
 def _render_mode_changed(pymux: Pymux, owner: object) -> None:
-    pymux.apply_render_mode()
+    pymux.waking.apply_render_mode()
 
 
 @options

@@ -21,7 +21,7 @@ def refresh_client(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     if pymux.answer is not None:
         return  # The command line drew nothing and has nothing to draw.
-    pymux.redraw(pymux.get_client_state())
+    pymux.waking.redraw(pymux.get_client_state())
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):

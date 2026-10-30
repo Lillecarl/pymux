@@ -44,7 +44,7 @@ def record_client(pymux: Pymux, args: argparse.Namespace) -> None:
             connection.colors.term,
             args.idle_time_limit,
         )
-        pymux.redraw(client_state)
+        pymux.waking.redraw(client_state)
         pymux.show_message("Recording %s to %s" % (connection.recording.name, recordings_directory()))
     pymux.invalidate()
 
