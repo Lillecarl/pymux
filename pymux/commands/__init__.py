@@ -112,6 +112,7 @@ MODULES = [
     "notify",
     "get",
     "clear_history",
+    "unscroll_pane",
     "list_keys",
     "list_panes",
     "list_windows",
