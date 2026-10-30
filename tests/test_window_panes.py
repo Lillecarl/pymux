@@ -31,6 +31,8 @@ from pymux.window_pane import is_window_pane
 
 PROBE = Path(__file__).with_name("wayland_probe.py")
 SIZE = Size(rows=24, columns=80)
+#: A face for the pictures pymux draws itself; `checks.pymux-wayland` names one.
+FONT = os.environ.get("PYMUX_TEST_FONT", "/nonexistent")
 
 
 class Recorder:
@@ -493,6 +495,45 @@ async def test_capture_pane_png_of_a_window_pane_is_the_windows_frame(tmp_path, 
         got = await session.command("capture-pane -p -t %%%d" % pane.pane_id)
         await once(lambda: answered(got)["exit"] is not None, 10.0, "capture-pane -p never answered")
         assert "shows a Wayland window" in answered(got)["err"]
+
+
+@pytest.mark.parametrize("command", ["capture-client", "capture-window"])
+async def test_a_picture_of_the_whole_shows_the_windows_frame_in_its_pane(tmp_path, monkeypatch, command):
+    "Lillecarl/pymux#814."
+    log = tmp_path / "probe.log"
+    log.touch()
+    async with with_a_shell(tmp_path, monkeypatch) as (pymux, session, _window, shell):
+        await session.command(
+            "wl -- %s %s %s" % (sys.executable, PROBE, log), pane_id=shell.pane_id, environment=dict(os.environ)
+        )
+        await once(lambda: pymux.wayland.panes, 10.0, "the window never opened")
+        await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
+        # capture-client reads the client's last frame, which may not show the window yet.
+        await once(
+            lambda: any(client.window_panes() for client in pymux.clients),
+            10.0,
+            "the client never drew the window pane",
+        )
+
+        (pane,) = pymux.wayland.panes.values()
+        got = await session.command(
+            "%s -p --png --font %s --cell 4x8" % (command, shlex.quote(FONT)), pane_id=pane.pane_id
+        )
+        await once(lambda: answered(got)["exit"] is not None, 10.0, "%s never answered" % command)
+        told = answered(got)
+        assert (told["err"], told["exit"]) == ("", 0)
+        picture = Image.open(io.BytesIO(base64.b64decode(told["out"]))).convert("RGB")
+        # The one pane is the frame scaled to its cells. A client's status
+        # line may sit above it; a window has none.
+        width, height, rgba = pymux.wayland.frame(pane.terminal.toplevel)
+        size = (pane.terminal.columns * 4, pane.terminal.rows * 8)
+        frame = Image.frombytes("RGBA", (width, height), rgba).resize(size, Image.Resampling.LANCZOS)
+        top = 0
+        if command == "capture-client":
+            (client,) = pymux.clients
+            ((_pane, _widget, place),) = client.window_panes()
+            top = place.ypos * 8
+        assert picture.crop((0, top, size[0], top + size[1])).tobytes() == frame.convert("RGB").tobytes()
 
 
 async def test_a_later_window_of_a_wl_program_goes_beside_its_first(tmp_path, monkeypatch):

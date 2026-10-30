@@ -348,12 +348,16 @@ def video_parts(image_id: int, codec: Codec, frame: VideoFrame, after: str) -> l
 #: A program's own images count up from one.
 WINDOW_IMAGE = -1
 
+#: kitty draws a placement whose z-index is under this one under every
+#: cell with a background colour of its own, and not only under the text.
+UNDER_BACKGROUNDS = -(1 << 30)
+
 #: The z-index a window pane's picture is placed at: under every cell
-#: with a background colour of its own, kitty's line being -2**30. The
-#: pane's cells take the default background, so the picture shows there,
-#: and a prompt, a menu or a message drawn over the pane covers it. Zero
-#: or above would draw it over them all. Lillecarl/pymux#647.
-WINDOW_Z = -(1 << 30) - 1
+#: with a background colour of its own. The pane's cells take the default
+#: background, so the picture shows there, and a prompt, a menu or a
+#: message drawn over the pane covers it. Zero or above would draw it
+#: over them all. Lillecarl/pymux#647.
+WINDOW_Z = UNDER_BACKGROUNDS - 1
 
 
 class _ShownWindow(NamedTuple):

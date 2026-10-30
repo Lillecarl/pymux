@@ -22,7 +22,7 @@ from pyte.painted import Paint
 from pymux import screenshot
 from pymux.answer import Answer
 from pymux.commands import call_command_handler
-from pymux.graphics import DEFAULT_CELL_HEIGHT, DEFAULT_CELL_WIDTH
+from pymux.graphics import DEFAULT_CELL_HEIGHT, DEFAULT_CELL_WIDTH, WINDOW_Z
 from pymux.main import Pymux
 
 COLUMNS = 20
@@ -230,6 +230,32 @@ async def test_an_image_under_the_text_lets_the_text_show(pymux):
     assert RED in _cell(image, 0, 0, 9, 18)
     assert len(_cell(image, 0, 0, 9, 18)) > 1, "the X is not drawn over the image"
     assert _cell(image, 1, 0, 9, 18) == {RED}
+
+
+async def test_an_image_under_the_backgrounds_shows_only_where_the_background_is_the_default(pymux):
+    "As kitty draws a z under -2**30: a cell with a colour of its own covers it. Lillecarl/pymux#814."
+    create_pane(pymux, "\x1b[?25l" + KITTY_RED % (",z=%d,C=1" % WINDOW_Z) + "\x1b[44m \x1b[m")
+    image = await picture(pymux, "--cell", "9x18")
+    assert RED not in _cell(image, 0, 0, 9, 18)
+    assert _cell(image, 1, 0, 9, 18) == {RED}
+
+
+def test_a_window_frame_is_drawn_over_its_cells_and_under_their_colours():
+    "Lillecarl/pymux#814."
+    plain, blue = screenshot.Look("#ffffff", "#000000"), screenshot.Look("#ffffff", "#0000ff")
+    frame = screenshot.Pixels(2, 1, bytes((0, 255, 0, 255)) * 2)
+    grid = screenshot.Grid(
+        [[(" ", blue), (" ", plain), (" ", plain)]],
+        3,
+        "#ffffff",
+        "#000000",
+        None,
+        [screenshot.window_shown(0, 0, 2, 1, frame)],
+    )
+    image = Image.open(io.BytesIO(screenshot.draw(grid, screenshot.faces_of(FONTS), 9, 18))).convert("RGB")
+    assert _cell(image, 0, 0, 9, 18) == {(0, 0, 255)}
+    assert _cell(image, 1, 0, 9, 18) == {(0, 255, 0)}
+    assert _cell(image, 2, 0, 9, 18) == {(0, 0, 0)}
 
 
 async def test_the_cursor_is_an_outline_where_it_stands(pymux):

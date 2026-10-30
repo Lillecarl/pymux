@@ -19,20 +19,27 @@ from pymux.commands.pictures import (
     save_png,
 )
 from pymux.layout import plan_of
+from pymux.window_pane import WindowWidget
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable
 
     from pymux.arrangement import Window
     from pymux.main import Pymux
+    from pymux.plane import Rect
 
 
 def _grid_of(pymux: Pymux, window: Window, cell: tuple[int, int]) -> screenshot.Grid:
     "The window's panes and border lines, where its plan puts them."
     plan = plan_of(pymux, window)
-    panes = []
+    panes: list[tuple[Rect, Screen | screenshot.Pixels | None]] = []
     for slot, rect in plan.rects.items():
-        screen = getattr(cast(Pane, slot.shown).terminal, "screen", None)
+        terminal = cast(Pane, slot.shown).terminal
+        if isinstance(terminal, WindowWidget):
+            frame = pymux.wayland.frame(terminal.toplevel)
+            panes.append((rect, None if frame is None else screenshot.Pixels(*frame)))
+            continue
+        screen = getattr(terminal, "screen", None)
         panes.append((rect, screen if isinstance(screen, Screen) else None))
     focused = getattr(window.active_pane.terminal, "screen", None) if window.active_pane is not None else None
     focused = focused if isinstance(focused, Screen) else None
@@ -50,7 +57,7 @@ def capture_window(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None] | 
 
     The status line is a client's and not the window's, so it is not
     here: `capture-client` draws what a client shows. A Wayland window
-    pane is blank. Lillecarl/pymux#818.
+    pane shows its last frame. Lillecarl/pymux#818.
     """
     if args.output is None and not args.p:
         raise CommandException("capture-window: it prints, so it needs -p or -o")

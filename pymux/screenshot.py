@@ -53,7 +53,7 @@ from pyte.html import visible_char
 from pyte.painted import Paint
 
 from . import box_drawing
-from .graphics import PaneView, pane_placements, source_rgba
+from .graphics import UNDER_BACKGROUNDS, WINDOW_Z, PaneView, pane_placements, source_rgba
 
 if TYPE_CHECKING:
     from prompt_toolkit.styles import Attrs
@@ -68,6 +68,7 @@ __all__ = [
     "Faces",
     "Grid",
     "Look",
+    "Pixels",
     "client_grid_of",
     "draw",
     "faces_of",
@@ -203,8 +204,26 @@ class Shown:
     columns: int
     rows: int
     z: int
+    #: A `GraphicsImage`, or the `Pixels` of a Wayland window's frame.
     image: Any
     source: tuple[int, int, int, int] | None
+
+
+@dataclass(frozen=True, slots=True)
+class Pixels:
+    "A Wayland window's last frame, as `WaylandServer.frame` copies it out."
+
+    width: int
+    height: int
+    rgba: bytes
+
+
+def window_shown(column: int, row: int, columns: int, rows: int, frame: Pixels) -> Shown:
+    """
+    A window pane's frame over the pane's cells, where a client places
+    it: under every cell with a background of its own. Lillecarl/pymux#814.
+    """
+    return Shown(column, row, columns, rows, WINDOW_Z, frame, None)
 
 
 class Look(NamedTuple):
@@ -292,7 +311,7 @@ def grid_of(screen: Screen, first: int, last: int, colors: ColorOverrides | None
 
 
 def window_grid_of(
-    panes: Sequence[tuple[Rect, Screen | None]],
+    panes: Sequence[tuple[Rect, Screen | Pixels | None]],
     lines: Sequence[Line],
     focused: Screen | None,
     colors: ColorOverrides | None,
@@ -303,8 +322,8 @@ def window_grid_of(
     rows at its rectangle, and the layout's border lines in the gaps.
     `capture-window`. Lillecarl/pymux#818.
 
-    `panes` pairs each shown pane's rectangle with its screen, `None` for
-    one that has no cells (a Wayland window pane), which stays blank.
+    `panes` pairs each shown pane's rectangle with its screen, or with a
+    Wayland window pane's last frame, `None` while it has drawn none.
     `colors` paint what no pane covers. The cursor is `focused`'s.
     """
     boxes = [rect for rect, _screen in panes] + [line.rect for line in lines]
@@ -323,6 +342,9 @@ def window_grid_of(
     cursor = None
     images: list[Shown] = []
     for rect, screen in panes:
+        if isinstance(screen, Pixels):
+            images.append(window_shown(rect.x - left, rect.y - top, rect.width, rect.height, screen))
+            continue
         if screen is None:
             continue
         first = screen.line_offset
@@ -383,8 +405,8 @@ def client_grid_of(client_state: ClientState, colors: ColorOverrides, cell: tupl
     theme's. `cell` is the picture's cell, which a placeholder image's
     crop is counted in.
 
-    The images are the client's own `graphics_views`: none under a
-    popup, and a Wayland window pane's picture is not among them.
+    The images are the client's own: its `graphics_views`, and the last
+    frame of each Wayland window pane it shows. None under a popup.
 
     Raises `LookupError` before the client's first frame.
     """
@@ -429,6 +451,10 @@ def client_grid_of(client_state: ClientState, colors: ColorOverrides, cell: tupl
         for view in client_state.graphics_views()
         for placement, image, width, height, x, y, source in pane_placements(view, *cell)
     ]
+    for _pane, widget, place in client_state.window_panes():
+        frame = client_state.pymux.wayland.frame(widget.toplevel)
+        if frame is not None:
+            images.append(window_shown(place.xpos, place.ypos, place.width, place.height, Pixels(*frame)))
     return Grid(rows, size.columns, paint.foreground, paint.background, cursor, images)
 
 
@@ -496,7 +522,10 @@ class _Pens:
 def _paste(picture: Image.Image, images: list[Shown], width: int, height: int) -> None:
     "Each image scaled to the cells it covers, over what is drawn, through its own alpha."
     for shown in images:
-        found = source_rgba(shown.image, shown.source)
+        image = shown.image
+        found = (
+            (image.rgba, image.width, image.height) if isinstance(image, Pixels) else source_rgba(image, shown.source)
+        )
         if found is None:
             continue  # A format nothing here reads.
         pixels, image_width, image_height = found
@@ -534,15 +563,17 @@ def draw(grid: Grid, faces: Faces, width: int, height: int) -> bytes:
     image = Image.new("RGB", (grid.columns * width, max(1, len(grid.rows)) * height), grid.background)
     pen = ImageDraw.Draw(image)
     pens = _Pens(faces, width, height)
-    # As kitty layers them: backgrounds, the images under the text, the
-    # text, and the images over it.
+    # As kitty layers them: the images under the backgrounds, the
+    # backgrounds, the images under the text, the text, and the images
+    # over it.
+    _paste(image, [shown for shown in grid.images if shown.z < UNDER_BACKGROUNDS], width, height)
     for y, row in enumerate(grid.rows):
         for x, (char, look) in enumerate(row):
             if char and look.background != grid.background:
                 span = 2 if x + 1 < len(row) and not row[x + 1][0] else 1
                 left, upper = x * width, y * height
                 pen.rectangle((left, upper, left + span * width - 1, upper + height - 1), fill=look.background)
-    _paste(image, [shown for shown in grid.images if shown.z < 0], width, height)
+    _paste(image, [shown for shown in grid.images if UNDER_BACKGROUNDS <= shown.z < 0], width, height)
     for y, row in enumerate(grid.rows):
         for x, (char, look) in enumerate(row):
             if not char:

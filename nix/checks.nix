@@ -715,6 +715,7 @@ in
           wl-clipboard
           dbus
         ];
+        env.PYMUX_TEST_FONT = "${dejavu_fonts}/share/fonts/truetype/DejaVuSansMono.ttf";
       }
       ''
         ${waylandTestEnv}/bin/python -m pytest -q -p no:cacheprovider \

@@ -148,6 +148,7 @@ from .window_pane import WindowProcess, WindowScreen, WindowWidget, is_window_pa
 
 if TYPE_CHECKING:
     from prompt_toolkit.input import Input
+    from prompt_toolkit.layout.screen import WritePosition
     from prompt_toolkit.output import ColorDepth, Output
     from pyte.keys import KeyEvent
 
@@ -875,15 +876,24 @@ class ClientState:
 
         connection._spawn(wait())
 
+    def window_panes(self) -> list[tuple[Pane, WindowWidget, WritePosition]]:
+        "Each window pane whose picture this client shows, and where. A popup covers them all."
+        if self.display_popup:
+            return []
+        return [
+            (pane, pane.terminal, write_position)
+            for pane, write_position in self.layout_manager.pane_write_positions.items()
+            if isinstance(pane.terminal, WindowWidget) and not pane.clock_mode
+        ]
+
     def _window_views(self) -> list[WindowView]:
-        "One `WindowView` per window pane this client can see. A popup covers them all."
-        if self.display_popup or self.connection is None:
+        "One `WindowView` per window pane this client can see."
+        if self.connection is None:
             return []
         drained = self.connection.frame_drained
         return [
-            self.pymux.wayland.view_of(pane.pane_id, pane.terminal, write_position, drained)
-            for pane, write_position in self.layout_manager.pane_write_positions.items()
-            if isinstance(pane.terminal, WindowWidget) and not pane.clock_mode
+            self.pymux.wayland.view_of(pane.pane_id, widget, write_position, drained)
+            for pane, widget, write_position in self.window_panes()
         ]
 
     @property
