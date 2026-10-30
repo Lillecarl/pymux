@@ -4,11 +4,11 @@ import argparse
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pymux.arrangement import Arrangement
-    from pymux.main import Pymux
-    from pymux.session import Session
+    from pymux.core.arrangement import Arrangement
+    from pymux.core.main import Pymux
+    from pymux.core.session import Session
+    from pymux.core.window_tree import Window
     from pymux.tags import Tags
-    from pymux.window_tree import Window
 
 
 from pymux.commands import CommandException, CommandParser, add_command

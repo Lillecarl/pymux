@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 from pyte.osc import COLOR_BASE, ColorOverrides
 
 from pymux import screenshot
-from pymux.colors import theme_color_base
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import the_client
 from pymux.commands.pictures import (
@@ -19,12 +18,13 @@ from pymux.commands.pictures import (
     refuse_picture_flags,
     save_png,
 )
+from pymux.style.colors import theme_color_base
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable
 
-    from pymux.client_state import ClientState
-    from pymux.main import Pymux
+    from pymux.connection.client_state import ClientState
+    from pymux.core.main import Pymux
 
 
 def _colors_of(pymux: Pymux, client_state: ClientState) -> ColorOverrides:

@@ -4,12 +4,12 @@ import argparse
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
+    from pymux.core.main import Pymux
 
 
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import answer, clients_named, option_as_written
-from pymux.options import ALL_CLIENT_OPTIONS
+from pymux.options.options import ALL_CLIENT_OPTIONS
 
 
 def show_client_options(pymux: Pymux, args: argparse.Namespace) -> None:

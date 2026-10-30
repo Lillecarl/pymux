@@ -19,7 +19,7 @@ from run_commands import over_socket
 
 from pymux.answer import Answer
 from pymux.commands import call_command_handler
-from pymux.main import Pymux
+from pymux.core.main import Pymux
 
 ENDS_AT_ONCE = "%s -c pass" % (sys.executable,)
 

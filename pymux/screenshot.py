@@ -52,10 +52,10 @@ from pyte.cells import PLAIN_APPEARANCE
 from pyte.html import visible_char
 from pyte.painted import Paint
 
-from . import box_drawing
-from .graphics import PaneView
-from .placements import pane_placements, source_rgba
-from .window_frames import UNDER_BACKGROUNDS, WINDOW_Z
+from .graphics.graphics import PaneView
+from .graphics.placements import pane_placements, source_rgba
+from .graphics.window_frames import UNDER_BACKGROUNDS, WINDOW_Z
+from .layout import box_drawing
 
 if TYPE_CHECKING:
     from prompt_toolkit.styles import Attrs
@@ -63,8 +63,8 @@ if TYPE_CHECKING:
     from pyte.osc import ColorOverrides
     from pyte.screen import Screen
 
-    from .client_state import ClientState
-    from .plane import Line, Rect
+    from .connection.client_state import ClientState
+    from .layout.plane import Line, Rect
 
 __all__ = [
     "Faces",

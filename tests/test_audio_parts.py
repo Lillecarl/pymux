@@ -24,7 +24,7 @@ from pymux.audio import (
     pw_cat,
     resolve,
 )
-from pymux.client_options import ClientOptions
+from pymux.core.main import Pymux
 from pymux.enums import AudioFrame, AudioServerMode, ClientAudio
 from pymux.jitter import (
     CEILING_MS,
@@ -38,8 +38,8 @@ from pymux.jitter import (
     samples_per_frame,
     stats_every,
 )
-from pymux.main import Pymux
-from pymux.options import ALL_CLIENT_OPTIONS, SetOptionError
+from pymux.options.client_options import ClientOptions
+from pymux.options.options import ALL_CLIENT_OPTIONS, SetOptionError
 
 PIPEWIRE = {"pipewire": "/bin/pipewire", "wireplumber": "/bin/wireplumber"}
 

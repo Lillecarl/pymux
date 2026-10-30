@@ -9,7 +9,7 @@ from pymux.link_rules import rules_for
 from pymux.url_mode import UrlMode
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
+    from pymux.core.main import Pymux
 
 
 def show_urls(pymux: Pymux, args: argparse.Namespace) -> None:

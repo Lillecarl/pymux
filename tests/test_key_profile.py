@@ -16,8 +16,8 @@ from prompt_toolkit.data_structures import Size
 from pyte.keys import KEY_PROFILES
 from session import once, over_connection
 
-from pymux.main import Pymux
-from pymux.options import ALL_OPTIONS, SetOptionError
+from pymux.core.main import Pymux
+from pymux.options.options import ALL_OPTIONS, SetOptionError
 
 SIZE = Size(rows=24, columns=80)
 WAITS = "%s -c 'import time; time.sleep(30)'" % (sys.executable,)

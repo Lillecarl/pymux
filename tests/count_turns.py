@@ -104,8 +104,8 @@ from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from session import over_connection
 
+from pymux.core.main import Pymux
 from pymux.introspect import own_coroutine
-from pymux.main import Pymux
 
 #: How many keystrokes to count. A turn count is nearly determined, so
 #: this is about seeing the tail rather than about the average.

@@ -17,14 +17,14 @@ from collections.abc import Awaitable, Callable
 from importlib import import_module
 from typing import TYPE_CHECKING, Any, NoReturn, overload, override
 
-from pymux.actions import Kind, arguments_of, note, words_of
 from pymux.commands.aliases import ALIASES
 from pymux.enums import Woke
+from pymux.keys.actions import Kind, arguments_of, note, words_of
 from pymux.log import logger
 
 if TYPE_CHECKING:
-    from pymux.client_state import ClientState
-    from pymux.main import Pymux
+    from pymux.connection.client_state import ClientState
+    from pymux.core.main import Pymux
 
 __all__ = [
     "CommandException",

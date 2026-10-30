@@ -38,10 +38,10 @@ from pyte.colors import parse_color
 from run_commands import run
 from session import Connection
 
-from pymux.cut_shade import hex_of
-from pymux.main import Pymux
-from pymux.plan_container import PlanContainer
-from pymux.style import tinted
+from pymux.core.main import Pymux
+from pymux.layout.cut_shade import hex_of
+from pymux.layout.plan_container import PlanContainer
+from pymux.style.style import tinted
 
 ROWS = 12
 COLUMNS = 80

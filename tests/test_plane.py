@@ -1,7 +1,7 @@
 """
 The promises a plan makes, and the two it does not.
 
-`pymux/plane.py` holds no layout, so what is worth judging is not what
+`pymux/layout/plane.py` holds no layout, so what is worth judging is not what
 it computes but what it guarantees. This file is that list. Every
 promise here is written against *any* plan, so the classes that lay
 one out (`Strip`, `Divided`, `Masonry`) import
@@ -31,17 +31,7 @@ from hypothesis import find, given, settings
 from hypothesis import strategies as st
 from prompt_toolkit.data_structures import Point
 
-from pymux.plane import (
-    GROUND,
-    Plan,
-    Rect,
-    Side,
-    Slot,
-    _covered,
-    _without,
-    bounding_box,
-    overlap_of,
-)
+from pymux.layout.plane import GROUND, Plan, Rect, Side, Slot, _covered, _without, bounding_box, overlap_of
 
 rects = st.builds(Rect, st.integers(-5, 5), st.integers(-5, 5), st.integers(0, 6), st.integers(0, 6))
 

@@ -53,7 +53,7 @@ if TYPE_CHECKING:
     import asyncio
     from types import FrameType
 
-    from pymux.main import Pymux
+    from pymux.core.main import Pymux
     from pymux.pipes.base import PipeConnection
 
 __all__ = [

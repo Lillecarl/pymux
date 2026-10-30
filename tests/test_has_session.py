@@ -9,7 +9,7 @@ and a server that answers at all has one.
 from __future__ import annotations
 
 from pymux.commands.has_session import pane_matches_session_name
-from pymux.main import Pymux
+from pymux.core.main import Pymux
 
 
 def test_no_target_asks_whether_there_is_session():

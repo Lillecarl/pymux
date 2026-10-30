@@ -9,7 +9,7 @@ from pymux.commands.common import answer
 from pymux.commands.completer import values_for
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
+    from pymux.core.main import Pymux
 
 
 def complete_value(pymux: Pymux, args: argparse.Namespace):

@@ -23,11 +23,11 @@ pytest.importorskip("dbus_fast")
 from dbus_fast import Message, MessageType, Variant
 from dbus_fast.aio import MessageBus
 
+from pymux.core.main import Pymux
 from pymux.enums import WaylandPortal
-from pymux.main import Pymux
-from pymux.options import ALL_SERVER_OPTIONS
-from pymux.portal import ColorScheme
-from pymux.portal_settings import APPEARANCE, BUS_NAME, COLOR_SCHEME, INTERFACE, OBJECT_PATH
+from pymux.options.options import ALL_SERVER_OPTIONS
+from pymux.wayland.portal import ColorScheme
+from pymux.wayland.portal_settings import APPEARANCE, BUS_NAME, COLOR_SCHEME, INTERFACE, OBJECT_PATH
 
 CONFIG = """<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"
  "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
@@ -191,7 +191,7 @@ async def test_the_host_bus_is_served_while_nobody_holds_the_name(tmp_path, monk
 
 async def test_a_real_portal_that_can_start_is_left_alone(tmp_path, monkeypatch, caplog):
     "Holding the name first would keep the desktop's portal from ever starting."
-    caplog.set_level(logging.INFO, logger="pymux.portal")
+    caplog.set_level(logging.INFO, logger="pymux.wayland.portal")
     async with a_host_bus(tmp_path, monkeypatch, real_portal=True) as address:
         pymux = Pymux()
         pymux.socket_name = str(tmp_path / "pymux.sock.test")

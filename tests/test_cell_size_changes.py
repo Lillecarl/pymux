@@ -13,7 +13,7 @@ from prompt_toolkit.data_structures import Size
 from session import once, over_connection
 from test_show_terminal import frames_of
 
-from pymux.graphics import CELL_SIZE_QUERY
+from pymux.graphics.graphics import CELL_SIZE_QUERY
 
 SIZE = Size(rows=24, columns=80)
 

@@ -75,12 +75,12 @@ from typing import TYPE_CHECKING, NoReturn, assert_never
 from pymux import __version__, log
 from pymux.client import command_client, create_client, is_ssh_url, list_clients
 from pymux.config import find_config
-from pymux.scope import rerun_in_a_scope
+from pymux.options.scope import rerun_in_a_scope
 from pymux.utils import daemonize
 
 if TYPE_CHECKING:
     from pymux.client.terminal import TerminalClient
-    from pymux.main import Pymux
+    from pymux.core.main import Pymux
 
 __all__ = ["run"]
 
@@ -110,7 +110,7 @@ class Mode(StrEnum):
     #: Show images in the terminal it runs in. Lillecarl/pymux#764.
     IMGCAT = "imgcat"
     #: An upgrade's check of the new build, and its new server.
-    #: `pymux/upgrade.py`.
+    #: `pymux/core/upgrade.py`.
     CHECK_SNAPSHOT = "check-snapshot"
     RESUME_SERVER = "resume-server"
 
@@ -395,7 +395,7 @@ def parse_arguments(
 
         if mode in (Mode.CHECK_SNAPSHOT, Mode.RESUME_SERVER):
             # What an upgrading server runs, never a person: the words
-            # are `pymux.upgrade`'s to read.
+            # are `pymux.core.upgrade`'s to read.
             a.upgrade_words = rest
             rest = []
 
@@ -535,7 +535,7 @@ def _person_paths(prefix: str, **_) -> list[str]:
     the prefix names. Nothing, outside a pane or when the client says
     nothing. Lillecarl/pymux#748.
     """
-    from pymux.uploads import LIST_SECONDS
+    from pymux.connection.uploads import LIST_SECONDS
 
     if not os.environ.get("PYMUX"):
         return []
@@ -577,7 +577,7 @@ def run() -> None:
         socket_name, pane_id = socket_name.rsplit(",", 1)
 
     # Color depth. Without a flag the client asks its terminal and
-    # falls back through COLORTERM and TERM. (See `pymux.colors`.) It
+    # falls back through COLORTERM and TERM. (See `pymux.style.colors`.) It
     # is answered where a depth is used, so that a detached command
     # pays neither the question nor the import of the answer.
     # Lillecarl/pymux#392.
@@ -745,7 +745,7 @@ def run() -> None:
                 sys.exit(1)
 
         case Mode.CHECK_SNAPSHOT:
-            from pymux import upgrade
+            from pymux.core import upgrade
 
             # A failure is a traceback on stderr and a status, which the
             # upgrading server logs and answers with. So is a warning.
@@ -757,7 +757,7 @@ def run() -> None:
                     sys.exit("usage: pymux %s PATH" % (Mode.CHECK_SNAPSHOT,))
 
         case Mode.RESUME_SERVER:
-            from pymux import upgrade
+            from pymux.core import upgrade
 
             # Where the image before this one logged, which it passed
             # on. Its stdout is this process's, as `start-server` has it.
@@ -854,7 +854,7 @@ def _new_pymux(
     """
     Build the thing that runs a server.
 
-    `pymux.main` arrives here and not from the top of the module: a
+    `pymux.core.main` arrives here and not from the top of the module: a
     detached command never builds one, and what it imports instead is
     the whole cost this file was charged. Lillecarl/pymux#392.
 
@@ -864,7 +864,7 @@ def _new_pymux(
     """
     from prompt_toolkit.data_structures import Size
 
-    from pymux.main import Pymux
+    from pymux.core.main import Pymux
 
     return Pymux(
         source_file=source_file,
@@ -990,7 +990,7 @@ def _color_depth(ansi_colors_only: bool, true_color: bool):
     """
     The depth the flags asked for, or `None`: the client then asks its
     terminal and falls back through COLORTERM and TERM
-    (`pymux.colors`). The import rides along -- the answer is an enum
+    (`pymux.style.colors`). The import rides along -- the answer is an enum
     of the toolkit, and a detached command draws nothing.
     """
     from prompt_toolkit.output import ColorDepth
@@ -1231,7 +1231,7 @@ def _new_session(
 
     # Read before a server is forked, so that a number nobody can read
     # leaves no server behind. The standing answer is tmux's, and
-    # `pymux.session.DEFAULT_SIZE` is the same two numbers; it is not
+    # `pymux.core.session.DEFAULT_SIZE` is the same two numbers; it is not
     # imported here because that would import the server.
     # Lillecarl/pymux#459. Neither flag names nothing, and the clients'
     # `window-size` decides. Lillecarl/pymux#817.

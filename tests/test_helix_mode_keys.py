@@ -13,7 +13,7 @@ from prompt_toolkit.keys import Keys
 from session import create_session
 from test_command_mode import press
 
-from pymux.options import ALL_OPTIONS
+from pymux.options.options import ALL_OPTIONS
 
 
 def _copy_mode_on(pymux, state, written: str):

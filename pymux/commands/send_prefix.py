@@ -4,12 +4,12 @@ import argparse
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
+    from pymux.core.main import Pymux
 
 
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import find_pane, send_key
-from pymux.key_spelling import event_however_it_is_written
+from pymux.keys.key_spelling import event_however_it_is_written
 
 
 def send_prefix(pymux: Pymux, args: argparse.Namespace) -> None:

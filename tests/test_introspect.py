@@ -29,11 +29,11 @@ from session import Connection
 
 from pymux import introspect, log
 from pymux.answer import Answer
-from pymux.client_io import SocketStdout
 from pymux.commands import handle_command
+from pymux.connection.client_io import SocketStdout
+from pymux.core.main import Pymux
+from pymux.core.serving import Serving
 from pymux.enums import Woke
-from pymux.main import Pymux
-from pymux.serving import Serving
 
 SIZE = Size(rows=24, columns=80)
 

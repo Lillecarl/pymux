@@ -36,12 +36,12 @@ from prompt_toolkit.document import Document
 
 from pymux.commands import CommandException, CommandParser, build_parser_tree, parser_tree
 from pymux.commands.aliases import ALIASES
-from pymux.forwarding import Direction
-from pymux.key_spelling import key_completions
+from pymux.core.forwarding import Direction
+from pymux.keys.key_spelling import key_completions
 from pymux.query import register, tables_of
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
+    from pymux.core.main import Pymux
 
 __all__ = ["completes_from_the_server", "create_command_completer", "stop_shlex_comments", "values_for"]
 

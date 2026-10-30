@@ -41,7 +41,7 @@ from pymux.client.reconnect import (
     why,
 )
 from pymux.client.ssh import SshClient
-from pymux.main import Pymux
+from pymux.core.main import Pymux
 
 PANE_COMMAND = "%s -c 'import time; time.sleep(30)'" % (sys.executable,)
 

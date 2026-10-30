@@ -34,8 +34,8 @@ from prompt_toolkit.output.vt100 import Vt100_Output
 from run_commands import run
 from session import Connection
 
-from pymux.main import Pymux
-from pymux.plan_container import PlanContainer
+from pymux.core.main import Pymux
+from pymux.layout.plan_container import PlanContainer
 
 ROWS = 12
 COLUMNS = 80

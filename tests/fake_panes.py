@@ -4,7 +4,7 @@ Panes with no program behind them, for tests of the arrangement alone.
 
 from __future__ import annotations
 
-from pymux.window_tree import Pane
+from pymux.core.window_tree import Pane
 
 
 class FakeTerminal:

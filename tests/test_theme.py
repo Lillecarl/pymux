@@ -1,11 +1,11 @@
 """
 Choosing a colour scheme.
 
-`pymux.style` was one module-level object, handed to each application
+`pymux.style.style` was one module-level object, handed to each application
 when it was built. There was nowhere to choose another, and nothing
 short of restarting the server would have changed one.
 
-`set-client-option theme <name>` chooses one now. `pymux/style.py`
+`set-client-option theme <name>` chooses one now. `pymux/style/style.py`
 holds them by name, and the application takes the scheme through a
 `DynamicStyle`, so it reads the client's own style on every render and
 a client that is already attached follows.
@@ -38,10 +38,10 @@ from prompt_toolkit.output.vt100 import Vt100_Output
 from session import Connection
 
 from pymux.answer import Answer
-from pymux.main import Pymux
-from pymux.nearest import NEAREST
-from pymux.options import ALL_CLIENT_OPTIONS, ALL_OPTIONS, SetOptionError
-from pymux.style import DEFAULT_THEME, THEMES
+from pymux.core.main import Pymux
+from pymux.options.options import ALL_CLIENT_OPTIONS, ALL_OPTIONS, SetOptionError
+from pymux.style.nearest import NEAREST
+from pymux.style.style import DEFAULT_THEME, THEMES
 
 ROWS, COLUMNS = 24, 80
 
@@ -314,7 +314,7 @@ GREY_ROLES = {
 
 
 def test_roles_produce_rules_default_drew():
-    from pymux.style import ROLES, derive
+    from pymux.style.style import ROLES, derive
 
     assert derive(ROLES) == RULES
 
@@ -325,7 +325,7 @@ def test_roles_produce_rules_grey_drew():
     roles it replaces are those seventeen; the rules it produces are
     the same seventeen keys.
     """
-    from pymux.style import ROLES, derive
+    from pymux.style.style import ROLES, derive
 
     rules_with_grey_replaced = {
         key: value
@@ -427,8 +427,8 @@ def test_names_are_offered_for_completion():
     nearest search reads the same list to know what it may match.
     Lillecarl/pymux#346.
     """
-    from pymux.style_base16 import names as base16_names
-    from pymux.style_pygments import names
+    from pymux.style.style_base16 import names as base16_names
+    from pymux.style.style_pygments import names
 
     pymux = Pymux()
 

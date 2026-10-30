@@ -17,11 +17,11 @@ import anyio
 from libpymux.wire import encode_json
 
 from pymux.config import client_options_in
-from pymux.main import Pymux
-from pymux.nearest import NEAREST
+from pymux.connection.server import ServerConnection
+from pymux.core.main import Pymux
 from pymux.pipes.memory import connect_in_memory
-from pymux.server import ServerConnection
-from pymux.style import DEFAULT_THEME
+from pymux.style.nearest import NEAREST
+from pymux.style.style import DEFAULT_THEME
 
 # ----------------------------------------------------------------------
 # What the client takes out of the file.

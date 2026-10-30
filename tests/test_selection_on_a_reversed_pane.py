@@ -14,7 +14,7 @@ The answer is the one a terminal gives by itself. foot documents
 foreground/background", and an inverse of an already inverted screen
 is the screen: selected text reads as normal against a reversed pane.
 `Terminal._copy_style` puts `class:reversed-pane` on the copy window
-and `pymux/style.py` turns the reverse back off for a selected cell.
+and `pymux/style/style.py` turns the reverse back off for a selected cell.
 
 Lillecarl/pymux#99.
 """
@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from prompt_toolkit.styles import default_ui_style, merge_styles
 
-from pymux.style import THEMES, theme
+from pymux.style.style import THEMES, theme
 
 
 def resolved(style, style_str: str):

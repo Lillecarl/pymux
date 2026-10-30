@@ -392,23 +392,23 @@ Two smaller rules that follow:
 ## The slices, in order
 
 1. **`Rect`, `Slot`, `Plan`, the services, and the property tests.** Pure code,
-   no wiring, testable alone. **Landed**: `pymux/plane.py` and
+   no wiring, testable alone. **Landed**: `pymux/layout/plane.py` and
    `tests/test_plane.py`, with `every_promise_holds(plan)` for the
    slices after it to hold their own `measure` to.
 2. **`Strip` emits a plan, and the title bars plus `select-pane -L|-R`
    read it.** The probe. **Landed**: `Strip.measure` in
-   `pymux/strip.py`, and `layout.the_pane_beside` is the one question
+   `pymux/layout/strip.py`, and `layout.the_pane_beside` is the one question
    both ask. Two things a person sees changed, both in a strip: a
    direction key works before the first frame, and the pane named
    beside a stack is the one sharing most of the edge.
 3. **`PlanContainer`, and `Strip` draws through it.** **Landed**:
-   `pymux/plan_container.py`, `Plan.lines`, `Strip.look_at`.
+   `pymux/layout/plan_container.py`, `Plan.lines`, `Strip.look_at`.
    `ScrollableStrip` is deleted and `strip.py` draws nothing.
    The layout draws the borders; a pane knows nothing about them.
 4. **`Divided` emits a plan**, and every window draws through
-   `PlanContainer`. **Landed**: `pymux/divided.py`,
-   `pymux/zoomed.py`, and the walk both layouts share in
-   `pymux/tiling.py`. `_create_split`, `SizedBox`, the callback that
+   `PlanContainer`. **Landed**: `pymux/layout/divided.py`,
+   `pymux/layout/zoomed.py`, and the walk both layouts share in
+   `pymux/layout/tiling.py`. `_create_split`, `SizedBox`, the callback that
    wrote the drawn size back into the weights, `_move_focus` and the
    tree walk in `arrangement.py` are all gone.
 
@@ -434,7 +434,7 @@ Two smaller rules that follow:
      fourth column-width preset beside it. A zoomed pane keeps the row
      its title bar hangs in, which it did not have before.
 5. **`View` per client, with an offset**, and the `window-size` policy
-   as a real option. **Landed**: `View` in `pymux/plane.py`, one per
+   as a real option. **Landed**: `View` in `pymux/layout/plane.py`, one per
    client and window on `DynamicBody`, and `window-size` with all four
    of tmux's values. `tests/test_two_clients_of_different_sizes.py` is
    where the whole slice is judged.

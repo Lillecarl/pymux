@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from prompt_toolkit.application import DummyApplication
 from prompt_toolkit.application.current import set_app
 
-from pymux.layout import DynamicBody
+from pymux.layout.layout import DynamicBody
 
 
 class Arrangement:

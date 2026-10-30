@@ -4,12 +4,12 @@ import argparse
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
+    from pymux.core.main import Pymux
 
 
 from pymux.commands import CommandParser, add_command
 from pymux.commands.common import ask_person
-from pymux.key_spelling import KeyCompleter
+from pymux.keys.key_spelling import KeyCompleter
 
 
 def compose_key(pymux: Pymux, args: argparse.Namespace) -> None:

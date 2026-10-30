@@ -29,11 +29,12 @@ import logging
 
 import anyio
 
+from pymux.connection.server import FAILURES_THAT_END_A_CONNECTION, ServerConnection
+
 # pymux's own, and not the builtin of the same name. The read loop of a
 # connection ends on this one and logs anything else.
-from pymux.graphics import OuterImageIds
+from pymux.graphics.graphics import OuterImageIds
 from pymux.pipes.base import BrokenPipeError
-from pymux.server import FAILURES_THAT_END_A_CONNECTION, ServerConnection
 
 
 class FakePipe:

@@ -16,7 +16,7 @@ from prompt_toolkit.data_structures import Size
 from session import over_connection
 from test_a_session_on_a_pyte_screen import attached, shows
 
-from pymux.main import Pymux
+from pymux.core.main import Pymux
 
 #: The default status-right in test mode: the clock and the date.
 CLOCK = re.compile(r"\d\d:\d\d \d\d-\w\w\w-\d\d")

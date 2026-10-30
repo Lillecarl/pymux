@@ -26,10 +26,10 @@ from libpymux.protocol import Packet
 from session import once
 from test_a_session_on_a_pyte_screen import attached, shows
 
-from pymux.client_io import FrameOutput, SocketStdout
+from pymux.connection.client_io import FrameOutput, SocketStdout
+from pymux.connection.server import ServerConnection
+from pymux.core.main import Pymux
 from pymux.enums import Clipboard, NotificationPopups
-from pymux.main import Pymux
-from pymux.server import ServerConnection
 
 #: A clipboard write, as a pane writes one.
 COPIED = "\x1b]52;c;aGVsbG8=\x07"

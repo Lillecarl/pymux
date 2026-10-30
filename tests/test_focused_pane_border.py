@@ -29,8 +29,8 @@ from prompt_toolkit.output.vt100 import Vt100_Output
 from session import Connection
 
 from pymux.commands import handle_command
-from pymux.main import Pymux
-from pymux.pane_container import pane_write_positions
+from pymux.core.main import Pymux
+from pymux.layout.pane_container import pane_write_positions
 
 ROWS = 12
 COLUMNS = 40

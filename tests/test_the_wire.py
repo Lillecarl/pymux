@@ -12,10 +12,10 @@ from libpymux.protocol import READ_SIZE
 from libpymux.wire import MSGPACK, MSGPACK_ZSTD, Compressor, PacketReader, encode_json, encode_msgpack
 
 from pymux.client.terminal import TerminalClient
-from pymux.main import Pymux
+from pymux.connection.server import ServerConnection
+from pymux.core.main import Pymux
 from pymux.pipes.memory import connect_in_memory
 from pymux.pipes.posix import COMPRESS_IN_A_THREAD, PosixSocketConnection
-from pymux.server import ServerConnection
 
 TURN = {"cmd": "wire", "wire": MSGPACK}
 

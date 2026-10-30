@@ -29,7 +29,7 @@ from pymux.client import ssh as ssh_module
 from pymux.client.forwards import Forwards
 from pymux.client.ssh import SshClient
 from pymux.commands import list_forwards as list_forwards_command
-from pymux.forwarding import (
+from pymux.core.forwarding import (
     ANY_PORT,
     LOOPBACK,
     BadForward,

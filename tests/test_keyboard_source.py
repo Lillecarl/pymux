@@ -15,11 +15,11 @@ import pytest
 from pyte.keys import KeyboardFlag
 from session import Connection
 
-from pymux.client_options import ClientOptions
+from pymux.core.main import Pymux
 from pymux.enums import ExtendedKeys
-from pymux.main import Pymux
-from pymux.options import ALL_SERVER_OPTIONS, SetOptionError
-from pymux.style import DEFAULT_THEME
+from pymux.options.client_options import ClientOptions
+from pymux.options.options import ALL_SERVER_OPTIONS, SetOptionError
+from pymux.style.style import DEFAULT_THEME
 
 
 class FakeConnection(Connection):

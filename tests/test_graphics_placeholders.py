@@ -20,7 +20,7 @@ from pyte.screen import Screen
 from pyte.sequences import csi
 from pyte.streams import Stream
 
-from pymux.graphics import ClientGraphics, PaneView
+from pymux.graphics.graphics import ClientGraphics, PaneView
 
 
 def make_client():
@@ -266,7 +266,7 @@ def test_a_terminal_that_takes_fewer_colours_gets_the_puts():
 
 def test_every_client_knows_an_image_by_one_id():
     "A pane builds the text of its image cells once for all of them."
-    from pymux.graphics import OuterImageIds
+    from pymux.graphics.graphics import OuterImageIds
 
     ids = OuterImageIds()
     sent = []
@@ -306,7 +306,7 @@ def test_a_frame_for_a_terminal_that_draws_no_placeholder_has_spaces():
 
     from prompt_toolkit.data_structures import Size
 
-    from pymux.client_io import FrameOutput
+    from pymux.connection.client_io import FrameOutput
 
     for keeps in (False, True):
         stdout = io.StringIO()
@@ -320,7 +320,7 @@ def test_a_frame_for_a_terminal_that_draws_no_placeholder_has_spaces():
 
 def test_two_clients_of_one_pane_each_get_their_own_way():
     "kitty reads the placeholders, and foot gets the image as a sixel."
-    from pymux.graphics import OuterImageIds
+    from pymux.graphics.graphics import OuterImageIds
 
     ids = OuterImageIds()
     kitty, kitty_wrote = make_kitty(ids)
@@ -344,7 +344,7 @@ def test_two_clients_of_one_pane_each_get_their_own_way():
 
 def test_the_terminal_names_itself_in_the_detection():
     from pymux.client.terminal import DETECTION_QUERIES
-    from pymux.graphics import VERSION_QUERY
+    from pymux.graphics.graphics import VERSION_QUERY
 
     queries = DETECTION_QUERIES.decode("ascii")
     assert VERSION_QUERY == "\x1b[>0q"

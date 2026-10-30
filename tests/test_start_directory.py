@@ -18,7 +18,7 @@ from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from session import in_this_process, once
 
-from pymux.main import Pymux
+from pymux.core.main import Pymux
 
 SIZE = Size(rows=24, columns=80)
 

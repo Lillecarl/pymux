@@ -10,11 +10,11 @@ from ptyhost.asciicast import asciicast
 
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.record_pane import seconds
-from pymux.recording import recordings_directory
+from pymux.connection.recording import recordings_directory
 from pymux.web.replay import replay_of
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
+    from pymux.core.main import Pymux
 
 #: What each format writes, beside the recording.
 SUFFIXES = {"web": ".web.json", "asciicast": ".cast"}

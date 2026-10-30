@@ -1,5 +1,5 @@
 """
-Tests for the kitty graphics output of a client (`pymux.graphics`).
+Tests for the kitty graphics output of a client (`pymux.graphics.graphics`).
 
 Each test builds the pane state with the real `pyte.images`
 classes, renders one or more frames, and checks the escape sequences
@@ -16,8 +16,8 @@ from pyte.images import GraphicsImage, GraphicsPlacement, GraphicsState, PixelFo
 from pyte.sequences import apc
 from pyte.sixel import store_payload
 
-from pymux.graphics import ClientGraphics, PaneView
-from pymux.plane import Rect
+from pymux.graphics.graphics import ClientGraphics, PaneView
+from pymux.layout.plane import Rect
 
 # 2x2 pixels, RGB.
 IMAGE_DATA = bytes(range(12))

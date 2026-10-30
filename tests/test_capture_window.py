@@ -18,7 +18,7 @@ from test_capture_pane_as_png import FALLBACK, FONTS, pytestmark  # noqa: F401
 
 from pymux.answer import Answer
 from pymux.commands import call_command_handler
-from pymux.main import Pymux
+from pymux.core.main import Pymux
 
 CELL = (9, 18)
 SAYS = "%s -c \"import time; print('%%s', flush=True); time.sleep(60)\"" % (sys.executable,)

@@ -16,7 +16,7 @@ from pyte.screen import Screen
 from pyte.streams import Stream
 
 from pymux.entry_points.run_pymux import Mode, parse_arguments
-from pymux.graphics import DEFAULT_CELL_WIDTH
+from pymux.graphics.graphics import DEFAULT_CELL_WIDTH
 from pymux.imgcat import CHUNK, cells_for, imgcat, sequences_of
 
 

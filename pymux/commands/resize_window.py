@@ -4,7 +4,7 @@ import argparse
 from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
+    from pymux.core.main import Pymux
 
 
 from prompt_toolkit.data_structures import Size
@@ -12,7 +12,7 @@ from prompt_toolkit.data_structures import Size
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import the_window
 from pymux.enums import WindowSize
-from pymux.geometry import size_the_panes_of
+from pymux.layout.geometry import size_the_panes_of
 
 
 def resize_window(pymux: Pymux, args: argparse.Namespace) -> None:

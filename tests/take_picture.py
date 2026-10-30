@@ -386,7 +386,7 @@ def sixel_image(fixture, height):
 
     **This is the one fixture the client terminal does not draw the way
     the program wrote it.** A pane cannot draw pixels, so it decodes the
-    sixel into RGBA and `pymux/graphics.py` writes it again in whatever
+    sixel into RGBA and `pymux/graphics/graphics.py` writes it again in whatever
     the outer terminal speaks: the kitty graphics protocol where there
     is one, sixel where there is not, half blocks where there is
     neither. So the bare picture is the terminal's own sixel decoder and
@@ -402,7 +402,7 @@ def sixel_image(fixture, height):
     cells against the cell this client really has. Lillecarl/pymux#369
     is where they stopped.
 
-    The bytes are written here and not built with `pymux.sixel`. An
+    The bytes are written here and not built with `pymux.graphics.sixel`. An
     encoder fault that survives its own decoder would be invisible if
     the encoder made both sides.
     """
@@ -473,7 +473,7 @@ def kitty_image(fixture, height):
     as a percentage. Only 101 of 256 byte values survive that, which is
     why the transmitted bytes are taken from the six that do.
 
-    The bytes are written here and not built with `pymux.graphics`, for
+    The bytes are written here and not built with `pymux.graphics.graphics`, for
     the reason `sixel_image` gives: an encoder fault that survives its
     own decoder would be invisible if the encoder made both sides.
     """

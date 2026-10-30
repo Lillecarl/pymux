@@ -127,7 +127,7 @@ from scroll_app import (
 from session import Connection, over_connection
 
 from pymux.commands import handle_command
-from pymux.main import Pymux
+from pymux.core.main import Pymux
 
 #: The client this draws for. A terminal nobody resized, unless the
 #: environment said otherwise: the cost of a frame is the cost of the

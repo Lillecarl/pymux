@@ -1,5 +1,5 @@
 """
-Tests for the sixel encoder (`pymux.sixel`).
+Tests for the sixel encoder (`pymux.graphics.sixel`).
 
 Most of them run the encoded image back through the decoder of ptterm,
 which is an independent implementation: what the encoder writes has to
@@ -14,7 +14,7 @@ import zlib
 
 from pyte.sixel import decode_sixel
 
-from pymux.sixel import encode_sixel, scale_rgba, to_rgba
+from pymux.graphics.sixel import encode_sixel, scale_rgba, to_rgba
 
 
 def rgba(pixels):

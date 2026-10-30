@@ -22,9 +22,9 @@ import socket
 import anyio
 from libpymux.wire import encode_json
 
-from pymux.main import Pymux
+from pymux.connection.server import CANNOT_ATTACH, ServerConnection
+from pymux.core.main import Pymux
 from pymux.pipes.memory import connect_in_memory
-from pymux.server import CANNOT_ATTACH, ServerConnection
 
 #: What a client sends to ask for the user interface.
 START_GUI = {

@@ -37,8 +37,8 @@ import re
 from pyte.images import GraphicsImage, GraphicsPlacement, GraphicsState
 from pyte.sixel import decode_sixel
 
-from pymux.graphics import ClientGraphics, PaneView
-from pymux.placements import visible_placements
+from pymux.graphics.graphics import ClientGraphics, PaneView
+from pymux.graphics.placements import visible_placements
 
 #: An image that is four cells wide and two tall at a ten by twenty
 #: cell, and the same at a ten by nineteen one: `ceil(38/19)` is 2.

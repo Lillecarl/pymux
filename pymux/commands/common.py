@@ -7,11 +7,11 @@ from typing import TYPE_CHECKING, NamedTuple
 
 if TYPE_CHECKING:
     from pymux.answer import Answer
-    from pymux.client_state import ClientState
-    from pymux.main import Pymux
-    from pymux.options import Holder
-    from pymux.session import Session
-    from pymux.window_tree import Pane, Window
+    from pymux.connection.client_state import ClientState
+    from pymux.core.main import Pymux
+    from pymux.core.session import Session
+    from pymux.core.window_tree import Pane, Window
+    from pymux.options.options import Holder
 
 
 from prompt_toolkit.application.current import get_app
@@ -24,8 +24,8 @@ from pyte.keys import KeyEvent, Unhearable
 from pymux.commands import CommandException, this_client
 from pymux.format import Language, format_pymux_string
 from pymux.ids import PaneId, PaneIndex, WindowId, WindowIndex
-from pymux.key_spelling import why_pane_cannot_read
-from pymux.options import Option, Scope, SetOptionError
+from pymux.keys.key_spelling import why_pane_cannot_read
+from pymux.options.options import Option, Scope, SetOptionError
 
 
 def session_part(pymux: Pymux, target: str) -> tuple[Session | None, str]:

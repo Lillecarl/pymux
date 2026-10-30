@@ -1,7 +1,7 @@
 """
 What a view promises: where it goes, and where it refuses to go.
 
-`pymux/plane.py` holds `View`, the part of the plane one client sees.
+`pymux/layout/plane.py` holds `View`, the part of the plane one client sees.
 A plan is shared between the clients and a view is not, so this is the
 one place a client of its own size is answered. Decision 10 of
 `docs/layout-engine-plan.md`, and slice 5 of Lillecarl/pymux#217.
@@ -25,7 +25,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 from prompt_toolkit.data_structures import Point, Size
 
-from pymux.plane import Rect, View
+from pymux.layout.plane import Rect, View
 
 #: A plane big enough that a view of twenty by five can move on it.
 PLANE = Rect(x=0, y=0, width=60, height=15)

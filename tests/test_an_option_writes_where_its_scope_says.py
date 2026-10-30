@@ -16,9 +16,9 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from pymux.client_options import ClientOptions
-from pymux.main import Pymux
-from pymux.options import ALL_CLIENT_OPTIONS, ALL_OPTIONS, ALL_SERVER_OPTIONS
+from pymux.core.main import Pymux
+from pymux.options.client_options import ClientOptions
+from pymux.options.options import ALL_CLIENT_OPTIONS, ALL_OPTIONS, ALL_SERVER_OPTIONS
 
 
 def test_a_client_option_is_written_on_the_client():

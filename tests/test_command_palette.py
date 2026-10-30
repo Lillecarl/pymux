@@ -19,7 +19,7 @@ from prompt_toolkit.application.current import set_app
 from prompt_toolkit.layout.containers import ConditionalContainer, Float
 from session import create_session
 
-from pymux.options import ALL_OPTIONS
+from pymux.options.options import ALL_OPTIONS
 
 
 def in_command_mode(state):

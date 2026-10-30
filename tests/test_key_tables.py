@@ -22,7 +22,7 @@ from test_command_mode import press
 
 from pymux.answer import Answer
 from pymux.commands import handle_command
-from pymux.main import Pymux
+from pymux.core.main import Pymux
 
 
 @pytest.fixture

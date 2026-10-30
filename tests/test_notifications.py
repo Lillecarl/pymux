@@ -20,10 +20,10 @@ from pyte.osc import Osc
 from run_commands import run_as
 from session import create_session
 
+from pymux.core.main import Pymux
 from pymux.enums import Chooser
-from pymux.hub import Heading, age
-from pymux.main import Pymux
-from pymux.notifications import NotificationCenter, NotificationRoutes, Route, is_click, osc99_of
+from pymux.notify.hub import Heading, age
+from pymux.notify.notifications import NotificationCenter, NotificationRoutes, Route, is_click, osc99_of
 
 
 class FakePane:
@@ -361,7 +361,7 @@ def test_pymux_s_own_notification_is_base64_and_asks_for_the_click():
 
 def _clicked(pymux, state, param):
     "kitty's answer arriving on the connection of the client `state` is."
-    from pymux.replies import TerminalReplies
+    from pymux.connection.replies import TerminalReplies
 
     TerminalReplies._route_notification(
         SimpleNamespace(connection=SimpleNamespace(pymux=pymux, client_state=state)), param
@@ -423,7 +423,7 @@ async def test_steal_focus_shows_the_pane_when_the_session_allows_it():
 
 
 def test_the_query_answer_says_what_the_terminal_takes():
-    from pymux.replies import TerminalReplies
+    from pymux.connection.replies import TerminalReplies
 
     connection = SimpleNamespace(notification_actions=frozenset())
     TerminalReplies._route_notification(connection, "i=pymux:p=?;a=focus,report:o=always:u=0,1,2:p=title,body")
@@ -454,7 +454,7 @@ def test_the_query_answer_says_whether_the_terminal_closes():
     Mac. `c=1` says the terminal reports a close a person made, which is
     another thing. Lillecarl/pymux#799.
     """
-    from pymux.replies import TerminalReplies
+    from pymux.connection.replies import TerminalReplies
 
     kitty = (
         "a=focus,report:o=always,unfocused,invisible:u=0,1,2:p=title,body,?,close,icon,alive,buttons"

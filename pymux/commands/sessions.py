@@ -5,9 +5,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pymux.client_state import ClientState
-    from pymux.main import Pymux
-    from pymux.session import Session
+    from pymux.connection.client_state import ClientState
+    from pymux.core.main import Pymux
+    from pymux.core.session import Session
 
 
 from pymux.commands import CommandException, this_client

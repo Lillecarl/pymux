@@ -19,7 +19,7 @@ from prompt_toolkit.layout.layout import walk
 from prompt_toolkit.layout.screen import Screen
 from session import create_session
 
-from pymux.options import ALL_OPTIONS
+from pymux.options.options import ALL_OPTIONS
 
 
 def which_key_floats(state) -> list[Float]:

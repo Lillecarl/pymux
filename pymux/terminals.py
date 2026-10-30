@@ -17,20 +17,20 @@ from pyte.images import ASSUMED_CELL_HEIGHT, ASSUMED_CELL_WIDTH
 from pyte.keep import Keep
 from pyte.keys import KeyboardFlag
 
-from .colors import theme_color_base
 from .enums import ExtendedKeys
 from .log import logger
-from .osc import NO_PROGRESS
-from .portal import color_scheme_of, theme_background
-from .style import DEFAULT_THEME
+from .notify.osc import NO_PROGRESS
+from .style.colors import theme_color_base
+from .style.style import DEFAULT_THEME
+from .wayland.portal import color_scheme_of, theme_background
 
 if TYPE_CHECKING:
-    from .client_state import ClientState
+    from .connection.client_state import ClientState
+    from .connection.server import ServerConnection
+    from .core.main import Pymux
+    from .core.session import Session
+    from .core.window_tree import Pane
     from .ids import SessionId
-    from .main import Pymux
-    from .server import ServerConnection
-    from .session import Session
-    from .window_tree import Pane
 
 __all__ = ["Terminals", "pointer_shape_of"]
 

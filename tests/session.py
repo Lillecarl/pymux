@@ -43,15 +43,15 @@ from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 
-from pymux.colors import ColorDetection, DefaultColors
-from pymux.graphics import ClientGraphics
-from pymux.keys import KittyVt100Parser
-from pymux.known_terminals import Identity, identify
-from pymux.main import Pymux
+from pymux.connection.known_terminals import Identity, identify
+from pymux.connection.rate import Rate
+from pymux.connection.server import ServerConnection
+from pymux.connection.terminal_answers import TerminalAnswers
+from pymux.core.main import Pymux
+from pymux.graphics.graphics import ClientGraphics
+from pymux.keys.keys import KittyVt100Parser
 from pymux.pipes.memory import connect_in_memory
-from pymux.rate import Rate
-from pymux.server import ServerConnection
-from pymux.terminal_answers import TerminalAnswers
+from pymux.style.colors import ColorDetection, DefaultColors
 
 
 class _NoPipe:
@@ -350,7 +350,7 @@ async def in_this_process(pymux=None):
         # that reads the key encoding of the kitty keyboard protocol,
         # so a test that feeds bytes has to have it, and a driver
         # cannot tell the routes apart without it. See
-        # `pymux.client_io.ClientInput`.
+        # `pymux.connection.client_io.ClientInput`.
         pipe.vt100_parser = KittyVt100Parser(pipe._buffer.append)
 
         # A terminal apiece, so two attached clients have two names.

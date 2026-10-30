@@ -8,8 +8,8 @@ from __future__ import annotations
 import pytest
 
 from pymux import hacks_and_lies
+from pymux.core.main import Pymux
 from pymux.hacks_and_lies import PYMUX_VERSION, version
-from pymux.main import Pymux
 
 
 def test_a_pane_names_pymux():

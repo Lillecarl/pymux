@@ -21,11 +21,8 @@ from prompt_toolkit.document import Document
 from prompt_toolkit.keys import Keys
 from pyte.keys import FIRST_FUNCTIONAL_KEY, KeyEvent, Modifier
 
-from pymux.key_mappings import (
-    PYMUX_TO_PROMPT_TOOLKIT_KEYS,
-    prompt_toolkit_key_to_vt100_key,
-)
-from pymux.key_spelling import (
+from pymux.keys.key_mappings import PYMUX_TO_PROMPT_TOOLKIT_KEYS, prompt_toolkit_key_to_vt100_key
+from pymux.keys.key_spelling import (
     AFTER,
     MODIFIERS_A_PERSON_WRITES,
     PREFIX,
@@ -39,7 +36,7 @@ from pymux.key_spelling import (
     keys_of,
     why_pane_cannot_read,
 )
-from pymux.keys import KEYS_A_KEYBOARD_SPELLS_OUT
+from pymux.keys.keys import KEYS_A_KEYBOARD_SPELLS_OUT
 
 # ----------------------------------------------------------------------
 # Everything the older spelling reaches.

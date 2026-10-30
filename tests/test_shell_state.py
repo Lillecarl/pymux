@@ -20,11 +20,12 @@ from pyte.osc import Osc
 from pyte.page import RowMark
 from session import create_session
 
+from pymux.core.main import Pymux
+from pymux.core.outward import MAX_USER_VARS
 from pymux.enums import Clipboard, NotificationPopups
 from pymux.format import format_pymux_string
-from pymux.main import Pymux
-from pymux.notifications import Urgency
-from pymux.osc import (
+from pymux.notify.notifications import Urgency
+from pymux.notify.osc import (
     NO_PROGRESS,
     Progress,
     copy_data_of,
@@ -36,7 +37,6 @@ from pymux.osc import (
     request_attention_of,
     set_user_var_of,
 )
-from pymux.outward import MAX_USER_VARS
 
 
 def sequence(code, param):

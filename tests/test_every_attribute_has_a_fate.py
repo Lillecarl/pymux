@@ -22,8 +22,8 @@ from prompt_toolkit.application.current import set_app
 from pyte.keep import Keep
 from test_a_session_on_a_pyte_screen import attached, settled, shows
 
+from pymux.core.main import Pymux
 from pymux.jobs import JobFeed
-from pymux.main import Pymux
 
 
 @pytest.fixture

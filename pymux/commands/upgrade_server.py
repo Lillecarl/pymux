@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Awaitable
 
-    from pymux.main import Pymux
+    from pymux.core.main import Pymux
 
 
 from pymux.commands import CommandException, CommandParser, add_command
@@ -22,7 +22,7 @@ def upgrade_server(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None]:
     cannot is refused with nothing lost. Attached clients wait for the
     new server and attach again. Lillecarl/pymux#399.
     """
-    from pymux.upgrade import upgrade
+    from pymux.core.upgrade import upgrade
 
     command = shlex.split(args.command)
     if not command:

@@ -37,7 +37,7 @@ LOG = "server.log"
 CANNOT_RESUME = """#!/bin/sh
 exec %(python)s -c '
 import sys
-from pymux import snapshot
+from pymux.core import snapshot
 snapshot.SNAPSHOT_VERSION += 1
 from pymux.entry_points.run_pymux import run
 run()
@@ -60,7 +60,7 @@ BROKEN_MODULE = 'raise RuntimeError("broken on purpose, at import")\n'
 #: A new build that passes the check, then crashes as it resumes.
 CRASHES_AFTER_THE_EXEC = """#!/bin/sh
 exec %(python)s -c '
-from pymux import snapshot
+from pymux.core import snapshot
 async def start(pymux):
     raise RuntimeError("broken on purpose, after the exec")
 snapshot.start = start
@@ -198,7 +198,9 @@ def _leftovers(*pids: int) -> list[str]:
     What these servers' upgrades left. Only theirs: the directory is
     shared, and a test on another worker can be mid-upgrade beside this one.
     """
-    return [path for pid in pids for path in glob.glob(os.path.join(socket_directory(), "pymux.upgrade.%d.*" % pid))]
+    return [
+        path for pid in pids for path in glob.glob(os.path.join(socket_directory(), "pymux.core.upgrade.%d.*" % pid))
+    ]
 
 
 @pytest.fixture

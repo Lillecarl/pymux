@@ -4,12 +4,12 @@ import argparse
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
+    from pymux.core.main import Pymux
 
 
 from pymux.commands import CommandParser, add_command
 from pymux.commands.set_option import set_option
-from pymux.options import Scope
+from pymux.options.options import Scope
 
 
 def set_window_option(pymux: Pymux, args: argparse.Namespace) -> None:

@@ -24,15 +24,15 @@ from pyte.modes import PrivateMode
 
 from pymux.commands import CommandException
 from pymux.commands.common import send_key
-from pymux.key_spelling import event_however_it_is_written
+from pymux.keys.key_spelling import event_however_it_is_written
 from pymux.web.protocol import PaneView, Typed, encode_unsent, typed_of
 
 if TYPE_CHECKING:
     from ptterm import Terminal
     from pyte.screen import Screen
 
-    from pymux.main import Pymux
-    from pymux.window_tree import Pane
+    from pymux.core.main import Pymux
+    from pymux.core.window_tree import Pane
 
 __all__ = ["PaneStream"]
 

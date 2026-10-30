@@ -17,7 +17,7 @@ import subprocess
 from prompt_toolkit.application.current import set_app
 from session import create_session
 
-from pymux.main import Pymux
+from pymux.core.main import Pymux
 from pymux.shims import NOTIFY_SHIM_SCRIPT
 
 

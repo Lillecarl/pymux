@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, cast
 if TYPE_CHECKING:
     from collections.abc import Awaitable
 
-    from pymux.main import Pymux
+    from pymux.core.main import Pymux
 
 
 import anyio
@@ -29,7 +29,7 @@ from pymux.commands.pictures import (
     fitted_cell,
     refuse_picture_flags,
 )
-from pymux.window_pane import WindowWidget
+from pymux.wayland.window_pane import WindowWidget
 
 
 def _row_of(given: str | None, name: str, here: int, far_end: int, line_offset: int) -> int:

@@ -18,7 +18,7 @@ of one that fails. `test_window_defaults.py` says what it does.
 from __future__ import annotations
 
 from pymux.commands import call_command_handler
-from pymux.main import Pymux
+from pymux.core.main import Pymux
 
 
 def source(tmp_path, text):

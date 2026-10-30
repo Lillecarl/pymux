@@ -45,7 +45,7 @@ from pyte.html import CSS, href_of, runs_of_row, style_of, theme_css
 from pyte.images import PixelFormat
 from pyte.png import encode_png
 
-from pymux import graphics, placements, sixel
+from pymux.graphics import graphics, placements, sixel
 
 if TYPE_CHECKING:
     from collections.abc import Iterator

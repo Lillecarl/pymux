@@ -15,7 +15,7 @@ from run_commands import over_socket
 
 from pymux.commands import parser_tree
 from pymux.commands.completer import TARGET_COMPLETERS, create_command_completer
-from pymux.main import Pymux
+from pymux.core.main import Pymux
 
 ENDS_AT_ONCE = "%s -c pass" % (sys.executable,)
 

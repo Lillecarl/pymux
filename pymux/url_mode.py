@@ -25,7 +25,7 @@ from pyte.links import Link, LinkRule, links_in
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from .window_tree import Pane
+    from .core.window_tree import Pane
 
 __all__ = ["LABEL_LETTERS", "Target", "UrlMode", "labels"]
 

@@ -12,9 +12,9 @@ import pytest
 from pyte.colors import Color
 from test_theme import create_client as a_client
 
-from pymux.main import Pymux
-from pymux.options import ALL_CLIENT_OPTIONS, ALL_OPTIONS
-from pymux.portal import ColorScheme, color_scheme_of
+from pymux.core.main import Pymux
+from pymux.options.options import ALL_CLIENT_OPTIONS, ALL_OPTIONS
+from pymux.wayland.portal import ColorScheme, color_scheme_of
 
 DARK = "pygments:dracula"
 LIGHT = "pygments:default"

@@ -1,5 +1,5 @@
 """
-What a client asks its own terminal about colour (`pymux.colors`).
+What a client asks its own terminal about colour (`pymux.style.colors`).
 
 Two questions, and neither is about the session: how many colours the
 terminal takes, and which two it draws with when nothing says
@@ -23,7 +23,10 @@ from test_server_tasks import FakePipe, FakePymux
 from test_theme import create_client as a_client
 
 from pymux.client.terminal import DETECTION_QUERIES
-from pymux.colors import (
+from pymux.connection.server import ServerConnection
+from pymux.core.main import Pymux
+from pymux.options.options import ALL_OPTIONS
+from pymux.style.colors import (
     COLOR_QUERIES,
     TRUECOLOR_PROBE,
     ColorDetection,
@@ -32,10 +35,7 @@ from pymux.colors import (
     reports_truecolor,
     theme_color_base,
 )
-from pymux.main import Pymux
-from pymux.options import ALL_OPTIONS
-from pymux.server import ServerConnection
-from pymux.style import DEFAULT_THEME
+from pymux.style.style import DEFAULT_THEME
 
 
 def detection(term="", colorterm="", forced=None):

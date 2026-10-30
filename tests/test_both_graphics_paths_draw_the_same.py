@@ -43,9 +43,9 @@ from pyte.images import PixelFormat
 from pyte.sixel import decode_sixel
 from test_graphics_output import make_state, placement, view
 
-from pymux.graphics import ClientGraphics
-from pymux.placements import _crop_rgba
-from pymux.sixel import scale_rgba, to_rgba
+from pymux.graphics.graphics import ClientGraphics
+from pymux.graphics.placements import _crop_rgba
+from pymux.graphics.sixel import scale_rgba, to_rgba
 
 #: What sixel's three percentages cost a channel. The same number
 #: `test_graphics_fallback.test_colours_of_image_survive` allows.

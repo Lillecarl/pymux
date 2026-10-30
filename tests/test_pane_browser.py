@@ -8,8 +8,8 @@ from __future__ import annotations
 import pytest
 
 from pymux import shims
+from pymux.core.main import Pymux
 from pymux.enums import PaneBrowser
-from pymux.main import Pymux
 
 SHIM = "/nix/store/x-pymux/bin/pymux-browser"
 

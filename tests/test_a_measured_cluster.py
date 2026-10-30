@@ -12,7 +12,7 @@ from prompt_toolkit.data_structures import Size
 from session import once, over_connection
 
 from pymux.clusters import CLUSTER_WIDTH_PROBE, Drawn
-from pymux.main import Pymux
+from pymux.core.main import Pymux
 
 SIZE = Size(rows=10, columns=40)
 FLAG = "\U0001f1f8\U0001f1ea"

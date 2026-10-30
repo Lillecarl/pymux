@@ -29,10 +29,10 @@ import anyio
 import apsw
 import apsw.ext
 
-from .tables import LIVE_ROWS, JobTagRow, SavedQueryRow, affinity
+from .options.tables import LIVE_ROWS, JobTagRow, SavedQueryRow, affinity
 
 if TYPE_CHECKING:
-    from .main import Pymux
+    from .core.main import Pymux
 
 __all__ = [
     "SCHEMA_VERSION",
@@ -288,14 +288,14 @@ def _option_choices(pymux: Pymux, scope: object = None, name: object = None) -> 
 
 
 def _layouts(pymux: Pymux) -> Iterator[LayoutView]:
-    from .window_tree import LayoutTypes
+    from .core.window_tree import LayoutTypes
 
     for layout in sorted(each.value for each in LayoutTypes):
         yield LayoutView(layout)
 
 
 def _key_names(pymux: Pymux) -> Iterator[KeyNameView]:
-    from .key_spelling import key_words
+    from .keys.key_spelling import key_words
 
     for name, says, kind in key_words():
         yield KeyNameView(name, says, kind.value)
@@ -315,8 +315,8 @@ def _forwards(pymux: Pymux) -> Iterator[ForwardView]:
 
 
 def _live(pymux: Pymux, table: str) -> Iterator[Any]:
-    # Here and not at the top: the snapshot reaches `pymux.main`.
-    from .snapshot import rows_of
+    # Here and not at the top: the snapshot reaches `pymux.core.main`.
+    from .core.snapshot import rows_of
 
     return (row for row in rows_of(pymux) if row.TABLE == table)
 

@@ -22,7 +22,7 @@ from pymux.commands import CommandException
 from pymux.commands.show_client_options import show_client_options
 from pymux.commands.show_options import show_options
 from pymux.commands.show_window_options import show_window_options
-from pymux.options import (
+from pymux.options.options import (
     ALL_CLIENT_OPTIONS,
     ALL_OPTIONS,
     ALL_SERVER_OPTIONS,

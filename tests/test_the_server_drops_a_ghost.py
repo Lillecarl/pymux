@@ -22,8 +22,8 @@ from __future__ import annotations
 from prompt_toolkit.data_structures import Size
 from session import once, over_connection
 
-from pymux import server as pymux_server
 from pymux.client.ssh import SshClient
+from pymux.connection import server as pymux_server
 
 SIZE = Size(rows=24, columns=80)
 

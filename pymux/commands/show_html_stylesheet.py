@@ -4,7 +4,7 @@ import argparse
 from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
+    from pymux.core.main import Pymux
 
 
 from pyte.html import CSS, theme_css

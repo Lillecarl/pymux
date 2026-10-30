@@ -19,9 +19,9 @@ from session import create_session, once
 
 from pymux.answer import Answer
 from pymux.commands import call_command_handler
+from pymux.core.main import Pymux
 from pymux.enums import Chooser
 from pymux.jobs import JobFeed
-from pymux.main import Pymux
 
 
 async def _run_answering(pymux, state, command) -> None:

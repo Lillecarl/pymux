@@ -13,7 +13,7 @@ it. So the table keeps what the person asked for, separately from what
 is open, and opens the wanted set again on the new connection. openssh
 cannot do this: `~C` and its forwards go with the link.
 
-`pymux/forwarding.py` holds what a forward is. This holds the live ones.
+`pymux/core/forwarding.py` holds what a forward is. This holds the live ones.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ import time
 import weakref
 from typing import TYPE_CHECKING, Any, NamedTuple, override
 
-from pymux.forwarding import ANY_PORT, LOOPBACK_NAMES, Direction, Forward
+from pymux.core.forwarding import ANY_PORT, LOOPBACK_NAMES, Direction, Forward
 
 if TYPE_CHECKING:
     import asyncio

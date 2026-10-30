@@ -4,12 +4,12 @@ import argparse
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
+    from pymux.core.main import Pymux
 
 
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import the_window
-from pymux.geometry import change_pane_size
+from pymux.layout.geometry import change_pane_size
 
 
 def resize_pane(pymux: Pymux, args: argparse.Namespace) -> None:

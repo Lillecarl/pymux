@@ -23,7 +23,7 @@ from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from session import once, over_connection
 
-from pymux.pacing import STATUS_REPORT
+from pymux.connection.pacing import STATUS_REPORT
 
 SIZE = Size(rows=24, columns=80)
 ANSWER = "\x1b[0n"

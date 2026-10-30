@@ -26,9 +26,9 @@ FIREFOX = shutil.which("firefox")
 pytestmark = pytest.mark.skipif(FIREFOX is None, reason="no firefox on the PATH")
 
 from pymux.commands import handle_command
+from pymux.core.main import Pymux
 from pymux.enums import WindowCodec
-from pymux.kitty_frames import SHM_PROBE_ID
-from pymux.main import Pymux
+from pymux.graphics.kitty_frames import SHM_PROBE_ID
 
 SIZE = Size(rows=24, columns=80)
 

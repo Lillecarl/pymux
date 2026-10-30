@@ -14,8 +14,8 @@ from __future__ import annotations
 import anyio
 from libpymux.protocol import Field
 
-from pymux.graphics import ClientGraphics
-from pymux.window_frames import FrameRects, WindowView
+from pymux.graphics.graphics import ClientGraphics
+from pymux.graphics.window_frames import FrameRects, WindowView
 
 #: A pixel, in the shape `frame_rects` answers rectangles.
 PIXEL = (0, 0, 1, 1, b"\x00\x00\x00")

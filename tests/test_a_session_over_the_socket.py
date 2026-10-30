@@ -20,9 +20,9 @@ import anyio
 import pytest
 from anyio.abc import UNIXSocketStream
 
-from pymux.main import Pymux
+from pymux.connection.server import ServerConnection
+from pymux.core.main import Pymux
 from pymux.pipes.posix import PosixSocketConnection
-from pymux.server import ServerConnection
 from pymux.web.session import run_session
 
 

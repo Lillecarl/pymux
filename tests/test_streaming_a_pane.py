@@ -25,9 +25,9 @@ import anyio
 import pytest
 from libpymux.wire import encode_json
 
-from pymux.main import Pymux
+from pymux.connection.server import ServerConnection
+from pymux.core.main import Pymux
 from pymux.pipes.memory import connect_in_memory
-from pymux.server import ServerConnection
 from pymux.web.stream import LOOK_AGAIN, PaneStream
 
 #: A program that stays alive until something kills it.

@@ -35,16 +35,16 @@ from prompt_toolkit.input.posix_utils import PosixStdinReader
 from prompt_toolkit.input.vt100 import cooked_mode, raw_mode
 from prompt_toolkit.output.vt100 import Vt100_Output, _get_size
 
-from pymux.colors import COLOR_QUERIES, TRUECOLOR_PROBE
 from pymux.config import client_options_in, find_config
 from pymux.files import ArrivingFiles, Whole
-from pymux.graphics import CELL_SIZE_QUERY, RESTORE_CURSOR, SAVE_CURSOR, VERSION_QUERY
-from pymux.graphics import QUERY_SEQUENCE as GRAPHICS_QUERY
-from pymux.kitty_frames import Base64Carrier, Pictures, ShmCarrier, decoders, frame_commands, shm_probe
-from pymux.osc import PASSTHROUGH_VARIABLE, set_user_var
+from pymux.graphics.graphics import CELL_SIZE_QUERY, RESTORE_CURSOR, SAVE_CURSOR, VERSION_QUERY
+from pymux.graphics.graphics import QUERY_SEQUENCE as GRAPHICS_QUERY
+from pymux.graphics.kitty_frames import Base64Carrier, Pictures, ShmCarrier, decoders, frame_commands, shm_probe
+from pymux.notify.osc import PASSTHROUGH_VARIABLE, set_user_var
+from pymux.style.colors import COLOR_QUERIES, TRUECOLOR_PROBE
 from pymux.utils import nonblocking
 
-from ..packet_table import PacketTable
+from ..connection.packet_table import PacketTable
 from . import browser
 from .base import Client
 from .downloads import save_whole
@@ -70,7 +70,7 @@ if TYPE_CHECKING:
 
     from prompt_toolkit.output import ColorDepth
 
-    from pymux.kitty_frames import Rect
+    from pymux.graphics.kitty_frames import Rect
 
     from .audio import AudioClient
 

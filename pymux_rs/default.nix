@@ -1,7 +1,7 @@
 # The Rust kernels of pymux's image loops, as a package of their own.
 #
 # pymux depends on this, so this depends on nothing of pymux: the
-# package holds the kernels, and `pymux/kernels.py` puts them in place.
+# package holds the kernels, and `pymux/graphics/kernels.py` puts them in place.
 # Its parity check still takes pymux, for the Python each kernel is held
 # to. `pyte/pyte_rs/default.nix` says why this is not `mkProject`.
 # Lillecarl/pymux#574.

@@ -25,7 +25,7 @@ import anyio
 import pytest
 from websockets.asyncio.client import connect
 
-from pymux.main import Pymux
+from pymux.core.main import Pymux
 from pymux.web.server import a_token, serve
 
 LINES = 6

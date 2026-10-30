@@ -13,7 +13,7 @@ from __future__ import annotations
 from run_commands import run
 from test_strip_draws import CHROME, ROWS, create_client
 
-from pymux.pane_container import ABOVE_MARK, BELOW_MARK
+from pymux.layout.pane_container import ABOVE_MARK, BELOW_MARK
 
 NAMES = ["top", "middle", "bottom"]
 

@@ -21,9 +21,9 @@ from session import once, over_connection
 
 pytest.importorskip("pysmithay")
 
-from pymux.clipboard_reads import CLIPBOARD_READ_SECONDS
+from pymux.connection.clipboard_reads import CLIPBOARD_READ_SECONDS
+from pymux.core.main import Pymux
 from pymux.enums import Clipboard
-from pymux.main import Pymux
 
 SIZE = Size(rows=24, columns=80)
 

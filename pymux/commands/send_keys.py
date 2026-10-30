@@ -5,8 +5,8 @@ from collections.abc import Coroutine
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
-    from pymux.window_tree import Pane
+    from pymux.core.main import Pymux
+    from pymux.core.window_tree import Pane
 
 
 from prompt_toolkit.application.current import set_app
@@ -15,7 +15,7 @@ from pyte.page import RowMark
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import refuse_without_a_waiter, send_key, terminal_of, the_pane
 from pymux.commands.wait_pane import add_condition_arguments, armed, asks_for_a_wait
-from pymux.key_spelling import event_however_it_is_written
+from pymux.keys.key_spelling import event_however_it_is_written
 
 #: The copy mode commands `send-keys -X` runs, by tmux's names, and
 #: whether each goes down. `-o` after one jumps to where a command's

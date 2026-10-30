@@ -28,7 +28,7 @@ from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from session import in_this_process
 
-from pymux.options import ALL_CLIENT_OPTIONS, ALL_OPTIONS, SetOptionError
+from pymux.options.options import ALL_CLIENT_OPTIONS, ALL_OPTIONS, SetOptionError
 
 #: One terminal with room, and one without.
 BIG = Size(rows=24, columns=100)
@@ -196,7 +196,7 @@ async def test_set_option_says_which_command_takes_it():
 
 def test_nobody_attached_cannot_set_it():
     "A client option belongs to a terminal, and there is none."
-    from pymux.main import Pymux
+    from pymux.core.main import Pymux
 
     with pytest.raises(SetOptionError):
         ALL_CLIENT_OPTIONS["full-screen"].set_value(Pymux(), "on")

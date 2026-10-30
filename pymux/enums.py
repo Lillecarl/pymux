@@ -105,7 +105,7 @@ class AudioServerMode(StrEnum):
 class WaylandPortal(StrEnum):
     """
     Where the desktop portal's appearance settings for the programs in
-    window panes are served. `pymux/portal.py` says what each costs.
+    window panes are served. `pymux/wayland/portal.py` says what each costs.
     Lillecarl/pymux#812.
     """
 

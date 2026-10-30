@@ -9,7 +9,7 @@ from __future__ import annotations
 import pytest
 from pyte.osc import Osc
 
-from pymux.known_terminals import identify, wcwidth_name
+from pymux.connection.known_terminals import identify, wcwidth_name
 
 
 @pytest.mark.parametrize(

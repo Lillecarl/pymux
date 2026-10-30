@@ -6,16 +6,16 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
-    from pymux.server import ServerConnection
-    from pymux.uploads import Upload
-    from pymux.window_tree import Pane
+    from pymux.connection.server import ServerConnection
+    from pymux.connection.uploads import Upload
+    from pymux.core.main import Pymux
+    from pymux.core.window_tree import Pane
 
 
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import answer, find_pane, refuse_without_a_waiter
+from pymux.connection.uploads import receive_into
 from pymux.enums import FileTransfer
-from pymux.uploads import receive_into
 
 
 def receive(pymux: Pymux, args: argparse.Namespace):

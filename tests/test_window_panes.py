@@ -23,11 +23,11 @@ from session import once, over_connection
 
 pytest.importorskip("pysmithay")
 
+from pymux.core.main import Pymux
 from pymux.enums import WindowCodec, WindowScroll, Woke
-from pymux.main import Pymux
-from pymux.window_frames import WINDOW_Z
-from pymux.window_options import DEFAULT_FRAME_RATE
-from pymux.window_pane import is_window_pane
+from pymux.graphics.window_frames import WINDOW_Z
+from pymux.options.window_options import DEFAULT_FRAME_RATE
+from pymux.wayland.window_pane import is_window_pane
 
 PROBE = Path(__file__).with_name("wayland_probe.py")
 SIZE = Size(rows=24, columns=80)
@@ -317,7 +317,7 @@ async def test_the_terminals_answer_lets_the_next_frame_go(tmp_path):
 
 async def test_a_terminal_that_never_answers_costs_frames_not_the_window(tmp_path, monkeypatch):
     "Lillecarl/pymux#643."
-    monkeypatch.setattr("pymux.pacing.FRAME_ANSWER_SECONDS", 0.3)
+    monkeypatch.setattr("pymux.connection.pacing.FRAME_ANSWER_SECONDS", 0.3)
     async with with_a_window(tmp_path, animate=True, frames=True, shows=True) as (
         _pymux,
         _state,

@@ -16,10 +16,10 @@ from prompt_toolkit.keys import Keys
 from run_commands import run_as
 from session import DEFAULT_SIZE, create_session, once, over_connection
 
-from pymux import layout
-from pymux.actions import Kind
-from pymux.pane_container import pane_write_positions
-from pymux.plan_container import LineHandler
+from pymux.keys.actions import Kind
+from pymux.layout import layout
+from pymux.layout.pane_container import pane_write_positions
+from pymux.layout.plan_container import LineHandler
 
 PRESS, DRAG = 0, 32
 #: A move with no button held, which any-event tracking reports.

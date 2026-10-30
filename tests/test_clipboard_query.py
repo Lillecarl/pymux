@@ -15,7 +15,7 @@ from clipboard_terminal import ClipboardTerminal
 from prompt_toolkit.data_structures import Size
 from session import over_connection
 
-from pymux.clipboard_reads import CLIPBOARD_READ_SECONDS
+from pymux.connection.clipboard_reads import CLIPBOARD_READ_SECONDS
 
 SIZE = Size(rows=24, columns=80)
 

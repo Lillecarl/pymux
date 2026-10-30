@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from prompt_toolkit.filters import Filter
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
+    from pymux.core.main import Pymux
 
 __all__ = [
     "HasPrefix",

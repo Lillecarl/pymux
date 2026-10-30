@@ -4,13 +4,13 @@ import argparse
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
+    from pymux.core.main import Pymux
 
 
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import find_pane, the_window
-from pymux.layout import move_focus
-from pymux.plane import Side
+from pymux.layout.layout import move_focus
+from pymux.layout.plane import Side
 
 
 def select_pane(pymux: Pymux, args: argparse.Namespace) -> None:

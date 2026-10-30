@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from pymux.box_drawing import INK, arms, light_thickness, mask
+from pymux.layout.box_drawing import INK, arms, light_thickness, mask
 
 WIDTH, HEIGHT = 9, 18
 

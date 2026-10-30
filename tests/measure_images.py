@@ -15,7 +15,7 @@ and what moves a count that is not a change in the code.
 
 **(pure)** counts the Python that `PYTERM_PURE=1` keeps: every loop
 over pixels is in the count. **(rust)** installs the kernels first,
-as `pymux.main` does. A kernel runs no bytecode, so this count is the
+as `pymux.core.main` does. A kernel runs no bytecode, so this count is the
 Python around the kernels and nothing of the kernels themselves: it
 says when glue grows, or when a path stops reaching its kernel. A
 (rust) count near its (pure) one is a kernel nobody calls.
@@ -65,9 +65,9 @@ from pyte.sequences import apc
 from pyte.streams import Stream
 from recorded import how_to_record, moved, read_counts, write_list
 
-from pymux import kernels, sixel
-from pymux.graphics import ClientGraphics, PaneView
-from pymux.placements import visible_placements
+from pymux.graphics import kernels, sixel
+from pymux.graphics.graphics import ClientGraphics, PaneView
+from pymux.graphics.placements import visible_placements
 
 HERE = Path(__file__).parent
 

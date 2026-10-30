@@ -44,7 +44,7 @@ from pymux.query import SEEDS
 from pymux.tags import Tags, carries, parse_tag, spelled
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
+    from pymux.core.main import Pymux
 
 #: A newline with no return before it. What the viewer turns into a
 #: full return, the way ONLCR would have on a pty.

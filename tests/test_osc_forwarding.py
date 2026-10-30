@@ -16,9 +16,9 @@ from pyte import escape
 from pyte.osc import Osc, PointerShapes
 from pyte.sequences import Terminator, csi, osc
 
+from pymux.core.main import Pymux
 from pymux.enums import Clipboard, NotificationPopups
-from pymux.main import Pymux
-from pymux.osc import MAX_OSC_LENGTH, build_osc
+from pymux.notify.osc import MAX_OSC_LENGTH, build_osc
 from pymux.terminals import pointer_shape_of
 
 

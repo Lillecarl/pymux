@@ -49,8 +49,8 @@ from photograph_chrome import (
 )
 from take_picture import LIGHT_TERMINALS, TERMINALS
 
-from pymux.style import THEMES
-from pymux.style_pygments import names
+from pymux.style.style import THEMES
+from pymux.style.style_pygments import names
 
 #: Where the pictures go. The check points this at `$out`.
 PICTURES = Path(os.environ.get("PYMUX_THEMES_OUT", "theme-pictures"))

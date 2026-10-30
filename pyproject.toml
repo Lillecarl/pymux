@@ -22,7 +22,7 @@ dependencies = [
     # binds its socket in: the server and a caller have to agree about
     # that, so it is written once, in the library both import.
     "libpymux",
-    # pyte's per-cell loops in Rust, which `pymux/__init__.py` installs
+    # pyte's per-cell loops in Rust, which `pymux/core/main.py` installs
     # over the Python ones. Lillecarl/pymux#566.
     "pyte_rs",
     # And prompt_toolkit's, in `prompt_toolkit_rs/` beside this file.
@@ -117,7 +117,7 @@ catppuccin = ["catppuccin>=2.0.0"]
 web = ["websockets>=13.0"]
 # A Wayland compositor for panes with no display, so wl-copy and wl-paste
 # work there (`wayland-server`). Rust and Linux only, and pymux runs the
-# same without it: `pymux/wayland.py` imports it or does nothing.
+# same without it: `pymux/wayland/wayland.py` imports it or does nothing.
 # Lillecarl/pymux#383.
 #
 # dbus-fast serves the desktop portal those programs read light or dark
@@ -167,7 +167,7 @@ Issues = "https://github.com/Lillecarl/pymux/issues"
 
 [project.scripts]
 pymux = "pymux.entry_points.run_pymux:run"
-pymux-browser = "pymux.browser_shim:main"
+pymux-browser = "pymux.wayland.browser_shim:main"
 
 [build-system]
 requires = ["hatchling"]

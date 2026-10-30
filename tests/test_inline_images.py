@@ -13,7 +13,7 @@ from PIL import Image
 from prompt_toolkit.application.current import set_app
 from session import create_session
 
-from pymux.inline_images import as_png, cells_of
+from pymux.graphics.inline_images import as_png, cells_of
 
 CELL = (10, 20)
 PANE = (80, 24)

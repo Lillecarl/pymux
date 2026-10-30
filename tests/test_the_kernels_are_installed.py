@@ -17,8 +17,6 @@ import pyte.screen
 import pyte_rs
 import pytest
 
-import pymux.main  # noqa: F401  # installs the kernels
-
 
 @pytest.mark.skipif(os.environ.get("PYTERM_PURE", "") not in ("", "0"), reason="the run asked for the Python")
 def test_every_kernel_is_in_place():

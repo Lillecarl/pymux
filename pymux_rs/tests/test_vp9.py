@@ -31,10 +31,32 @@ def vp9_frames(yuv: list[bytes]) -> list[bytes]:
     ffmpeg = shutil.which("ffmpeg")
     assert ffmpeg, "the check puts ffmpeg on PATH"
     ivf = subprocess.run(
-        [ffmpeg, "-hide_banner", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "yuv444p",
-         "-color_range", "pc", "-s", "%dx%d" % (WIDTH, HEIGHT), "-i", "-",
-         "-c:v", "libvpx-vp9", "-lossless", "1", "-f", "ivf", "-"],
-        input=b"".join(yuv), capture_output=True, check=True,
+        [
+            ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "yuv444p",
+            "-color_range",
+            "pc",
+            "-s",
+            "%dx%d" % (WIDTH, HEIGHT),
+            "-i",
+            "-",
+            "-c:v",
+            "libvpx-vp9",
+            "-lossless",
+            "1",
+            "-f",
+            "ivf",
+            "-",
+        ],
+        input=b"".join(yuv),
+        capture_output=True,
+        check=True,
     ).stdout
     frames, at = [], 32
     while at < len(ivf):

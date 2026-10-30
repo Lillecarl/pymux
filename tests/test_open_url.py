@@ -22,8 +22,8 @@ from prompt_toolkit.data_structures import Size
 from session import in_this_process, once, over_connection
 
 from pymux.client.terminal import TerminalClient
-from pymux.main import Pymux
-from pymux.options import ALL_OPTIONS, SetOptionError
+from pymux.core.main import Pymux
+from pymux.options.options import ALL_OPTIONS, SetOptionError
 
 URL = "https://example.com/auth"
 

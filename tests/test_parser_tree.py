@@ -21,8 +21,8 @@ from session import in_this_process
 
 from pymux.commands import call_command_handler, completer, parser_tree
 from pymux.commands.completer import create_command_completer
-from pymux.main import Pymux
-from pymux.options import Scope
+from pymux.core.main import Pymux
+from pymux.options.options import Scope
 
 # ----------------------------------------------------------------------
 # The tree: what a command takes.

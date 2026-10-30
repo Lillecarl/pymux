@@ -31,11 +31,11 @@ from prompt_toolkit.application.current import set_app
 from pyte.png import decode_png
 from session import once
 
-from pymux import plan_container
+from pymux.connection.server import ServerConnection
+from pymux.core.main import Pymux
+from pymux.layout import plan_container
 from pymux.log import logger
-from pymux.main import Pymux
 from pymux.pipes.memory import connect_in_memory
-from pymux.server import ServerConnection
 from pymux.web.session import SessionScreen
 
 ROWS, COLUMNS = 12, 60

@@ -22,9 +22,9 @@ from pyte.painted import Paint
 from pymux import screenshot
 from pymux.answer import Answer
 from pymux.commands import call_command_handler
-from pymux.graphics import DEFAULT_CELL_HEIGHT, DEFAULT_CELL_WIDTH
-from pymux.main import Pymux
-from pymux.window_frames import WINDOW_Z
+from pymux.core.main import Pymux
+from pymux.graphics.graphics import DEFAULT_CELL_HEIGHT, DEFAULT_CELL_WIDTH
+from pymux.graphics.window_frames import WINDOW_Z
 
 COLUMNS = 20
 LINES = 5

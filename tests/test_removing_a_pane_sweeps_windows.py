@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import sys
 
-from pymux.main import Pymux
+from pymux.core.main import Pymux
 
 WAITS = "%s -c 'import time; time.sleep(30)'" % (sys.executable,)
 

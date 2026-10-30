@@ -9,8 +9,9 @@ import apsw
 from session import create_session
 
 import pymux.jobs as jobs_module
-from pymux import snapshot, tables
-from pymux.options import Scope
+from pymux.core import snapshot
+from pymux.options import tables
+from pymux.options.options import Scope
 from pymux.query import SCHEMA_VERSION, ask
 
 

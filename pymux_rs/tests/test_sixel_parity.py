@@ -1,10 +1,10 @@
 """
-`pymux_rs` encodes and converts what `pymux.sixel` does, byte for byte.
+`pymux_rs` encodes and converts what `pymux.graphics.sixel` does, byte for byte.
 
 The encoder takes random images: few colours and many, under every
 palette size, with pixels transparent enough to stay clear, so the
 median cut splits, ties and runs out of buckets. The conversions take
-every size. `pymux.kernels.install()` is held to the Python too, edges
+every size. `pymux.graphics.kernels.install()` is held to the Python too, edges
 and all. Lillecarl/pymux#574.
 """
 
@@ -16,7 +16,7 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 from pyte.images import PixelFormat
 
-from pymux import blocks, kernels, sixel
+from pymux.graphics import blocks, kernels, sixel
 
 #: The references, taken before any test could have installed a kernel.
 PURE_AVERAGE = blocks.average_rgba

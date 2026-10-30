@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import pytest
 
-from pymux.layout import DEFAULT_OVERLAY_SIZE, MIN_OVERLAY_SIZE, overlay_size
-from pymux.main import Pymux
+from pymux.core.main import Pymux
+from pymux.layout.layout import DEFAULT_OVERLAY_SIZE, MIN_OVERLAY_SIZE, overlay_size
 
 # ----------------------------------------------------------------------
 # How large it is.

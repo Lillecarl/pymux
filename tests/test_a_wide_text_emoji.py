@@ -12,8 +12,8 @@ from __future__ import annotations
 from prompt_toolkit.data_structures import Size
 from session import once, over_connection
 
-from pymux.main import Pymux
-from pymux.replies import EMOJI_WIDTH_PROBE
+from pymux.connection.replies import EMOJI_WIDTH_PROBE
+from pymux.core.main import Pymux
 
 SIZE = Size(rows=10, columns=40)
 EMOJI = "✳️"

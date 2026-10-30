@@ -4,15 +4,15 @@ import argparse
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
-    from pymux.options import Holder
-    from pymux.session import OwnOptions
+    from pymux.core.main import Pymux
+    from pymux.core.session import OwnOptions
+    from pymux.options.options import Holder
 
 
-from pymux.actions import Origin, started_by_now
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import answer, option_as_written, session_of_target
-from pymux.options import Option, Scope, SetOptionError
+from pymux.keys.actions import Origin, started_by_now
+from pymux.options.options import Option, Scope, SetOptionError
 
 #: Which command sets an option of each scope.
 _COMMAND_FOR = {

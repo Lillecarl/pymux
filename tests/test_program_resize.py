@@ -10,9 +10,9 @@ shorter, so a program only gets its way when the person allows it with
 
 from __future__ import annotations
 
-from pymux.geometry import plan_of
-from pymux.main import Pymux
-from pymux.window_tree import Pane
+from pymux.core.main import Pymux
+from pymux.core.window_tree import Pane
+from pymux.layout.geometry import plan_of
 
 
 class _FakeProcess:

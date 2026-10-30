@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from pymux.rate import RATE_WINDOW, Rate, frames_per_second, per_second
+from pymux.connection.rate import RATE_WINDOW, Rate, frames_per_second, per_second
 
 
 def test_the_first_read_is_zero():

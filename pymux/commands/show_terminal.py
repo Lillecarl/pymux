@@ -5,12 +5,12 @@ import datetime
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
+    from pymux.core.main import Pymux
 
 
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import clients_named, show_listing
-from pymux.terminal_answers import readable
+from pymux.connection.terminal_answers import readable
 
 
 def show_terminal(pymux: Pymux, args: argparse.Namespace) -> None:

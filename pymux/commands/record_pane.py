@@ -7,10 +7,10 @@ from ptyhost.process import Process
 
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import terminal_of, the_pane
-from pymux.recording import recording_of_process, recordings_directory
+from pymux.connection.recording import recording_of_process, recordings_directory
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
+    from pymux.core.main import Pymux
 
 
 def seconds(text: str) -> float:

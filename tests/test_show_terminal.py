@@ -13,7 +13,7 @@ from prompt_toolkit.data_structures import Size
 from session import once, over_connection
 
 from pymux.answer import Answer
-from pymux.terminal_answers import SURVEY, TerminalAnswers, readable
+from pymux.connection.terminal_answers import SURVEY, TerminalAnswers, readable
 
 SIZE = Size(rows=24, columns=80)
 DA2 = "\x1b[>1;10;0c"

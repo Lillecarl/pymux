@@ -26,7 +26,7 @@ import pytest
 from libpymux.protocol import Packet
 
 from pymux.client.posix import PosixClient
-from pymux.server import CANNOT_ATTACH
+from pymux.connection.server import CANNOT_ATTACH
 
 
 @pytest.fixture

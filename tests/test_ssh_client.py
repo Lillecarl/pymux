@@ -31,7 +31,7 @@ import anyio
 import pytest
 
 from pymux.client.ssh import SshClient, is_ssh_url, ssh_target
-from pymux.main import Pymux
+from pymux.core.main import Pymux
 
 PANE_COMMAND = "%s -c 'import time; time.sleep(30)'" % (sys.executable,)
 

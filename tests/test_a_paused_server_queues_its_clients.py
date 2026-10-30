@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import socket
 
-from pymux.main import Pymux
+from pymux.core.main import Pymux
 from pymux.pipes.posix import bind_and_listen_on_posix_socket
 
 #: The clients that come back at once: more than a person runs.

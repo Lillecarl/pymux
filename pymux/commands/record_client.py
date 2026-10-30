@@ -6,10 +6,10 @@ from typing import TYPE_CHECKING
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import the_client
 from pymux.commands.record_pane import seconds
-from pymux.recording import Recording, a_name, recordings_directory
+from pymux.connection.recording import Recording, a_name, recordings_directory
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
+    from pymux.core.main import Pymux
 
 
 def record_client(pymux: Pymux, args: argparse.Namespace) -> None:

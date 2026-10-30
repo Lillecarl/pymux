@@ -11,14 +11,7 @@ from __future__ import annotations
 import pytest
 from prompt_toolkit.output import ColorDepth
 
-from pymux.blocks import (
-    LOWER_HALF,
-    OPAQUE,
-    UPPER_HALF,
-    average_rgba,
-    blocks_for,
-    rows_for_cells,
-)
+from pymux.graphics.blocks import LOWER_HALF, OPAQUE, UPPER_HALF, average_rgba, blocks_for, rows_for_cells
 
 RED = (255, 0, 0, 255)
 GREEN = (0, 255, 0, 255)

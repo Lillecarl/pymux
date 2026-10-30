@@ -7,9 +7,9 @@ from __future__ import annotations
 
 import pytest
 
-from pymux.main import Pymux
-from pymux.options import ALL_WINDOW_OPTIONS, SetOptionError
-from pymux.wayland_scale import NOMINAL_CELL_HEIGHT, parse_scale, resolve_scale
+from pymux.core.main import Pymux
+from pymux.options.options import ALL_WINDOW_OPTIONS, SetOptionError
+from pymux.wayland.wayland_scale import NOMINAL_CELL_HEIGHT, parse_scale, resolve_scale
 
 
 @pytest.mark.parametrize(

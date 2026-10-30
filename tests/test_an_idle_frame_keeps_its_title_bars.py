@@ -11,8 +11,8 @@ Lillecarl/pymux#578.
 
 from __future__ import annotations
 
-from pymux.plane import GROUND, Plan, Rect, Side, Slot
-from pymux.titlebar import PaneTitleBar
+from pymux.layout.plane import GROUND, Plan, Rect, Side, Slot
+from pymux.layout.titlebar import PaneTitleBar
 
 
 class _Pane:

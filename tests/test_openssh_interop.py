@@ -48,7 +48,7 @@ import pytest
 from anyio.abc import SocketAttribute
 
 from pymux.client.forwards import Forwards
-from pymux.forwarding import ANY_PORT, Direction, Forward
+from pymux.core.forwarding import ANY_PORT, Direction, Forward
 
 #: Where the check puts the sshd it wants used. Absolute, because sshd
 #: refuses to run any other way.

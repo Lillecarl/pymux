@@ -16,8 +16,8 @@ from __future__ import annotations
 
 import pytest
 
+from pymux.core.main import Pymux
 from pymux.enums import EditingKeys
-from pymux.main import Pymux
 from pymux.utils import editor_keys
 
 #: What the editor of a person says, and the keys it means. `nvim` is

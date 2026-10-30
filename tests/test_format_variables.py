@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from pymux.client_state import ClientState
+from pymux.connection.client_state import ClientState
 from pymux.format import (
     FormatContext,
     compact_path,

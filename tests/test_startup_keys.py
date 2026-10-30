@@ -17,7 +17,7 @@ import shlex
 import pytest
 
 from pymux.commands import parser_tree
-from pymux.key_mappings import pymux_key_to_prompt_toolkit_key_sequence
+from pymux.keys.key_mappings import pymux_key_to_prompt_toolkit_key_sequence
 from pymux.rc import STARTUP_COMMANDS
 
 

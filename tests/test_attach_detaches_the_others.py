@@ -19,9 +19,9 @@ from libpymux.wire import encode_json
 from prompt_toolkit.application.current import set_app
 
 from pymux.client.terminal import TerminalClient
-from pymux.main import Pymux
+from pymux.connection.server import ServerConnection
+from pymux.core.main import Pymux
 from pymux.pipes.memory import connect_in_memory
-from pymux.server import ServerConnection
 
 #: A pane that stays. It has to outlive the test: the last window of a
 #: session ending takes the session with it, and that detaches its

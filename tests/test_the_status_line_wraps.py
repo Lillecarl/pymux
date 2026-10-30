@@ -17,7 +17,7 @@ from prompt_toolkit.layout.mouse_handlers import MouseHandlers
 from prompt_toolkit.layout.screen import Screen, WritePosition
 from session import in_this_process
 
-from pymux.options import ALL_CLIENT_OPTIONS, ALL_OPTIONS
+from pymux.options.options import ALL_CLIENT_OPTIONS, ALL_OPTIONS
 
 PHONE = Size(rows=20, columns=40)
 DESK = Size(rows=20, columns=200)

@@ -4,12 +4,12 @@ import argparse
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
+    from pymux.core.main import Pymux
 
 
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import the_window
-from pymux.window_tree import LayoutTypes
+from pymux.core.window_tree import LayoutTypes
 
 
 def select_layout(pymux: Pymux, args: argparse.Namespace) -> None:

@@ -43,8 +43,8 @@ if TYPE_CHECKING:
     from pyte.screen import Screen
 
     from pymux.answer import Answer
-    from pymux.main import Pymux
-    from pymux.window_tree import Pane
+    from pymux.core.main import Pymux
+    from pymux.core.window_tree import Pane
 
 #: The exit code of a wait that ran out, as `timeout(1)` and `tail` say it.
 TIMED_OUT = 124

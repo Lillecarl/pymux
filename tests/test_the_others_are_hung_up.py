@@ -27,9 +27,9 @@ from test_the_link_comes_back import Terminal
 from pymux.client.base import Client
 from pymux.client.memory import MemoryClient
 from pymux.client.terminal import TerminalClient
-from pymux.main import Pymux
+from pymux.connection.server import ServerConnection
+from pymux.core.main import Pymux
 from pymux.pipes.memory import connect_in_memory
-from pymux.server import ServerConnection
 
 #: A pane that stays, for the reason `test_attach_detaches_the_others`
 #: gives: a session whose last window ended detaches its own clients.

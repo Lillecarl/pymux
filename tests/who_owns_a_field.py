@@ -7,7 +7,7 @@ A field marked SHARED is read or written elsewhere; when the others
 only read the server's registry (sessions, clients, options), a
 reference to the server is enough. Lillecarl/pymux#775.
 
-    python tests/who_owns_a_field.py pymux/main.py Pymux \\
+    python tests/who_owns_a_field.py pymux/core/main.py Pymux \\
         commands=handle_command,show_message,add_command_error
 """
 

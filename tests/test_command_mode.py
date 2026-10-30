@@ -22,7 +22,7 @@ from prompt_toolkit.keys import Keys
 from pyte.sequences import Csi, csi
 from session import create_session
 
-from pymux.options import ALL_OPTIONS
+from pymux.options.options import ALL_OPTIONS
 
 
 def in_command_mode(state):

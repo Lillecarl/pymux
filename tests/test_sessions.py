@@ -21,7 +21,7 @@ from session import in_this_process, once, over_connection
 
 from pymux.answer import Answer
 from pymux.commands import handle_command
-from pymux.main import Pymux
+from pymux.core.main import Pymux
 
 SIZE = Size(rows=24, columns=80)
 

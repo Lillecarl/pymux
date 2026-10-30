@@ -4,13 +4,13 @@ import argparse
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
+    from pymux.core.main import Pymux
 
 
 from libpymux.protocol import Field, Packet
 
 from pymux.commands import CommandException, CommandParser, add_command
-from pymux.forwarding import BadForward, Direction, parse_listen
+from pymux.core.forwarding import BadForward, Direction, parse_listen
 
 
 def unforward_port(pymux: Pymux, args: argparse.Namespace) -> None:

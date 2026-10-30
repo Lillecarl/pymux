@@ -8,7 +8,7 @@ from __future__ import annotations
 from prompt_toolkit.keys import Keys
 from pyte.keys import parse_key_data
 
-from pymux.window_pane import WindowWidget, evdev_of, evdev_of_event
+from pymux.wayland.window_pane import WindowWidget, evdev_of, evdev_of_event
 
 SHIFT, CTRL, ALT = 42, 29, 56
 

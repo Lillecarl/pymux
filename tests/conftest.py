@@ -31,7 +31,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import contextlib
 
-from pymux.main import Pymux
+from pymux.core.main import Pymux
 
 #: How long one test may take before it is stuck. The check sets it.
 HANG_SECONDS = float(os.environ.get("PYMUX_HANG_SECONDS") or 0)

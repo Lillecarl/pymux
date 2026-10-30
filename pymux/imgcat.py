@@ -28,8 +28,8 @@ from typing import TYPE_CHECKING, BinaryIO, Final
 import magic
 import resvg_py
 
-from pymux.graphics import DEFAULT_CELL_HEIGHT, DEFAULT_CELL_WIDTH
-from pymux.inline_images import as_png
+from pymux.graphics.graphics import DEFAULT_CELL_HEIGHT, DEFAULT_CELL_WIDTH
+from pymux.graphics.inline_images import as_png
 
 if TYPE_CHECKING:
     from typing import TextIO

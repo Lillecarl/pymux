@@ -4,14 +4,14 @@ import argparse
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
+    from pymux.core.main import Pymux
 
 
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import answer, option_as_written
 from pymux.commands.set_option import find_option, session_holder
-from pymux.options import Option, Scope
-from pymux.session import OwnOptions
+from pymux.core.session import OwnOptions
+from pymux.options.options import Option, Scope
 
 
 def show_options(pymux: Pymux, args: argparse.Namespace) -> None:

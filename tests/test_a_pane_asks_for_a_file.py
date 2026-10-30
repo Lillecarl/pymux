@@ -34,8 +34,8 @@ from pymux.client.uploads import (
     upload_settings,
 )
 from pymux.commands.receive import wait_for_files
-from pymux.main import Pymux
-from pymux.uploads import LIST_SECONDS, Upload, receive_into
+from pymux.connection.uploads import LIST_SECONDS, Upload, receive_into
+from pymux.core.main import Pymux
 
 SIZE = Size(rows=24, columns=80)
 

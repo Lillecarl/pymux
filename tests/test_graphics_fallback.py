@@ -14,9 +14,9 @@ from pyte.sequences import Csi, apc, csi
 from pyte.sixel import decode_sixel
 from test_graphics_output import IMAGE_DATA, make_state, placement, view
 
-from pymux import sixel as sixel_module
-from pymux.blocks import LOWER_HALF, UPPER_HALF
-from pymux.graphics import ClientGraphics
+from pymux.graphics import sixel as sixel_module
+from pymux.graphics.blocks import LOWER_HALF, UPPER_HALF
+from pymux.graphics.graphics import ClientGraphics
 
 
 def make_client(kitty=False, sixel=False, repaint=None):

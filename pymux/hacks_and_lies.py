@@ -26,7 +26,7 @@ from pymux import __version__
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from pymux.client_state import ClientState
+    from pymux.connection.client_state import ClientState
 
 __all__ = ["LIES", "PYMUX_VERSION", "Lie", "outer_term", "version"]
 

@@ -7,7 +7,7 @@ from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import find_pane, terminal_of
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
+    from pymux.core.main import Pymux
 
 
 def unscroll_pane(pymux: Pymux, args: argparse.Namespace) -> None:

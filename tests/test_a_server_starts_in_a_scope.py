@@ -13,7 +13,7 @@ import sys
 
 import pytest
 
-from pymux import scope
+from pymux.options import scope
 
 
 @pytest.fixture

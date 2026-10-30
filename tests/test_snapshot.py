@@ -28,9 +28,11 @@ from session import once
 from test_a_session_on_a_pyte_screen import attached, settled, shows
 from test_every_attribute_has_a_fate import declared, live_objects
 
-from pymux import snapshot, tables
-from pymux.client_options import ClientOptions
 from pymux.commands.wait_for import WaitChannel
+from pymux.core import snapshot
+from pymux.core.main import Pymux
+from pymux.core.snapshot import _values_of
+from pymux.core.window_tree import LayoutTypes
 from pymux.enums import (
     AudioFrame,
     Chooser,
@@ -44,13 +46,12 @@ from pymux.enums import (
     WindowSize,
 )
 from pymux.jobs import JobFeed, JobPipes
-from pymux.main import Pymux
-from pymux.notifications import Urgency
+from pymux.notify.notifications import Urgency
+from pymux.options import tables
+from pymux.options.client_options import ClientOptions
+from pymux.options.session_options import SessionOptions
+from pymux.options.tables import ClientOptionRow
 from pymux.query import ask
-from pymux.session_options import SessionOptions
-from pymux.snapshot import _values_of
-from pymux.tables import ClientOptionRow
-from pymux.window_tree import LayoutTypes
 
 
 @pytest.fixture

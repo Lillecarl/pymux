@@ -28,9 +28,9 @@ from pymux.client.memory import MemoryClient
 from pymux.client.terminal import TerminalClient
 from pymux.commands import CommandException
 from pymux.commands.common import clients_named
-from pymux.main import Pymux
+from pymux.connection.server import ServerConnection
+from pymux.core.main import Pymux
 from pymux.pipes.memory import connect_in_memory
-from pymux.server import ServerConnection
 
 SIZE = Size(rows=24, columns=80)
 

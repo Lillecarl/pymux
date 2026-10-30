@@ -19,7 +19,7 @@ from pymux import screenshot
 from pymux.commands import CommandException
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
+    from pymux.core.main import Pymux
 
 __all__ = [
     "IN_PICTURES",

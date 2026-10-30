@@ -4,14 +4,14 @@ import argparse
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
+    from pymux.core.main import Pymux
 
 
 from pymux.client.uploads import LOCAL_CLIENT_OPTIONS
 from pymux.commands import CommandException, CommandParser, add_command, not_past_this_client, this_client
 from pymux.commands.common import clients_named
 from pymux.commands.set_option import set_option
-from pymux.options import Scope
+from pymux.options.options import Scope
 
 
 def set_client_option(pymux: Pymux, args: argparse.Namespace) -> None:

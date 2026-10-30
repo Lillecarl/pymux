@@ -25,18 +25,18 @@ from enum import Enum
 from typing import TYPE_CHECKING, NamedTuple
 
 from pymux.commands import CommandException
-from pymux.rate import frames_per_second, per_second
+from pymux.connection.rate import frames_per_second, per_second
 from pymux.tags import spelled
 
 if TYPE_CHECKING:
-    from pymux.client_state import ClientState
-    from pymux.graphics import ClientGraphics
-    from pymux.main import Pymux
+    from pymux.connection.client_state import ClientState
+    from pymux.connection.rate import Rate
+    from pymux.connection.server import ServerConnection
+    from pymux.core.main import Pymux
+    from pymux.core.session import OwnOptions, Session
+    from pymux.core.window_tree import Pane, Window
+    from pymux.graphics.graphics import ClientGraphics
     from pymux.pipes.base import PipeConnection
-    from pymux.rate import Rate
-    from pymux.server import ServerConnection
-    from pymux.session import OwnOptions, Session
-    from pymux.window_tree import Pane, Window
 
 __all__ = ["FormatContext", "Language", "format_pymux_string"]
 
@@ -805,7 +805,7 @@ def _client_rate(
 ) -> Callable[[FormatContext], str]:
     """
     The same bytes per second over the last few seconds, in a unit
-    that fits (`pymux.rate`). For a person; a script reads the counts.
+    that fits (`pymux.connection.rate`). For a person; a script reads the counts.
     Lillecarl/pymux#678.
     """
 

@@ -12,10 +12,10 @@ import sys
 
 import pytest
 
-from pymux.actions import Origin, started_by
 from pymux.answer import Answer
 from pymux.commands import call_command_handler
-from pymux.main import Pymux
+from pymux.core.main import Pymux
+from pymux.keys.actions import Origin, started_by
 
 ENDS_AT_ONCE = "%s -c pass" % (sys.executable,)
 

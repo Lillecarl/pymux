@@ -16,7 +16,7 @@ from session import create_session
 from test_command_mode import press
 from test_key_tables import written_keys
 
-from pymux.osc import PASSTHROUGH_VARIABLE, set_user_var, set_user_var_of
+from pymux.notify.osc import PASSTHROUGH_VARIABLE, set_user_var, set_user_var_of
 
 
 def status_right(state) -> str:

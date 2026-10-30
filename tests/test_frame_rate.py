@@ -20,11 +20,11 @@ import pytest
 from prompt_toolkit.application.current import set_app
 from session import create_session
 
-from pymux.client_state import BEHIND_INTERVAL
 from pymux.commands import handle_command
-from pymux.main import Pymux
-from pymux.options import ALL_WINDOW_OPTIONS, SetOptionError
-from pymux.window_options import DEFAULT_FRAME_RATE
+from pymux.connection.client_state import BEHIND_INTERVAL
+from pymux.core.main import Pymux
+from pymux.options.options import ALL_WINDOW_OPTIONS, SetOptionError
+from pymux.options.window_options import DEFAULT_FRAME_RATE
 
 PANE_COMMAND = "%s -c pass" % (sys.executable,)
 

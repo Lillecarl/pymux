@@ -37,7 +37,7 @@ from pyte.screen import Screen
 from pyte.streams import GroundTimer, Stream
 
 from pymux.client.terminal import DETECTION_QUERIES
-from pymux.key_spelling import event_however_it_is_written
+from pymux.keys.key_spelling import event_however_it_is_written
 from pymux.log import logger
 from pymux.web.protocol import PaneView, Typed, encode_unsent, typed_of
 

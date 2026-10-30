@@ -5,20 +5,14 @@ import shlex
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
+    from pymux.core.main import Pymux
 
 
 from libpymux.protocol import Field, Packet
 
 from pymux.commands import CommandException, CommandParser, add_command
+from pymux.core.forwarding import MAY_NARROW, BadForward, Direction, parse_forward, the_far_side_may_narrow
 from pymux.enums import ForwardMode
-from pymux.forwarding import (
-    MAY_NARROW,
-    BadForward,
-    Direction,
-    parse_forward,
-    the_far_side_may_narrow,
-)
 
 
 def forward_port(pymux: Pymux, args: argparse.Namespace) -> None:

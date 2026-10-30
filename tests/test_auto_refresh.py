@@ -30,9 +30,9 @@ from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 from session import Connection
 
+from pymux.core.main import Pymux
 from pymux.format import format_pymux_string
-from pymux.main import Pymux
-from pymux.options import ALL_CLIENT_OPTIONS, ALL_OPTIONS, ALL_SERVER_OPTIONS
+from pymux.options.options import ALL_CLIENT_OPTIONS, ALL_OPTIONS, ALL_SERVER_OPTIONS
 
 ROWS, COLUMNS = 24, 80
 

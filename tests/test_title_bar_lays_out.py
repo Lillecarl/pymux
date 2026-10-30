@@ -15,7 +15,7 @@ from __future__ import annotations
 import pytest
 from prompt_toolkit.formatted_text.utils import fragment_list_to_text
 
-from pymux.titlebar import ELLIPSIS, lay_out_bar
+from pymux.layout.titlebar import ELLIPSIS, lay_out_bar
 
 WIDTH = 40
 

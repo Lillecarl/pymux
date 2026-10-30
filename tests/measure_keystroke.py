@@ -98,7 +98,7 @@ from prompt_toolkit.output.vt100 import Vt100_Output
 from recorded import how_to_record, moved, read_counts, write_list
 from session import Connection
 
-from pymux.main import Pymux
+from pymux.core.main import Pymux
 
 #: The tool slot the walk below registers as. It is the one
 #: `instructions.py` uses, and the two never run at the same time.

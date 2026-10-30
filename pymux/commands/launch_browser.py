@@ -11,12 +11,12 @@ from typing import TYPE_CHECKING
 import anyio
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
+    from pymux.core.main import Pymux
 
 
-from pymux.browsers import BrowserRefused
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import answer, find_pane
+from pymux.wayland.browsers import BrowserRefused
 
 
 def launch_browser(pymux: Pymux, args: argparse.Namespace):

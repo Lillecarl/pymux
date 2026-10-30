@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-from pymux import wayland
-from pymux.main import Pymux
+from pymux.core.main import Pymux
+from pymux.wayland import wayland
 
 
 @pytest.fixture

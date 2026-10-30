@@ -22,7 +22,7 @@ from prompt_toolkit.data_structures import Size
 from prompt_toolkit.layout.containers import FloatContainer
 from session import in_this_process
 
-from pymux.z_index import Z_INDEX
+from pymux.layout.z_index import Z_INDEX
 
 SIZE = Size(rows=24, columns=80)
 

@@ -16,7 +16,7 @@ from ptkhx import Mode
 from session import create_session
 from test_command_mode import leaves_command_mode, press
 
-from pymux.options import ALL_OPTIONS
+from pymux.options.options import ALL_OPTIONS
 
 
 def _helix(pymux, state, text: str = "new-window") -> None:

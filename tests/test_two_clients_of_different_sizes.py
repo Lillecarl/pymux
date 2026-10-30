@@ -40,11 +40,11 @@ from session import Connection
 from test_server_tasks import FakePipe
 
 from pymux.commands import handle_command
+from pymux.connection.server import ServerConnection
+from pymux.core.main import Pymux
 from pymux.enums import WindowSize
-from pymux.keys import FOCUS_IN, FOCUS_OUT
-from pymux.main import Pymux
-from pymux.plan_container import PlanContainer
-from pymux.server import ServerConnection
+from pymux.keys.keys import FOCUS_IN, FOCUS_OUT
+from pymux.layout.plan_container import PlanContainer
 
 #: One client with room, and one without. The columns differ by enough
 #: that a pane of the big plane cannot fit in the small client.

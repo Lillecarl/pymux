@@ -27,7 +27,7 @@ from prompt_toolkit.layout.containers import ConditionalContainer, Float
 from session import create_session
 
 from pymux.commands import call_command_handler
-from pymux.key_spelling import PREFIX, KeyCompleter
+from pymux.keys.key_spelling import PREFIX, KeyCompleter
 
 
 def float_of(state, name: str) -> Float:

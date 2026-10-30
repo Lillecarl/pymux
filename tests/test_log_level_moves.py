@@ -14,8 +14,8 @@ import logging
 import pytest
 
 from pymux import log
-from pymux.main import Pymux
-from pymux.options import ALL_SERVER_OPTIONS, SetOptionError
+from pymux.core.main import Pymux
+from pymux.options.options import ALL_SERVER_OPTIONS, SetOptionError
 
 
 @pytest.fixture(autouse=True)

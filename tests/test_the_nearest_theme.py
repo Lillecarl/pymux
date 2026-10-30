@@ -19,8 +19,8 @@ from pyte.colors import parse_color
 from session import over_connection
 
 from pymux.answer import Answer
-from pymux.colors import DefaultColors
-from pymux.nearest import (
+from pymux.style.colors import DefaultColors
+from pymux.style.nearest import (
     NEAREST,
     WEIGHT_BACKGROUND,
     WEIGHT_PALETTE,
@@ -29,7 +29,7 @@ from pymux.nearest import (
     oklab,
     wanted_from,
 )
-from pymux.style import DEFAULT_THEME, roles_of
+from pymux.style.style import DEFAULT_THEME, roles_of
 
 #: Three themes, one out of each source pymux offers.
 ONE_OF_EACH = ["default", "base16:gruvbox-dark-hard", "pygments:monokai"]

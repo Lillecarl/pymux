@@ -17,7 +17,7 @@ import sys
 from prompt_toolkit.application.current import set_app
 from session import DEFAULT_SIZE, in_this_process
 
-from pymux.main import Pymux
+from pymux.core.main import Pymux
 
 #: A pane that stays up, so a window lives until a test closes it.
 WAITS = "%s -c 'import time; time.sleep(30)'" % (sys.executable,)

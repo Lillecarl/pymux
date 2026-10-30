@@ -227,7 +227,7 @@ def test_frame_is_not_logged_at_info():
     """
     import inspect
 
-    from pymux.main import Pymux
+    from pymux.core.main import Pymux
 
     said = inspect.getsource(Pymux.invalidate)
     assert "logger.debug(" in said
@@ -245,7 +245,7 @@ def test_pane_that_writes_is_still_logged():
     """
     import inspect
 
-    from pymux.waking import Waking
+    from pymux.core.waking import Waking
 
     said = inspect.getsource(Waking.client_asked_for_frame)
     assert "logger.debug(" in said

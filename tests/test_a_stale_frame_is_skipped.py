@@ -14,8 +14,8 @@ from __future__ import annotations
 from libpymux.protocol import Field, Packet
 from profile_frame import server
 
-from pymux.clipboard_reads import ClipboardReader
-from pymux.server import ServerConnection
+from pymux.connection.clipboard_reads import ClipboardReader
+from pymux.connection.server import ServerConnection
 
 
 class _Pipe:

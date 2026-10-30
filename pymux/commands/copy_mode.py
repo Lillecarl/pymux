@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from prompt_toolkit.application.current import set_app
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
+    from pymux.core.main import Pymux
 
 
 from pymux.commands import CommandException, CommandParser, add_command

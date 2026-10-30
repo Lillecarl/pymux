@@ -38,7 +38,7 @@ from prompt_toolkit.output.vt100 import Vt100_Output
 from session import Connection
 
 from pymux.commands import handle_command
-from pymux.main import Pymux
+from pymux.core.main import Pymux
 
 ROWS, COLUMNS = 12, 40
 

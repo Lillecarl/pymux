@@ -30,7 +30,7 @@ import pytest
 
 from pymux.answer import Answer
 from pymux.commands import call_command_handler
-from pymux.main import Pymux
+from pymux.core.main import Pymux
 
 COLUMNS = 20
 LINES = 5

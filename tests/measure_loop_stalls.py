@@ -49,7 +49,7 @@ from prompt_toolkit.data_structures import Size
 from prompt_toolkit.output import ColorDepth
 from session import once
 
-from pymux.main import Pymux
+from pymux.core.main import Pymux
 from pymux.pipes.posix import PosixSocketConnection
 
 TICK = 0.005

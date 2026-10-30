@@ -74,11 +74,11 @@ from pyte.sixel import decode_sixel
 from pyte.streams import Stream
 from pyterm_pytest.deadline import Deadline, pids_naming
 
-from pymux.blocks import LOWER_HALF, UPPER_HALF
-from pymux.colors import TRUECOLOR_PROBE
-from pymux.graphics import CELL_SIZE_QUERY
-from pymux.graphics import QUERY_SEQUENCE as GRAPHICS_QUERY
-from pymux.notifications import QUERY_IDENTIFIER
+from pymux.graphics.blocks import LOWER_HALF, UPPER_HALF
+from pymux.graphics.graphics import CELL_SIZE_QUERY
+from pymux.graphics.graphics import QUERY_SEQUENCE as GRAPHICS_QUERY
+from pymux.notify.notifications import QUERY_IDENTIFIER
+from pymux.style.colors import TRUECOLOR_PROBE
 
 REPO_ROOT = Path(__file__).parent.parent
 

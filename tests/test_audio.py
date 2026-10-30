@@ -39,8 +39,8 @@ from prompt_toolkit.output import ColorDepth
 
 from pymux.audio import programs
 from pymux.client.audio import AudioClient, PipeWireDevices
+from pymux.core.main import Pymux
 from pymux.enums import AudioFrame, AudioServerMode
-from pymux.main import Pymux
 
 RATE = 48000
 FRAME = 960

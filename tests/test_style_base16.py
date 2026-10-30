@@ -1,5 +1,5 @@
 """
-The base16 collection, as pymux themes (`pymux.style_base16`).
+The base16 collection, as pymux themes (`pymux.style.style_base16`).
 
 A scheme is sixteen colours and a documented meaning per colour: the
 roles derive from those, and the palette a pane answers with is the
@@ -12,8 +12,8 @@ import json
 
 import pytest
 
-from pymux import style_base16
-from pymux.style import roles_of_palette
+from pymux.style import style_base16
+from pymux.style.style import roles_of_palette
 
 A_DARK_SCHEME = {
     "base00": "#1e1e2e",

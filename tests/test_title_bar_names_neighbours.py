@@ -15,7 +15,7 @@ from __future__ import annotations
 from run_commands import run
 from test_strip_draws import CHROME, create_client
 
-from pymux.pane_container import LEFT_MARK, RIGHT_MARK
+from pymux.layout.pane_container import LEFT_MARK, RIGHT_MARK
 
 NAMES = ["alpha", "beta", "gamma"]
 

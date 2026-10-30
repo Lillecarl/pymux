@@ -18,7 +18,7 @@ from pyte.keep import Keep
 from .enums import PaneBrowser
 
 if TYPE_CHECKING:
-    from .session import OwnOptions
+    from .core.session import OwnOptions
 
 __all__ = ["NOTIFY_SHIM_SCRIPT", "Shims", "browser_shim"]
 

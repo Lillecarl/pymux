@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 from run_commands import complaints
 
-from pymux.main import Pymux
+from pymux.core.main import Pymux
 
 #: Three names for one key, and one that reads as nothing.
 CTRL_A = ("ctrl+a", "C-a", "c-a")

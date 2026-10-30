@@ -7,9 +7,9 @@ from __future__ import annotations
 
 import pytest
 
+from pymux.core.main import Pymux
 from pymux.enums import WindowCodec
-from pymux.main import Pymux
-from pymux.options import ALL_WINDOW_OPTIONS, SetOptionError
+from pymux.options.options import ALL_WINDOW_OPTIONS, SetOptionError
 
 
 async def test_the_option_writes_the_active_window():

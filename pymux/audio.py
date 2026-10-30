@@ -64,8 +64,8 @@ if TYPE_CHECKING:
 
     from opuslib import Encoder
 
-    from pymux.main import Pymux
-    from pymux.server import ServerConnection
+    from pymux.connection.server import ServerConnection
+    from pymux.core.main import Pymux
 
 try:
     import opuslib

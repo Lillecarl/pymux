@@ -28,21 +28,21 @@ from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
 from prompt_toolkit.layout.dimension import Dimension as D
 from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
 
-from pymux import window_tree
+from pymux.core import window_tree
 
-from .actions import Kind, Origin, note, started_by
-from .boxes import BOX_BOTTOM, BOX_TOP, PALETTE_HEADER
 from .enums import Chooser, Woke
 from .format import marks_of, window_marks
+from .keys.actions import Kind, Origin, note, started_by
+from .layout.boxes import BOX_BOTTOM, BOX_TOP, PALETTE_HEADER
 
 if TYPE_CHECKING:
     from prompt_toolkit.layout.controls import BufferControl, NotImplementedOrNone
 
+    from pymux.core.main import Pymux
+    from pymux.core.session import Session
     from pymux.ids import PaneId
-    from pymux.main import Pymux
-    from pymux.session import Session
 
-    from .layout import LayoutManager
+    from .layout.layout import LayoutManager
 
 __all__ = ["ChooserView"]
 
@@ -54,7 +54,7 @@ def option_value_of(pymux: Pymux, name: str) -> str:
     client option the client this command means.
     """
     from pymux.commands.common import option_as_written
-    from pymux.options import Scope
+    from pymux.options.options import Scope
 
     for table in pymux.option_tables.values():
         option = table.get(name)
@@ -72,7 +72,7 @@ def option_command_of(name: str) -> str:
     chooser that lists all three has to carry a name to the one that
     takes it. Lillecarl/pymux#472.
     """
-    from pymux.options import ALL_CLIENT_OPTIONS, ALL_WINDOW_OPTIONS
+    from pymux.options.options import ALL_CLIENT_OPTIONS, ALL_WINDOW_OPTIONS
 
     if name in ALL_CLIENT_OPTIONS:
         return "set-client-option"
@@ -404,7 +404,7 @@ class ChooserView:
                 return names
             return [name for name in names if text in name.lower() or text in option_value_of(self.pymux, name).lower()]
         if kind is Chooser.NOTIFICATIONS:
-            from pymux.hub import rows_of
+            from pymux.notify.hub import rows_of
 
             return rows_of(self.pymux, self.pymux.notification_center.notifications(), text)
         if kind is Chooser.JOB:
@@ -524,7 +524,7 @@ class ChooserView:
         way; a pane that is gone, or a notification no pane sent,
         leaves a message saying so instead of moving.
         """
-        from pymux.hub import Heading
+        from pymux.notify.hub import Heading
 
         row = self.pointed()
         self.client_state.chooser = None
@@ -770,7 +770,7 @@ class ChooserView:
         so too, because it is one value for every session.
         Lillecarl/pymux#297. Lillecarl/pymux#472.
         """
-        from pymux.options import ALL_CLIENT_OPTIONS, ALL_SERVER_OPTIONS, ALL_WINDOW_OPTIONS
+        from pymux.options.options import ALL_CLIENT_OPTIONS, ALL_SERVER_OPTIONS, ALL_WINDOW_OPTIONS
 
         matches = self.chooser_matches()
         if not matches:
@@ -808,7 +808,7 @@ class ChooserView:
         A row answers a click by jumping to its pane.
         Lillecarl/pymux#768.
         """
-        from pymux.hub import Heading, age, heading_text
+        from pymux.notify.hub import Heading, age, heading_text
 
         rows = self.chooser_matches()
         if not rows:

@@ -2,7 +2,7 @@
 Where the log of pymux goes.
 
 A server logs an exception and keeps going: the read loop of
-`pymux/server.py` is written that way on purpose, so one bad packet does
+`pymux/connection/server.py` is written that way on purpose, so one bad packet does
 not end a session. That makes logging a normal path and not a crash
 path, and it decides where the messages may go.
 

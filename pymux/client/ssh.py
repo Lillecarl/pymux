@@ -55,13 +55,7 @@ from libpymux.wire import MSGPACK, MSGPACK_ZSTD, PacketReader
 from prompt_toolkit.input.vt100 import raw_mode
 from prompt_toolkit.output.vt100 import Vt100_Output
 
-from pymux.forwarding import (
-    MAY_NARROW,
-    Direction,
-    Forward,
-    the_far_side_may_narrow,
-    with_port,
-)
+from pymux.core.forwarding import MAY_NARROW, Direction, Forward, the_far_side_may_narrow, with_port
 from pymux.utils import nonblocking
 
 from .audio import AudioClient, sound_devices

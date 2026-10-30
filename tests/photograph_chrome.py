@@ -84,7 +84,7 @@ from take_picture import (
     every_log,
 )
 
-from pymux import wayland
+from pymux.wayland import wayland
 
 #: The terminals whose cursor blinks for ever, and the argv that asks
 #: each one to hold still.

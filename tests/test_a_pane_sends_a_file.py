@@ -25,6 +25,7 @@ from pymux import downloads, files
 from pymux.client import downloads as client_downloads
 from pymux.client.downloads import download_directory, save_whole
 from pymux.client.terminal import TerminalClient
+from pymux.core.main import Pymux
 from pymux.downloads import (
     DEFAULT_NAME,
     DownloadReader,
@@ -38,9 +39,8 @@ from pymux.downloads import (
 from pymux.entry_points.run_pymux import Mode, parse_arguments
 from pymux.enums import FileTransfer
 from pymux.files import ArrivingFiles, Whole, safe_name, save
-from pymux.main import Pymux
-from pymux.options import ALL_CLIENT_OPTIONS, SetOptionError
-from pymux.osc import extension_key_of
+from pymux.notify.osc import extension_key_of
+from pymux.options.options import ALL_CLIENT_OPTIONS, SetOptionError
 
 SIZE = Size(rows=24, columns=80)
 

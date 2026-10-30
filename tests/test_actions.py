@@ -25,7 +25,7 @@ from test_command_mode import press as press_key
 from test_helix_mode_keys import _copy_mode_on
 from test_helix_status_keys import _helix
 
-from pymux.actions import SCHEMA_VERSION, Kind, Origin, _upkeep, note, started_by
+from pymux.keys.actions import SCHEMA_VERSION, Kind, Origin, _upkeep, note, started_by
 
 
 def _rows(path) -> list[dict]:

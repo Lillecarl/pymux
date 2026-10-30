@@ -12,7 +12,7 @@ change reaches a pane that is already running. tmux works the same way.
 
 from __future__ import annotations
 
-from pymux.options import ALL_OPTIONS
+from pymux.options.options import ALL_OPTIONS
 
 
 def pane_of(mux):

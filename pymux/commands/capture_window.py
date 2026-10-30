@@ -18,16 +18,16 @@ from pymux.commands.pictures import (
     refuse_picture_flags,
     save_png,
 )
-from pymux.geometry import plan_of
-from pymux.window_pane import WindowWidget
-from pymux.window_tree import Pane
+from pymux.core.window_tree import Pane
+from pymux.layout.geometry import plan_of
+from pymux.wayland.window_pane import WindowWidget
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable
 
-    from pymux.main import Pymux
-    from pymux.plane import Rect
-    from pymux.window_tree import Window
+    from pymux.core.main import Pymux
+    from pymux.core.window_tree import Window
+    from pymux.layout.plane import Rect
 
 
 async def _drawn_again(pymux: Pymux, window: Window) -> None:

@@ -4,7 +4,7 @@
 #
 # The session of a client that attached from a desktop keeps that
 # desktop's WAYLAND_DISPLAY, so the server's own is named here: it sits
-# beside the server's socket, which $PYMUX names. `pymux/wayland.py`,
+# beside the server's socket, which $PYMUX names. `pymux/wayland/wayland.py`,
 # `socket_path_of`. Lillecarl/pymux#620.
 socket=${PYMUX%,*}
 WAYLAND_DISPLAY="$(dirname "$socket")/wayland-$(basename "$socket").sock"

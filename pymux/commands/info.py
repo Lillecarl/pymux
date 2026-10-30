@@ -6,9 +6,9 @@ import os
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
-    from pymux.session import Session
-    from pymux.window_tree import Pane, Window
+    from pymux.core.main import Pymux
+    from pymux.core.session import Session
+    from pymux.core.window_tree import Pane, Window
 
 
 from pymux.commands import CommandParser, add_command

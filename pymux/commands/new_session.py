@@ -4,16 +4,16 @@ import argparse
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
-    from pymux.session import Session
+    from pymux.core.main import Pymux
+    from pymux.core.session import Session
 
 
 from prompt_toolkit.data_structures import Size
 
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import add_format_arguments, add_tag_arguments, print_object_format
+from pymux.core.session import DEFAULT_SIZE
 from pymux.enums import Woke
-from pymux.session import DEFAULT_SIZE
 from pymux.tags import parse_tags
 
 

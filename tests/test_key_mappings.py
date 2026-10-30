@@ -12,10 +12,7 @@ from __future__ import annotations
 import pytest
 from prompt_toolkit.keys import Keys
 
-from pymux.key_mappings import (
-    PYMUX_TO_PROMPT_TOOLKIT_KEYS,
-    pymux_key_to_prompt_toolkit_key_sequence,
-)
+from pymux.keys.key_mappings import PYMUX_TO_PROMPT_TOOLKIT_KEYS, pymux_key_to_prompt_toolkit_key_sequence
 
 
 def reached(key):
@@ -106,7 +103,7 @@ def test_table_still_completes_written_out_alt_keys():
 def bound(command):
     "Run one command the way a configuration file does, and complain."
     from pymux.commands import handle_command
-    from pymux.main import Pymux
+    from pymux.core.main import Pymux
 
     pymux = Pymux()
     handle_command(pymux, command)

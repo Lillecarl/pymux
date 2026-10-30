@@ -10,7 +10,7 @@ import os
 import anyio
 from websockets.asyncio.server import serve
 
-from pymux.browser_shim import bridge
+from pymux.wayland.browser_shim import bridge
 
 
 async def _read_messages(fd: int, count: int) -> list[bytes]:
