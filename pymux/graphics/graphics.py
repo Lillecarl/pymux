@@ -537,7 +537,7 @@ class ClientGraphics:
         would stretch the image to a size nobody asked for.
         Lillecarl/pymux#369.
         """
-        if placement.virtual or getattr(placement, "asked_for_the_box", True):
+        if placement.virtual or placement.asked_for_the_box:
             return False
         width, height = drawn_size(image, source)
         return columns * self.cell_width >= width and rows * self.cell_height >= height

@@ -809,7 +809,7 @@ class ServerConnection:
 
         others = self.pymux.clients_on(self.client_state.session, except_for=self.client_state)
         for other in others:
-            connection = getattr(other, "connection", None)
+            connection = other.connection
             if connection is not None:
                 connection.detach_and_close(hang_up=hang_up)
 

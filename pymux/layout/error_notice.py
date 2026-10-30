@@ -91,7 +91,7 @@ class ErrorNotice:
         if threading.get_ident() == self._loop_thread:
             self.noticed()
             return
-        loop = getattr(self.pymux, "loop", None)
+        loop = self.pymux.loop
         if loop is not None:
             loop.call_soon_threadsafe(self.noticed)
 

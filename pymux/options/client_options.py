@@ -78,7 +78,7 @@ def _swapped(pymux: Pymux, client: ClientState) -> None:
 
 def _theme_shown(value: str, client: ClientState | None) -> str:
     # `nearest` alone says nothing about what is on the screen.
-    matched = getattr(client, "matched", None)
+    matched = client.matched if client is not None else None
     if value != NEAREST or matched is None:
         return value
     return "%s (%s)" % (NEAREST, matched)

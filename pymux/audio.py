@@ -616,7 +616,7 @@ class AudioServer:
         """
         playing = {client_id: link for client_id, link in self.links.items() if self._audio_of(link) != ClientAudio.OFF}
         latest = self.pymux.latest_client()
-        client_id = getattr(getattr(latest, "connection", None), "client_id", None)
+        client_id = latest.connection.client_id if latest is not None and latest.connection is not None else None
         if client_id and client_id in playing:
             return playing[client_id]
         return next(reversed(playing.values()), None)

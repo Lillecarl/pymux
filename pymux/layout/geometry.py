@@ -313,7 +313,7 @@ def _frame_plan(manager: LayoutManager, window: window_tree.Window, size: Size) 
     if container is None or container.measured_for != size:
         return None
 
-    if getattr(container.layout, "window", None) is not window:
+    if container.layout.window is not window:
         return None
 
     return container.plan

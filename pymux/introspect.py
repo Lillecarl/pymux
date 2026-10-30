@@ -567,7 +567,7 @@ def _tasks(pymux: Pymux) -> str:
     # writes against.
     import asyncio
 
-    loop = getattr(pymux, "loop", None)
+    loop = pymux.loop
     if loop is None:
         return "--- asyncio tasks ---\n\nno loop"
 
