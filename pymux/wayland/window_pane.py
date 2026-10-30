@@ -28,7 +28,8 @@ from prompt_toolkit.layout.containers import Window
 from prompt_toolkit.layout.controls import UIContent, UIControl
 from prompt_toolkit.mouse_events import MouseButton, MouseEvent, MouseEventType
 from ptterm.per_application import PerApplication
-from pyte.keys import EventType, KeyEvent, Modifier, parse_key_data
+from pyte.keys.events import EventType, KeyEvent, Modifier
+from pyte.keys.parse import parse_key_data
 
 if TYPE_CHECKING:
     from prompt_toolkit.formatted_text import StyleAndTextTuples

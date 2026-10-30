@@ -13,7 +13,7 @@ import sys
 
 import pytest
 from prompt_toolkit.data_structures import Size
-from pyte.keys import KEY_PROFILES
+from pyte.keys.events import KEY_PROFILES
 from session import once, over_connection
 
 from pymux.core.main import Pymux

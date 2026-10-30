@@ -35,7 +35,7 @@ from .session import Session
 from .window_tree import Pane, Window
 
 if TYPE_CHECKING:
-    from pyte.keys import KeyEvent
+    from pyte.keys.events import KeyEvent
 
     from .main import Pymux
 

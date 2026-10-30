@@ -21,7 +21,7 @@ from prompt_toolkit.history import InMemoryHistory
 from ptyhost.backends.posix import GRACE
 from ptyhost.ending import say_how_it_ends
 from pyte.keep import Keep
-from pyte.keys import KEY_PROFILES, KeyProfile
+from pyte.keys.events import KEY_PROFILES, KeyProfile
 
 from .. import hacks_and_lies, introspect, log
 from ..answer import Answer, current_answer

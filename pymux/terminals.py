@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from libpymux.protocol import Field, Packet
 from pyte.images import ASSUMED_CELL_HEIGHT, ASSUMED_CELL_WIDTH
 from pyte.keep import Keep
-from pyte.keys import KeyboardFlag
+from pyte.keys.events import KeyboardFlag
 
 from .enums import ExtendedKeys
 from .log import logger

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pyte.keys import KEY_PROFILES
+from pyte.keys.events import KEY_PROFILES
 
 from ..enums import EditingKeys, Justify, OpenUrlMode, OpenUrlTarget, PaneBrowser
 from ..utils import editor_keys, get_default_shell

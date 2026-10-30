@@ -47,14 +47,8 @@ from prompt_toolkit.keys import KeyName, Keys
 
 if TYPE_CHECKING:
     from prompt_toolkit.key_binding.key_processor import KeyPress
-from pyte.keys import (
-    FIRST_FUNCTIONAL_KEY,
-    EventType,
-    KeyCode,
-    KeyEvent,
-    Modifier,
-    parse_key_data,
-)
+from pyte.keys.events import FIRST_FUNCTIONAL_KEY, EventType, KeyCode, KeyEvent, Modifier
+from pyte.keys.parse import parse_key_data
 
 logger = logging.getLogger(__name__)
 

@@ -12,7 +12,7 @@ keyboard that sends its own key release may not get a second one.
 from __future__ import annotations
 
 import pytest
-from pyte.keys import KeyboardFlag
+from pyte.keys.events import KeyboardFlag
 from session import Connection
 
 from pymux.core.main import Pymux

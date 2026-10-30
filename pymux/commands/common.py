@@ -19,7 +19,8 @@ from prompt_toolkit.completion import Completer
 from prompt_toolkit.document import Document
 from prompt_toolkit.key_binding.vi_state import InputMode
 from ptterm import Terminal
-from pyte.keys import KeyEvent, Unhearable
+from pyte.keys.events import KeyEvent
+from pyte.keys.unhearable import Unhearable
 
 from pymux.commands import CommandException, this_client
 from pymux.format import Language, format_pymux_string

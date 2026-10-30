@@ -19,7 +19,7 @@ from __future__ import annotations
 import pytest
 from prompt_toolkit.document import Document
 from prompt_toolkit.keys import Keys
-from pyte.keys import FIRST_FUNCTIONAL_KEY, KeyEvent, Modifier
+from pyte.keys.events import FIRST_FUNCTIONAL_KEY, KeyEvent, Modifier
 
 from pymux.keys.key_mappings import PYMUX_TO_PROMPT_TOOLKIT_KEYS, prompt_toolkit_key_to_vt100_key
 from pymux.keys.key_spelling import (

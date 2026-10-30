@@ -6,7 +6,7 @@ modifiers held around it. Lillecarl/pymux#620.
 from __future__ import annotations
 
 from prompt_toolkit.keys import Keys
-from pyte.keys import parse_key_data
+from pyte.keys.parse import parse_key_data
 
 from pymux.wayland.window_pane import WindowWidget, evdev_of, evdev_of_event
 

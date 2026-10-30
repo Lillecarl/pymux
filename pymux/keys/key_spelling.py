@@ -44,7 +44,7 @@ from typing import override
 from prompt_toolkit.completion import CompleteEvent, Completer, Completion
 from prompt_toolkit.document import Document
 from prompt_toolkit.keys import Keys
-from pyte.keys import FIRST_FUNCTIONAL_KEY, KeyEvent, Modifier
+from pyte.keys.events import FIRST_FUNCTIONAL_KEY, KeyEvent, Modifier
 
 from .key_mappings import (
     MODIFIERS_BY_TMUX_SPELLING,

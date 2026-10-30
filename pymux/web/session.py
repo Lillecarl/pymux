@@ -31,7 +31,7 @@ from typing import Any
 
 import anyio
 from libpymux.protocol import Field, Packet
-from pyte.keys import Unhearable
+from pyte.keys.unhearable import Unhearable
 from pyte.modes import PrivateMode
 from pyte.screen import Screen
 from pyte.streams import GroundTimer, Stream
