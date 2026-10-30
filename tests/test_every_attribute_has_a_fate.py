@@ -93,6 +93,7 @@ def live_objects(pymux):
                 yield screen.pointer_shapes
                 yield screen.graphics
     yield pymux.hooks
+    yield pymux.panes
     yield pymux.terminals
     yield pymux.shims
     yield pymux.jobs

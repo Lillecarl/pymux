@@ -48,7 +48,7 @@ def test_spelling_is_kept_tidy():
 async def test_the_option_writes_the_active_window():
     mux = Pymux()
     async with mux.running():
-        await mux.create_window("true")
+        await mux.panes.create_window("true")
         window = mux.arrangement.windows[0]
         assert window.options.wayland_scale == "auto"
         ALL_WINDOW_OPTIONS["wayland-scale"].set_value(mux, "auto*1.5")
@@ -61,8 +61,8 @@ async def test_the_option_writes_the_active_window():
 async def test_global_form_says_what_new_window_starts_with():
     mux = Pymux()
     async with mux.running():
-        await mux.create_window("true")
+        await mux.panes.create_window("true")
         mux.handle_command("set-window-option -g wayland-scale 2")
         assert mux.arrangement.windows[0].options.wayland_scale == "auto"
-        await mux.create_window("true")
+        await mux.panes.create_window("true")
         assert mux.arrangement.windows[-1].options.wayland_scale == "2"

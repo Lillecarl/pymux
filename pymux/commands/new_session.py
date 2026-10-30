@@ -104,7 +104,7 @@ def new_session(pymux: Pymux, args: argparse.Namespace):
 
 
 async def _open(pymux: Pymux, args: argparse.Namespace, session: Session) -> None:
-    await pymux.create_window(
+    await pymux.panes.create_window(
         command=args.command,
         start_directory=args.start_directory,
         name=args.window_name,

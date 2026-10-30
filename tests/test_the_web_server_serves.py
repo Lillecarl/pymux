@@ -42,7 +42,7 @@ async def pymux(tmp_path):
     mux = Pymux()
     mux.options.test_mode = True
     async with mux.running():
-        await mux.create_window(STAYS)
+        await mux.panes.create_window(STAYS)
         pane = mux.arrangement.get_active_window().active_pane
         pane.screen.resize(LINES, COLUMNS)
         mux.serving.listen_on_socket(str(tmp_path / "s.sock"))

@@ -45,7 +45,7 @@ async def pymux():
     mux = Pymux()
     mux.options.test_mode = True
     async with mux.running():
-        await mux.create_window(STAYS)
+        await mux.panes.create_window(STAYS)
         try:
             yield mux
         finally:

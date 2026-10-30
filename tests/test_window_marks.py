@@ -141,7 +141,7 @@ async def test_a_notification_from_a_pane_marks_its_window():
     pymux = Pymux()
     pymux.options.test_mode = True
     async with pymux.running():
-        window = await pymux.create_window("sleep 30")
+        window = await pymux.panes.create_window("sleep 30")
         try:
             # The redraw it asks for runs with no client current, and
             # that is not somebody looking at the window.

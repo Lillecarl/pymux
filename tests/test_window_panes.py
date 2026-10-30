@@ -801,7 +801,7 @@ async def test_a_scroll_reaches_the_window_as_the_client_says(tmp_path, scroll):
 async def test_the_pane_goes_when_the_window_closes(tmp_path):
     async with with_a_window(tmp_path) as (pymux, state, pane, _recorder, log, probe):
         await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
-        pymux.kill_pane(pane)
+        pymux.panes.kill_pane(pane)
         await once(lambda: "closed" in logged(log), 10.0, "the window was never asked to close")
         with anyio.fail_after(10):
             await probe.wait()

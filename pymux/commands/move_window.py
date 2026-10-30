@@ -91,7 +91,7 @@ def move_window(pymux: Pymux, args: argparse.Namespace) -> None:
         # The panes and not the window: a window is gone when its last
         # pane is, and that is the path `kill-window` takes.
         for pane in list(occupant.panes):
-            pymux.kill_pane(pane)
+            pymux.panes.kill_pane(pane)
 
     if args.after or args.before or args.kill:
         # **After the kill, not before it.** A kill can renumber the

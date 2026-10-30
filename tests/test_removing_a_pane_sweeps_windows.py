@@ -35,8 +35,8 @@ async def test_an_empty_window_after_a_closing_one_is_swept_up():
     pymux = Pymux()
     async with pymux.running():
         try:
-            await pymux.create_window(WAITS)
-            await pymux.create_window(WAITS)
+            await pymux.panes.create_window(WAITS)
+            await pymux.panes.create_window(WAITS)
             first, second = pymux.arrangement.windows
 
             # Empty the second one without going through `remove_pane`,
@@ -58,9 +58,9 @@ async def test_the_pane_still_goes_from_the_window_that_held_it():
     pymux = Pymux()
     async with pymux.running():
         try:
-            await pymux.create_window(WAITS)
+            await pymux.panes.create_window(WAITS)
             window = pymux.arrangement.windows[0]
-            await pymux.add_process(WAITS, window=window)
+            await pymux.panes.add_process(WAITS, window=window)
             assert len(window.panes) == 2
             going = window.panes[1]
 

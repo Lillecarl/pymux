@@ -649,7 +649,7 @@ async def _animated(command: str, seconds: float, out: Path) -> None:
         pyte.streams.Stream.feed = timing_feed
 
         with set_app(state.app):
-            await pymux.create_window(command)
+            await pymux.panes.create_window(command)
         await anyio.sleep(1.5)
 
         # Every render, timed, whether or not it emitted a frame.

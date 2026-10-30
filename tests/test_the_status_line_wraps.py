@@ -35,7 +35,7 @@ async def with_windows(session, size, names=NAMES):
     with set_app(state.app):
         pymux.arrangement.get_active_window().chosen_name = names[0]
         for name in names[1:]:
-            await pymux.create_window(NOTHING, name=name)
+            await pymux.panes.create_window(NOTHING, name=name)
     return state
 
 

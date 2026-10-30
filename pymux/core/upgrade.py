@@ -168,7 +168,7 @@ async def _end_the_hung_up(pymux: Pymux) -> None:
     reaped here. Its pane is in no snapshot, so the new image would
     neither send its SIGKILL nor reap it. Lillecarl/pyterm#1.
     """
-    backends = list(pymux.hanging_up)
+    backends = list(pymux.panes.hanging_up)
     for backend in backends:
         backend.kill()
     with anyio.move_on_after(KILL_TIMEOUT):

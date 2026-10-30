@@ -127,7 +127,7 @@ async def a_real_client(monkeypatch, config_file, chosen_name):
     pymux.options.test_mode = True
 
     async with pymux.running():
-        await pymux.create_window(WAITS)
+        await pymux.panes.create_window(WAITS)
         server_end, client_end = connect_in_memory()
 
         # A context of its own, the same as `run_integrated`.

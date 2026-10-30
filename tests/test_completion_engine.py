@@ -112,7 +112,7 @@ async def test_a_server_option_s_values_follow_its_name():
 
 async def test_a_window_target_opens_a_menu_of_every_window():
     async with create_session(window=WAITS) as (pymux, state):
-        await pymux.create_window(WAITS)
+        await pymux.panes.create_window(WAITS)
         found = await tab(state, "select-window -t ")
         session = pymux.sessions[0].name
         windows = ["%s:%s" % (session, window.index) for window in pymux.sessions[0].arrangement.windows]
@@ -124,7 +124,7 @@ async def test_a_window_target_opens_a_menu_of_every_window():
 
 async def test_a_single_answer_is_written_in_at_once():
     async with create_session(window=WAITS) as (pymux, state):
-        await pymux.create_window(WAITS, name="editor")
+        await pymux.panes.create_window(WAITS, name="editor")
         found = await tab(state, "select-window -t edit")
         editor = pymux.sessions[0].arrangement.windows[-1]
 

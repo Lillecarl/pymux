@@ -27,14 +27,14 @@ WAITS = "%s -c 'import time; time.sleep(30)'" % (sys.executable,)
 
 async def _three_windows(pymux: Pymux) -> list:
     for _ in range(3):
-        await pymux.create_window(WAITS)
+        await pymux.panes.create_window(WAITS)
     return [window.index for window in pymux.arrangement.windows]
 
 
 def _kill(pymux: Pymux, index: int) -> None:
     window = pymux.arrangement.get_window_by_index(index)
     for pane in list(window.panes):
-        pymux.kill_pane(pane)
+        pymux.panes.kill_pane(pane)
 
 
 def _indices(pymux: Pymux) -> list:

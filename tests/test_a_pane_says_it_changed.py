@@ -40,7 +40,7 @@ LINES = 5
 async def pymux():
     mux = Pymux()
     async with mux.running():
-        await mux.create_window("%s -c pass" % (sys.executable,))
+        await mux.panes.create_window("%s -c pass" % (sys.executable,))
         try:
             yield mux
         finally:
@@ -184,7 +184,7 @@ async def test_the_end_of_the_program_moves_it():
     """
     mux = Pymux()
     async with mux.running():
-        await mux.create_window("%s -c 'import sys; sys.stdin.read()'" % (sys.executable,))
+        await mux.panes.create_window("%s -c 'import sys; sys.stdin.read()'" % (sys.executable,))
         pane = mux.arrangement.get_active_window().active_pane
         mux.options_of_pane(pane).remain_on_exit = True
         await anyio.sleep(0.2)
@@ -211,7 +211,7 @@ async def test_the_format_field_reads_it(pymux):
 async def test_two_panes_count_apart(pymux):
     pane = the_pane(pymux)
     window = pymux.arrangement.get_active_window()
-    await pymux.add_process("%s -c pass" % (sys.executable,), window=window)
+    await pymux.panes.add_process("%s -c pass" % (sys.executable,), window=window)
     other = window.panes[-1]
 
     arrives(pane, "hello")

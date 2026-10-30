@@ -38,7 +38,7 @@ def test_an_integrated_server_reads_its_own_term(monkeypatch):
 async def pymux():
     mux = Pymux()
     async with mux.running():
-        await mux.create_window("sleep 30")
+        await mux.panes.create_window("sleep 30")
         try:
             yield mux
         finally:

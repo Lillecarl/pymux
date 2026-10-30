@@ -209,7 +209,7 @@ async def test_a_real_client_holds_it_through_a_flush_between_frames():
 async def pymux():
     mux = Pymux()
     async with mux.running():
-        await mux.create_window("%s -c pass" % (sys.executable,))
+        await mux.panes.create_window("%s -c pass" % (sys.executable,))
         try:
             yield mux
         finally:

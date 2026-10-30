@@ -16,7 +16,7 @@ def kill_pane(pymux: Pymux, args: argparse.Namespace) -> None:
     Kill a pane, or the active one.
     """
     pane = the_pane(pymux, args.target_pane)
-    pymux.kill_pane(pane)
+    pymux.panes.kill_pane(pane)
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):

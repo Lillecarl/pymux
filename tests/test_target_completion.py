@@ -31,7 +31,7 @@ async def two_sessions(mux):
     "`home` with two windows, the second called `editor`, and `work` with one."
     await over_socket(mux, "new-session", "-d", "-s", "home", ENDS_AT_ONCE)
     home = mux.get_session("home")
-    await mux.create_window(ENDS_AT_ONCE, name="editor", session=home)
+    await mux.panes.create_window(ENDS_AT_ONCE, name="editor", session=home)
     await over_socket(mux, "new-session", "-d", "-s", "work", ENDS_AT_ONCE)
 
 

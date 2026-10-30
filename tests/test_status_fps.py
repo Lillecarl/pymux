@@ -54,7 +54,7 @@ BY_WIDTH = "{% if client_width|int < 100 %}phone {{ client_width }}{% else %}des
 async def test_a_template_tells_clients_apart_by_width(columns, drawn):
     "Over a real connection: the width is what the client's terminal reported."
     async with over_connection() as session:
-        await session.pymux.create_window("sleep 60")
+        await session.pymux.panes.create_window("sleep 60")
         client, _ = await session.attach("only", Size(rows=40, columns=columns))
         with set_app(client.app):
             session.pymux.handle_command("set-option -g status-right '%s'" % BY_WIDTH)

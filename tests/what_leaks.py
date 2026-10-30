@@ -416,7 +416,7 @@ async def create_round(session: Session, recordings) -> list:
                 if pane not in killed:
                     killed.append(pane)
         for pane in killed:
-            pymux.kill_pane(pane)
+            pymux.panes.kill_pane(pane)
 
     for state in (big, small):
         await session.detach(state)

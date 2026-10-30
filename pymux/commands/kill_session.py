@@ -19,7 +19,7 @@ def kill_session(pymux: Pymux, args: argparse.Namespace) -> None:
     last session to go stops the server, which is the way the last
     `tmux kill-session` ends its own.
     """
-    pymux.kill_session(find_session(pymux, args.target_session))
+    pymux.panes.kill_session(find_session(pymux, args.target_session))
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):

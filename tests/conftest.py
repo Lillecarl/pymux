@@ -206,7 +206,7 @@ async def pymux():
     "A server with one window, whose program ends at once. A file that needs another server defines its own."
     mux = Pymux()
     async with mux.running():
-        await mux.create_window("%s -c pass" % (sys.executable,))
+        await mux.panes.create_window("%s -c pass" % (sys.executable,))
         try:
             yield mux
         finally:

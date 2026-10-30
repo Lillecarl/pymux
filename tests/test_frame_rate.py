@@ -33,7 +33,7 @@ PANE_COMMAND = "%s -c pass" % (sys.executable,)
 async def pymux():
     mux = Pymux()
     async with mux.running():
-        await mux.create_window(PANE_COMMAND)
+        await mux.panes.create_window(PANE_COMMAND)
         yield mux
 
 
@@ -87,7 +87,7 @@ async def test_global_form_says_what_new_window_starts_with(pymux):
 
     assert window(pymux).options.frame_rate == was, "it changed a window that was open"
 
-    await pymux.create_window(PANE_COMMAND)
+    await pymux.panes.create_window(PANE_COMMAND)
     assert pymux.arrangement.windows[-1].options.frame_rate == 15
 
 
@@ -135,7 +135,7 @@ async def test_client_follows_window_it_looks_at():
             if answer is not None:
                 await answer
 
-            await mux.create_window(PANE_COMMAND)
+            await mux.panes.create_window(PANE_COMMAND)
             answer = handle_command(mux, "set-window-option frame-rate 60")
             if answer is not None:
                 await answer

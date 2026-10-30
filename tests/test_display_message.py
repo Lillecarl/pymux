@@ -81,7 +81,7 @@ async def test_a_named_client_answers_for_itself():
     by_width = "{% if client_width|int < 100 %}phone {{ client_width }}{% else %}desk {{ client_width }}{% endif %}"
     async with over_connection() as session:
         pymux = session.pymux
-        await pymux.create_window("sleep 60")
+        await pymux.panes.create_window("sleep 60")
         desk, _ = await session.attach("desk", Size(rows=40, columns=342))
         phone, _ = await session.attach("phone", Size(rows=40, columns=60))
 

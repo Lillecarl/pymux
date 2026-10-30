@@ -17,14 +17,14 @@ SIZE = Size(rows=24, columns=80)
 
 async def test_a_second_attach_finds_the_first_window():
     pymux = Pymux(startup_command="sleep 30")
-    opening = pymux.create_window
+    opening = pymux.panes.create_window
 
     async def slowly(**arguments):
         # The process takes its time to start, as it does under load.
         await anyio.sleep(0.3)
         await opening(**arguments)
 
-    pymux.create_window = slowly  # type: ignore[method-assign]
+    pymux.panes.create_window = slowly  # type: ignore[method-assign]
     windows_seen = []
 
     async with in_this_process(pymux) as session:

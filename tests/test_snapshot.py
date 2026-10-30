@@ -808,7 +808,7 @@ async def test_a_column_this_build_declares_and_the_file_lacks_takes_its_default
     "A new option needs no step: the load adds its column. Lillecarl/pymux#769."
     path = tmp_path / "older.sqlite"
     async with pymux.running():
-        await pymux.create_window("true")
+        await pymux.panes.create_window("true")
         snapshot.save(pymux, path)
     db = apsw.Connection(str(path))
     db.execute("ALTER TABLE window_options DROP COLUMN monitor_silence")
@@ -826,7 +826,7 @@ async def test_a_table_or_column_the_file_lacks_needs_no_step(pymux, tmp_path):
     "Lillecarl/pymux#771."
     path = tmp_path / "older.sqlite"
     async with pymux.running():
-        await pymux.create_window("true")
+        await pymux.panes.create_window("true")
         snapshot.save(pymux, path)
     db = apsw.Connection(str(path))
     db.execute("ALTER TABLE panes DROP COLUMN bell")

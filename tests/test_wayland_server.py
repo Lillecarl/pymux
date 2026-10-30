@@ -91,7 +91,7 @@ async def environment_of_a_pane(mux, tmp_path) -> str:
         "import os, pathlib; pathlib.Path(%r).write_text(os.environ.get('WAYLAND_DISPLAY', '')); os.replace(%r, %r)"
         % (str(out) + ".part", str(out) + ".part", str(out))
     )
-    await mux.create_window("%s -c %s" % (sys.executable, _quoted(script)))
+    await mux.panes.create_window("%s -c %s" % (sys.executable, _quoted(script)))
     await once(out.exists, 10.0, "the pane never wrote its environment")
     return out.read_text()
 

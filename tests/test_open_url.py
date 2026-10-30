@@ -42,7 +42,7 @@ def opens(packets):
 async def create_pane(pymux, state):
     "A window with a pane in it, so a pane can ask for something."
     with set_app(state.app):
-        await pymux.create_window(PANE_THAT_STAYS)
+        await pymux.panes.create_window(PANE_THAT_STAYS)
     return pymux.arrangement.get_active_window().panes[0]
 
 
@@ -527,7 +527,7 @@ async def test_pane_that_starts_with_shim_finds_opener():
             ' " and the shim directory leads PATH"); time.sleep(30)\''
         ) % (sys.executable,)
         with set_app(state.app):
-            await pymux.create_window(program)
+            await pymux.panes.create_window(program)
         pane = pymux.arrangement.get_active_window().panes[0]
 
         def page_text():

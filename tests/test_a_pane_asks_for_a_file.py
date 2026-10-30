@@ -585,7 +585,7 @@ async def test_a_client_too_old_to_send_a_file_is_refused():
     async with over_connection() as session:
         state, _ = await session.attach("old", SIZE, forwards=True)
         with set_app(state.app):
-            await session.pymux.create_window(PANE_THAT_STAYS)
+            await session.pymux.panes.create_window(PANE_THAT_STAYS)
         pane = session.pymux.arrangement.get_active_window().panes[0]
         _out, errors = await answer_to(session, "receive x -d /", pane_id=pane.pane_id)
         assert "too old to send a file" in errors
@@ -630,7 +630,7 @@ async def test_pymux_receive_gets_a_file_from_the_client(tmp_path, home, config)
         async with anyio.create_task_group() as tasks:
             client._tasks = tasks
             with set_app(state.app):
-                await pymux.create_window(
+                await pymux.panes.create_window(
                     "/bin/sh -c %s"
                     % shlex.quote(
                         "%s -m pymux receive '~/notes.txt' -d %s >%s 2>&1; %s"
@@ -696,7 +696,7 @@ async def test_a_shell_in_a_pane_completes_the_persons_paths(tmp_path, home, con
         async with anyio.create_task_group() as tasks:
             client._tasks = tasks
             with set_app(state.app):
-                await pymux.create_window(
+                await pymux.panes.create_window(
                     "/bin/sh -c %s"
                     % shlex.quote(
                         "%s -c %s >%s 2>&1; %s" % (sys.executable, shlex.quote(complete), said, PANE_THAT_STAYS)

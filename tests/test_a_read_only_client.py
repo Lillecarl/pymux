@@ -57,7 +57,7 @@ def _what_the_pane_reads(pymux) -> list:
 async def test_a_key_from_an_ordinary_client_reaches_the_pane():
     "The control. Without it the test below passes on a broken keyboard."
     async with over_connection() as session:
-        await session.pymux.create_window(WAITS)
+        await session.pymux.panes.create_window(WAITS)
         state, _ = await session.attach("watcher", SIZE)
         written = _what_the_pane_reads(session.pymux)
 
@@ -69,7 +69,7 @@ async def test_a_key_from_an_ordinary_client_reaches_the_pane():
 
 async def test_a_key_from_a_read_only_client_never_reaches_the_pane():
     async with over_connection() as session:
-        await session.pymux.create_window(WAITS)
+        await session.pymux.panes.create_window(WAITS)
         state, _ = await session.attach("watcher", SIZE)
         state.read_only = True
         written = _what_the_pane_reads(session.pymux)
@@ -94,7 +94,7 @@ async def test_a_key_from_a_read_only_client_never_reaches_the_pane():
 async def test_a_read_only_client_is_refused_a_command_that_writes():
     async with over_connection() as session:
         pymux = session.pymux
-        await pymux.create_window(WAITS)
+        await pymux.panes.create_window(WAITS)
         state, _ = await session.attach("watcher", SIZE)
         state.read_only = True
 
@@ -113,7 +113,7 @@ async def test_a_read_only_client_may_still_leave():
     """
     async with over_connection() as session:
         pymux = session.pymux
-        await pymux.create_window(WAITS)
+        await pymux.panes.create_window(WAITS)
         state, _ = await session.attach("watcher", SIZE)
         state.read_only = True
 
@@ -137,7 +137,7 @@ async def test_a_read_only_client_reads_the_history_and_leaves():
     """
     async with over_connection() as session:
         pymux = session.pymux
-        await pymux.create_window(WAITS)
+        await pymux.panes.create_window(WAITS)
         state, _ = await session.attach("watcher", SIZE)
         state.read_only = True
         pane = _the_pane(pymux)
@@ -170,7 +170,7 @@ async def test_a_read_only_client_reads_the_history_and_leaves():
 
 async def _two_clients(session):
     "A person working, and a person watching over their shoulder."
-    await session.pymux.create_window(WAITS)
+    await session.pymux.panes.create_window(WAITS)
     working, _ = await session.attach("working", SIZE)
     watching, _ = await session.attach("watching", SIZE)
     watching.read_only = True
@@ -262,7 +262,7 @@ async def test_a_read_only_client_cannot_set_somebody_else_up():
 async def test_a_read_only_client_may_still_read_the_clients():
     async with over_connection() as session:
         pymux = session.pymux
-        await pymux.create_window(WAITS)
+        await pymux.panes.create_window(WAITS)
         state, _ = await session.attach("watcher", SIZE)
         state.read_only = True
 
@@ -279,7 +279,7 @@ async def test_a_read_only_client_may_still_read_the_clients():
 async def test_attach_session_r_marks_the_client_that_ran_it():
     async with over_connection() as session:
         pymux = session.pymux
-        await pymux.create_window(WAITS)
+        await pymux.panes.create_window(WAITS)
         state, _ = await session.attach("watcher", SIZE)
 
         with set_app(state.app):
@@ -297,7 +297,7 @@ async def test_attaching_again_without_r_leaves_it_read_only():
     """
     async with over_connection() as session:
         pymux = session.pymux
-        await pymux.create_window(WAITS)
+        await pymux.panes.create_window(WAITS)
         state, _ = await session.attach("watcher", SIZE)
 
         with set_app(state.app):
@@ -315,7 +315,7 @@ async def test_a_client_that_attached_with_the_flag_only_watches():
     way is never writable, not even for one frame.
     """
     async with over_connection() as session:
-        await session.pymux.create_window(WAITS)
+        await session.pymux.panes.create_window(WAITS)
         state, _ = await session.attach("watcher", SIZE, read_only=True)
 
         assert state.read_only is True
@@ -326,7 +326,7 @@ async def test_the_flags_can_be_read_back():
     "`list-clients -F` is how anything outside pymux sees this."
     async with over_connection() as session:
         pymux = session.pymux
-        await pymux.create_window(WAITS)
+        await pymux.panes.create_window(WAITS)
         state, _ = await session.attach("watcher", SIZE, read_only=True)
 
         pymux.answer = Answer()
@@ -347,7 +347,7 @@ async def test_the_flags_can_be_read_back():
 async def test_a_read_only_client_does_not_shrink_the_plane():
     async with in_this_process() as session:
         pymux = session.pymux
-        await pymux.create_window(WAITS)
+        await pymux.panes.create_window(WAITS)
         await session.attach("working", BIG)
         watching, _ = await session.attach("watching", SMALL)
         watching.ignore_size = True
@@ -359,7 +359,7 @@ async def test_without_the_flag_the_small_client_still_wins():
     "The control: `window-size smallest` is the default."
     async with in_this_process() as session:
         pymux = session.pymux
-        await pymux.create_window(WAITS)
+        await pymux.panes.create_window(WAITS)
         await session.attach("working", BIG)
         await session.attach("watching", SMALL)
 
@@ -374,7 +374,7 @@ async def test_a_read_only_client_on_its_own_still_sizes_the_plane():
     """
     async with in_this_process() as session:
         pymux = session.pymux
-        await pymux.create_window(WAITS)
+        await pymux.panes.create_window(WAITS)
         watching, _ = await session.attach("watching", SMALL)
         watching.ignore_size = True
 
@@ -390,7 +390,7 @@ async def test_a_command_from_a_pane_is_nobody_and_is_not_refused():
     """
     async with over_connection() as session:
         pymux = session.pymux
-        await pymux.create_window(WAITS)
+        await pymux.panes.create_window(WAITS)
         state, _ = await session.attach("watcher", SIZE)
         state.read_only = True
 

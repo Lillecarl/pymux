@@ -32,7 +32,7 @@ def _shown(pane) -> str:
 async def test_one_client_reads_the_history_and_the_other_stays_live():
     async with over_connection() as session:
         pymux = session.pymux
-        await pymux.create_window(ECHOES)
+        await pymux.panes.create_window(ECHOES)
         reading, _ = await session.attach("reading", SIZE)
         watching, _ = await session.attach("watching", SIZE)
         pane = _the_pane(pymux)
@@ -56,7 +56,7 @@ async def test_one_client_reads_the_history_and_the_other_stays_live():
 async def test_the_reader_leaves_and_the_watcher_never_entered():
     async with over_connection() as session:
         pymux = session.pymux
-        await pymux.create_window(ECHOES)
+        await pymux.panes.create_window(ECHOES)
         reading, _ = await session.attach("reading", SIZE)
         watching, _ = await session.attach("watching", SIZE)
         pane = _the_pane(pymux)
@@ -73,7 +73,7 @@ async def test_two_clients_read_one_history_apart():
     "Each has a caret of its own, and one moving it does not move the other's."
     async with over_connection() as session:
         pymux = session.pymux
-        await pymux.create_window(ECHOES)
+        await pymux.panes.create_window(ECHOES)
         first, _ = await session.attach("first", SIZE)
         second, _ = await session.attach("second", SIZE)
         pane = _the_pane(pymux)
@@ -95,7 +95,7 @@ async def test_the_mode_of_a_pane_is_the_clients():
     "`#{pane_mode}` names copy mode for the client reading, and nothing for the one watching."
     async with over_connection() as session:
         pymux = session.pymux
-        await pymux.create_window(ECHOES)
+        await pymux.panes.create_window(ECHOES)
         reading, _ = await session.attach("reading", SIZE)
         watching, _ = await session.attach("watching", SIZE)
         pane = _the_pane(pymux)
@@ -113,7 +113,7 @@ async def test_a_pane_killed_while_a_client_reads_it():
     "The reader is left on the pane that remains, and nothing raises."
     async with over_connection() as session:
         pymux = session.pymux
-        await pymux.create_window(ECHOES)
+        await pymux.panes.create_window(ECHOES)
         reading, _ = await session.attach("reading", SIZE)
         watching, _ = await session.attach("watching", SIZE)
         window = pymux.arrangement.get_active_window()
@@ -145,7 +145,7 @@ async def test_the_copy_holds_rows_of_the_kind_the_screen_holds():
     """
     async with over_connection() as session:
         pymux = session.pymux
-        await pymux.create_window(ECHOES)
+        await pymux.panes.create_window(ECHOES)
         state, _ = await session.attach("reading", SIZE)
         pane = _the_pane(pymux)
         pane.terminal.terminal_control.stream.feed("on the screen")

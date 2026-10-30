@@ -219,7 +219,7 @@ class Collected:
 
 async def a_pane(pymux, state):
     with set_app(state.app):
-        await pymux.create_window(PANE_THAT_STAYS)
+        await pymux.panes.create_window(PANE_THAT_STAYS)
     return pymux.arrangement.get_active_window().panes[0]
 
 
@@ -589,7 +589,7 @@ async def test_pymux_send_file_reaches_the_download_directory(tmp_path, monkeypa
         pymux = session.pymux
         state, _ = await session.attach("remote", SIZE, forwards=True)
         with set_app(state.app):
-            await pymux.create_window(
+            await pymux.panes.create_window(
                 # A pane runs its command without a shell, so the
                 # redirection and the second command need one.
                 "/bin/sh -c %s"

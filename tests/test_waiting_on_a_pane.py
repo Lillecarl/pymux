@@ -25,7 +25,7 @@ IDLE = "%s -c 'import sys; sys.stdin.read()'" % (sys.executable,)
 async def pymux():
     mux = Pymux()
     async with mux.running():
-        await mux.create_window(IDLE)
+        await mux.panes.create_window(IDLE)
         try:
             yield mux
         finally:

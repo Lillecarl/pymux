@@ -500,7 +500,7 @@ async def test_a_new_pane_finds_the_private_pipewire(tmp_path):
             "p.with_suffix('.part').write_text(os.environ.get('PIPEWIRE_REMOTE', '') + '\\n' + os.environ.get('PULSE_SERVER', '')); "
             "os.replace(p.with_suffix('.part'), p)"
         ) % (str(out),)
-        await pymux.create_window("%s -c %s" % (sys.executable, "'" + script.replace("'", "'\\''") + "'"))
+        await pymux.panes.create_window("%s -c %s" % (sys.executable, "'" + script.replace("'", "'\\''") + "'"))
         await once(out.exists, 10.0, "the pane never wrote its environment")
         remote, pulse = out.read_text().split("\n")
         assert remote == os.path.join(pymux.audio.runtime, "pipewire-0")

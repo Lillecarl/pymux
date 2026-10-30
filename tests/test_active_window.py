@@ -81,7 +81,7 @@ async def create_server(windows):
             first = attach()
             with set_app(first):
                 while len(pymux.arrangement.windows) < windows:
-                    await pymux.create_window(NOTHING)
+                    await pymux.panes.create_window(NOTHING)
             assert len(pymux.arrangement.windows) == windows
 
             yield pymux, attach

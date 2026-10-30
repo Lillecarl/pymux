@@ -45,7 +45,7 @@ async def a_split_window(mux):
     await run(mux, "new-session", "-d", "-s", "work", "-x", "60", "-y", "10", SAYS % "LEFT")
     (session,) = [one for one in mux.sessions if one.name == "work"]
     window = session.arrangement.windows[0]
-    await mux.add_process(SAYS % "RIGHT", vsplit=True, window=window)
+    await mux.panes.add_process(SAYS % "RIGHT", vsplit=True, window=window)
     for pane in window.panes:
         await once(lambda pane=pane: _first_row(pane).strip(), 10.0, "a pane never spoke")
     return window

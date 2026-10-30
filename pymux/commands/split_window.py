@@ -45,7 +45,7 @@ async def _split(
     args: argparse.Namespace,
 ) -> None:
     # The tmux definition of horizontal is the opposite of prompt_toolkit.
-    pane = await pymux.add_process(
+    pane = await pymux.panes.add_process(
         executable,
         vsplit=args.h,
         start_directory=start_directory,

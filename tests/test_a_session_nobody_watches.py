@@ -138,7 +138,7 @@ async def test_a_pane_split_off_later_is_the_same_size(pymux):
     session, _pane = one_pane(pymux)
     window = session.arrangement.windows[0]
 
-    await pymux.add_process(ENDS_AT_ONCE, window=window)
+    await pymux.panes.add_process(ENDS_AT_ONCE, window=window)
 
     assert size_of(window.panes[-1]) == (200, 50)
 
@@ -333,7 +333,7 @@ async def test_every_pane_of_the_window_hears_it(pymux):
     "Two panes divide the new plane between them, and both are told."
     await new_session(pymux)
     window = window_of(pymux)
-    await pymux.add_process(ENDS_AT_ONCE, window=window)
+    await pymux.panes.add_process(ENDS_AT_ONCE, window=window)
 
     resize_window(pymux, *named(window), "-x", "200", "-y", "50")
 

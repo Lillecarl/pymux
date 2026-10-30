@@ -136,7 +136,7 @@ async def test_a_command_from_nowhere_says_what_it_acts_on():
     """
     async with over_connection() as session:
         pymux = session.pymux
-        await pymux.create_window("sleep 60")
+        await pymux.panes.create_window("sleep 60")
 
         for pane_id, name in ((None, "far"), (999999, "gone")):
             said, code = await _answered(session, "rename-pane %s" % name, pane_id=pane_id)
@@ -151,7 +151,7 @@ async def test_a_command_from_nowhere_says_what_it_acts_on():
 async def test_a_command_from_a_pane_or_with_a_target_says_nothing():
     async with over_connection() as session:
         pymux = session.pymux
-        await pymux.create_window("sleep 60")
+        await pymux.panes.create_window("sleep 60")
         pane = pymux.arrangement.get_active_pane()
 
         assert await _answered(session, "rename-pane near", pane_id=pane.pane_id) == ("", 0)

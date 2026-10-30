@@ -32,7 +32,7 @@ async def test_client_over_connection_still_detaches():
 
     pymux = Pymux()
     async with pymux.running():
-        await pymux.create_window("%s -c pass" % (sys.executable,))
+        await pymux.panes.create_window("%s -c pass" % (sys.executable,))
         output = Vt100_Output(stdout=io.StringIO(), get_size=lambda: Size(rows=ROWS, columns=COLUMNS))
         with create_pipe_input() as pipe:
             state = pymux.add_client(

@@ -526,7 +526,7 @@ async def attached(monkeypatch, pymux=None, client_setup=None, **how):
     pymux.serving.listen_on_socket(socket_path)
 
     async with pymux.running():
-        await pymux.create_window(PANE_COMMAND)
+        await pymux.panes.create_window(PANE_COMMAND)
         await anyio.sleep(0.3)
 
         server, port, client_key = await create_ssh_server(where, socket_path)

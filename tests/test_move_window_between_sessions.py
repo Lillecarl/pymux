@@ -66,11 +66,11 @@ async def two_sessions(mux, home_windows=2, work_windows=1):
     await new_session(mux, "home")
     home = mux.get_session("home")
     for _ in range(home_windows - 1):
-        await mux.create_window(ENDS_AT_ONCE, session=home)
+        await mux.panes.create_window(ENDS_AT_ONCE, session=home)
     await new_session(mux, "work")
     work = mux.get_session("work")
     for _ in range(work_windows - 1):
-        await mux.create_window(ENDS_AT_ONCE, session=work)
+        await mux.panes.create_window(ENDS_AT_ONCE, session=work)
 
 
 # ----------------------------------------------------------------------
@@ -112,7 +112,7 @@ async def test_a_live_pane_survives_the_move(pymux):
     "The point of moving and not of killing and reopening."
     await new_session(pymux, "home")
     home = pymux.get_session("home")
-    await pymux.create_window(WAITS, session=home)
+    await pymux.panes.create_window(WAITS, session=home)
     moving = home.arrangement.get_window_by_index(2)
     await new_session(pymux, "work")
 

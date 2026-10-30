@@ -44,7 +44,7 @@ async def create_session(*indexes):
         state, _ = await session.attach("the client", DEFAULT_SIZE)
         with set_app(state.app):
             while len(pymux.arrangement.windows) < len(indexes):
-                await pymux.create_window(NOTHING)
+                await pymux.panes.create_window(NOTHING)
             assert len(pymux.arrangement.windows) == len(indexes)
 
             for window, index in zip(pymux.arrangement.windows, indexes):

@@ -168,7 +168,7 @@ async def _open(
     window: Window | None,
     tags: Tags,
 ) -> None:
-    made = await pymux.create_window(
+    made = await pymux.panes.create_window(
         args.executable,
         start_directory=args.start_directory,
         name=args.name,

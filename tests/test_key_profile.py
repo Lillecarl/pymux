@@ -35,7 +35,7 @@ async def _super_delete_from(version: str | None, fallback: str | None = None) -
     async with over_connection() as session:
         if fallback is not None:
             ALL_OPTIONS["key-profile"].set_value(session.pymux, fallback)
-        await session.pymux.create_window(WAITS)
+        await session.pymux.panes.create_window(WAITS)
         state, _ = await session.attach("one", SIZE)
         if version is not None:
             state.connection.graphics.handle_reply("\x1bP>|%s\x1b\\" % version)
@@ -56,7 +56,7 @@ async def test_a_client_in_wezterm_sends_what_wezterm_sends():
 async def test_f13_from_wezterm_reaches_a_legacy_pane_as_rxvt_writes_it():
     "A key prompt_toolkit has no name for still reaches the pane. Lillecarl/pymux#707."
     async with over_connection() as session:
-        await session.pymux.create_window(WAITS)
+        await session.pymux.panes.create_window(WAITS)
         state, _ = await session.attach("one", SIZE)
         state.connection.graphics.handle_reply("\x1bP>|WezTerm 20240203-110809-5046fc22\x1b\\")
         written = _what_the_pane_reads(session.pymux)

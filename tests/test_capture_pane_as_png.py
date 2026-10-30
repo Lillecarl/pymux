@@ -41,7 +41,7 @@ async def pymux():
     "A server with one window, whose program waits, so the pane outlives a picture or two."
     mux = Pymux()
     async with mux.running():
-        await mux.create_window("%s -c 'import time; time.sleep(60)'" % (sys.executable,))
+        await mux.panes.create_window("%s -c 'import time; time.sleep(60)'" % (sys.executable,))
         try:
             yield mux
         finally:

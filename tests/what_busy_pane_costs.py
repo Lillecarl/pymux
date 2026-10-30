@@ -128,12 +128,12 @@ async def what_it_costs(name: str) -> tuple:
         state, _ = await session.attach("only", SIZE)
 
         with set_app(state.app):
-            await pymux.create_window(WATCHED_PROGRAM)
+            await pymux.panes.create_window(WATCHED_PROGRAM)
         await anyio.sleep(0.5)
         watched = looks_at(pymux, state)
 
         with set_app(state.app):
-            await pymux.create_window(command)
+            await pymux.panes.create_window(command)
         await anyio.sleep(1.0)
 
         # Back to the watched window, so nobody looks at the animation.
@@ -168,7 +168,7 @@ async def what_it_costs_watched(name: str, rate: int) -> tuple:
         state, _ = await session.attach("only", SIZE)
 
         with set_app(state.app):
-            await pymux.create_window(command)
+            await pymux.panes.create_window(command)
             answer = handle_command(pymux, "set-window-option frame-rate %d" % rate)
             if answer is not None:
                 await answer

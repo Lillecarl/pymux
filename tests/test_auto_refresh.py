@@ -59,7 +59,7 @@ async def session():
     # tests read it through `displayed_now`, which says so.
     pymux.options.test_mode = True
     async with pymux.running():
-        await pymux.create_window("%s -c 'import time; time.sleep(30)'" % (sys.executable,))
+        await pymux.panes.create_window("%s -c 'import time; time.sleep(30)'" % (sys.executable,))
 
         output = Vt100_Output(stdout=io.StringIO(), get_size=lambda: Size(rows=ROWS, columns=COLUMNS))
         with create_pipe_input() as pipe:

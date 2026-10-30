@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import os
 import shlex
+import weakref
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 import anyio
 import anyio.abc
@@ -17,14 +18,18 @@ from prompt_toolkit.application.current import get_app
 from ptterm import Terminal
 from ptyhost.backends import Backend
 from ptyhost.backends.posix import PosixBackend
+from pyte.keep import Keep
 
 from .. import hacks_and_lies
+from ..commands import CommandException
 from ..enums import EditingKeys, RenderMode, Woke
+from ..ids import PaneId, WindowIndex
 from ..jobs import Job, JobFeed
 from ..keys.actions import Kind, Origin, note, note_keys, started_by
 from ..keys.key_spelling import why_pane_cannot_read
 from ..log import logger
 from ..wayland.window_pane import WindowWidget, is_window_pane
+from .planes import remember_the_size_made_at
 from .session import Session
 from .window_tree import Pane, Window
 
@@ -62,10 +67,23 @@ def _say_key_did_not_fit():
 
 
 class PaneMaker:
-    "Builds each pane, registers it, and takes it down when it ends."
+    "Builds each pane and window, registers it, and takes it down when it ends or a person kills it."
+
+    KEEP: ClassVar[dict[str, Keep]] = {
+        "pymux": Keep.REBUILT,
+        "hanging_up": Keep.DROPPED,  # an upgrade kills them before it goes
+        "_killed_in": Keep.DROPPED,  # the panes it names are hanging up, and go with them
+    }
 
     def __init__(self, pymux: Pymux) -> None:
         self.pymux = pymux
+        #: The session each pane `kill_pane` took out was in, until its
+        #: program ends: by then no session holds it, and the end has to
+        #: know which one it may leave empty. Lillecarl/pymux#807.
+        self._killed_in: dict[PaneId, Session] = {}
+        #: Programs sent SIGHUP whose SIGKILL may still be due. The
+        #: grace task keeps each backend alive until the program ends.
+        self.hanging_up: weakref.WeakSet[PosixBackend] = weakref.WeakSet()
 
     async def create_pane(
         self,
@@ -399,7 +417,7 @@ class PaneMaker:
         "Take a pane whose program ended out of its session, and the session if it empties."
         # The session the pane was in, and not the session of whoever
         # happens to be the current client when a program ends.
-        killed_in = self.pymux._killed_in.pop(pane.pane_id, None)
+        killed_in = self._killed_in.pop(pane.pane_id, None)
         session = self.pymux.session_holding(pane) or killed_in
         if session is not None:
             session.arrangement.remove_pane(pane)
@@ -456,7 +474,7 @@ class PaneMaker:
         # The swap first: an ended program takes its pane out of the
         # session, and a session left with none stops the server.
         session.arrangement.replace_pane(old, pane)
-        self.pymux.hang_up(old)
+        self.hang_up(old)
         self._window_pane_shown()
         return pane
 
@@ -533,3 +551,131 @@ class PaneMaker:
             # new process at the same location.
             return window.active_process.get_cwd()
         return None
+
+    def kill_session(self, session: Session) -> None:
+        """
+        Kill every pane of a session, and take the session off.
+
+        The last pane already takes the session, so the call below is
+        for a session that had no pane to start with.
+        """
+        for window in list(session.arrangement.windows):
+            for pane in list(window.panes):
+                self.kill_pane(pane)
+
+        if session in self.pymux.sessions:
+            self.pymux.remove_session(session)
+
+    def hang_up(self, pane: Pane) -> None:
+        """
+        End the program of a pane a person closed: SIGHUP, and SIGKILL
+        after a grace. `hanging_up` keeps it, because a pane closed
+        within the grace is in no snapshot, and the server that resumes
+        one never sends that SIGKILL.
+        """
+        if isinstance(backend := pane.process.backend, PosixBackend):
+            self.hanging_up.add(backend)
+        pane.process.hang_up()
+
+    async def create_window(
+        self,
+        command: str | None = None,
+        start_directory: str | None = None,
+        name: str | None = None,
+        index: WindowIndex | None = None,
+        session: Session | None = None,
+        task_group: anyio.abc.TaskGroup | None = None,
+    ) -> Window:
+        """
+        Create a new :class:`pymux.core.window_tree.Window` in the arrangement,
+        and answer it.
+
+        `index` says where it goes. Without one it takes the lowest
+        free index. Lillecarl/pymux#191.
+
+        `session` says where the window goes. Without one it is the
+        session of the client that asks. A window made for another
+        session is not focused: its pane is in no layout the asking
+        client draws.
+
+        `task_group` is whose scope the pane's program runs in, and
+        without one it is the server's. A window made outside
+        `Pymux.running` names its own.
+        """
+        asked_for = self.pymux.current_session
+        if session is None:
+            session = asked_for
+
+        pane = await self.create_pane(
+            None, command, start_directory=start_directory, session=session, task_group=task_group
+        )
+
+        window = session.arrangement.create_window(pane, name=name, index=index)
+        remember_the_size_made_at(window, pane)
+        if session is asked_for:
+            pane.focus()
+        self.pymux.invalidate(Woke.WINDOW_OPENED)
+        return window
+
+    async def add_process(
+        self,
+        command: str | None = None,
+        vsplit: bool = False,
+        start_directory: str | None = None,
+        window: Window | None = None,
+        task_group: anyio.abc.TaskGroup | None = None,
+        select: bool = True,
+    ) -> Pane:
+        """
+        Add a new process to the given window (or the active window).
+        (vsplit/hsplit). Answers the new pane. Without `select` the
+        focus stays where it was: `split-window -d`.
+        """
+        if window is None:
+            window = self.pymux.arrangement.get_active_window()
+        if window is None:
+            raise CommandException("no current window")
+
+        pane = await self.create_pane(
+            window,
+            command,
+            start_directory=start_directory,
+            session=self.pymux.session_of_window(window),
+            task_group=task_group,
+        )
+        window.add_pane(pane, vsplit=vsplit, select=select)
+        if select:
+            pane.focus()
+        self.pymux.invalidate(Woke.PANE_WAS_SPLIT_OFF)
+        return pane
+
+    def kill_pane(self, pane: Pane) -> None:
+        """
+        Kill the given pane, and remove it from the arrangement.
+
+        **The session it empties is not taken here.** The callback that
+        runs when the process ends does that, and it has to: a pane
+        ends on its own as often as a person kills one. Doing it in
+        both places would end a session while the program in its last
+        pane is still answering the signal.
+
+        **SIGHUP, not SIGKILL**, the way closing a terminal ends what
+        runs in it: a shell writes its history on the way out, and a
+        program that ignores it gets SIGKILL after a grace.
+        """
+        # Remove from layout. The session the pane is in, and not the
+        # session of whoever asked: `kill-pane -t` reaches across.
+        session = self.pymux.session_holding(pane)
+        if session is None:
+            if not pane.process.is_terminated:
+                self.hang_up(pane)
+            return
+        session.arrangement.remove_pane(pane)
+
+        if pane.process.is_terminated:
+            # Its end was heard already, under `remain-on-exit`, and
+            # nothing calls back again.
+            self.end_if_empty(session)
+        else:
+            self._killed_in[pane.pane_id] = session
+            self.hang_up(pane)

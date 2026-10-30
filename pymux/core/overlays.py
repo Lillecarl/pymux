@@ -90,7 +90,7 @@ class Overlays:
         session.overlay_pane = None
 
         if not pane.process.is_terminated:
-            self.pymux.hang_up(pane)
+            self.pymux.panes.hang_up(pane)
 
         self.pymux.sync_focus_everywhere()
         self.pymux.invalidate(Woke.OVERLAY_CLOSED)
@@ -165,4 +165,4 @@ class Overlays:
         """
         if session is None:
             session = self.pymux.current_session
-        await self.pymux.create_window(command=job.command, start_directory=job.directory, session=session)
+        await self.pymux.panes.create_window(command=job.command, start_directory=job.directory, session=session)
