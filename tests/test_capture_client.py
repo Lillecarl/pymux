@@ -85,6 +85,37 @@ async def test_a_panes_image_is_where_the_client_shows_it(pymux):
     assert {color for _count, color in corner.getcolors(width * height)} == {RED}
 
 
+async def test_a_capture_from_the_command_line_shows_it_closed(pymux):
+    """
+    The key that runs a command also closes the command line, and the
+    frame without it comes after: the capture waits for that frame.
+    Lillecarl/pymux#820.
+    """
+    async with pymux.running(), attached(pymux) as session:
+        await shows(session, "$")
+        (client,) = pymux.clients
+        typed = "capture-client -p"
+        with set_app(client.app):
+            call_command_handler("command-prompt", pymux, [])
+        client.command_buffer.text = typed
+        await shows(session, typed)
+        printed, errors = await run(pymux)
+        assert not errors, errors
+        assert typed in printed, "the open command line is not in the capture"
+
+        pymux.answer = Answer()
+        try:
+            with set_app(client.app):
+                answer = call_command_handler("capture-client", pymux, ["-p"])
+                pymux.leave_command_mode()
+            assert answer is not None
+            await answer
+            printed = "\n".join(pymux.answer.output)
+        finally:
+            pymux.answer = None
+    assert typed not in printed, printed
+
+
 async def test_an_image_goes_under_a_menu_drawn_over_it(pymux):
     """
     A red image over the whole pane, and a menu over that: the cells of

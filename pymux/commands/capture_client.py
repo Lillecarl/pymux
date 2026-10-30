@@ -25,6 +25,10 @@ if TYPE_CHECKING:
     from pymux.main import ClientState, Pymux
 
 
+#: How long a capture waits for its client to draw again, in seconds.
+FRAME_WAIT = 1.0
+
+
 def _colors_of(pymux: Pymux, client_state: ClientState) -> ColorOverrides:
     """
     The colours this client's terminal shows with: its theme's when the
@@ -71,9 +75,10 @@ def capture_client(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None] | 
     `-o` writes the picture to a file on the server's machine, by default
     a new one in the pictures directory, and says where.
 
-    It reads the frame the client was last sent, so it is what the
-    person sees, and a change a command just made shows once pymux has
-    drawn it.
+    It draws the client again first and reads that frame, so it is what
+    the person sees once the command ran: a change the command made
+    shows, and the command line that ran it is closed.
+    Lillecarl/pymux#820.
     """
     if args.output is None and not args.p:
         raise CommandException("capture-client: it prints, so it needs -p or -o")
@@ -81,13 +86,18 @@ def capture_client(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None] | 
     if args.output is not None or args.png:
         return _png(pymux, client_state, args)
     refuse_picture_flags(args, "capture-client")
+    return _text(pymux, client_state)
+
+
+async def _text(pymux: Pymux, client_state: ClientState) -> None:
+    await client_state.drawn_again(FRAME_WAIT)
     size = client_state.app.output.get_size()
     grid = _grid_of(pymux, client_state, _cell_of(pymux, client_state))
     pymux.print_command_line("\n".join("".join(char for char, _look in row).rstrip() for row in grid.rows[: size.rows]))
-    return None
 
 
 async def _png(pymux: Pymux, client_state: ClientState, args: argparse.Namespace) -> None:
+    await client_state.drawn_again(FRAME_WAIT)
     size = client_state.app.output.get_size()
     cell = cell_from(args.cell, _cell_of(pymux, client_state), "capture-client")
     cell = fitted_cell(cell, size.columns, size.rows, args.fit)

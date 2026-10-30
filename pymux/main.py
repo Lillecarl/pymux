@@ -431,6 +431,7 @@ class ClientState:
         "schedule_tick": Keep.DROPPED,
         "_waiting_for_drain": Keep.DROPPED,
         "_paced_while_behind": Keep.DROPPED,
+        "_frame_waiters": Keep.DROPPED,
         "frame_interval": Keep.DROPPED,
         # A command's client lives for one command, and no command
         # spans an upgrade.
@@ -526,6 +527,9 @@ class ClientState:
         #: Whether this client's redraws are paced because its terminal
         #: fell behind; `should_skip_render` sets and clears it.
         self._paced_while_behind = False
+
+        #: Set by the next frame this client draws: `drawn_again`.
+        self._frame_waiters: anyio.Event | None = None
 
         #: The cap the window's `frame-rate` sets, in seconds per frame.
         #: `sync_frame_rate` sets it and `pace` combines it with the
@@ -687,6 +691,10 @@ class ClientState:
             # drawn, and not again for one it drew on its own.
             with set_app(self.app):
                 self.last_time_text = self.layout_manager.what_time_moves()
+
+            if self._frame_waiters is not None:
+                self._frame_waiters.set()
+                self._frame_waiters = None
 
             # A client that runs in the process that started pymux has
             # no connection, and there is nothing to draw images on.
@@ -880,6 +888,20 @@ class ClientState:
             self.app.invalidate()
 
         connection._spawn(wait())
+
+    async def drawn_again(self, timeout: float) -> None:
+        """
+        Draw this client again, and wait until it has. What a command
+        changed shows then: the command line that ran it is closed.
+        A client that draws nothing within `timeout` keeps its last frame,
+        as one whose terminal fell behind does. Lillecarl/pymux#820.
+        """
+        if self._frame_waiters is None:
+            self._frame_waiters = anyio.Event()
+        drawn = self._frame_waiters
+        self.app.invalidate()
+        with anyio.move_on_after(timeout):
+            await drawn.wait()
 
     def window_panes(self) -> list[tuple[Pane, WindowWidget, WritePosition]]:
         "Each window pane whose picture this client shows, and where. A popup covers them all."
