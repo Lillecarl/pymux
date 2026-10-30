@@ -142,6 +142,28 @@ async def test_a_kitty_client_gets_the_frame_then_only_the_damage(tmp_path):
         assert "\x1b_Ga=p," in recorder.out
 
 
+@pytest.mark.parametrize("frames", [False, True], ids=["kitty", "client-encodes"])
+async def test_a_redraw_places_the_window_again(tmp_path, frames):
+    """
+    A redraw erases the terminal, and an erase takes kitty's placements
+    with it. So the window goes again whole, and is placed again: else
+    its pane shows the background. `record-client` redraws.
+    """
+    async with with_a_window(tmp_path, frames=frames) as (pymux, state, _pane, recorder, log, _probe):
+
+        def placed() -> bool:
+            return "\x1b_Ga=p," in recorder.out or any(
+                "\x1b_Ga=p," in frame.get("after", "") for frame in recorder.frames
+            )
+
+        await once(lambda: "drew" in logged(log), 10.0, "the window never drew its second frame")
+        await once(placed, 10.0, "the window was never placed")
+        await anyio.sleep(0.3)
+        recorder.out, recorder.frames = "", []
+        pymux.redraw(state)
+        await once(placed, 10.0, "the redraw left the window unplaced")
+
+
 async def test_the_picture_goes_under_what_pymux_draws_over_the_pane(tmp_path):
     "Under every cell with a colour, so a prompt or a message covers it. Lillecarl/pymux#647."
     async with with_a_window(tmp_path) as (_pymux, _state, pane, recorder, _log, _probe):

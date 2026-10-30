@@ -3195,7 +3195,14 @@ class Pymux:
         reads, and the frames after went to its main screen. On a
         terminal that never left, it clears a screen this redraws
         anyway. Lillecarl/pymux#791.
+
+        The erase takes kitty's placements with it, so the images go too,
+        and each is sent and placed again. A window pane left as it was
+        gets only its damage, on an image nothing shows, and its pane
+        shows the background.
         """
+        if client_state.connection is not None:
+            client_state.connection.graphics.reset()
         renderer = client_state.app.renderer
         renderer.reset(leave_alternate_screen=False)
         if renderer.full_screen:
