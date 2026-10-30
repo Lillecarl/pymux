@@ -26,7 +26,7 @@ def notify(pymux: Pymux, args: argparse.Namespace) -> None:
     pane_id = None
     try:
         asking = pymux.the_client_to_tell()
-        focused = pymux.focused_pane_of(asking) if asking is not None else None
+        focused = pymux.focus.pane_of(asking) if asking is not None else None
         pane_id = focused.pane_id if focused is not None else None
     except Exception:
         pane_id = None

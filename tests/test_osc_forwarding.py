@@ -126,7 +126,7 @@ class FakeConnection:
 
 
 class FakeSession:
-    "A session with no overlay, which is what `focused_pane_of` reads."
+    "A session with no overlay, which is what `Focus.pane_of` reads."
 
     overlay_pane = None
     arrangement = None
@@ -180,7 +180,7 @@ def make_pymux(focused=(), pane=None, clipboard=Clipboard.ON):
     connections = [FakeConnection(), FakeConnection()]
     states = [FakeClientState(), FakeClientState()]
     pymux._client_states = dict(zip(connections, states))
-    pymux.focused_pane_of = lambda state: pane if states.index(state) in focused else None
+    pymux.focus.pane_of = lambda state: pane if states.index(state) in focused else None
     return pymux, connections
 
 
@@ -299,7 +299,7 @@ def test_shape_goes_away_when_focus_leaves_pane():
     assert connections[0].written == [sequence("22", "pointer")]
 
     # The client looks at another pane now, which asks for no shape.
-    pymux.focused_pane_of = lambda state: None
+    pymux.focus.pane_of = lambda state: None
     pymux.terminals.sync_pointer_shape()
     assert connections[0].written[-1] == sequence("22", "")
 
@@ -392,9 +392,9 @@ def test_broken_connection_does_not_stop_pane():
 
 
 def test_client_without_focus_information_gets_no_pointer_shape():
-    "`focused_pane_of` needs a running application, and says None without one."
+    "`Focus.pane_of` needs a running application, and says None without one."
     pymux = Pymux()
-    assert pymux.focused_pane_of(FakeClientState()) is None
+    assert pymux.focus.pane_of(FakeClientState()) is None
 
 
 # ----------------------------------------------------------------------

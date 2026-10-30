@@ -56,7 +56,7 @@ async def test_opening_overlay_starts_pane():
             assert pymux.overlay_pane is pane
             assert pymux.current_session.overlay_title == "a title"
             # The overlay takes the keyboard.
-            assert pymux.get_focused_pane() is pane
+            assert pymux.focus.focused_pane() is pane
         finally:
             pymux.overlays.close()
 
@@ -123,9 +123,9 @@ async def test_every_client_of_the_session_looks_at_overlay():
     async with pymux.running():
         pane = await pymux.overlays.display(command="%s -c pass" % _python())
         try:
-            assert pymux.focused_pane_of(FakeClientState(here)) is pane
-            assert pymux.focused_pane_of(FakeClientState(here)) is not FakePane()
-            assert pymux.focused_pane_of(FakeClientState(elsewhere)) is not pane
+            assert pymux.focus.pane_of(FakeClientState(here)) is pane
+            assert pymux.focus.pane_of(FakeClientState(here)) is not FakePane()
+            assert pymux.focus.pane_of(FakeClientState(elsewhere)) is not pane
         finally:
             pymux.overlays.close()
 

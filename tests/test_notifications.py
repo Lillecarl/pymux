@@ -491,11 +491,11 @@ async def test_a_look_at_the_window_closes_its_notification_on_the_terminal():
             pymux.outward.forward_osc(first.active_pane, "99", "i=a;Built")
             state.terminal_focused = False
             pymux.current_session.arrangement.set_active_window(first)
-            pymux.sync_pane_focus()
+            pymux.focus.sync_panes()
             assert not [each for each in sent if "p=close" in each]
 
             state.terminal_focused = True
-            pymux.sync_pane_focus()
+            pymux.focus.sync_panes()
         assert [each for each in sent if "p=close" in each] == ["\x1b]99;i=1:p=close;\x1b\\"]
 
 
@@ -515,7 +515,7 @@ async def test_the_window_chooser_closes_only_what_was_chosen():
             state.terminal_focused = True
             await run_as(pymux, state, "choose-window")
             chooser.point_at(chooser.chooser_matches().index(first))
-            pymux.sync_pane_focus()
+            pymux.focus.sync_panes()
             assert not [each for each in sent if "p=close" in each]
 
             chooser.choose_pointed_window()

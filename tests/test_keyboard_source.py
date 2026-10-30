@@ -256,7 +256,7 @@ def test_what_pane_asks_for_reaches_terminal_as_well():
             kitty_keyboard_flags = KeyboardFlag.REPORT_EVENT_TYPES
 
     pymux = Pymux()
-    pymux.get_focused_pane = lambda: PaneThatAsked()
+    pymux.focus.focused_pane = lambda: PaneThatAsked()
     assert pymux.terminals.keyboard_flags_for_client() == (KeyboardFlag.DISAMBIGUATE | KeyboardFlag.REPORT_EVENT_TYPES)
 
 

@@ -867,7 +867,7 @@ class ClientState:
         """
         with set_app(self.app):
             self._sync_focus()
-        self.pymux.sync_pane_focus()
+        self.pymux.focus.sync_panes()
 
     def modes(self) -> dict[str, Any]:
         """

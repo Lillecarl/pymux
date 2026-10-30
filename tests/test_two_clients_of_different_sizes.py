@@ -241,17 +241,17 @@ async def test_pane_that_asks_hears_its_terminal_focus():
         heard = []
         pane.process.write_input = heard.append
         big.state.terminal_focused = small.state.terminal_focused = False
-        pymux.sync_pane_focus()
+        pymux.focus.sync_panes()
         heard.clear()
 
         big.state.terminal_focused = True
-        pymux.sync_pane_focus()
+        pymux.focus.sync_panes()
         small.state.terminal_focused = True
-        pymux.sync_pane_focus()
+        pymux.focus.sync_panes()
         assert heard == [FOCUS_IN]
 
         big.state.terminal_focused = small.state.terminal_focused = False
-        pymux.sync_pane_focus()
+        pymux.focus.sync_panes()
         assert heard == [FOCUS_IN, FOCUS_OUT]
 
 
@@ -261,9 +261,9 @@ async def test_pane_that_never_asked_hears_no_focus():
         heard = []
         pane.process.write_input = heard.append
         big.state.terminal_focused = small.state.terminal_focused = False
-        pymux.sync_pane_focus()
+        pymux.focus.sync_panes()
         big.state.terminal_focused = True
-        pymux.sync_pane_focus()
+        pymux.focus.sync_panes()
         assert heard == []
 
 

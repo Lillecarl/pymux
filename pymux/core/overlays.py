@@ -73,7 +73,7 @@ class Overlays:
         "The program of an overlay finished, so the overlay goes."
         if session.overlay_pane is pane:
             session.overlay_pane = None
-            self.pymux.sync_focus_everywhere()
+            self.pymux.focus.sync_clients()
 
     def close(self, session: Session | None = None) -> None:
         """
@@ -92,7 +92,7 @@ class Overlays:
         if not pane.process.is_terminated:
             self.pymux.panes.hang_up(pane)
 
-        self.pymux.sync_focus_everywhere()
+        self.pymux.focus.sync_clients()
         self.pymux.invalidate(Woke.OVERLAY_CLOSED)
 
     async def display_job(
@@ -127,7 +127,7 @@ class Overlays:
         session.overlay_title = title
         session.overlay_width = width
         session.overlay_height = height
-        self.pymux.sync_focus_everywhere()
+        self.pymux.focus.sync_clients()
         self.pymux.invalidate(Woke.OVERLAY_OPENED)
 
     async def open_job_in_pane(self, job: Job, session: Session | None = None) -> Window:

@@ -94,6 +94,7 @@ def live_objects(pymux):
                 yield screen.graphics
     yield pymux.hooks
     yield pymux.panes
+    yield pymux.focus
     yield pymux.terminals
     yield pymux.shims
     yield pymux.jobs

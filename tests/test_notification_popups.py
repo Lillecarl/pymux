@@ -81,7 +81,7 @@ async def test_a_box_goes_once_its_pane_is_seen():
         pymux.notification_center.add("Build", "Ready", pane_id=pane.pane_id)
         with set_app(state.app):
             await run_as(pymux, state, "previous-window")
-        pymux.sync_pane_focus()
+        pymux.focus.sync_panes()
         assert state.popups == []
 
 

@@ -38,7 +38,6 @@ from ..ids import PaneId, SessionId
 from ..jobs import JOB_SWEEP_EVERY, JobTable
 from ..keys.actions import ActionLog, Origin, awaited_as, started_by
 from ..keys.key_bindings import PymuxKeyBindings
-from ..keys.keys import FOCUS_IN, FOCUS_OUT
 from ..layout.error_notice import ErrorNotice
 from ..log import logger
 from ..notify.notifications import Notification, NotificationCenter, NotificationRoutes
@@ -52,8 +51,8 @@ from ..terminals import Terminals
 from ..wayland.browsers import Browsers
 from ..wayland.portal import Portal
 from ..wayland.wayland import WaylandServer
-from ..wayland.window_pane import WindowProcess, WindowScreen
 from .arrangement import Arrangement
+from .focus import Focus
 from .forward_requests import ForwardRequests
 from .hooks import Hooks
 from .outward import Outward
@@ -166,8 +165,6 @@ class Pymux:
         "panes_by_id": Keep.REBUILT,
         "refusing_commands": Keep.DROPPED,  # the new image takes them again
         "_client_states": Keep.REBUILT,  # from the client records, as clients reconnect
-        # Told again at the first focus sync, which a program reads as one more focus-in.
-        "_focused_panes": Keep.DROPPED,
         "shims": Keep.REBUILT,
         "options": Keep.SAVED,
         "session_defaults": Keep.SAVED,
@@ -180,6 +177,7 @@ class Pymux:
         "overlays": Keep.REBUILT,
         "forward_requests": Keep.REBUILT,
         "waking": Keep.REBUILT,
+        "focus": Keep.REBUILT,
         # The running server.
         "connections": Keep.DROPPED,
         "tasks": Keep.DROPPED,
@@ -204,8 +202,6 @@ class Pymux:
         size_with_no_client: Size | None = None,
     ):
         self._client_states = {}  # connection -> client_state
-        #: The ids of the panes that have the focus. Lillecarl/pymux#795.
-        self._focused_panes: set[PaneId] = set()
 
         #: How many times a client has been used, over the session.
         #: `client_was_used` bumps it and stamps the client, and
@@ -288,6 +284,7 @@ class Pymux:
         self.overlays = Overlays(self)
         self.forward_requests = ForwardRequests(self)
         self.waking = Waking(self)
+        self.focus = Focus(self)
         self.serving = Serving(self)
         self.panes = PaneMaker(self)
         self.outward = Outward(self)
@@ -954,39 +951,6 @@ class Pymux:
         self.terminals.sync_cell_size()
         self.terminals.sync_color_scheme()
 
-    def sync_pane_focus(self) -> None:
-        """
-        Send focus-in and focus-out to the panes that asked (DEC 1004).
-
-        A pane has the focus while it is the active pane of a client
-        whose terminal window has it. Several clients can give several
-        panes the focus at once; tmux has one client and one focus.
-        Lillecarl/pymux#795.
-        """
-        self.notifier.close_seen_notifications()
-        self.notifier.drop_seen_popups()
-        focused = set()
-        for client_state in self._client_states.values():
-            if client_state.terminal_focused and not client_state.temporary:
-                pane = client_state.session.arrangement.get_active_pane_for(client_state.app)
-                if pane is not None:
-                    focused.add(pane.pane_id)
-        if focused == self._focused_panes:
-            return
-        for pane_id, report in [(one, FOCUS_IN) for one in focused - self._focused_panes] + [
-            (one, FOCUS_OUT) for one in self._focused_panes - focused
-        ]:
-            pane = self.panes_by_id.get(pane_id)
-            if pane is None:
-                continue
-            # A window pane has no program to read the report.
-            screen, process = pane.screen, pane.process
-            if isinstance(screen, WindowScreen) or isinstance(process, WindowProcess):
-                continue
-            if screen.reports_focus and not process.is_terminated:
-                process.write_input(report)
-        self._focused_panes = focused
-
     def clients_watching(self, window: Window | None = None) -> list[ClientState]:
         """
         Every client that is looking at that window.
@@ -1008,16 +972,6 @@ class Pymux:
             for client_state in self._client_states.values()
             if not client_state.temporary and active_window_for_app(client_state.app) == window
         ]
-
-    def sync_focus_everywhere(self) -> None:
-        "Give every client the focus that its state asks for."
-        for client_state in list(self._client_states.values()):
-            try:
-                with set_app(client_state.app):
-                    client_state.sync_focus()
-            except Exception:
-                # An application that never ran has no layout to focus.
-                logger.exception("Could not sync the focus of a client.")
 
     def invalidate(self, reason: str = Woke.APPLICATION):
         """
@@ -1049,39 +1003,6 @@ class Pymux:
         self.terminals.sync_progress()
         # "set-option synthesize-key-events" takes effect here.
         self.terminals.sync_keyboard_source_flags()
-
-    def get_focused_pane(self):
-        """
-        The pane that the keyboard of the active client reaches.
-
-        An overlay pane takes the keyboard while it is open, so it is
-        not always the active pane of the arrangement.
-
-        Never raises: this runs on the invalidate path, also for
-        headless servers without a running prompt_toolkit application.
-        """
-        if self.overlay_pane is not None:
-            return self.overlay_pane
-
-        try:
-            return self.arrangement.get_active_pane()
-        except Exception:
-            # `get_active_window` needs a running application.
-            return None
-
-    def get_focused_kitty_flags(self) -> int:
-        """
-        The kitty keyboard protocol flags requested by the process in
-        the focused pane. (Zero when the process did not request
-        anything or when there is no focused pane.)
-
-        Never raises: this runs on the invalidate path, also for
-        headless servers without a running prompt_toolkit application.
-        """
-        pane = self.get_focused_pane()
-        if pane is None:
-            return 0
-        return pane.screen.kitty_keyboard_flags
 
     def _place_of(self, pane: Pane) -> tuple[Session, Window] | None:
         "The session and window that hold this pane, or None when it is gone."
@@ -1209,24 +1130,6 @@ class Pymux:
             else:
                 merged[name] = value
         return merged
-
-    def focused_pane_of(self, client_state: ClientState) -> Pane | None:
-        """
-        The pane that this client looks at, or `None`.
-
-        Never raises: this runs on the invalidate path, also for
-        headless servers without a running prompt_toolkit application.
-        """
-        if client_state.session.overlay_pane is not None:
-            return client_state.session.overlay_pane
-
-        try:
-            with set_app(client_state.app):
-                window = client_state.session.arrangement.get_active_window()
-        except Exception:
-            # `get_active_window` needs a running application.
-            return None
-        return window.active_pane if window is not None else None
 
     def latest_client(self):
         """
@@ -1553,7 +1456,7 @@ class Pymux:
             self.counters.client_left(connection.pipe_connection)
         if gone is not None:
             self.browsers.client_gone(gone)
-            self.sync_pane_focus()
+            self.focus.sync_panes()
         # One client fewer can mean that the rest speak more.
         self.terminals.sync_keyboard_source_flags()
         # And the client that spoke for the panes may be the one gone.

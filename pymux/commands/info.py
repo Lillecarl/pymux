@@ -97,7 +97,7 @@ def _clients_tree(pymux: Pymux):
     """
     clients = []
     for state in pymux.clients:
-        pane = pymux.focused_pane_of(state)
+        pane = pymux.focus.pane_of(state)
         found = pymux.place_of_pane_id(pane.pane_id) if pane is not None else None
         clients.append(
             {

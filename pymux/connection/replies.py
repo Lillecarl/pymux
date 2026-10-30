@@ -179,7 +179,7 @@ class TerminalReplies:
             logger.debug("The terminal %s the focus.", "took" if data == FOCUS_IN else "lost")
             if self.connection.client_state is not None:
                 self.connection.client_state.terminal_focused = data == FOCUS_IN
-                self.connection.pymux.sync_pane_focus()
+                self.connection.pymux.focus.sync_panes()
                 if data == FOCUS_IN:
                     self.connection.pymux.client_was_used(self.connection.client_state)
                     self.connection.pymux.invalidate(Woke.CLIENT_FOCUSED)

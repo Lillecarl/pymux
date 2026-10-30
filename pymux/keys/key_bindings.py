@@ -578,7 +578,7 @@ class PymuxKeyBindings:
             pane answers. Returning anything else asks for a redraw
             that has nothing in it. Lillecarl/pymux#246.
             """
-            pane = pymux.get_focused_pane()
+            pane = pymux.focus.focused_pane()
             if pane is None or not event.data:
                 return NotImplemented
             terminal = pane.terminal

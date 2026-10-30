@@ -130,7 +130,7 @@ class Terminals:
             shape = getattr(handlers.get(column) if handlers is not None else None, "pointer_shape", None)
             if shape:
                 return shape
-        return pointer_shape_of(self.pymux.focused_pane_of(client_state))
+        return pointer_shape_of(self.pymux.focus.pane_of(client_state))
 
     def sync_progress(self) -> None:
         """
@@ -141,7 +141,7 @@ class Terminals:
             for connection, client_state in self.pymux._client_states.items():
                 if connection is None:
                     continue
-                pane = self.pymux.focused_pane_of(client_state)
+                pane = self.pymux.focus.pane_of(client_state)
                 connection.set_progress(pane.progress if pane is not None else NO_PROGRESS)
         except Exception:
             logger.exception("Sending the progress failed.")
@@ -425,7 +425,7 @@ class Terminals:
         """
         if self.pymux.options.extended_keys is ExtendedKeys.OFF:
             return 0
-        return KeyboardFlag.DISAMBIGUATE | self.pymux.get_focused_kitty_flags()
+        return KeyboardFlag.DISAMBIGUATE | self.pymux.focus.focused_kitty_flags()
 
     def sync_kitty_flags(self) -> None:
         """
