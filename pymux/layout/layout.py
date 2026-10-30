@@ -251,8 +251,7 @@ class LayoutManager:
         reads its own and never another's. Before the first render, and
         on a frame that the renderer threw away, there are none.
         """
-        renderer = getattr(self.client_state.app, "renderer", None)
-        screen = getattr(renderer, "_last_screen", None)
+        screen = self.client_state.app.renderer.last_rendered_screen
         if screen is None:
             return {}
         return pane_write_positions(screen)
@@ -260,8 +259,7 @@ class LayoutManager:
     @property
     def pane_covers(self) -> dict[window_tree.Pane, tuple[Rect, ...]]:
         "What the last render of this client drew over each pane: `pane_covers`."
-        renderer = getattr(self.client_state.app, "renderer", None)
-        screen = getattr(renderer, "_last_screen", None)
+        screen = self.client_state.app.renderer.last_rendered_screen
         if screen is None:
             return {}
         return pane_covers(screen)
@@ -765,10 +763,10 @@ class LayoutManager:
         Lillecarl/pymux#29.
         """
         app = self.client_state.app
-        screen = getattr(getattr(app, "renderer", None), "_last_screen", None)
-        window = getattr(getattr(app, "layout", None), "current_window", None)
-        if screen is None or window is None:
+        screen = app.renderer.last_rendered_screen
+        if screen is None:
             return Point(0, 0)
+        window = app.layout.current_window
         return screen.get_cursor_position(window)
 
     def _cursor_is_in_top_right(self) -> bool:

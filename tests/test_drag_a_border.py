@@ -32,7 +32,7 @@ def _drawn(state) -> dict:
         state.layout_manager.frame_started(state.app)
         state.app.renderer.render(state.app, state.app.layout)
         state.layout_manager.frame_ended(state.app)
-    return dict(pane_write_positions(state.app.renderer._last_screen))
+    return dict(pane_write_positions(state.app.renderer.last_rendered_screen))
 
 
 def _mouse(state, code: int, x: int, y: int, end: str = "M") -> None:

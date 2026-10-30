@@ -483,6 +483,8 @@ class TerminalReplies:
         self.pixel_mouse = True
         logger.info("The terminal of client %s reports the mouse in pixels.", self.connection.client_id or "?")
         app = self.connection.client_state.app if self.connection.client_state is not None else None
-        if app is not None and app.renderer._mouse_support_enabled:
+        # The renderer turns pixel mode on with the mouse when it does so
+        # later; a client whose mouse is on now hears it here.
+        if app is not None and app.mouse_support():
             self.connection.write_output_raw(PIXEL_MOUSE_ON)
             self.connection.flush_output()
