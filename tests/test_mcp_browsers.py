@@ -95,6 +95,11 @@ async def test_an_agent_fills_a_form_and_reads_what_the_page_logged(server, seat
     assert isinstance(shot, Png) and shot.data.startswith(b"\x89PNG")
     assert max(struct.unpack(">II", shot.data[16:24])) <= 300, shot.data[16:24]
 
+    # Less motion means fewer frames to send a person watching.
+    assert await call(
+        server, "browser.evaluate", name="probe", expression="matchMedia('(prefers-reduced-motion: reduce)').matches"
+    )
+
     loaded = await call(server, "browser.goto", name="probe", url=PAGE)
     assert loaded["loaded"] and loaded["title"] == "probe", loaded
     (tab,) = await call(server, "browser.tabs", name="probe")

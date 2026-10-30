@@ -75,6 +75,15 @@ QUIET: Final = (
     "--password-store=basic",
 )
 
+#: Less motion, so a watched browser sends fewer frames: every one
+#: crosses to each client that shows it. Measured on Chromium 155: the
+#: switch makes `prefers-reduced-motion: reduce` match, and a site that
+#: asks for the `Sec-CH-Prefers-Reduced-Motion` hint gets the same.
+CALM: Final = (
+    "--force-prefers-reduced-motion",
+    "--disable-smooth-scrolling",
+)
+
 
 class Seat(StrEnum):
     HEADLESS = "headless"
@@ -234,6 +243,7 @@ async def open_browser(
         "--remote-debugging-port=0",
         "--user-data-dir=%s" % (profile,),
         *QUIET,
+        *CALM,
         *arguments,
     ]
     holder: Job | Window | Pane
