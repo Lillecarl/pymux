@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import re
 import time
-from collections import deque
 from collections.abc import Coroutine
 from contextlib import suppress
 from typing import (
@@ -33,7 +32,6 @@ from .actions import Origin, started_by
 from .answer import Answer
 from .audio import AudioLink
 from .client_io import PIXEL_MOUSE_ON, ClientInput, FrameOutput, NoStdout, SocketStdout
-from .client_options import ClientOptions
 from .clipboard_reads import ClipboardReader
 from .clusters import CLUSTER_WIDTH_PROBE, PROBE_ROWS, PROBES, Drawn, table_width
 from .colors import COLOR_QUERIES, ColorDetection, DefaultColors
@@ -56,6 +54,7 @@ from .notifications import (
 )
 from .options import Scope, SetOptionError
 from .osc import NO_PROGRESS, Progress
+from .pacing import FramePacing
 from .packet_table import PacketTable
 from .pipes import BrokenPipeError
 from .rate import Rate
@@ -97,10 +96,6 @@ _THEME_REPORT_RE = re.compile(r"^\x1b\[\?997;[12]n$")
 _INBAND_RESIZE_RE = re.compile(r"^\x1b\[48;(\d+);(\d+);(\d+);(\d+)t$")
 _PIXEL_MOUSE_REPLY_RE = re.compile(r"^\x1b\[\?1016;(\d+)\$y$")
 
-#: A status report and its answer: 0 is ready, 3 a malfunction, and
-#: either says the terminal read everything sent before the report.
-#: Lillecarl/pymux#259.
-STATUS_REPORT = "\x1b[5n"
 _STATUS_REPLY_RE = re.compile(r"^\x1b\[[03]n$")
 
 _OSC_REPLY_RE = re.compile(r"^(?:\x1b\]|\x9d)(\d+);(.*?)(?:\x1b\\|\x9c|\x07)$", re.DOTALL)
@@ -137,11 +132,6 @@ CANNOT_ATTACH = (
 )
 
 
-#: How long a window pane's frame may go unanswered before the next one
-#: goes all the same. Lillecarl/pymux#643.
-FRAME_ANSWER_SECONDS = 2.0
-
-
 def _without_left(forwards: list[dict[str, Any]]) -> list[dict[str, Any]]:
     "A forwarding table without the time each forward has left."
     return [{key: value for key, value in one.items() if key != "left"} for one in forwards]
@@ -167,6 +157,7 @@ class ServerConnection:
         # terminal, and the next frame places them again.
         "graphics": Keep.DROPPED,
         "pymux": Keep.REBUILT,
+        "pacing": Keep.REBUILT,
         "clipboard": Keep.REBUILT,
         "size": Keep.REBUILT,
         "hostname": Keep.REBUILT,
@@ -185,7 +176,6 @@ class ServerConnection:
         "_pointer_shape_sent": Keep.REBUILT,
         "_progress_sent": Keep.REBUILT,
         "answers_ping": Keep.REBUILT,
-        "paced": Keep.REBUILT,
         "can_forward": Keep.REBUILT,
         "answers_forwards": Keep.REBUILT,
         "_next_forwards": Keep.DROPPED,
@@ -209,31 +199,19 @@ class ServerConnection:
         "_closed": Keep.DROPPED,
         "_kitty_detection_pending": Keep.DROPPED,
         "_unanswered": Keep.DROPPED,
-        # A frame in flight belongs to the connection it went out on.
-        "_frames_out": Keep.DROPPED,
-        # A new server asks its own reports, and learns again whether
-        # the terminal answers them.
-        "unread": Keep.DROPPED,
-        "frame_held": Keep.DROPPED,
         # The client asks again when it reattaches to the new server.
         "terminal_said": Keep.DROPPED,
-        "answers_reports": Keep.DROPPED,
         # The next server asks the terminal again.
         "pixel_mouse": Keep.DROPPED,
         "sizes_in_band": Keep.DROPPED,  # the terminal reports again when the mode is set
         "widens_text_emoji": Keep.DROPPED,
         "clusters_drawn": Keep.DROPPED,
-        "_frames_shown": Keep.DROPPED,
         # A recording holds Python objects of this build, so it ends
         # with it. `upgrade.py` writes it out first.
         "recording": Keep.DROPPED,
         # The pipe's counts start again on the next server's connection.
         "rate_down": Keep.DROPPED,
         "rate_up": Keep.DROPPED,
-        "frames_sent": Keep.DROPPED,
-        "rate_frames": Keep.DROPPED,
-        "window_frames_sent": Keep.DROPPED,
-        "rate_window_frames": Keep.DROPPED,
     }
 
     def __init__(self, pymux: Pymux, pipe_connection: PipeConnection, may_attach: bool = True) -> None:
@@ -269,22 +247,7 @@ class ServerConnection:
         #: Lillecarl/pymux#801.
         self.clusters_drawn = Drawn()
 
-        #: Window frames sent and not yet answered with `frame-shown`,
-        #: for a client that answers; set while there are none.
-        #: Lillecarl/pymux#641.
-        self._frames_out = 0
-        self._frames_shown = anyio.Event()
-        self._frames_shown.set()
-
-        #: Whether this client said its terminal answers a status
-        #: report, the size of each frame whose report is not answered
-        #: yet, oldest first, and whether one ever was. Lillecarl/pymux#259.
-        self.paced = False
-        self.unread: deque[int] = deque()
-        self.answers_reports = False
-        #: A frame was skipped for the terminal, so its answer asks for
-        #: the next one. Lillecarl/pymux#824.
-        self.frame_held = False
+        self.pacing = FramePacing(self)
 
         #: Every reply this client's terminal gave. Lillecarl/pymux#725.
         self.terminal_said = TerminalAnswers()
@@ -297,15 +260,6 @@ class ServerConnection:
         #: the pipe's counts. Lillecarl/pymux#678.
         self.rate_down = Rate()
         self.rate_up = Rate()
-        #: The frames this client was sent, and what `#{client_fps}`
-        #: reads off them. Lillecarl/pymux#596.
-        self.frames_sent = 0
-        self.rate_frames = Rate()
-        #: The window panes' frames, which go out apart from the frames
-        #: above, and what `#{client_window_fps}` reads off them.
-        self.window_frames_sent = 0
-        self.rate_window_frames = Rate()
-
         #: The scope the background work of this connection runs in.
         #: `serve()` opens it, so every task of a client ends when that
         #: client goes, and none of them can outlive the server: the
@@ -719,12 +673,12 @@ class ServerConnection:
 
         # The terminal read a frame. Lillecarl/pymux#259.
         if _STATUS_REPLY_RE.match(data):
-            self._status_answered()
+            self.pacing.status_answered()
             return
 
         # The terminal processed a window pane's frame. Lillecarl/pymux#643.
         if self.graphics.frame_room is not None and self.graphics.is_frame_answer(data):
-            self._frame_answered()
+            self.pacing.frame_answered()
             return
 
         osc = _OSC_REPLY_RE.match(data)
@@ -1083,7 +1037,7 @@ class ServerConnection:
             # in the buffers past it, with every key's echo behind
             # them. Lillecarl/pymux#641.
             if packet.get(Field.SHOWS):
-                self.graphics.frame_room = self._frames_all_shown
+                self.graphics.frame_room = self.pacing.frames_all_shown
 
         detach_other_clients = bool(packet[Field.DETACH_OTHERS])
         # `attach -x`: the others leave, and the terminals they were
@@ -1107,7 +1061,7 @@ class ServerConnection:
         self.saves_files = bool(packet.get(Field.SAVES_FILES))
         self.sends_files = bool(packet.get(Field.SENDS_FILES))
         self.answers_ping = bool(packet.get(Field.PINGS))
-        self.paced = bool(packet.get(Field.PACED))
+        self.pacing.paced = bool(packet.get(Field.PACED))
         self.environment = packet.get(Field.ENVIRONMENT) or {}
         self.ttyname = packet.get(Field.TTYNAME, "")
         self.pid = packet.get(Field.PID) or 0
@@ -1207,7 +1161,7 @@ class ServerConnection:
 
     @_PACKETS.handles(Packet.FRAME_SHOWN)
     def _on_frame_shown(self, packet: Message) -> None:
-        self._frame_answered()
+        self.pacing.frame_answered()
 
     @_PACKETS.handles(Packet.FORWARDS)
     def _on_forwards(self, packet: Message) -> None:
@@ -1587,11 +1541,7 @@ class ServerConnection:
         Lillecarl/pymux#632.
         """
         self._flush_output()
-        self.window_frames_sent += 1
-        if self.graphics.frame_room is not None:
-            self._frames_out += 1
-            if self._frames_shown.is_set():
-                self._frames_shown = anyio.Event()
+        self.pacing.window_frame_went_out()
         for part in parts:
             if self._closed:
                 return
@@ -1633,86 +1583,12 @@ class ServerConnection:
     def pointer_shape_sent(self) -> str:
         return self._pointer_shape_sent
 
-    def _frame_answered(self) -> None:
-        self._frames_out = max(0, self._frames_out - 1)
-        if not self._frames_out:
-            self._frames_shown.set()
-
-    async def _frames_all_shown(self) -> None:
-        """
-        Wait until the client answered every window frame it was sent, or
-        went. A terminal that never answers is let go after
-        `FRAME_ANSWER_SECONDS`, so it costs frames and never the window.
-        """
-        with anyio.move_on_after(FRAME_ANSWER_SECONDS) as waited:
-            while self._frames_out and not self._closed:
-                await self._frames_shown.wait()
-        if waited.cancelled_caught:
-            logger.warning("Client %s did not answer %d window frames.", self.client_id or "?", self._frames_out)
-            self._frames_out = 0
-            self._frames_shown.set()
-
-    async def frame_drained(self) -> None:
-        """
-        Wait until this client's terminal took what it was sent: every
-        window frame answered, for a client that answers, and the
-        socket empty. Lillecarl/pymux#641.
-        """
-        await self.pipe_connection.drained()
-        if self.graphics.frame_room is not None:
-            await self._frames_all_shown()
-
     async def _write(self, frame: bytes, compress_after: bool = False) -> None:
         "Write one encoded packet; a client that is gone is let go."
         try:
             await self.pipe_connection.write(frame, compress_after)
         except BrokenPipeError:
             self.detach_and_close()
-
-    def _frame_went_out(self) -> None:
-        self.frames_sent += 1
-
-    def _report_after_frame(self, size: int) -> str:
-        """
-        What goes behind a frame of `size` bytes: a status report, for a
-        client whose terminal answers one. The answer arrives once the
-        terminal read everything before it, which over ssh is the only
-        thing that says a frame reached the person. Lillecarl/pymux#259.
-        """
-        if not self.paced:
-            return ""
-        self.unread.append(size + len(STATUS_REPORT))
-        return STATUS_REPORT
-
-    def _status_answered(self) -> None:
-        """
-        The terminal read a frame. A frame held back for it can draw.
-        """
-        if self.unread:
-            self.unread.popleft()
-        self.answers_reports = True
-        if self.frame_held and not self.waits_for_terminal and self.client_state is not None:
-            self.frame_held = False
-            self.client_state.app.invalidate()
-
-    @property
-    def waits_for_terminal(self) -> bool:
-        """
-        Whether the next frame waits: as many frames, or as many bytes,
-        are on their way to a terminal that has answered before as this
-        client's `frames-in-flight` and `bytes-in-flight` allow. A frame
-        goes whenever none is, so a big one on a slow link waits for the
-        answer and never builds a backlog. One that never answered is
-        never waited for, so a terminal that ignores the report costs
-        nothing; one that answered and went quiet holds a few frames and
-        no more, which is the dead link of a phone that lost its signal.
-        Lillecarl/pymux#825.
-        """
-        if not self.answers_reports or not self.unread:
-            return False
-        options = self.client_state.options if self.client_state is not None else ClientOptions()
-        frames, size = options.frames_in_flight, options.bytes_in_flight
-        return bool(frames and len(self.unread) >= frames) or bool(size and sum(self.unread) >= size)
 
     def _create_app(
         self,
@@ -1732,7 +1608,9 @@ class ServerConnection:
             the session a person looked at last.
         """
         stdout = (
-            SocketStdout(self._send_packet, self.pymux.counters, self._frame_went_out, self._report_after_frame)
+            SocketStdout(
+                self._send_packet, self.pymux.counters, self.pacing.frame_went_out, self.pacing.report_after_frame
+            )
             if start
             else NoStdout()
         )
@@ -1828,7 +1706,7 @@ class ServerConnection:
         self.pymux.remove_client(self)
         self.client_state = None
         self._closed = True
-        self._frames_shown.set()
+        self.pacing.frames_shown.set()
         # A `pymux receive` waiting for this client would wait for ever.
         for upload in self.uploads.values():
             upload.end("the client went before it answered")

@@ -317,7 +317,7 @@ async def test_the_terminals_answer_lets_the_next_frame_go(tmp_path):
 
 async def test_a_terminal_that_never_answers_costs_frames_not_the_window(tmp_path, monkeypatch):
     "Lillecarl/pymux#643."
-    monkeypatch.setattr("pymux.server.FRAME_ANSWER_SECONDS", 0.3)
+    monkeypatch.setattr("pymux.pacing.FRAME_ANSWER_SECONDS", 0.3)
     async with with_a_window(tmp_path, animate=True, frames=True, shows=True) as (
         _pymux,
         _state,

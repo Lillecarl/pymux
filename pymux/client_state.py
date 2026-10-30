@@ -526,8 +526,8 @@ class ClientState:
         if self.input_tick != self.schedule_tick:
             self.app.invalidate()
             return True
-        if self.connection.waits_for_terminal:
-            self.connection.frame_held = True
+        if self.connection.pacing.waits_for_terminal:
+            self.connection.pacing.frame_held = True
             return True
         pipe = self.connection.pipe_connection
         if pipe.holds_frames_while_behind and pipe.outstanding:
@@ -643,7 +643,7 @@ class ClientState:
         write_position = self.layout_manager.pane_write_positions.get(pane)
         if write_position is None or not isinstance(pane.terminal, WindowWidget):
             return
-        drained = self.connection.frame_drained
+        drained = self.connection.pacing.drained
         self.connection.graphics.refresh_window(
             self.pymux.wayland.view_of(pane.pane_id, pane.terminal, write_position, drained)
         )
@@ -696,7 +696,7 @@ class ClientState:
         "One `WindowView` per window pane this client can see."
         if self.connection is None:
             return []
-        drained = self.connection.frame_drained
+        drained = self.connection.pacing.drained
         return [
             self.pymux.wayland.view_of(pane.pane_id, widget, write_position, drained)
             for pane, widget, write_position in self.window_panes()

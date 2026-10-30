@@ -826,7 +826,7 @@ def _client_fps(context: FormatContext) -> str:
     connection = _connection_of(context)
     if connection is None:
         return ""
-    return frames_per_second(connection.rate_frames.read(connection.frames_sent, time.monotonic()))
+    return frames_per_second(connection.pacing.rate_frames.read(connection.pacing.frames_sent, time.monotonic()))
 
 
 def _client_window_fps(context: FormatContext) -> str:
@@ -839,7 +839,7 @@ def _client_window_fps(context: FormatContext) -> str:
     connection = _connection_of(context)
     if connection is None:
         return ""
-    rate = connection.rate_window_frames.read(connection.window_frames_sent, time.monotonic())
+    rate = connection.pacing.rate_window_frames.read(connection.pacing.window_frames_sent, time.monotonic())
     return frames_per_second(rate) if rate else ""
 
 

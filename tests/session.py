@@ -70,6 +70,13 @@ class _NoClipboard:
         return None
 
 
+class _NoPacing:
+    "A client whose terminal never answers a status report."
+
+    waits_for_terminal = False
+    frame_held = False
+
+
 class Connection:
     """
     What `Pymux` asks a connection for, and nothing else.
@@ -137,7 +144,7 @@ class Connection:
         self.starts_browsers = False
         # As every pymux client of this build says it does.
         self.saves_files = True
-        self.waits_for_terminal = False
+        self.pacing = _NoPacing()
         self.pointer_fraction = (0.5, 0.5)
         self.notification_actions: frozenset[str] = frozenset()
         self.notification_closes = False

@@ -23,7 +23,7 @@ from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from session import once, over_connection
 
-from pymux.server import STATUS_REPORT
+from pymux.pacing import STATUS_REPORT
 
 SIZE = Size(rows=24, columns=80)
 ANSWER = "\x1b[0n"
@@ -69,16 +69,16 @@ async def test_a_terminal_that_never_answered_is_not_waited_for():
         redraw(state)
         await once(lambda: len(frames_of(packets)) > before, 5.0, "the second frame never came")
 
-        assert not state.connection.waits_for_terminal
+        assert not state.connection.pacing.waits_for_terminal
 
 
 async def answered_all(session, state, in_flight: int = 1) -> None:
     "Every report answered, so the terminal is known to answer; `in_flight` frames allowed out."
     connection = state.connection
     state.options.frames_in_flight = in_flight
-    for _ in range(len(connection.unread)):
+    for _ in range(len(connection.pacing.unread)):
         session.typed(state, ANSWER)
-    await once(lambda: connection.answers_reports and not connection.unread, 5.0, "answers not read")
+    await once(lambda: connection.pacing.answers_reports and not connection.pacing.unread, 5.0, "answers not read")
 
 
 async def test_after_an_answer_the_next_frame_waits_for_the_next_one():
@@ -90,7 +90,7 @@ async def test_after_an_answer_the_next_frame_waits_for_the_next_one():
 
         state.message = "one"
         redraw(state)
-        await once(lambda: len(connection.unread) == 1, 5.0, "the frame never went")
+        await once(lambda: len(connection.pacing.unread) == 1, 5.0, "the frame never went")
         sent = len(frames_of(packets))
 
         # Unanswered: more changes draw nothing.
@@ -98,13 +98,13 @@ async def test_after_an_answer_the_next_frame_waits_for_the_next_one():
         redraw(state)
         state.message = "three"
         redraw(state)
-        await once(lambda: connection.waits_for_terminal, 5.0, "the client was not held")
+        await once(lambda: connection.pacing.waits_for_terminal, 5.0, "the client was not held")
 
         # The answer draws the newest screen, once: a frame that went
         # while it was held would make the count overshoot.
         session.typed(state, ANSWER)
         await once(lambda: len(frames_of(packets)) > sent, 5.0, "the answer drew nothing")
-        await once(lambda: connection.waits_for_terminal, 5.0, "the new frame was not held for")
+        await once(lambda: connection.pacing.waits_for_terminal, 5.0, "the new frame was not held for")
         assert len(frames_of(packets)) == sent + 1
         assert "three" in frames_of(packets)[-1]
 
@@ -123,9 +123,9 @@ async def test_small_frames_go_until_the_count_is_out():
         for word in ("one", "two", "three", "four"):
             state.message = word
             redraw(state)
-            await once(lambda: connection.waits_for_terminal or word in frames_of(packets)[-1], 5.0, "no frame")
-        assert len(connection.unread) == 3
-        assert connection.waits_for_terminal
+            await once(lambda: connection.pacing.waits_for_terminal or word in frames_of(packets)[-1], 5.0, "no frame")
+        assert len(connection.pacing.unread) == 3
+        assert connection.pacing.waits_for_terminal
         assert "four" not in frames_of(packets)[-1]
 
         # One answer makes room for the newest screen.
@@ -147,9 +147,9 @@ async def test_a_frame_past_the_bytes_waits_however_few_frames():
 
         state.message = "x" * 70
         redraw(state)
-        await once(lambda: len(connection.unread) == 1, 5.0, "the frame never went")
+        await once(lambda: len(connection.pacing.unread) == 1, 5.0, "the frame never went")
         # Nothing was out, so it went whatever its size.
-        assert connection.waits_for_terminal
+        assert connection.pacing.waits_for_terminal
 
 
 #: The round trip to Carl's Mac, as the audio link measures it.
@@ -246,6 +246,6 @@ async def test_the_answer_never_reaches_a_pane():
         pane.process.write_input = written.append
 
         session.typed(state, ANSWER)
-        await once(lambda: state.connection.answers_reports, 5.0, "the answer was not read")
+        await once(lambda: state.connection.pacing.answers_reports, 5.0, "the answer was not read")
 
         assert "".join(written) == ""

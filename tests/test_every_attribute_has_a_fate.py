@@ -99,6 +99,7 @@ def live_objects(pymux):
     yield from pymux.jobs.listing()
     for connection in pymux.connections:
         yield connection
+        yield connection.pacing
         yield connection.clipboard
         if connection.client_state is not None:
             yield connection.client_state

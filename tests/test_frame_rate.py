@@ -182,7 +182,7 @@ async def test_a_frame_held_for_the_terminals_answer_asks_for_no_other():
         asked = []
         state.app.invalidate = lambda: asked.append(True)
         before = state.app.min_redraw_interval
-        state.connection.waits_for_terminal = True
+        state.connection.pacing.waits_for_terminal = True
 
         assert state.should_skip_render()
         assert asked == []

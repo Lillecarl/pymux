@@ -35,12 +35,12 @@ async def test_a_template_shows_the_frame_rates_where_it_says():
             )
             right = connection.client_state.layout_manager.status.right
             # A count read two seconds ago, before any read now keeps one.
-            connection.rate_window_frames.read(0, time.monotonic() - 2)
+            connection.pacing.rate_window_frames.read(0, time.monotonic() - 2)
             assert re.fullmatch(r"\d+\.?\d* fps", right())
 
             # Sixty window frames a second since: a little under, as the
             # rate divides by the seconds that passed.
-            connection.window_frames_sent = 120
+            connection.pacing.window_frames_sent = 120
             assert re.search(r" / (5\d|60) fps wl$", right())
         for pane in list(pymux.panes_by_id.values()):
             pane.process.kill()
