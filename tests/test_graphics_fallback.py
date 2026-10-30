@@ -446,7 +446,7 @@ async def test_an_image_gone_before_its_encoding_ends_is_not_kept():
     client.render([])
 
     await spawned.pop()
-    assert client._cell_cache == {}
+    assert client.cells._cache == {}
     assert repaints == []
 
 
@@ -457,7 +457,7 @@ async def test_a_reset_drops_the_encoding_in_flight():
     repaints.clear()
 
     await spawned.pop()
-    assert client._cell_cache == {}
+    assert client.cells._cache == {}
     assert repaints == []
 
 

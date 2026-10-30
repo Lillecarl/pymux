@@ -44,13 +44,12 @@ from prompt_toolkit.output import ColorDepth
 from pyte import escape
 from pyte.images import GraphicsImage, GraphicsPlacement, PixelFormat
 from pyte.sequences import Csi, csi, esc
-from pyte.sixel import stored_payload
 from pyte.terminfo import DeviceExtension
 
 # Through the modules, so the kernels `pymux.kernels.install()` puts there
 # are the ones that run.
-from . import blocks, sixel
-from .blocks import blocks_for, rows_for_cells
+from . import sixel
+from .cell_images import CellImages
 from .kitty_frames import SHM_PROBE_ID
 from .log import logger
 from .placements import (
@@ -59,7 +58,6 @@ from .placements import (
     drawn_size,
     pane_placements,
     put_command,
-    source_rgba,
     visible_placements,
 )
 from .plane import Rect
@@ -143,11 +141,6 @@ _SIXEL_ATTRIBUTE = str(int(DeviceExtension.SIXEL))
 
 _VERSION_REPLY_RE = re.compile(r"^\x1bP>\|(.*)\x1b\\$", re.DOTALL)
 
-# What a sixel payload is made of: printable ASCII, and the line breaks
-# programs wrap it with.
-_SIXEL_TEXT_RE = re.compile(r"[ -~\r\n]*")
-
-
 #: A kitty graphics reply naming an image: OK or an error, both say the
 #: terminal processed the command.
 _IMAGE_REPLY_RE = re.compile(r"^\x1b_G(?:[^;]*,)?i=(\d+)(?:,[^;]*)?;")
@@ -223,14 +216,6 @@ FrameRects = tuple[int, bool, int, int, list[tuple[int, int, int, int, bytes]]]
 #: What `WindowView.video` answers: serial, keyframe, width, height, the
 #: encoded frame, and the rectangles that changed as `(x, y, w, h)`.
 VideoFrame = tuple[int, bool, int, int, bytes, list[tuple[int, int, int, int]]]
-
-#: What the cell cache keys an encoded placement by: the image and
-#: whatever about the placement changes the encoding.
-type CellKey = tuple[object, ...]
-
-#: One frame of a way of drawing whose pixels are the cells: the
-#: commands by pane, image and slot, and the cache keys they used.
-type Collected = tuple[dict[tuple[int, int, int], str], set[CellKey]]
 
 #: The most pixel bytes one `window-frame` packet carries. A key queued
 #: behind a part waits for at most this much on the link.
@@ -477,16 +462,7 @@ class ClientGraphics:
         # (outer image id, slot) -> placement of the previous frame.
         self._placements: dict[tuple[int, int], _Placement] = {}
 
-        # The state of a way of drawing whose pixels are the cells:
-        # sixel, and half blocks. A client draws one way or the other,
-        # never both, so the two share this. The encoded images are
-        # cached, because cropping means encoding again and a scrolling
-        # image would otherwise pay for the encoder on every frame.
-        self._cell_placements: dict[tuple[int, int, int], str] = {}
-        self._cell_cache: dict[CellKey, tuple[GraphicsImage, Any]] = {}
-        self._cell_redraw = False
-        #: Cache keys a worker thread is encoding.
-        self._cell_pending: set[CellKey] = set()
+        self.cells = CellImages(self)
 
         #: Pane id -> what this client holds of that window pane.
         self._windows: dict[int, _ShownWindow] = {}
@@ -671,9 +647,9 @@ class ClientGraphics:
         if self.kitty_supported:
             self._render_kitty(views)
         elif self.sixel_supported:
-            self._render_sixel(views)
+            self.cells.render_sixel(views)
         elif self.detected:
-            self._render_blocks(views)
+            self.cells.render_blocks(views)
 
     def render_windows(self, views: Iterable[WindowView]) -> None:
         """
@@ -1130,228 +1106,6 @@ class ClientGraphics:
     # ------------------------------------------------------------------
     # Sixel.
 
-    def _render_sixel(self, views: Iterable[PaneView]) -> None:
-        """
-        Draw the images as sixel.
-
-        Sixel pixels are the cells, so the renderer and the images
-        write to the same place. Two rules keep them apart: the images
-        go out after the text of the frame, and a change asks for a
-        full repaint, which puts the text back under the image that
-        moved away.
-        """
-        self._render_cells(self._collect_sixel, views)
-
-    def _render_blocks(self, views: Iterable[PaneView]) -> None:
-        """
-        Draw the images as half blocks.
-
-        These are cells, like sixel pixels are, so they follow the same
-        two rules: they go out after the text of the frame, and a
-        change asks for a full repaint, which puts the text back where
-        an image moved away from.
-        """
-        self._render_cells(self._collect_blocks, views)
-
-    def _render_cells(self, collect: Callable[[Iterable[PaneView]], Collected], views: Iterable[PaneView]) -> None:
-        """
-        Draw one frame of a way whose pixels are the cells.
-
-        The images go out after the text of the frame, and a change
-        asks the renderer for a full repaint, so the text comes back
-        under an image that moved away.
-        """
-        try:
-            desired, live = collect(views)
-        except Exception:
-            logger.exception("Encoding the pane images failed.")
-            return
-
-        for key in list(self._cell_cache):
-            if key not in live:
-                del self._cell_cache[key]
-        self._cell_pending &= live
-
-        changed = desired != self._cell_placements
-        if not changed and not self._cell_redraw:
-            return
-
-        self._cell_placements = desired
-        if changed and self.repaint is not None:
-            # The next frame paints the whole screen, which wipes the
-            # pixels. Draw again once it did.
-            self.repaint()
-            self._cell_redraw = True
-        else:
-            self._cell_redraw = False
-
-        if not desired:
-            return
-
-        self.write_in_place("".join(desired[key] for key in sorted(desired)))
-
-    def _collect_sixel(self, views: Iterable[PaneView]) -> Collected:
-        "The sixel commands of one frame, and the cache keys they used."
-        desired: dict[tuple[int, int, int], str] = {}
-        live: set[CellKey] = set()
-
-        for view in views:
-            slots: dict[int, int] = {}
-            for (
-                placement,
-                image,
-                columns,
-                rows,
-                x,
-                y,
-                source,
-            ) in self.placements_of(view):
-                slot = slots.get(placement.image_id, 0) + 1
-                slots[placement.image_id] = slot
-
-                own_size = self.draws_at_its_own_size(placement, image, source, columns, rows)
-                if own_size and source is None and image.format == PixelFormat.SIXEL:
-                    key = (id(image), "as sent")
-                    live.add(key)
-                    data = self._as_sent(key, image)
-                    if data is not None:
-                        desired[(view.pane_id, placement.image_id, slot)] = "\x1b[%i;%iH%s" % (y + 1, x + 1, data)
-                        continue
-
-                key = (
-                    id(image),
-                    source,
-                    columns * self.cell_width,
-                    rows * self.cell_height,
-                    own_size,
-                )
-                live.add(key)
-
-                data = self._sixel_for(key, image, source, columns, rows, own_size)
-                if data is None:
-                    continue
-                desired[(view.pane_id, placement.image_id, slot)] = "\x1b[%i;%iH%s" % (
-                    y + 1,
-                    x + 1,
-                    data,
-                )
-
-        return desired, live
-
-    def _collect_blocks(self, views: Iterable[PaneView]) -> Collected:
-        "The half block rows of one frame, and the cache keys they used."
-        desired: dict[tuple[int, int, int], str] = {}
-        live: set[CellKey] = set()
-        depth = self.color_depth
-
-        for view in views:
-            slots: dict[int, int] = {}
-            for (
-                placement,
-                image,
-                columns,
-                rows,
-                x,
-                y,
-                source,
-            ) in self.placements_of(view):
-                slot = slots.get(placement.image_id, 0) + 1
-                slots[placement.image_id] = slot
-
-                key = (id(image), source, columns, rows, depth)
-                live.add(key)
-
-                lines = self._blocks_for(key, image, source, columns, rows, depth)
-                if not lines:
-                    continue
-
-                # One cursor move for each row: the rows of an image are
-                # not the rows of the screen once a pane is not at the
-                # left edge.
-                desired[(view.pane_id, placement.image_id, slot)] = "".join(
-                    "\x1b[%i;%iH%s" % (y + offset + 1, x + 1, line) for offset, line in enumerate(lines) if line
-                )
-
-        return desired, live
-
-    def _blocks_for(
-        self, key: CellKey, image: GraphicsImage, source: Source | None, columns: int, rows: int, depth: ColorDepth
-    ) -> list[str] | None:
-        "The half block rows of one placement. (Cached by geometry.)"
-        return self._cell_entry(key, image, _encode_blocks, image, source, columns, rows, depth)
-
-    def _sixel_for(
-        self,
-        key: CellKey,
-        image: GraphicsImage,
-        source: Source | None,
-        columns: int,
-        rows: int,
-        own_size: bool = False,
-    ) -> str | None:
-        "The sixel sequence of one placement. (Cached by geometry.)"
-        target = None if own_size else (max(1, columns * self.cell_width), max(1, rows * self.cell_height))
-        return self._cell_entry(key, image, _encode_sixel, image, source, target)
-
-    def _as_sent(self, key: CellKey, image: GraphicsImage) -> str | None:
-        """
-        The program's own sixel sequence, for an image drawn whole at its
-        own size. Encoding it again changes the palette, so a gradient
-        gains pixels the program never drew. Lillecarl/pymux#603.
-
-        None when the payload holds anything but sixel characters: those
-        bytes go to the client's terminal, and must not end the sequence.
-        """
-        known = self._cell_cache.get(key)
-        if known is not None and known[0] is image:
-            return known[1]
-        payload = stored_payload(image.data)
-        sent = "\x1bP%s\x1b\\" % payload if _SIXEL_TEXT_RE.fullmatch(payload) else None
-        self._cell_cache[key] = (image, sent)
-        return sent
-
-    def _cell_entry(self, key: CellKey, image: GraphicsImage, work: Callable[..., Any], *args: object) -> Any:
-        """
-        What `work(*args)` gives for one placement, from the cache.
-
-        With `spawn` a miss answers None, and a worker thread does the
-        work: the cells of the placement stay blank until the next
-        frame after it is done. The kernels release the GIL, so the
-        event loop keeps running beside it. Lillecarl/pymux#575.
-        """
-        known = self._cell_cache.get(key)
-        if known is not None and known[0] is image:
-            return known[1]
-
-        if self.spawn is None:
-            result = work(*args)
-            self._cell_cache[key] = (image, result)
-            return result
-
-        if key not in self._cell_pending:
-            self._cell_pending.add(key)
-            self.spawn(self._work_in_thread(key, image, work, args))
-        return None
-
-    async def _work_in_thread(
-        self, key: CellKey, image: GraphicsImage, work: Callable[..., Any], args: tuple[object, ...]
-    ) -> None:
-        "Run one `_cell_entry` miss in a thread, and keep the answer."
-        try:
-            result = await anyio.to_thread.run_sync(work, *args)
-        except Exception:
-            logger.exception("Encoding a pane image failed.")
-            result = None
-
-        # The placement went away while the thread worked, or the
-        # client reset: the answer is for nobody.
-        if key not in self._cell_pending:
-            return
-        self._cell_pending.discard(key)
-        self._cell_cache[key] = (image, result)
-        if self.repaint is not None:
-            self.repaint()
-
     # ------------------------------------------------------------------
 
     def reset(self) -> None:
@@ -1359,7 +1113,6 @@ class ClientGraphics:
         Remove everything that this client put on the outer terminal.
         (When the client detaches, or when a popup covers the panes.)
         """
-        self._cell_pending = set()
         self._image_pending = {}
         self._window_places = {}
         self._window_again = {}
@@ -1370,12 +1123,7 @@ class ClientGraphics:
                 self._delete_image(window.outer_id)
             self._windows = {}
             self._flush()
-        if self._cell_placements:
-            self._cell_placements = {}
-            self._cell_cache = {}
-            self._cell_redraw = False
-            if self.repaint is not None:
-                self.repaint()
+        self.cells.reset()
 
         if not self._images and not self._placements:
             return
@@ -1412,34 +1160,3 @@ def _transmission(outer_id: int, image: GraphicsImage) -> list[str]:
         control = "a=t,i=%i,t=d,q=2,%s,m=%i" % (outer_id, keys, more) if index == 0 else "m=%i" % more
         commands.append("\x1b_G%s;%s\x1b\\" % (control, chunk))
     return commands
-
-
-def _encode_blocks(
-    image: GraphicsImage, source: Source | None, columns: int, rows: int, depth: ColorDepth
-) -> list[str]:
-    "The half block rows of one placement. It runs in a worker thread."
-    found = source_rgba(image, source)
-    if found is None:
-        return []
-    pixels, width, height = found
-    # Two pixels for every cell, one above the other.
-    pixels = blocks.average_rgba(pixels, width, height, columns, rows_for_cells(rows))
-    return blocks_for(pixels, columns, rows, depth)
-
-
-def _encode_sixel(image: GraphicsImage, source: Source | None, target: tuple[int, int] | None) -> str | None:
-    """
-    The sixel sequence of one placement, scaled to `target` pixels, or
-    at its own size for None. It runs in a worker thread.
-
-    `draws_at_its_own_size` says when the own size is right, and
-    `put_command` says why the cells below the image are safe then.
-    """
-    found = source_rgba(image, source)
-    if found is None:
-        return None
-    pixels, width, height = found
-    if target is not None:
-        pixels = sixel.scale_rgba(pixels, width, height, *target)
-        width, height = target
-    return sixel.encode_sixel(width, height, pixels)
