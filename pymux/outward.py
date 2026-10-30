@@ -204,7 +204,7 @@ class Outward:
         """
         try:
             # A notification the hub recorded goes to a terminal that
-            # reports clicks as OSC 99 instead (`_notified`).
+            # reports clicks as OSC 99 instead (`Notifier.notified`).
             recorded = False
 
             if code == Osc.POINTER_SHAPE:
@@ -298,7 +298,7 @@ class Outward:
             # notification says: it stays in the hub, seen. A terminal
             # without the focus is no look. Lillecarl/pymux#799.
             notice = recorded or (code == Osc.NOTIFICATION and not is_question(param))
-            if notice and pane.pane_id in self.pymux._panes_in_sight():
+            if notice and pane.pane_id in self.pymux.notifier.panes_in_sight():
                 logger.debug("Kept a notification of pane %%%d: a terminal with the focus shows it.", pane.pane_id)
                 return
 

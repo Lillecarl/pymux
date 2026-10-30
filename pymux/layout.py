@@ -1255,7 +1255,7 @@ class LayoutManager:
             pane = self.pymux.panes_by_id.get(record.pane_id) if record.pane_id is not None else None
             if pane is not None:
                 self.pymux.show_pane_on_click(self.client_state, pane)
-            self.pymux.drop_popup(self.client_state, record)
+            self.pymux.notifier.drop_popup(self.client_state, record)
             return None
 
         return click

@@ -31,7 +31,6 @@ from ptyhost.backends.posix import GRACE, PosixBackend
 from ptyhost.ending import say_how_it_ends
 from pyte.keep import Keep
 from pyte.keys import KEY_PROFILES, KeyProfile
-from pyte.osc import Osc
 
 from . import hacks_and_lies, introspect, kernels, log
 from .actions import ActionLog, Kind, Origin, awaited_as, note, note_keys, started_by
@@ -43,10 +42,8 @@ from .client.memory import MemoryClient
 from .client_state import ClientState
 from .commands import CommandException, call_command_handler, handle_command
 from .enums import (
-    Chooser,
     EditingKeys,
     ForwardMode,
-    NotificationPopups,
     OpenUrlTarget,
     RenderMode,
     WindowSize,
@@ -68,21 +65,14 @@ from .notifications import (
     Notification,
     NotificationCenter,
     NotificationRoutes,
-    NotificationSource,
-    close_of,
-    osc99_of,
 )
+from .notifier import Notifier
 from .options import (
     ALL_CLIENT_OPTIONS,
     ALL_OPTIONS,
     ALL_SERVER_OPTIONS,
     ALL_WINDOW_OPTIONS,
     Scope,
-)
-from .osc import (
-    build_osc,
-    message,
-    simple_notification,
 )
 from .outward import Outward
 from .pipes import bind_and_listen_on_socket, connect_in_memory
@@ -120,19 +110,6 @@ kernels.install()
 #: key repeats, and one line per repeat is a log nobody reads. A
 #: keyboard has fewer keys than this.
 MAX_KEYS_TO_REMEMBER = 512
-
-#: The notifications a terminal got as the program wrote them, in the
-#: forward of the pane's OSC: nothing is spelled again for it.
-_WENT_AS_IT_CAME = frozenset(
-    {
-        (Osc.NOTIFICATION, NotificationSource.OSC_99),
-        (Osc.MESSAGE, NotificationSource.ATTENTION),
-    }
-)
-
-#: How many notification boxes one client stacks; a new one pushes the
-#: oldest off. Lillecarl/pymux#826.
-MAX_POPUPS = 5
 
 #: How often the windows are checked for output and for quiet, in
 #: seconds: a mark goes up within this of what raised it.
@@ -342,6 +319,7 @@ class Pymux:
         "session_defaults": Keep.SAVED,
         "terminals": Keep.REBUILT,
         "outward": Keep.REBUILT,
+        "notifier": Keep.REBUILT,
         # The running server.
         "connections": Keep.DROPPED,
         "tasks": Keep.DROPPED,
@@ -423,7 +401,8 @@ class Pymux:
         #: beside the routes and not in them: a route answers one
         #: question, the hub lists everything.
         self.notification_center = NotificationCenter()
-        self.notification_center.on_added = self._notified
+        self.notifier = Notifier(self)
+        self.notification_center.on_added = self.notifier.notified
 
         #: The panes that say a progress (OSC 9 ; 4), so the window list
         #: walks no panes while none does. A pane that goes stays until
@@ -1095,102 +1074,6 @@ class Pymux:
                 # Like the clock: this must not take the server with it.
                 logger.exception("Checking the windows for output failed.")
 
-    def _notified(self, record: Notification) -> None:
-        "Mark the window a notification came from, and tell each client. Lillecarl/pymux#767."
-        self._pop_up(record)
-        self._emit(record)
-        found = self.window_of_pane(record.pane_id)
-        if found is None:
-            return
-        session, window, _pane = found
-        if session.arrangement.notify(window, self.apps):
-            self.invalidate(Woke.WINDOW_MARKED)
-
-    def _pop_up(self, record: Notification) -> None:
-        """
-        Show a notification as a box on each client that asks for one,
-        for `notification-popup-seconds`. Not for a pane a client with
-        the focus already shows, as a desktop notification is not.
-        Lillecarl/pymux#826.
-        """
-        if record.pane_id is not None and record.pane_id in self._panes_in_sight():
-            return
-        shown = False
-        for connection, client_state in self._client_states.items():
-            if client_state.temporary:
-                continue
-            wanted = client_state.options.notification_popups
-            if wanted is NotificationPopups.OFF or (
-                wanted is NotificationPopups.AUTO and connection is not None and connection.notification_osc is not None
-            ):
-                continue
-            client_state.popups = [*client_state.popups, record][-MAX_POPUPS:]
-            if self.tasks is not None:
-                self.tasks.start_soon(
-                    self._take_down, client_state, record, client_state.options.notification_popup_seconds
-                )
-            shown = True
-        if shown:
-            self.invalidate(Woke.NOTIFICATION_SENT)
-
-    async def _take_down(self, client_state: ClientState, record: Notification, seconds: float) -> None:
-        await anyio.sleep(seconds)
-        self.drop_popup(client_state, record)
-
-    def drop_popup(self, client_state: ClientState, record: Notification) -> None:
-        if record in client_state.popups:
-            client_state.popups = [one for one in client_state.popups if one is not record]
-            self.invalidate(Woke.NOTIFICATION_SENT)
-
-    def _drop_seen_popups(self) -> None:
-        "A box goes once its pane is seen, as a desktop notification does."
-        showing = [state for state in self._client_states.values() if state.popups]
-        if not showing:
-            return
-        seen = self._panes_in_sight()
-        for client_state in showing:
-            for record in client_state.popups:
-                if record.pane_id in seen:
-                    self.drop_popup(client_state, record)
-
-    def _emit(self, record: Notification) -> None:
-        """
-        Send a finished notification to each client's terminal, spelled
-        in the OSC that terminal shows, whichever OSC the program used.
-        OSC 99 to an OSC 99 terminal already went as it came, chunk by
-        chunk, with everything the program asked of it; and iTerm2 got
-        an attention request as it came. Lillecarl/pymux#497.
-
-        As OSC 99 it carries an identifier of pymux's own, so a click
-        shows the pane. Lillecarl/pymux#779.
-        """
-        if record.pane_id is not None and record.pane_id in self._panes_in_sight():
-            return
-        spelled: dict[Osc, list[str]] = {}
-        for connection, client_state in self._client_states.items():
-            if connection is None or client_state.temporary:
-                continue
-            osc = connection.notification_osc
-            if osc is None or (osc, record.source) in _WENT_AS_IT_CAME:
-                continue
-            if osc not in spelled:
-                spelled[osc] = self._spell(osc, record)
-            for sequence in spelled[osc]:
-                connection.forward_osc(sequence)
-        if spelled:
-            self.invalidate(Woke.NOTIFICATION_SENT)
-
-    def _spell(self, osc: Osc, record: Notification) -> list[str]:
-        "The sequences that say `record` in `osc`."
-        if osc is Osc.NOTIFICATION:
-            ours = self.notifications.own(record.pane_id)
-            params = osc99_of(ours, record.title, record.body, record.urgency)
-        elif osc is Osc.SIMPLE_NOTIFICATION:
-            params = [simple_notification(record.title, record.body)]
-        else:
-            params = [message(record.title, record.body)]
-        return [sequence for param in params if (sequence := build_osc(osc, param)) is not None]
-
     def show_pane_on_click(self, client_state: ClientState, pane: Pane) -> None:
         "Take this client to the pane a clicked notification came from, unless its session says no."
         if not self.options_of_pane(pane).notification_click_shows_pane:
@@ -1507,8 +1390,8 @@ class Pymux:
         panes the focus at once; tmux has one client and one focus.
         Lillecarl/pymux#795.
         """
-        self._close_seen_notifications()
-        self._drop_seen_popups()
+        self.notifier.close_seen_notifications()
+        self.notifier.drop_seen_popups()
         focused = set()
         for client_state in self._client_states.values():
             if client_state.terminal_focused and not client_state.temporary:
@@ -1530,41 +1413,6 @@ class Pymux:
             if screen.reports_focus and not process.is_terminated:
                 process.write_input(report)
         self._focused_panes = focused
-
-    def _panes_in_sight(self) -> set[PaneId]:
-        """
-        The panes of every window a client shows on a terminal that has the focus.
-
-        Not while the window chooser is open: it switches to each window
-        it points at, as a preview, and a window walked past is not seen.
-        """
-        shown: set[PaneId] = set()
-        for client_state in self._client_states.values():
-            if (
-                client_state.terminal_focused
-                and not client_state.temporary
-                and client_state.chooser is not Chooser.WINDOW
-            ):
-                window = client_state.session.arrangement.get_active_window_for(client_state.app)
-                if window is not None:
-                    shown.update(pane.pane_id for pane in window.panes)
-        return shown
-
-    def _close_seen_notifications(self) -> None:
-        """
-        Take the desktop notifications of a window off each terminal that
-        can close one, once a client whose terminal has the focus shows
-        that window. Lillecarl/pymux#799.
-        """
-        if not self.notifications.any_shown:
-            return
-        closed = self.notifications.seen(self._panes_in_sight())
-        if not closed:
-            return
-        for connection in self._client_states:
-            if connection is not None and connection.notification_closes:
-                for ours in closed:
-                    connection.forward_osc(build_osc(Osc.NOTIFICATION, close_of(ours)))
 
     def clients_watching(self, window: Window | None = None) -> list[ClientState]:
         """
