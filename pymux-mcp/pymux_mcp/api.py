@@ -622,6 +622,15 @@ async def open_browser(
     session: Annotated[
         str | None, Field(description="For `pane`: the session's name; the oldest session when left out.")
     ] = None,
+    window: Annotated[
+        str | None,
+        Field(
+            description=(
+                "For `pane`: split this window (`@1`) and open beside what a person works on there,"
+                " rather than in a window of its own."
+            )
+        ),
+    ] = None,
     executable: Annotated[
         str | None, Field(description="Chromium to run; PYMUX_MCP_CHROMIUM or `chromium` on the PATH when left out.")
     ] = None,
@@ -637,9 +646,13 @@ async def open_browser(
     It runs across calls until `browser.close`, or until nobody used it
     for `idle` seconds: no browser operation, and no key or mouse from a
     person looking at its window. pymux holds it, as a window pane or a
-    job. A `pane` browser opens in a window that is not in front.
+    job. A `pane` browser opens in a window that is not in front, or in
+    a split of `window` that leaves the keyboard where it was; closing
+    it then takes its panes away and leaves the window.
     """
-    opened = await browser.open_browser(server, name, seat, url, session, executable, arguments or (), idle)
+    opened = await browser.open_browser(
+        server, name, seat, url, session, executable, arguments or (), idle, window=window
+    )
     return opened.json()
 
 

@@ -6,7 +6,8 @@ A browser runs in one of two seats:
 
 - `headless`: a job of the server, with nothing to see.
 - `pane`: a window pane of the server, through `wl`. Anybody attached
-  watches it, over SSH too.
+  watches it, over SSH too. It opens in a window of its own, or as a
+  split of a window somebody works in.
 
 **pymux holds the browser, and this process holds nothing.** Each
 operation finds the browser by its tag, reads its port out of
@@ -38,7 +39,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import anyio
-from libpymux import Job, Server, Window
+from libpymux import Job, Pane, Server, Window
 
 from .cdp import CDPError, Connection, Page, connected
 
@@ -88,12 +89,16 @@ class Browser:
     """
     A browser that pymux holds, and its profile.
 
-    A `pane` browser's holder is its window and not its pane: a pane
-    shows one window of Chromium, and Chromium opens the next one beside
-    it in the same window.
+    A `pane` browser in a window of its own is held by that window and
+    not by its pane: a pane shows one window of Chromium, and Chromium
+    opens the next one beside it in the same window. One that split a
+    window somebody else uses is held by its panes, which pymux tags
+    alike, and `holder` is the first of them.
     """
 
-    def __init__(self, name: str, seat: Seat, profile: Path, holder: Job | Window, used: float, idle: float) -> None:
+    def __init__(
+        self, name: str, seat: Seat, profile: Path, holder: Job | Window | Pane, used: float, idle: float
+    ) -> None:
         self.name = name
         self.seat = seat
         self.profile = profile
@@ -111,9 +116,19 @@ class Browser:
         }
         if isinstance(self.holder, Job):
             found["job"] = self.holder.id
+        elif isinstance(self.holder, Pane):
+            found["pane"] = self.holder.id
+            found["window"] = self.holder.window_id
         else:
             found["window"] = self.holder.id
         return found
+
+    @property
+    def window_id(self) -> str | None:
+        "The pymux window that shows it, if any."
+        if isinstance(self.holder, Pane):
+            return self.holder.window_id
+        return self.holder.id if isinstance(self.holder, Window) else None
 
     def endpoint(self) -> str | None:
         "The browser's WebSocket, or None before it listens."
@@ -133,21 +148,37 @@ def chromium(executable: str | None) -> str:
 
 async def find(server: Server, name: str) -> Browser:
     "The browser called `name`, from the tags of what holds it."
-    wanted = {NAME_TAG: name}
-    holders: list[Job | Window] = [job for job in await server.jobs(wanted) if job.running]
-    holders += await server.windows(wanted)
-    if not holders:
-        raise BrowserGone("no browser named %r; browser.open makes one, browser.list shows them" % (name,))
-    return await _browser(server, holders[-1])
+    for found in await _holders(server, {NAME_TAG: name}):
+        return await _browser(server, found)
+    raise BrowserGone("no browser named %r; browser.open makes one, browser.list shows them" % (name,))
 
 
 async def every(server: Server) -> list[Browser]:
-    holders: list[Job | Window] = [job for job in await server.jobs({NAME_TAG: None}) if job.running]
-    holders += await server.windows({NAME_TAG: None})
-    return [await _browser(server, holder) for holder in holders]
+    return [await _browser(server, holder) for holder in await _holders(server, {NAME_TAG: None})]
 
 
-async def _browser(server: Server, holder: Job | Window) -> Browser:
+async def _holders(server: Server, wanted: Mapping[str, str | None]) -> list[Job | Window | Pane]:
+    "What holds each browser: one holder a name, though a split browser has a pane for each of its windows."
+    found: list[Job | Window | Pane] = [job for job in await server.jobs(wanted) if job.running]
+    found += await server.windows(wanted)
+    found += await server.panes(wanted)
+    tags = await server.tags()
+    named: set[str | None] = set()
+    holders = []
+    for holder in found:
+        name = (holder.tags if isinstance(holder, Job) else tags.get(holder.id) or {}).get(NAME_TAG)
+        if name not in named:
+            named.add(name)
+            holders.append(holder)
+    return holders
+
+
+async def _panes(server: Server, browser: Browser) -> list[Pane]:
+    "Every pane of a split browser."
+    return await server.panes({NAME_TAG: browser.name})
+
+
+async def _browser(server: Server, holder: Job | Window | Pane) -> Browser:
     tags = holder.tags if isinstance(holder, Job) else (await server.tags()).get(holder.id, {})
     return Browser(
         tags[NAME_TAG] or "",
@@ -164,7 +195,13 @@ async def _browser(server: Server, holder: Job | Window) -> Browser:
 async def touch(server: Server, browser: Browser, when: float | None = None) -> None:
     "Mark the browser used, at `when` or now."
     browser.used = time.time() if when is None else when
-    await server.set_tags(browser.holder.id, {USED_TAG: str(int(browser.used))})
+    used = {USED_TAG: str(int(browser.used))}
+    if isinstance(browser.holder, Pane):
+        # Every pane: whichever is first when the next call looks reads it.
+        for pane in await _panes(server, browser):
+            await pane.set_tags(used)
+    else:
+        await server.set_tags(browser.holder.id, used)
 
 
 async def open_browser(
@@ -176,8 +213,11 @@ async def open_browser(
     executable: str | None,
     arguments: Sequence[str],
     idle: float = DEFAULT_IDLE,
+    window: str | None = None,
 ) -> Browser:
-    "Start a browser in `seat`, and answer it once it listens."
+    "Start a browser in `seat`, and answer it once it listens: in a split of `window` when one is named."
+    if window is not None and seat is not Seat.PANE:
+        raise ValueError("only a `pane` browser opens in a window")
     for existing in await every(server):
         if existing.name == name:
             raise ValueError("a browser named %r is open; close it or pick another name" % (name,))
@@ -196,14 +236,17 @@ async def open_browser(
         *QUIET,
         *arguments,
     ]
-    holder: Job | Window
+    holder: Job | Window | Pane
     try:
         if seat is Seat.HEADLESS:
             command = [chromium(executable), "--headless=new", *argv, url]
             holder = await server.run_job(shlex.join(command), tags=tags)
         else:
             command = [chromium(executable), "--ozone-platform=wayland", *argv, url]
-            holder = await _in_a_window(server, name, session, command, tags)
+            if window is None:
+                holder = await _in_a_window(server, name, session, command, tags)
+            else:
+                holder = await _beside(server, window, command, tags)
         browser = Browser(name, seat, profile, holder, used, idle)
         await _listening(browser)
     except BaseException:
@@ -224,13 +267,27 @@ async def _in_a_window(
     if window is None:
         raise LookupError("new-window answered nothing")
     (pane,) = await window.panes()
+    await _wl(server, pane, command, window)
+    return window
+
+
+async def _beside(server: Server, window: str, command: Sequence[str], tags: Mapping[str, str]) -> Pane:
+    "A split of a window somebody works in; the keyboard stays where it was."
+    split = await Window(server, {"window_id": window}).split(vertical=False, select=False, tags=tags)
+    if split is None:
+        raise LookupError("no window %s" % (window,))
+    await _wl(server, split, command, split)
+    # The window pane took the split's place, and its tags, under an id of its own.
+    return (await server.panes({NAME_TAG: tags[NAME_TAG]}))[0]
+
+
+async def _wl(server: Server, pane: Pane, command: Sequence[str], holder: Window | Pane) -> None:
     # `wl` answers once the window opened, or with what the program said
     # when it ended first.
     result = await server.cmd(["wl", "-t", pane.id, "--", *command], check=False)
     if result.exit_code != 0:
-        await window.kill()
+        await holder.kill()
         raise CDPError("chromium ended before it opened a window: %s" % ((result.stdout + result.stderr).strip(),))
-    return window
 
 
 async def _listening(browser: Browser) -> None:
@@ -270,7 +327,11 @@ async def close(browser: Browser) -> None:
                     pass
                 while await _held(browser):
                     await anyio.sleep(0.1)
-        if await _held(browser):
+        if isinstance(browser.holder, Pane):
+            # Its own panes, never the window: somebody else works there.
+            for pane in await _panes(browser.holder.server, browser):
+                await pane.kill()
+        elif await _held(browser):
             await browser.holder.kill()
     finally:
         shutil.rmtree(browser.profile, ignore_errors=True)
@@ -294,7 +355,7 @@ async def sweep(server: Server, now: float | None = None) -> list[str]:
             shown[window] = max(shown.get(window, 0.0), float(activity))
     closed = []
     for browser in await every(server):
-        seen = shown.get(browser.holder.id, 0.0) if isinstance(browser.holder, Window) else 0.0
+        seen = shown.get(browser.window_id or "", 0.0)
         if seen > browser.used:
             await touch(server, browser, seen)
         if browser.idle and now - browser.used > browser.idle:
@@ -314,6 +375,8 @@ async def collect(server_for: Callable[[], Awaitable[Server]]) -> None:
 
 
 async def _held(browser: Browser) -> bool:
+    if isinstance(browser.holder, Pane):
+        return bool(await _panes(browser.holder.server, browser))
     try:
         await browser.holder.refresh()
     except LookupError:

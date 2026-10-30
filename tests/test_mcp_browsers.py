@@ -108,7 +108,30 @@ async def test_an_agent_fills_a_form_and_reads_what_the_page_logged(server, seat
         assert [one.name for one in await server.windows({"browser": None})] == []
 
 
-async def test_a_second_browser_of_the_same_name_is_refused(server):
+async def test_a_browser_beside_a_persons_work_takes_only_its_own_panes_away(server):
+    """
+    A split of a window somebody works in. Chromium's second window
+    opens beside its first, carries the same tags, and goes with it.
+    """
+    (window,) = await server.windows()
+    (work,) = await window.panes()
+    opened = await call(server, "browser.open", name="probe", url=PAGE, window=window.id, arguments=ARGUMENTS)
+    assert opened["window"] == window.id and opened["pane"] != work.id, opened
+    assert (await work.refresh()).active, "the browser took the keyboard"
+
+    endpoint = (await browser.find(server, "probe")).endpoint()
+    async with browser.connected(endpoint) as connection:
+        await connection.send("Target.createTarget", {"url": PAGE, "newWindow": True})
+    with anyio.fail_after(20):
+        while len(await server.panes({"browser": "probe"})) < 2:
+            await anyio.sleep(0.1)
+    # A call finds the browser by any of its panes, and is use for all of them.
+    assert await call(server, "browser.evaluate", name="probe", expression="1 + 1") == 2
+    assert [one["name"] for one in await call(server, "browser.list")] == ["probe"]
+
+    await call(server, "browser.close", name="probe")
+    assert await server.panes({"browser": "probe"}) == []
+    assert [pane.id for pane in await window.panes()] == [work.id]
     await call(server, "browser.open", name="probe", seat="headless", arguments=ARGUMENTS)
     try:
         with pytest.raises(ValueError, match="is open"):
