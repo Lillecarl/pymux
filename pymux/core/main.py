@@ -460,52 +460,6 @@ class Pymux:
 
         self.invalidate(Woke.SESSION_CLOSED)
 
-    def welcome_back(self, client_state: ClientState, client_id: str) -> None:
-        """
-        Give a client that attaches again after `upgrade-server` the
-        view and the settings it left with. A record names ids, and one
-        whose session or window has gone since is skipped.
-        Lillecarl/pymux#409.
-        """
-        record = self.returning_clients.pop(client_id, None) if client_id else None
-        if record is None:
-            return
-        sessions = {session.session_id: session for session in self.sessions}
-
-        app = client_state.app
-        for session_id, (active_id, previous_id) in record["windows"].items():
-            session = sessions.get(session_id)
-            if session is None:
-                continue
-            arrangement = session.arrangement
-            windows = {window.window_id: window for window in arrangement.windows}
-            if active_id in windows:
-                arrangement._active_window_for_cli[app] = windows[active_id]
-            if previous_id in windows:
-                arrangement._window_history_for_cli[app] = [windows[previous_id]]
-
-        for name, value in record["settings"].items():
-            setattr(client_state, name, value)
-        for name, value in record["options"].items():
-            setattr(client_state.options, name, value)
-        self.terminals.sync_color_bases()
-        if record.get("connected") is not None:
-            client_state.connection.created = record["connected"]
-
-        session = sessions.get(record["session_id"])
-        if session is not None:
-            client_state.session = session
-        client_state.previous_session = sessions.get(record["previous_session_id"])
-        client_state.sync_focus()
-        if record.get("modes"):
-            # The view is back already; a mode that cannot open again
-            # must not cost the person the attach.
-            try:
-                client_state.take_modes(record["modes"])
-            except Exception:
-                logger.exception("Could not open again what a returning client was in the middle of.")
-        self.invalidate(Woke.SESSION_CHANGED)
-
     def attach_client_to(self, client_state: ClientState, session: Session) -> None:
         "Put one client on a session, and draw what it shows."
         if client_state.session is session:

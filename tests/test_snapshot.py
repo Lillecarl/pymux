@@ -32,6 +32,7 @@ from pymux.commands.wait_for import WaitChannel
 from pymux.core import snapshot
 from pymux.core.main import Pymux
 from pymux.core.snapshot import _values_of
+from pymux.core.upgrade import welcome_back
 from pymux.core.window_tree import LayoutTypes
 from pymux.enums import (
     AudioFrame,
@@ -652,7 +653,7 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                         await anyio.sleep(0.05)
                 async with attached(fresh):
                     back = fresh.connections[-1].client_state
-                    fresh.welcome_back(back, "gone")
+                    welcome_back(fresh, back, "gone")
                     (elsewhere,) = back.session.arrangement.windows
                     assert back.session.name == "second"
                     assert back.session.arrangement.previous_window_for(back.app) is elsewhere
@@ -667,13 +668,13 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                     assert back.app.layout.has_focus(back.prompt_buffer)
                 async with attached(fresh):
                     back = fresh.connections[-1].client_state
-                    fresh.welcome_back(back, "away")
+                    welcome_back(fresh, back, "away")
                     assert (back.menu_title, back.menu_entries) == ("Do", [("a", "again", "display-message again")])
                     assert back.command_buffer.text == "kill-ses"
                     assert back.app.layout.has_focus(back.command_buffer)
                 async with attached(fresh):
                     back = fresh.connections[-1].client_state
-                    fresh.welcome_back(back, "returning")
+                    welcome_back(fresh, back, "returning")
                     copying = [pane for pane in fresh.panes_by_id.values() if pane.is_copying_for(back.app)]
                     assert len(copying) == 2
                     assert not any(pane.process.suspended for pane in fresh.panes_by_id.values())

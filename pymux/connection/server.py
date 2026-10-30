@@ -29,6 +29,7 @@ from ..answer import Answer
 from ..audio import AudioLink
 from ..commands import handle_command
 from ..core.environment import take_environment_from
+from ..core.upgrade import welcome_back
 from ..enums import Woke
 from ..graphics.graphics import CELL_SIZE_QUERY, ClientGraphics
 from ..ids import PaneId
@@ -675,7 +676,7 @@ class ServerConnection:
         # After the options: what the client had set while it ran
         # wins over what its file says. Lillecarl/pymux#409.
         if self.client_state is not None:
-            self.pymux.welcome_back(self.client_state, self.client_id)
+            welcome_back(self.pymux, self.client_state, self.client_id)
 
         # The session this client landed on takes the names that
         # follow a client: a display, an agent, a session bus.
