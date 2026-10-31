@@ -137,7 +137,7 @@ CLIENT_MODES = frozenset(
 #: What each class writes into a table. `tests/test_snapshot.py` says
 #: this equals the class's `Keep.SAVED` fields.
 WRITES: dict[str, frozenset[str]] = {
-    "pymux.core.session.Session": frozenset(Session.KEEP),
+    "pymux.core.session.Session": frozenset(name for name, fate in Session.KEEP.items() if fate == Keep.SAVED),
     "pymux.core.arrangement.Arrangement": frozenset(
         {
             "windows",

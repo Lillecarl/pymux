@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import math
 from contextlib import suppress
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import anyio
 from libpymux.protocol import Field, Message, Packet
@@ -21,6 +21,8 @@ from pyte.keep import Keep
 from ..client.defaults import is_ssh_url
 from ..log import logger
 from .dial import dial
+from .program import RemoteProgram
+from .tree import MirrorTree
 
 if TYPE_CHECKING:
     from ..core.main import Pymux
@@ -48,10 +50,31 @@ class Peers:
         if peer is None:
             if self.pymux.tasks is None:
                 raise RuntimeError("A peer link was asked for outside `Pymux.running`, so nothing would hold it.")
-            peer = self.by_address[address] = Peer(address, **connect_with)
+            peer = self.by_address[address] = Peer(self.pymux, address, **connect_with)
             peer.tell_terminal(self.pymux.terminals.peer_terminal())
             self.pymux.tasks.start_soon(peer.run)
         return peer
+
+    def sync_sight(self) -> None:
+        """
+        Tell every mirrored pane whether a client here shows it: the
+        panes of the window each client looks at, in a mirrored session.
+        `Pymux.invalidate` calls this, since a switch and a split both
+        reach it.
+        """
+        if not self.by_address:
+            return
+        seen: set[int] = set()
+        for client_state in self.pymux._client_states.values():
+            session = client_state.session
+            if client_state.temporary or session.remote is None:
+                continue
+            window = session.arrangement.get_active_window_for(client_state.app)
+            if window is not None:
+                seen.update(id(pane) for pane in window.panes)
+        for peer in self.by_address.values():
+            for pane in peer.tree.panes.values():
+                cast(RemoteProgram, pane.process).seen(id(pane) in seen)
 
 
 class Peer:
@@ -74,12 +97,15 @@ class Peer:
         "_send": Keep.DROPPED,
         "_receive": Keep.DROPPED,
         "_terminal_told": Keep.DROPPED,
+        "tree": Keep.DROPPED,
     }
 
-    def __init__(self, address: str, **connect_with: Any) -> None:
+    def __init__(self, pymux: Pymux, address: str, **connect_with: Any) -> None:
         self.address = address
         self.connect_with = connect_with
         self.sinks: dict[int, MirrorSink] = {}
+        #: The owner's sessions as built here, once this side watches.
+        self.tree = MirrorTree(pymux, self)
         #: Whether the link is up.
         self.connected = False
         #: Why the link went or never came, for the person to read.
@@ -111,6 +137,10 @@ class Peer:
 
     def type(self, pane_id: int, data: str) -> None:
         self.send({Field.CMD: Packet.MIRROR_INPUT, Field.PANE_ID: pane_id, Field.DATA: data})
+
+    def watch(self) -> None:
+        "Ask the owner for its sessions, now and on every change."
+        self.send({Field.CMD: Packet.WATCH})
 
     def focus(self, pane_id: int, focused: bool) -> None:
         self.send({Field.CMD: Packet.MIRROR_FOCUS, Field.PANE_ID: pane_id, Field.FOCUSED: focused})
@@ -174,6 +204,13 @@ class Peer:
         await stream.aclose()
 
     def _take(self, packet: Message) -> None:
+        if packet.get(Field.CMD) == Packet.TREE:
+            try:
+                self.tree.update(str(packet.get(Field.SERVER) or self.address), packet.get(Field.ROWS) or {})
+            except Exception:
+                # A tree this side cannot build leaves the last one standing.
+                logger.exception("The sessions of %s could not be mirrored.", self.address)
+            return
         pane_id = packet.get(Field.PANE_ID)
         sink = self.sinks.get(pane_id) if isinstance(pane_id, int) else None
         if sink is None:

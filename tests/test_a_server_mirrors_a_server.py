@@ -1,22 +1,29 @@
 """
-One pymux server shows a pane of another, over the other's socket.
-Lillecarl/pymux#759.
+One pymux server shows the sessions of another, over the other's
+socket. Lillecarl/pymux#759.
 
 Two servers in one loop: the owner listens on a socket in the test's
-directory, and the peer opens `mirror-pane` on it. The peer's new
-window has to show the owner's pane, send keys to its program, and let
-it go when the window is killed.
+directory, and the peer runs `connect` on it. A client on the peer
+switches to the mirrored session; the panes it shows stream, keys typed
+there reach the owner's programs, and the owner answers for the
+terminal at the peer.
 """
 
 from __future__ import annotations
 
+import io
+import socket
 import sys
 
 import anyio
 import pytest
+from prompt_toolkit.data_structures import Size
+from prompt_toolkit.input import create_pipe_input
+from prompt_toolkit.output import ColorDepth
+from prompt_toolkit.output.vt100 import Vt100_Output
 from pyte.osc import ColorBase
+from session import Connection
 
-from pymux.commands.mirror_pane import _open
 from pymux.core.main import Pymux
 from pymux.mirror.program import RemoteProgram
 from pymux.style.colors import theme_color_base
@@ -42,6 +49,7 @@ async def until(condition, what: str, seen=None) -> None:
 
 @pytest.fixture
 async def two_servers(tmp_path):
+    "The owner, and a peer with one client attached to its own session."
     owner = Pymux()
     owner.options.test_mode = True
     owner.serving.listen_on_socket(str(tmp_path / "owner.sock"))
@@ -50,21 +58,43 @@ async def two_servers(tmp_path):
     async with owner.running(), peer.running():
         await owner.panes.create_window(STAYS)
         await peer.panes.create_window(STAYS)
-        try:
-            yield owner, peer
-        finally:
-            for mux in (owner, peer):
-                for window in list(mux.arrangement.windows):
-                    for pane in list(window.panes):
+        output = Vt100_Output(stdout=io.StringIO(), get_size=lambda: Size(rows=24, columns=80))
+        with create_pipe_input() as pipe:
+            client = peer.add_client(
+                output=output,
+                input=pipe,
+                color_depth=ColorDepth.DEPTH_8_BIT,
+                connection=Connection("here", None, peer, "/dev/pts/8"),
+            )
+            try:
+                yield owner, peer, client
+            finally:
+                for mux in (owner, peer):
+                    for pane in list(mux.panes_by_id.values()):
                         process = getattr(pane, "process", None)
                         if process is not None and not process.is_terminated:
                             process.kill()
-            peer.stop()
-            owner.stop()
+                peer.stop()
+                owner.stop()
 
 
-async def test_a_window_here_shows_a_pane_there(two_servers):
-    owner, peer = two_servers
+async def shown_here(owner, peer, client):
+    """
+    Connect the peer to the owner and put the client on the mirrored
+    session. Answers the owner's active pane and its mirror here.
+    """
+    there = owner.arrangement.get_active_window().active_pane
+    peer.handle_command("connect %s" % (owner.socket_name,))
+    (link,) = peer.peers.by_address.values()
+    await until(lambda: there.pane_id in link.tree.panes, "the owner's sessions arrive")
+    (session,) = [session for session in peer.sessions if session.remote is not None]
+    peer.attach_client_to(client, session)
+    peer.invalidate()
+    return there, link.tree.panes[there.pane_id]
+
+
+async def test_a_session_there_shows_here(two_servers):
+    owner, peer, client = two_servers
     there = owner.arrangement.get_active_window().active_pane
     owner_control = there.terminal.terminal_control
     owner_control.resize_screen(6, 30)
@@ -72,7 +102,8 @@ async def test_a_window_here_shows_a_pane_there(two_servers):
     typed: list[str] = []
     owner_control.process.write_input = typed.append
 
-    here = await _open(peer, owner.socket_name, int(there.pane_id), detached=False)
+    there, here = await shown_here(owner, peer, client)
+    assert here_session(peer).name == "%s/%s" % (socket.gethostname().partition(".")[0], owner.sessions[0].name)
     assert isinstance(here.process, RemoteProgram)
     control = here.terminal.terminal_control
 
@@ -83,23 +114,58 @@ async def test_a_window_here_shows_a_pane_there(two_servers):
     control.process.write_input("ls\r")
     await until(lambda: typed == ["ls\r"], "a key typed here reaches the program there")
 
-    here.process.kill()
+
+async def test_a_pane_streams_only_while_seen(two_servers):
+    "The client leaves for its own session: the mirror pauses, and catches up on its return."
+    owner, peer, client = two_servers
+    there, here = await shown_here(owner, peer, client)
+    owner_control = there.terminal.terminal_control
+    control = here.terminal.terminal_control
     (link,) = [connection.peer for connection in owner.connections if connection.peer is not None]
-    await until(lambda: not link.sources, "killing the window stops the mirror there")
-    assert not owner_control.followers
-    assert not there.process.is_terminated, "the pane runs on, on its own server"
+    await until(lambda: there.pane_id in link.sources, "the seen pane streams")
+
+    own = next(session for session in peer.sessions if session.remote is None)
+    peer.attach_client_to(client, own)
+    peer.invalidate()
+    await until(lambda: link.sources[there.pane_id].paused, "a pane nobody sees pauses")
+    owner_control.feed_output("written meanwhile")
+    assert "written meanwhile" not in "".join(rows_of(control))
+
+    peer.attach_client_to(client, here_session(peer))
+    peer.invalidate()
+    await until(lambda: rows_of(control) == rows_of(owner_control), "the mirror catches up when seen again")
+
+
+def here_session(peer):
+    (session,) = [session for session in peer.sessions if session.remote is not None]
+    return session
+
+
+async def test_a_pane_that_ends_there_ends_here(two_servers):
+    owner, peer, client = two_servers
+    await owner.panes.create_window(STAYS)
+    gone = owner.arrangement.get_active_window().active_pane
+    there, here = await shown_here(owner, peer, client)
+    assert there is gone
+    (link,) = peer.peers.by_address.values()
+    window_count = len(here_session(peer).arrangement.windows)
+
+    owner.panes.kill_pane(gone)
+    await until(lambda: gone.pane_id not in link.tree.panes, "the tree loses the pane")
+    assert here.process.is_terminated
+    assert len(here_session(peer).arrangement.windows) == window_count - 1
 
 
 async def test_the_owner_reports_the_focus_of_a_mirror(two_servers):
     "The program hears the focus from its owner once, never as keys from the peer."
-    owner, peer = two_servers
+    owner, peer, client = two_servers
     there = owner.arrangement.get_active_window().active_pane
     owner_control = there.terminal.terminal_control
     owner_control.feed_output("\x1b[?1004h")
     typed: list[str] = []
     owner_control.process.write_input = typed.append
 
-    here = await _open(peer, owner.socket_name, int(there.pane_id), detached=False)
+    there, here = await shown_here(owner, peer, client)
     await until(lambda: here.terminal.terminal_control.screen.reports_focus, "the mirror shows the mode")
     here.process.focus(True)
     await until(lambda: typed == ["\x1b[I"], "the program hears the focus come", lambda: typed)
@@ -119,7 +185,7 @@ async def test_the_owner_answers_for_the_terminal_at_the_peer(two_servers):
     keyboard, and the mirror takes them back from the owner. The peer's
     own idea of its panes never reaches the mirror.
     """
-    owner, peer = two_servers
+    owner, peer, client = two_servers
     there = owner.arrangement.get_active_window().active_pane
     owner_screen = there.terminal.terminal_control.screen
     # A painted screen answers with the theme's colours, whoever looks.
@@ -128,8 +194,7 @@ async def test_the_owner_answers_for_the_terminal_at_the_peer(two_servers):
     theirs = PeerTerminal((7, 15), ColorBase(list(reversed(base.palette)), base.defaults), 1, "pygments:dracula")
     peer.terminals.peer_terminal = lambda: theirs
 
-    here = await _open(peer, owner.socket_name, int(there.pane_id), detached=False)
-    peer.terminals.tell_peers()
+    there, here = await shown_here(owner, peer, client)
     mirror_screen = here.terminal.terminal_control.screen
 
     def surroundings(screen) -> tuple[int, int, bool, int]:

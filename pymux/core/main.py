@@ -873,6 +873,13 @@ class Pymux:
         self.terminals.sync_progress()
         # "set-option synthesize-key-events" takes effect here.
         self.terminals.sync_keyboard_source_flags()
+        # Mirrors: what a client here shows streams, and a peer that
+        # watches this server hears that its sessions may have changed.
+        # Lillecarl/pymux#759.
+        self.peers.sync_sight()
+        for connection in self.connections:
+            if connection.peer is not None and connection.peer.watching:
+                connection.peer.tree_changed()
 
     def _place_of(self, pane: Pane) -> tuple[Session, Window] | None:
         "The session and window that hold this pane, or None when it is gone."

@@ -293,6 +293,9 @@ class Woke(StrEnum):
     #: Window panes. Lillecarl/pymux#620.
     WINDOW_PANE_OPENED = "a Wayland window opened in a pane"
     WINDOW_PANE_CHANGED = "a Wayland window took a title or an app id"
+    #: Another server's sessions changed, and the mirrors here follow.
+    #: Lillecarl/pymux#759.
+    TREE_MIRRORED = "the sessions of another server changed"
 
 
 class ExtendedKeys(StrEnum):

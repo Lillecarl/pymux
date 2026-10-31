@@ -254,6 +254,8 @@ class Terminals:
 
     def tell_peers(self) -> None:
         "Tell every server this one mirrors panes of what the terminals here say, when it changed."
+        if not self.pymux.peers.by_address:
+            return
         terminal = self.peer_terminal()
         for peer in self.pymux.peers.by_address.values():
             peer.tell_terminal(terminal)

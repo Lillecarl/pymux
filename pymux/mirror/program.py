@@ -33,8 +33,13 @@ class RemoteProgram:
 
     Keys go to the owner as the bytes this pane encoded them to, for
     the keyboard mode the program asked the owner's screen for, which a
-    mirror holds as well. Copy mode suspends it, which pauses the mirror
-    so the history holds still; resuming sends what changed meanwhile.
+    mirror holds as well.
+
+    **The screen streams only while somebody here can see it.** The
+    first sight asks the owner for the screen, and losing sight pauses
+    the mirror; the owner sends what changed when it is seen again.
+    Copy mode suspends it the same way, so the history holds still
+    under the reader.
     """
 
     KEEP: ClassVar[dict[str, Keep]] = {
@@ -44,9 +49,12 @@ class RemoteProgram:
         "sx": Keep.SAVED,
         "sy": Keep.SAVED,
         "backend": Keep.REBUILT,
+        "command": Keep.DROPPED,
+        "visible": Keep.DROPPED,
         "suspended": Keep.DROPPED,
         "_stopped": Keep.DROPPED,
-        "_started": Keep.DROPPED,
+        "_asked": Keep.DROPPED,
+        "_streaming": Keep.DROPPED,
     }
 
     @classmethod
@@ -61,17 +69,40 @@ class RemoteProgram:
         self.sx = 0
         self.sy = 0
         self.backend = _NoMachinery()
+        #: The program the owner says runs in the pane (`tree`).
+        self.command: str | None = None
+        #: A client here shows the pane (`Peers.sync_sight`).
+        self.visible = False
         self.suspended = False
         self._stopped = False
-        self._started = False
+        # The owner was asked for the screen once, and streams it now.
+        self._asked = False
+        self._streaming = False
 
     async def start(self, task_group: anyio.abc.TaskGroup) -> None:
-        if not self._started:
-            self._started = True
-            self.peer.mirror(self.pane_id, self.sink)
+        "Nothing starts here: the owner runs the program."
 
     def get_name(self) -> str:
-        return "%s %%%d" % (self.peer.address, self.pane_id)
+        return self.command or "%s %%%d" % (self.peer.address, self.pane_id)
+
+    def seen(self, visible: bool) -> None:
+        "Whether a client here shows the pane now."
+        self.visible = visible
+        self._stream()
+
+    def _stream(self) -> None:
+        "Ask the owner for the reads while the pane is seen, and stop them while it is not."
+        wanted = self.visible and not self.suspended and not self._stopped
+        if wanted == self._streaming:
+            return
+        self._streaming = wanted
+        if wanted and not self._asked:
+            self._asked = True
+            self.peer.mirror(self.pane_id, self.sink)
+        elif wanted:
+            self.peer.resume(self.pane_id)
+        else:
+            self.peer.pause(self.pane_id)
 
     def get_cwd(self) -> None:
         return None
@@ -91,20 +122,19 @@ class RemoteProgram:
             self.peer.focus(self.pane_id, focused)
 
     def suspend(self) -> None:
-        if not self.suspended and not self._stopped:
-            self.suspended = True
-            self.peer.pause(self.pane_id)
+        self.suspended = True
+        self._stream()
 
     def resume(self) -> None:
-        if self.suspended and not self._stopped:
-            self.suspended = False
-            self.peer.resume(self.pane_id)
+        self.suspended = False
+        self._stream()
 
     def kill(self) -> None:
         "Stop mirroring. The pane runs on, on its own server."
         if not self._stopped:
             self._stopped = True
-            self.peer.stop(self.pane_id)
+            if self._asked:
+                self.peer.stop(self.pane_id)
 
     def hang_up(self) -> None:
         self.kill()

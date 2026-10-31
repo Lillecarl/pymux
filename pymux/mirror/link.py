@@ -12,6 +12,7 @@ holds up the link, and each mirror then stops sending reads on its own
 
 from __future__ import annotations
 
+import socket
 from collections import deque
 from typing import TYPE_CHECKING, ClassVar
 
@@ -28,6 +29,7 @@ from ..pipes.base import BrokenPipeError
 from ..style.style import DEFAULT_THEME
 from ..terminals import PeerTerminal
 from .source import MirrorSource
+from .tree import Tree, tree_of
 
 if TYPE_CHECKING:
     from pymux.connection.server import ServerConnection
@@ -46,7 +48,17 @@ PEER_PACKETS = (
     Packet.MIRROR_INPUT,
     Packet.MIRROR_FOCUS,
     Packet.PEER_TERMINAL,
+    Packet.WATCH,
 )
+
+#: How long a change to the sessions waits for more before the tree
+#: goes, so a burst of changes sends one tree.
+TREE_SETTLE = 0.05
+
+#: How often the tree is built again with no change announced, for what
+#: moves without asking for a frame, such as a pane's running command.
+#: It goes only when it differs from the last one sent.
+TREE_EVERY = 2.0
 
 
 class PeerLink:
@@ -60,6 +72,9 @@ class PeerLink:
         "_ready": Keep.DROPPED,
         "terminal": Keep.DROPPED,
         "last_used": Keep.DROPPED,
+        "watching": Keep.DROPPED,
+        "_tree_changed": Keep.DROPPED,
+        "_tree_sent": Keep.DROPPED,
     }
 
     def __init__(self, connection: ServerConnection, offered: object) -> None:
@@ -70,6 +85,10 @@ class PeerLink:
         #: When a person at the peer last used a mirror, by the
         #: server's count of uses (`Pymux.peer_was_used`).
         self.last_used = 0
+        #: The peer asked for the sessions (`watch`).
+        self.watching = False
+        self._tree_changed = anyio.Event()
+        self._tree_sent: Tree | None = None
         # Each packet with the mirror it is for, and whether the stream
         # turns to zstd after it.
         self._queue: deque[tuple[MirrorSource | None, bytes, bool]] = deque()
@@ -82,7 +101,7 @@ class PeerLink:
             self._queue.append((None, encode_json({Field.CMD: Packet.WIRE, Field.WIRE: wire}), wire == MSGPACK_ZSTD))
             connection.encode = encode_msgpack
 
-    def queue(self, source: MirrorSource, packet: Message) -> int:
+    def queue(self, source: MirrorSource | None, packet: Message) -> int:
         "Encode a packet now, queue it behind the others, and say its size."
         encoded = self.connection.encode(packet)
         self._queue.append((source, encoded, False))
@@ -105,6 +124,24 @@ class PeerLink:
             pass
         finally:
             self.close()
+
+    def tree_changed(self) -> None:
+        "Something the tree holds may have changed (`Pymux.invalidate`)."
+        self._tree_changed.set()
+
+    async def _send_trees(self) -> None:
+        "Send the tree, and again after each change to it, until the connection goes."
+        pymux = self.connection.pymux
+        server = socket.gethostname().partition(".")[0]
+        while not self.connection.closed:
+            tree = tree_of(pymux)
+            if tree != self._tree_sent:
+                self._tree_sent = tree
+                self.queue(None, {Field.CMD: Packet.TREE, Field.SERVER: server, Field.ROWS: tree})
+            with anyio.move_on_after(TREE_EVERY):
+                await self._tree_changed.wait()
+            self._tree_changed = anyio.Event()
+            await anyio.sleep(TREE_SETTLE)
 
     def close(self) -> None:
         for source in self.sources.values():
@@ -189,6 +226,12 @@ class PeerLink:
         if source is not None:
             self.connection.pymux.peer_was_used(self)
             source.control.process.write_input(packet.get(Field.DATA, ""))
+
+    @_PACKETS.handles(Packet.WATCH)
+    def _on_watch(self, packet: Message) -> None:
+        if not self.watching:
+            self.watching = True
+            self.connection.spawn(self._send_trees())
 
     @_PACKETS.handles(Packet.MIRROR_FOCUS)
     def _on_focus(self, packet: Message) -> None:

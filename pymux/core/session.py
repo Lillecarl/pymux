@@ -20,6 +20,7 @@ from .arrangement import Arrangement
 from .pane import Pane
 
 if TYPE_CHECKING:
+    from ..mirror.tree import RemoteSession
     from ..tags import Tags
 
 __all__ = ["DEFAULT_SIZE", "OwnOptions", "Session"]
@@ -122,6 +123,9 @@ class Session:
         "overlay_height": Keep.SAVED,
         "created": Keep.SAVED,
         "last_used": Keep.SAVED,
+        # A snapshot refuses a mirrored pane, so no mirrored session
+        # reaches one yet. Lillecarl/pymux#759.
+        "remote": Keep.DROPPED,
     }
 
     def __init__(self, session_id: SessionId, name: str, defaults: SessionOptions) -> None:
@@ -171,6 +175,11 @@ class Session:
         #: at this session. A client that attaches with no session named
         #: lands on the highest.
         self.last_used = 0
+
+        #: Where the session lives when another server owns it, or None
+        #: for a session of this server. A mirrored session's windows
+        #: and panes are its owner's (`mirror.tree`). Lillecarl/pymux#759.
+        self.remote: RemoteSession | None = None
 
     def __repr__(self) -> str:
         return "Session($%s, %r)" % (self.session_id, self.name)

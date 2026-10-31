@@ -236,8 +236,16 @@ class Packet(StrEnum):
     # The owner weighs it with its own clients' terminals, and the
     # screens it settles on reach every mirror as `mirror-surrounded`.
     PEER_TERMINAL = "peer-terminal"
-    # This server tells. The pane's screen, its parser and its
-    # surroundings, frozen: the first whole, a later one only what
+    # "Show me your sessions": the owner sends `tree` now and on every
+    # change after.
+    WATCH = "watch"
+    # This server tells.
+    # Every session with its windows, splits and panes, under `rows` as
+    # the live tables name them, each row as `{column: value}` so two
+    # versions of pymux still read each other; `server` names the
+    # owner for the peer's session names.
+    TREE = "tree"
+    # The pane's screen, its parser and its surroundings, frozen: the first whole, a later one only what
     # changed since the pause or the lag that stopped the reads.
     MIRROR_SCREEN = "mirror-screen"
     # One read, under `data`, with `expired` when the ground timer
@@ -400,6 +408,9 @@ class Field(StrEnum):
     THEME = "theme"
     #: In `mirror-focus`: true while the mirror has the focus.
     FOCUSED = "focused"
+    #: In `tree`: `{table: [row, ...]}`, and the owner's name.
+    ROWS = "rows"
+    SERVER = "server"
 
 
 class Codec(StrEnum):
