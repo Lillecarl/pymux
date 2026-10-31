@@ -570,7 +570,7 @@ async def over_connection(pymux=None, read_packet=None):
         pymux.connections.append(connection)
 
         watch("%s connection" % name, connection)
-        watch("%s connection input" % name, connection._pipeinput)
+        watch("%s connection input" % name, connection.pipeinput)
 
         draining = anyio.CancelScope()
         pymux.tasks.start_soon(drain, client_end, draining)

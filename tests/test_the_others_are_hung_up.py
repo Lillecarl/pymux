@@ -27,6 +27,7 @@ from test_the_link_comes_back import Terminal
 from pymux.client.base import Client
 from pymux.client.memory import MemoryClient
 from pymux.client.terminal import TerminalClient
+from pymux.connection.attach import detach_the_others
 from pymux.connection.server import ServerConnection
 from pymux.core.main import Pymux
 from pymux.pipes.memory import connect_in_memory
@@ -152,7 +153,7 @@ async def test_without_the_flag_nobody_is_told_anything():
 
             second, _ = await _attach(pymux, tasks)
             # The `-d` path, without the hangup.
-            second._detach_the_others()
+            detach_the_others(second)
 
             await _until(lambda: first.closed, "the connection to close")
             assert heard.exits == []

@@ -29,6 +29,7 @@ import logging
 
 import anyio
 
+from pymux.connection.attach import create_app
 from pymux.connection.server import FAILURES_THAT_END_A_CONNECTION, ServerConnection
 
 # pymux's own, and not the builtin of the same name. The read loop of a
@@ -266,5 +267,5 @@ def test_application_does_not_take_over_exception_handler():
     Nothing can answer that prompt on a server, so the server keeps the
     plain handler, which logs.
     """
-    source = inspect.getsource(ServerConnection._create_app)
+    source = inspect.getsource(create_app)
     assert "set_exception_handler=False" in source

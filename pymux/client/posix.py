@@ -200,7 +200,7 @@ class PosixClient(TerminalClient):
         Send to server, and say nothing when the server has gone.
 
         **A server that refuses an attach writes the reason and closes.**
-        `ServerConnection._refuse_the_attach` awaits both writes first,
+        `pymux.connection.attach.refuse_the_attach` awaits both writes first,
         so the reason is on its way; the client is still in its
         handshake at that moment, and its next packet meets a socket
         with no reader. Raising there loses the reason: the person reads

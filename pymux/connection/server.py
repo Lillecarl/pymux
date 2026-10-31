@@ -8,18 +8,14 @@ from typing import (
     TYPE_CHECKING,
     Any,
     ClassVar,
-    TextIO,
-    cast,
 )
 
 import anyio
 from libpymux.agentic import caller_context
 from libpymux.protocol import Field, Message, Packet
-from libpymux.wire import MSGPACK_ZSTD, choose, encode_json, encode_msgpack
+from libpymux.wire import encode_json
 from prompt_toolkit.application.current import create_app_session, set_app
 from prompt_toolkit.data_structures import Size
-from prompt_toolkit.input import Input
-from prompt_toolkit.output import ColorDepth
 from pyte.keep import Keep
 
 from pymux.commands import CommandException
@@ -28,18 +24,16 @@ from pymux.commands.common import find_pane, terminal_of
 from ..answer import Answer
 from ..audio import AudioLink
 from ..commands import handle_command
-from ..core.environment import take_environment_from
-from ..core.upgrade import welcome_back
 from ..enums import Woke
 from ..graphics.graphics import CELL_SIZE_QUERY, ClientGraphics
 from ..ids import PaneId
 from ..keys.actions import Origin, started_by
 from ..log import logger
 from ..notify.osc import NO_PROGRESS, Progress
-from ..options.options import Scope, SetOptionError
 from ..pipes.base import BrokenPipeError
 from ..style.colors import ColorDetection, DefaultColors
-from .client_io import ClientInput, FrameOutput, NoStdout, SocketStdout
+from .attach import create_app, start_gui
+from .client_io import ClientInput, FrameOutput
 from .clipboard_reads import ClipboardReader
 from .files import Files
 from .pacing import FramePacing
@@ -51,7 +45,6 @@ if TYPE_CHECKING:
     from pymux.connection.client_state import ClientState
     from pymux.connection.recording import Recording
     from pymux.core.main import Pymux
-    from pymux.core.session import Session
     from pymux.pipes.base import PipeConnection
     from pymux.web.stream import PaneStream
 
@@ -74,19 +67,6 @@ FAILURES_THAT_END_A_CONNECTION = 5
 #: transport with no liveness of its own. Lillecarl/pymux#446.
 PING_INTERVAL = 15.0
 PING_MISSES = 2
-
-#: What a client is told when it may not attach here.
-#:
-#: `pymux integrated` holds the server and its one terminal in one
-#: process. The socket it binds is for commands, and a client that
-#: attached over it would own half a session that the other half can
-#: end: `ctrl+b d` in the first terminal takes the process, and the
-#: second terminal loses the session whatever the first person meant.
-#: Lillecarl/pymux#159.
-CANNOT_ATTACH = (
-    "This pymux runs in one terminal, and that terminal is taken.\r\n"
-    "The socket is for commands: pymux -S <socket> <command>.\r\n"
-)
 
 
 def _without_left(forwards: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -141,11 +121,11 @@ class ServerConnection:
         "pipe_connection": Keep.DROPPED,
         # The client offers msgpack again on the connection it opens to
         # the next server.
-        "_encode": Keep.DROPPED,
-        "_pipeinput": Keep.DROPPED,
+        "encode": Keep.DROPPED,
+        "pipeinput": Keep.DROPPED,
         "_stream": Keep.DROPPED,
         # The next server measures the client's round trip again.
-        "_audio": Keep.DROPPED,
+        "audio": Keep.DROPPED,
         "_tasks": Keep.DROPPED,
         "closed": Keep.DROPPED,
         "_unanswered": Keep.DROPPED,
@@ -163,7 +143,7 @@ class ServerConnection:
         self.pipe_connection = pipe_connection
         #: How a packet to this client is encoded: JSON until the client
         #: offers msgpack in `start-gui`. Lillecarl/pymux#633.
-        self._encode = encode_json
+        self.encode = encode_json
 
         #: Whether a client on this connection may ask for the user
         #: interface. False for a connection that arrived over the
@@ -272,7 +252,7 @@ class ServerConnection:
         self.sends_files = False
         self.files = Files(self)
         #: This client's sound, when it plays it. Lillecarl/pymux#657.
-        self._audio: AudioLink | None = None
+        self.audio: AudioLink | None = None
 
         #: Whether this client answers a ping, and how many have gone
         #: unanswered. Only a client that said it answers is ever
@@ -299,7 +279,7 @@ class ServerConnection:
         # the pipe input (see `ClientInput`). Give that input a parser
         # that also understands the kitty keyboard protocol, and route
         # terminal replies to `TerminalReplies.arrived`.
-        self._pipeinput = ClientInput(
+        self.pipeinput = ClientInput(
             self.send_packet,
             reply_callback=self.replies.arrived,
             # Whether this client's terminal counts the modifiers the
@@ -545,8 +525,8 @@ class ServerConnection:
     @_PACKETS.handles(Packet.SOUND, Packet.ECHO, Packet.MICROPHONE, Packet.BEHIND)
     def _on_sound(self, packet: Message) -> None:
         # Sound from a client that plays it. Lillecarl/pymux#657.
-        if self._audio is not None:
-            self._audio.heard(packet)
+        if self.audio is not None:
+            self.audio.heard(packet)
 
     @_PACKETS.handles(Packet.STREAM_IN)
     def _on_stream_in(self, packet: Message) -> None:
@@ -561,7 +541,7 @@ class ServerConnection:
     def _on_input(self, packet: Message) -> None:
         if self.recording is not None:
             self.recording.hear("in", packet[Field.DATA])
-        self._pipeinput.send_text(self.clipboard.take_answer(packet[Field.DATA]))
+        self.pipeinput.send_text(self.clipboard.take_answer(packet[Field.DATA]))
         # Input newer than a scheduled redraw makes that frame
         # stale: the renderer skips it and asks for another one
         # instead, so this is handled first. Lillecarl/pymux#524.
@@ -591,105 +571,7 @@ class ServerConnection:
 
     @_PACKETS.handles(Packet.START_GUI)
     def _on_start_gui(self, packet: Message) -> None:
-        if not self.may_attach:
-            self.spawn(self._refuse_the_attach())
-            return
-
-        # The client reads msgpack, perhaps inside zstd: say which
-        # in JSON, and write it from the next packet on.
-        # `libpymux.wire`.
-        wire = choose(packet.get(Field.WIRE), self.pipe_connection.can_compress)
-        if wire is not None and self._encode is encode_json:
-            self.send_packet(
-                {Field.CMD: Packet.WIRE, Field.WIRE: wire},
-                compress_after=wire == MSGPACK_ZSTD,
-            )
-            self._encode = encode_msgpack
-
-        # Window frames as raw pixels, which the client encodes for
-        # its own terminal. Only in msgpack, which carries bytes.
-        # Lillecarl/pymux#634.
-        if packet.get(Field.FRAMES) and self._encode is encode_msgpack:
-            self.graphics.windows.send_frame = self._send_frame
-            # And the codecs it decodes, for `window-codec`.
-            # Lillecarl/pymux#639.
-            self.graphics.windows.codecs = frozenset(packet.get(Field.CODECS) or ())
-            # A client that says when it wrote a frame gets the next
-            # one after that: the socket draining says only that the
-            # kernel took it, and over SSH megabytes of frames wait
-            # in the buffers past it, with every key's echo behind
-            # them. Lillecarl/pymux#641.
-            if packet.get(Field.SHOWS):
-                self.graphics.windows.frame_room = self.pacing.frames_all_shown
-
-        detach_other_clients = bool(packet[Field.DETACH_OTHERS])
-        # `attach -x`: the others leave, and the terminals they were
-        # in close. Lillecarl/pymux#347.
-        hang_up_others = bool(packet.get(Field.HANG_UP_OTHERS))
-        forced = packet[Field.COLOR_DEPTH]
-        term = packet[Field.TERM]
-
-        # The colour depth of the outer terminal. A flag of the
-        # client forces one; otherwise the environment gives the
-        # first answer and the probe can raise it later.
-        self.colors.forced = ColorDepth(forced) if forced else None
-        self.colors.term = term
-        self.colors.colorterm = packet.get(Field.COLORTERM, "")
-        self.hostname = packet.get(Field.HOSTNAME, "")
-        # Whether `forward-port` can reach this client at all. Only
-        # the SSH client says yes. Lillecarl/pymux#436.
-        self.can_forward = bool(packet.get(Field.FORWARDS))
-        self.answers_forwards = bool(packet.get(Field.REPORTS))
-        self.starts_browsers = bool(packet.get(Field.BROWSERS))
-        self.saves_files = bool(packet.get(Field.SAVES_FILES))
-        self.sends_files = bool(packet.get(Field.SENDS_FILES))
-        self.answers_ping = bool(packet.get(Field.PINGS))
-        self.pacing.paced = bool(packet.get(Field.PACED))
-        self.environment = packet.get(Field.ENVIRONMENT) or {}
-        self.ttyname = packet.get(Field.TTYNAME, "")
-        self.pid = packet.get(Field.PID) or 0
-        self.client_id = packet.get(Field.CLIENT_ID) or ""
-
-        self._create_app(color_depth=self.colors.depth, term=term)
-
-        # `pymux attach -r`. The client state exists from
-        # `_create_app` on, and the flag has to be on it before the
-        # first key arrives. `attach-session -r` is the same two
-        # lines for a client that is already here.
-        # Lillecarl/pymux#467.
-        if packet.get(Field.READ_ONLY) and self.client_state is not None:
-            self.client_state.read_only = True
-            self.client_state.ignore_size = True
-
-        if detach_other_clients or hang_up_others:
-            self._detach_the_others(hang_up=hang_up_others)
-
-        # What this client's own configuration file said about it.
-        # Applied before the first frame, so nothing draws with a
-        # theme the person did not choose and then change.
-        # Lillecarl/pymux#223.
-        self._take_client_options(packet.get(Field.CLIENT_OPTIONS) or [])
-
-        # After the options: what the client had set while it ran
-        # wins over what its file says. Lillecarl/pymux#409.
-        if self.client_state is not None:
-            welcome_back(self.pymux, self.client_state, self.client_id)
-
-        # The session this client landed on takes the names that
-        # follow a client: a display, an agent, a session bus.
-        # `attach_client_to` does it for every later move between
-        # sessions; this is the first attach, which does not go
-        # through it. Lillecarl/pymux#271.
-        if self.client_state is not None:
-            take_environment_from(self.pymux, self.client_state)
-
-        # Sound, on this connection, for a client that plays it.
-        # Lillecarl/pymux#657.
-        if packet.get(Field.AUDIO) and self._encode is encode_msgpack and self._audio is None:
-            self.spawn(self._carry_audio())
-
-        if self.answers_ping:
-            self.spawn(self._watch_the_client())
+        start_gui(self, packet)
 
     @_PACKETS.handles(Packet.BROWSER_STARTED)
     def _on_browser_started(self, packet: Message) -> None:
@@ -775,59 +657,6 @@ class ServerConnection:
         self.send_packet({Field.CMD: Packet.REPORT_FORWARDS})
         await arrived.wait()
 
-    def _detach_the_others(self, hang_up: bool = False) -> None:
-        """
-        What `attach -d` means: take this session from whoever else
-        holds it. `attach -x` is the same set of clients, told to hang
-        up as well as to leave. Lillecarl/pymux#347.
-
-        **The session, and not the server.** `Pymux.clients_on` holds
-        that rule, for this and for `attach-session -d` alike.
-        Lillecarl/pymux#345, Lillecarl/pymux#349.
-
-        **This runs after `_create_app`**, because until then this
-        connection has no session to compare the others against.
-        """
-        if self.client_state is None:
-            return
-
-        others = self.pymux.clients_on(self.client_state.session, except_for=self.client_state)
-        for other in others:
-            connection = other.connection
-            if connection is not None:
-                connection.detach_and_close(hang_up=hang_up)
-
-    def _take_client_options(self, announced: list[Any]) -> None:
-        """
-        Set on this client what its own configuration file named.
-
-        **A bad line never fails the attach.** A person with a typo in
-        their configuration gets their panes and a message saying what
-        was wrong; refusing to attach would leave them with a terminal
-        they cannot use and a file they may not be able to reach.
-        Lillecarl/pymux#223.
-        """
-        if self.client_state is None:
-            return
-
-        for one in announced:
-            try:
-                name, value = one
-                option = self.pymux.option_tables[Scope.CLIENT][name]
-            except KeyError, TypeError, ValueError:
-                self.client_state.message = "Invalid client option: %s" % (one,)
-                continue
-
-            try:
-                option.set_value(self.pymux, value, self.client_state)
-            except SetOptionError as e:
-                # The line as they wrote it, then the reason. A person
-                # reading "Expecting one of" needs to see what they
-                # typed to know which line to go and fix.
-                self.client_state.message = "%s %s: %s" % (name, value, e.message)
-
-        self.pymux.terminals.sync_color_bases()
-
     def send_packet(self, data: object, compress_after: bool = False) -> None:
         """
         Send packet to client. `compress_after` turns the stream to zstd
@@ -841,7 +670,7 @@ class ServerConnection:
             self.recording.hear("out", data[Field.DATA])
         # Serialised now: the write runs later, and the packet is what
         # was true when it was sent, in the format of the moment.
-        self.spawn(self._write(self._encode(data), compress_after))
+        self.spawn(self._write(self.encode(data), compress_after))
 
     async def say_restarting(self, wait: float, why: str) -> None:
         """
@@ -856,25 +685,6 @@ class ServerConnection:
             # buffer, and that client leaves for good instead of
             # waiting. Lillecarl/pymux#766.
             logger.warning("Client %s went before the restart notice reached it.", self.client_id or "?")
-
-    async def _refuse_the_attach(self) -> None:
-        """
-        Tell this client that it cannot have the user interface, and
-        close the connection. Lillecarl/pymux#159.
-
-        **The write is awaited, and `send_packet` does not wait.** That
-        one spawns the write into the scope of this connection, and
-        closing cancels that scope: the reason the client came would
-        reach it only if the cancel lost the race.
-        """
-        await self.write_packet({Field.CMD: Packet.OUT, Field.DATA: CANNOT_ATTACH})
-        # And a code to leave with. A client that attached reads this
-        # too now, so a script hears the refusal rather than reading a
-        # zero and calling it attached. Lillecarl/pymux#332.
-        await self.write_packet({Field.CMD: Packet.EXIT, Field.CODE: 1})
-
-        logger.info("A client asked to attach to a server that serves one terminal.")
-        self.detach_and_close()
 
     async def _stream_pane(self, packet: dict[str, Any]) -> None:
         """
@@ -910,21 +720,21 @@ class ServerConnection:
             self._stream = None
             self.close_connection()
 
-    async def _carry_audio(self) -> None:
+    async def carry_audio(self) -> None:
         """
         Carry this client's sound, until the connection goes. Only in
         msgpack, which carries bytes. `AudioLink` says why on this
         connection and not one of its own. Lillecarl/pymux#657.
         """
         link = AudioLink(self)
-        self._audio = link
+        self.audio = link
         self.pymux.audio.link_opened(link)
         try:
             await link.run()
         except BrokenPipeError:
             pass
         finally:
-            self._audio = None
+            self.audio = None
             self.pymux.audio.link_closed(link)
 
     async def _run_command(self, packet: dict[str, Any]) -> None:
@@ -946,7 +756,7 @@ class ServerConnection:
             # would open the window in another. Lillecarl/pymux#323.
             session = self.pymux.session_holding(pane) if pane is not None else None
 
-            self._create_app(start=False, session=session)
+            create_app(self, start=False, session=session)
             client_state = self.client_state
             if client_state is not None and pane is not None and session is not None:
                 client_state.caller_pane_id = pane.pane_id
@@ -1014,7 +824,7 @@ class ServerConnection:
         if self.closed:
             return
         try:
-            await self.pipe_connection.write(self._encode(data_obj), urgent=True)
+            await self.pipe_connection.write(self.encode(data_obj), urgent=True)
         except BrokenPipeError:
             self.detach_and_close()
 
@@ -1024,13 +834,13 @@ class ServerConnection:
         """
         if self.closed:
             return
-        await self._write(self._encode(data_obj))
+        await self._write(self.encode(data_obj))
 
     def _terminal_reads_shm(self) -> None:
         logger.info("The terminal of client %s reads window frames from shared memory.", self.client_id or "?")
         self.send_packet({Field.CMD: Packet.SHM})
 
-    async def _send_frame(self, parts: list[Message]) -> None:
+    async def send_frame(self, parts: list[Message]) -> None:
         """
         Write a window pane's frame, one part at a time.
 
@@ -1050,23 +860,23 @@ class ServerConnection:
         for part in parts:
             if self.closed:
                 return
-            await self._write(self._encode(part))
+            await self._write(self.encode(part))
             await anyio.lowlevel.checkpoint()
 
     @property
     def pointer_fraction(self) -> tuple[float, float]:
         "Where in its cell the client's last mouse report was. Lillecarl/pymux#648."
-        return self._pipeinput.pointer_fraction
+        return self.pipeinput.pointer_fraction
 
     @property
     def pointer_cell(self) -> tuple[int, int] | None:
         "The cell of the client's last mouse report, column and row from 0."
-        return self._pipeinput.pointer_cell
+        return self.pipeinput.pointer_cell
 
     @property
     def activity(self) -> float:
         "When a person last pressed a key or used the mouse at this client."
-        return self._pipeinput.activity
+        return self.pipeinput.activity
 
     @property
     def pointer_shape_sent(self) -> str:
@@ -1078,99 +888,6 @@ class ServerConnection:
             await self.pipe_connection.write(frame, compress_after)
         except BrokenPipeError:
             self.detach_and_close()
-
-    def _create_app(
-        self,
-        color_depth: ColorDepth = ColorDepth.DEPTH_8_BIT,
-        term: str = "xterm",
-        start: bool = True,
-        session: Session | None = None,
-    ) -> None:
-        """
-        Make this client's state and application: on attach, or for a
-        command that arrived over the socket.
-
-        :param start: Start the application. (`False` for the temporary client
-            that handles `run-command` packets. That one is removed right
-            after the command handler ran.)
-        :param session: The session this client is on. Without one it is
-            the session a person looked at last.
-        """
-        stdout = (
-            SocketStdout(
-                self.send_packet, self.pymux.counters, self.pacing.frame_went_out, self.pacing.report_after_frame
-            )
-            if start
-            else NoStdout()
-        )
-        output = FrameOutput(
-            cast(TextIO, stdout),
-            lambda: self.size,
-            term=term,
-        )
-        output.keeps_placeholders = lambda: self.graphics.forwards_placeholders
-        output.pixel_mouse = lambda: self.replies.pixel_mouse
-        output.narrows_text_emoji = lambda: self.replies.widens_text_emoji
-        output.cluster_fit = self.replies.cluster_fit
-
-        client_state = self.pymux.add_client(
-            # A proxy: what it lacks of an `Input` it forwards to its pipe.
-            input=cast("Input", self._pipeinput),
-            output=output,
-            connection=self,
-            color_depth=color_depth,
-            # The temporary client of a command that arrived over a socket is
-            # not a client a person uses: it must not win "used last",
-            # and what a command shows must go to a real one.
-            temporary=not start,
-            session=session,
-        )
-        self.client_state = client_state
-
-        def frame_begins(_app: object) -> None:
-            output.frame_begins()
-
-        def frame_ends(_app: object) -> None:
-            output.frame_ends()
-
-        client_state.app.before_render += frame_begins
-        client_state.app.after_render += frame_ends
-
-        if start:
-
-            async def run() -> None:
-                try:
-                    # The first window, before the first frame: a client
-                    # that arrives finds a session with a window, the
-                    # way attaching always did. Under its application,
-                    # so the new pane is focused where it is looked at.
-                    with set_app(client_state.app):
-                        await self.pymux.startup()
-                    # A server has no terminal of its own to print a
-                    # traceback on, and nobody to press ENTER, which is
-                    # what prompt_toolkit does with an exception in the
-                    # event loop. Let asyncio log it instead.
-                    await client_state.app.run_async(
-                        set_exception_handler=False,
-                        # **A server's application has no terminal of
-                        # its own to be resized.** Each client reports
-                        # its size in a packet, and SIGWINCH is one
-                        # process-wide handler that only one
-                        # application can hold: two of them save and
-                        # restore it in the wrong order, and the last
-                        # restore puts back an application that has
-                        # already gone, with its whole layout behind
-                        # it. Lillecarl/pymux#231.
-                        handle_sigwinch=False,
-                    )
-                except anyio.get_cancelled_exc_class():
-                    raise
-                except Exception:
-                    logger.exception("Application crashed.")
-                finally:
-                    self.close_connection()
-
-            self.spawn(run())
 
     def close_connection(self) -> None:
         # Without this the server goes on drawing frames for a client
@@ -1204,7 +921,7 @@ class ServerConnection:
         # would cancel the caller before it finished closing.
 
         # Close input pipe and remove connection from eventloop.
-        self._pipeinput.close()
+        self.pipeinput.close()
         with suppress(Exception):
             self.pipe_connection.close()
 
@@ -1241,7 +958,7 @@ class ServerConnection:
             return ""
         return "%s:%s" % (self.hostname or "?", what)
 
-    async def _watch_the_client(self) -> None:
+    async def watch_the_client(self) -> None:
         """
         Drop a client that stops answering.
 

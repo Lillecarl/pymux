@@ -23,7 +23,7 @@ Lillecarl/pymux#208.
 **So a server's application says it does not want the signal**, which
 is the honest statement of the same fact: it has no terminal of its own
 to be resized, and every client reports its size in a packet.
-`run_async(handle_sigwinch=False)` in `ServerConnection._create_app`,
+`run_async(handle_sigwinch=False)` in `pymux.connection.attach.create_app`,
 and the flag is Lillecarl/pymux#231.
 
 The size is polled as well, and that stays. prompt_toolkit polls for a

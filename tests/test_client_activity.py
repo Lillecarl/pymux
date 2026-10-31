@@ -28,7 +28,7 @@ async def test_a_key_moves_it_and_a_terminal_reply_does_not():
     async with over_connection() as session:
         state, _size = await session.attach("one", SIZE)
         connection = state.connection
-        connection._pipeinput.activity = 0.0
+        connection.pipeinput.activity = 0.0
         # The answer to a status report, which every frame asks for.
         session.typed(state, "\x1b[0n")
         await once(lambda: True, 1.0, "")

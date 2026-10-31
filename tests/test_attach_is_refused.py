@@ -22,7 +22,8 @@ import socket
 import anyio
 from libpymux.wire import encode_json
 
-from pymux.connection.server import CANNOT_ATTACH, ServerConnection
+from pymux.connection.attach import CANNOT_ATTACH
+from pymux.connection.server import ServerConnection
 from pymux.core.main import Pymux
 from pymux.pipes.memory import connect_in_memory
 

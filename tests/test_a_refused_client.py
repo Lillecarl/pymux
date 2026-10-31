@@ -7,7 +7,7 @@ server says so: "This pymux runs in one terminal, and that terminal is
 taken." Lillecarl/pymux#159.
 
 **The sentence has to reach the person.**
-`ServerConnection._refuse_the_attach` awaits both writes before it
+`pymux.connection.attach.refuse_the_attach` awaits both writes before it
 closes, so the reason is on its way. The client is still in its
 handshake at that moment, and its next packet meets a socket with no
 reader. That raised, so the person read "BrokenPipeError: [Errno 32]
@@ -26,7 +26,7 @@ import pytest
 from libpymux.protocol import Packet
 
 from pymux.client.posix import PosixClient
-from pymux.connection.server import CANNOT_ATTACH
+from pymux.connection.attach import CANNOT_ATTACH
 
 
 @pytest.fixture
