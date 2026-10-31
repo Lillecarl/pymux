@@ -262,7 +262,7 @@ class TerminalClient(Client):
         return socket.gethostname()
 
     @property
-    def _stdin_reader(self) -> PosixStdinReader:
+    def stdin_reader(self) -> PosixStdinReader:
         """
         The keyboard, opened when something first reads it.
 
@@ -776,9 +776,9 @@ class TerminalClient(Client):
         is what is reported here.
         """
         with nonblocking(sys.stdin.fileno()):
-            data = self._stdin_reader.read()
+            data = self.stdin_reader.read()
         self._take_input(data)
-        return not self._stdin_reader.closed
+        return not self.stdin_reader.closed
 
     def _take_input(self, data: str) -> None:
         """

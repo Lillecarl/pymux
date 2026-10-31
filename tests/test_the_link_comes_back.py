@@ -30,7 +30,7 @@ from pyterm_pytest.deadline import Deadline
 from test_ssh_client import create_key
 
 from pymux.client import reconnect as reconnect_module
-from pymux.client import ssh as ssh_client
+from pymux.client import relink
 from pymux.client.reconnect import (
     Backoff,
     Internet,
@@ -235,12 +235,12 @@ async def test_the_reconnect_bounds_the_attempt(monkeypatch):
     client = SshClient("ssh://127.0.0.1/tmp/nowhere.sock")
 
     with pytest.raises(OSError):
-        await client._connect()
+        await client.connect()
     assert "connect_timeout" not in seen, "a first attach is not cut off"
 
     with pytest.raises(OSError):
-        await client._connect(ssh_client.CONNECT_TIMEOUT)
-    assert seen["connect_timeout"] == ssh_client.CONNECT_TIMEOUT
+        await client.connect(relink.CONNECT_TIMEOUT)
+    assert seen["connect_timeout"] == relink.CONNECT_TIMEOUT
 
 
 async def test_the_watch_keeps_the_last_answer(monkeypatch):
@@ -283,7 +283,7 @@ class Link:
 
 def moving_clocks(steps):
     """
-    A `_clocks` that walks through these `(wall, loop)` pairs.
+    A `Relink.clocks` that walks through these `(wall, loop)` pairs.
 
     The last pair repeats, so a watch that keeps looking sees a
     machine whose clocks agree again -- which is what a machine that
@@ -300,7 +300,7 @@ def moving_clocks(steps):
 async def _watched(client, link, seconds: float = 2.0) -> None:
     "Run the suspend watch until it ends or the time is up."
     with anyio.move_on_after(seconds):
-        await client._watch_for_suspend(link)
+        await client.relink.watch_for_suspend(link)
 
 
 def a_client() -> SshClient:
@@ -310,10 +310,10 @@ def a_client() -> SshClient:
 
 async def test_a_clock_that_keeps_up_never_ends_the_link(monkeypatch):
     "The ordinary case: both clocks move together, for ever."
-    monkeypatch.setattr(ssh_client, "SUSPEND_POLL", 0.01)
+    monkeypatch.setattr(relink, "SUSPEND_POLL", 0.01)
 
     client = a_client()
-    client._clocks = moving_clocks([(100.0, 100.0), (101.0, 101.0), (102.0, 102.0), (103.0, 103.0)])
+    client.relink.clocks = moving_clocks([(100.0, 100.0), (101.0, 101.0), (102.0, 102.0), (103.0, 103.0)])
     link = Link()
 
     await _watched(client, link, seconds=0.2)
@@ -326,11 +326,11 @@ async def test_a_poll_that_ran_late_is_not_a_sleep(monkeypatch):
     A machine under load runs a poll late, and both clocks show it. A
     gap has to be the difference between them, never the length of one.
     """
-    monkeypatch.setattr(ssh_client, "SUSPEND_POLL", 0.01)
+    monkeypatch.setattr(relink, "SUSPEND_POLL", 0.01)
 
     client = a_client()
     # Thirty seconds late, and the loop agrees it was thirty seconds.
-    client._clocks = moving_clocks([(100.0, 100.0), (130.0, 130.0)])
+    client.relink.clocks = moving_clocks([(100.0, 100.0), (130.0, 130.0)])
     link = Link()
 
     await _watched(client, link, seconds=0.2)
@@ -343,10 +343,10 @@ async def test_the_world_moving_without_the_loop_ends_the_link(monkeypatch):
     What a closed lid looks like from inside the process: the wall
     clock jumped an hour and the loop's clock barely moved.
     """
-    monkeypatch.setattr(ssh_client, "SUSPEND_POLL", 0.01)
+    monkeypatch.setattr(relink, "SUSPEND_POLL", 0.01)
 
     client = a_client()
-    client._clocks = moving_clocks([(100.0, 100.0), (3700.0, 101.0)])
+    client.relink.clocks = moving_clocks([(100.0, 100.0), (3700.0, 101.0)])
     link = Link()
 
     await _watched(client, link, seconds=0.2)
@@ -356,11 +356,11 @@ async def test_the_world_moving_without_the_loop_ends_the_link(monkeypatch):
 
 async def test_a_gap_under_the_threshold_is_left_alone(monkeypatch):
     "Below the threshold nothing happens, so a stepped clock costs nothing."
-    monkeypatch.setattr(ssh_client, "SUSPEND_POLL", 0.01)
+    monkeypatch.setattr(relink, "SUSPEND_POLL", 0.01)
 
     client = a_client()
-    gap = ssh_client.SUSPEND_GAP - 1.0
-    client._clocks = moving_clocks([(100.0, 100.0), (100.0 + gap + 0.01, 100.01)])
+    gap = relink.SUSPEND_GAP - 1.0
+    client.relink.clocks = moving_clocks([(100.0, 100.0), (100.0 + gap + 0.01, 100.01)])
     link = Link()
 
     await _watched(client, link, seconds=0.2)
@@ -619,8 +619,8 @@ async def test_a_machine_that_slept_comes_back_without_waiting(monkeypatch):
         # An hour of sleep, from inside the process. Every later read
         # keeps the same offset, which is a machine that woke up and
         # whose clocks agree again.
-        real = it.client._clocks
-        it.client._clocks = lambda: (real()[0] + 3600.0, real()[1])
+        real = it.client.relink.clocks
+        it.client.relink.clocks = lambda: (real()[0] + 3600.0, real()[1])
 
         await it.until(lambda: not it.pymux.connections, "the server to let the old client go")
         await it.until(lambda: "lost the server" in it.terminal.said, "the disconnected screen")
@@ -658,7 +658,7 @@ async def test_the_screen_says_it_is_trying_while_the_attempt_runs(monkeypatch):
         async def hangs(*_arguments):
             await anyio.sleep(30)
 
-        it.client._connect = hangs
+        it.client.connect = hangs
         it.drop_the_link()
 
         await it.until(lambda: "Trying to reach" in it.terminal.said, "the trying screen")
@@ -678,7 +678,7 @@ async def test_a_failure_that_does_not_come_back_is_told_as_itself(monkeypatch, 
         async def refused(*_arguments):
             raise asyncssh.PermissionDenied("Permission denied")
 
-        it.client._connect = refused
+        it.client.connect = refused
         it.drop_the_link()
         it.terminal.type("\r")
         await it.wait_for_attach(10)
@@ -722,7 +722,7 @@ async def test_a_restarting_server_s_refusals_are_waited_out(monkeypatch):
         await it.until(lambda: len(it.pymux.connections) == 1, "the first attach")
         await it.until(lambda: ALTERNATE_SCREEN in it.terminal.said, "the first frame")
 
-        real = it.client._connect
+        real = it.client.connect
         refusals = []
 
         async def refused_twice(*arguments):
@@ -731,7 +731,7 @@ async def test_a_restarting_server_s_refusals_are_waited_out(monkeypatch):
                 raise asyncssh.ChannelOpenError(asyncssh.OPEN_CONNECT_FAILED, "open failed")
             return await real(*arguments)
 
-        it.client._connect = refused_twice
+        it.client.connect = refused_twice
         # Whether the server's own write let the client go while it sent
         # the notice: the warning `say_restarting` logs for that does not
         # reach this log once a test on the same worker stopped the
@@ -790,7 +790,7 @@ async def test_a_client_told_to_hang_up_does_not_come_back(monkeypatch):
         # Lillecarl/pymux#710.
         read: list[str] = []
         retried: list[object] = []
-        process, link_again = it.client._process, it.client._link_again
+        process, link_again = it.client._process, it.client.relink.again
 
         def recording_process(packet):
             read.append(packet.get(Field.CMD))
@@ -801,7 +801,7 @@ async def test_a_client_told_to_hang_up_does_not_come_back(monkeypatch):
             return await link_again(stdin_fd, waits, lost)
 
         it.client._process = recording_process
-        it.client._link_again = recording_link_again
+        it.client.relink.again = recording_link_again
 
         # The client once read nothing at all and saw a clean close, so
         # the server's side is recorded too: whether the exit packet's

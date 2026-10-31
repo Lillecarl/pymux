@@ -25,9 +25,10 @@ from session import once, over_connection
 from test_ssh_client import create_ssh_server, live_servers
 
 from pymux.answer import Answer
-from pymux.client import ssh as ssh_module
+from pymux.client import ssh_requests
 from pymux.client.forwards import Forwards
 from pymux.client.ssh import SshClient
+from pymux.client.ssh_requests import forward_asked, open_asked, reap_forwards
 from pymux.commands import list_forwards as list_forwards_command
 from pymux.core.forwarding import (
     ANY_PORT,
@@ -383,7 +384,7 @@ async def test_a_refused_local_forward_opens_and_fails_per_connection():
 
 async def test_the_wanted_set_comes_back_on_a_new_connection():
     """
-    **The reason this class exists.** `_link_again` builds a new
+    **The reason this class exists.** `Relink.again` builds a new
     connection and every listener of the old one dies with it. openssh
     loses its forwards there for good; this opens them again.
     """
@@ -1021,7 +1022,7 @@ async def test_a_url_forward_that_went_idle_while_the_link_was_down_stays_gone()
 
 async def test_the_client_opens_what_the_server_asked_for():
     """
-    `_forward_asked` end to end: the packet the server sends, the
+    `forward_asked` end to end: the packet the server sends, the
     listener it produces, and the answer that goes back.
 
     **The answer is the whole table**, so the server's copy is right
@@ -1038,7 +1039,8 @@ async def test_the_client_opens_what_the_server_asked_for():
         client = SshClient("ssh://127.0.0.1:1%s" % (socket_path,))
         client.send_packet = sent.append
 
-        await client._forward_asked(
+        await forward_asked(
+            client,
             connection,
             {
                 "cmd": "forward",
@@ -1063,7 +1065,8 @@ async def test_the_client_opens_what_the_server_asked_for():
         assert str(port) in sent[0]["message"], sent[0]["message"]
         assert await _spoken_through(port) == b"HELLO"
 
-        await client._forward_asked(
+        await forward_asked(
+            client,
             connection,
             {
                 "cmd": "forward",
@@ -1094,7 +1097,8 @@ async def test_the_client_removes_by_the_number_it_reported():
         client = SshClient("ssh://127.0.0.1:1%s" % (socket_path,))
         client.send_packet = sent.append
 
-        await client._forward_asked(
+        await forward_asked(
+            client,
             connection,
             {
                 "cmd": "forward",
@@ -1109,7 +1113,8 @@ async def test_the_client_removes_by_the_number_it_reported():
         port = sent[0]["data"][0]["port"]
         assert port != ANY_PORT
 
-        await client._forward_asked(
+        await forward_asked(
+            client,
             connection,
             {
                 "cmd": "forward",
@@ -1142,7 +1147,8 @@ async def test_the_message_does_not_claim_an_address_it_cannot_know():
         client = SshClient("ssh://127.0.0.1/tmp/nowhere.sock")
         client.send_packet = sent.append
 
-        await client._forward_asked(
+        await forward_asked(
+            client,
             connection,
             {
                 "cmd": "forward",
@@ -1168,7 +1174,8 @@ async def test_a_loopback_forward_is_reported_without_a_caveat():
         client = SshClient("ssh://127.0.0.1/tmp/nowhere.sock")
         client.send_packet = sent.append
 
-        await client._forward_asked(
+        await forward_asked(
+            client,
             connection,
             {
                 "cmd": "forward",
@@ -1207,7 +1214,8 @@ async def test_the_client_keeps_the_url_when_its_port_was_free():
         client.send_packet = sent.append
 
         with _browser(client) as opened:
-            await client._open_asked(
+            await open_asked(
+                client,
                 connection,
                 {
                     "cmd": "open",
@@ -1241,7 +1249,8 @@ async def test_the_client_moves_the_url_when_its_port_was_taken():
         client.send_packet = sent.append
 
         with _browser(client) as opened:
-            await client._open_asked(
+            await open_asked(
+                client,
                 connection,
                 {
                     "cmd": "open",
@@ -1282,7 +1291,8 @@ async def test_the_client_opens_the_page_even_when_it_cannot_forward():
         client.send_packet = sent.append
 
         with _browser(client) as opened:
-            await client._open_asked(
+            await open_asked(
+                client,
                 connection,
                 {
                     "cmd": "open",
@@ -1298,7 +1308,7 @@ async def test_the_client_opens_the_page_even_when_it_cannot_forward():
 
 async def test_the_client_gives_an_idle_port_back_and_says_so(monkeypatch):
     "The reaper is a task of the attachment, and it reports like the rest."
-    monkeypatch.setattr(ssh_module, "REAP_POLL", 0.01)
+    monkeypatch.setattr(ssh_requests, "REAP_POLL", 0.01)
     sent = []
 
     async with echoing() as echo_port, ssh_connection() as connection:
@@ -1313,7 +1323,7 @@ async def test_the_client_gives_an_idle_port_back_and_says_so(monkeypatch):
         assert opened.error == ""
 
         with anyio.move_on_after(2.0):
-            await client._reap_forwards()
+            await reap_forwards(client)
 
         assert sent, "The reaper never reported anything."
         assert "Stopped forwarding" in sent[0]["message"], sent[0]["message"]
@@ -1354,10 +1364,10 @@ async def test_a_forward_pymux_made_is_marked_in_its_report():
 async def test_connecting_again_brings_the_forwards_back():
     """
     **The promise this feature makes**, through the client's own
-    `_connect` and not through `Forwards.reopen` alone: a link that
+    `connect` and not through `Forwards.reopen` alone: a link that
     dropped gives the tunnels back with the panes.
 
-    `_link_again` calls the same `_connect`, so what passes here is
+    `Relink.again` calls the same `connect`, so what passes here is
     what a person gets after their laptop wakes up.
     """
     import tempfile
@@ -1374,7 +1384,7 @@ async def test_connecting_again_brings_the_forwards_back():
                 username="anybody",
             )
 
-            connection, _reader = await client._connect()
+            connection, _reader = await client.connect()
             was = await client.forwards.add(
                 connection,
                 Forward(Direction.LOCAL, "127.0.0.1", ANY_PORT, "127.0.0.1", echo_port),
@@ -1385,8 +1395,8 @@ async def test_connecting_again_brings_the_forwards_back():
             with pytest.raises(_NOTHING_CAME_BACK):
                 await _spoken_through(was.port)
 
-            # What `_link_again` does, and the only line under test.
-            again, _reader = await client._connect()
+            # What `Relink.again` does, and the only line under test.
+            again, _reader = await client.connect()
             try:
                 back = client.forwards.opened()[0]
                 assert back.error == "", back.error

@@ -7,7 +7,7 @@ already has, so only this side can make one, and the far side is a
 normal sshd that gains nothing. It is the property the whole `ssh://`
 client is built on. Lillecarl/pymux#436.
 
-**A reconnect is what this class is for.** `SshClient._link_again`
+**A reconnect is what this class is for.** `Relink.again`
 builds a new connection, and every listener of the old one dies with
 it. So the table keeps what the person asked for, separately from what
 is open, and opens the wanted set again on the new connection. openssh

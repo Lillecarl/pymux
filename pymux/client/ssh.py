@@ -35,7 +35,8 @@ running one; spawning one is the other half of Lillecarl/pymux#90.
 
 **A link that drops is a pause and not the end.** The panes are on the
 other machine, so this client shows a notice and opens the link again.
-`client/reconnect.py` holds that part. Lillecarl/pymux#256.
+`client/relink.py` and `client/reconnect.py` hold that part.
+Lillecarl/pymux#256.
 """
 
 from __future__ import annotations
@@ -44,7 +45,6 @@ import asyncio
 import contextlib
 import os
 import sys
-import time
 from typing import TYPE_CHECKING, Any, NamedTuple, override
 from urllib.parse import urlparse
 
@@ -53,25 +53,17 @@ from libpymux.agentic import caller_fields
 from libpymux.protocol import READ_SIZE, Field, Message, Packet
 from libpymux.wire import MSGPACK, MSGPACK_ZSTD, PacketReader
 from prompt_toolkit.input.vt100 import raw_mode
-from prompt_toolkit.output.vt100 import Vt100_Output
-
-from pymux.core.forwarding import MAY_NARROW, Direction, Forward, the_far_side_may_narrow, with_port
-from pymux.utils import nonblocking
 
 from .audio import AudioClient, sound_devices
 from .command import NO_ANSWER
 from .defaults import is_ssh_url as is_ssh_url
 from .forwards import Forwards
 from .reconnect import (
-    WAN_INTERVAL,
     Backoff,
-    Internet,
-    draw,
-    link_may_come_back,
-    notice,
-    watch_internet,
     why,
 )
+from .relink import Relink, Restarting
+from .ssh_requests import browser_asked, forward_asked, open_asked, reap_forwards, report_forwards
 from .terminal import DELETE_EVERY_IMAGE, TerminalClient
 
 if TYPE_CHECKING:
@@ -110,39 +102,6 @@ __all__ = [
 KEEPALIVE_INTERVAL = 5
 KEEPALIVE_MISSES = 3
 
-#: How often to look for a gap between the clocks, in seconds.
-SUSPEND_POLL = 1.0
-
-#: How far the world may move ahead of the loop before this client
-#: calls the link gone, in seconds.
-#:
-#: The number only has to be above the jitter of a poll that is late
-#: under load, and below the shortest sleep worth noticing. A laptop
-#: lid closes for minutes, never for four seconds.
-SUSPEND_GAP = 4.0
-
-#: How often the disconnected screen draws its countdown, in seconds.
-COUNTDOWN_STEP = 1.0
-
-#: How long one reconnection attempt may last, in seconds.
-#:
-#: **Without this the screen freezes on the last second of the
-#: countdown.** asyncssh passes no timeout to the connect by default,
-#: so a network that drops packets without refusing them -- an uplink
-#: that went, a route that vanished -- leaves the TCP connect in the
-#: kernel's hands for the minute or two `tcp_syn_retries` takes. The
-#: countdown has already drawn "1 second" by then, and nothing moves
-#: until the connect returns. A bound makes the retry loop turn, and
-#: the wait grows the way it is meant to.
-#:
-#: **Only an attempt after a loss is bounded.** A person who just
-#: typed `attach` would rather wait than be told no too soon, so the
-#: first connect and a command keep asyncssh's own default. Eight
-#: seconds is above a slow handshake -- a mobile link with a second of
-#: round trip, a loaded far machine -- and well below the twenty a
-#: keepalive already spends before it calls a link dead.
-CONNECT_TIMEOUT = 8.0
-
 #: How long a way out waits for a closed connection to finish closing.
 #: asyncssh closes through loop callbacks, and one that ran after the
 #: scope it belonged to completed a future whose waiter was gone.
@@ -159,58 +118,11 @@ CLOSE_SECONDS = 2.0
 #: there, and the next failure starts from the first wait again.
 STABLE_LINK = 5.0
 
-#: How often to look for a forward nothing is using, in seconds.
-#:
-#: It decides only how late a reap is, never whether one happens: the
-#: idle time itself is measured against the clock. Half a minute is
-#: nothing beside the ten minutes a URL forward is given.
-#: Lillecarl/pymux#437.
-REAP_POLL = 30.0
-
-#: What a person types to stop trying.
-LEAVE = ("q", "Q", "\x03")
-
-#: Seconds between two tries while a server restarts. Its next image
-#: answers within about one, so the backoff's long waits would only
-#: keep the person waiting. The local client tries every 0.1 s.
-RESTART_RETRY = 0.25
-
-
-class Restarting(ConnectionResetError):
-    """
-    The server said it is restarting, and closed the link. The message
-    is the reason it gave; `until` is when its window ends, on the
-    loop's clock.
-    """
-
-    def __init__(self, why: str, until: float) -> None:
-        super().__init__(why)
-        self.until = until
-
-
-class _Left:
-    "The person stopped the client. A type, so a result can be told apart."
-
-
-#: What a try returns when the person stopped the client. A sentinel
-#: and not an exception, so nothing mistakes it for a failure to retry.
-_LEFT = _Left()
-
-
 #: What runs on the other machine when the address named no path. It
 #: prints the socket a local `pymux attach` would take: the newest
 #: server of that user, found by the same code that binds one. One
 #: command, one line back.
 FIND_COMMAND = "pymux find"
-
-
-def _how_long(seconds: float) -> str:
-    "A sleep, in the largest unit that keeps it a small number."
-    if seconds < 90:
-        return "%d seconds" % (round(seconds),)
-    if seconds < 90 * 60:
-        return "%d minutes" % (round(seconds / 60),)
-    return "%.1f hours" % (seconds / 3600,)
 
 
 class SshTarget(NamedTuple):
@@ -308,12 +220,10 @@ class SshClient(TerminalClient):
         #: `_attached` to say once it has a client to say it to.
         #: Lillecarl/pymux#442.
         self._forwards_moved = ""
-        #: Why this client ended its own link, when it did. Only the
-        #: suspend watch sets it, and only `_attached` reads it.
-        #: Lillecarl/pymux#445.
-        self._slept_through: Exception | None = None
+        #: The link while it is gone. Lillecarl/pymux#256.
+        self.relink = Relink(self)
         #: The ports this client was asked to forward. It outlives a
-        #: connection on purpose: `_connect` opens the wanted set again
+        #: connection on purpose: `connect` opens the wanted set again
         #: on the new one, so a link that dropped gives the tunnels
         #: back with the panes. Lillecarl/pymux#436.
         self.forwards = Forwards()
@@ -345,7 +255,7 @@ class SshClient(TerminalClient):
             # way.
             raise BrokenPipeError(str(error)) from error
 
-    async def _connect(self, connect_timeout: float | None = None) -> Link:
+    async def connect(self, connect_timeout: float | None = None) -> Link:
         """
         Open the channel to the socket on the far side.
 
@@ -353,7 +263,7 @@ class SshClient(TerminalClient):
         context manager, and asyncssh closes the channel with it.
 
         `connect_timeout` bounds the attempt, and only a reconnection
-        passes one: `CONNECT_TIMEOUT` says why.
+        passes one: `relink.CONNECT_TIMEOUT` says why.
         """
         import asyncssh
 
@@ -463,7 +373,7 @@ class SshClient(TerminalClient):
         attachment retries, because only an attachment has work on the
         other machine to go back to.
         """
-        connection, reader = await self._connect()
+        connection, reader = await self.connect()
 
         try:
             self.send_packet(
@@ -521,7 +431,7 @@ class SshClient(TerminalClient):
         """
         stdin_fd = sys.stdin.fileno()
         self._loop = asyncio.get_running_loop()
-        connection, reader = await self._connect()
+        connection, reader = await self.connect()
         waits = Backoff()
         cannot = None
 
@@ -564,7 +474,7 @@ class SshClient(TerminalClient):
                     waits.reset()
 
                 try:
-                    again = await self._link_again(stdin_fd, waits, lost)
+                    again = await self.relink.again(stdin_fd, waits, lost)
                 except Exception as error:
                     cannot = error
                     break
@@ -601,7 +511,7 @@ class SshClient(TerminalClient):
         the packets are awaited and one thread cannot do both.
         """
         lost = None
-        self._slept_through = None
+        self.relink.slept_through = None
 
         async with anyio.create_task_group() as tasks:
 
@@ -627,10 +537,10 @@ class SshClient(TerminalClient):
             tasks.start_soon(self._while_the_link_holds, read_keyboard)
             tasks.start_soon(self._while_the_link_holds, self._watch_signal)
             tasks.start_soon(self._while_the_link_holds, self._watch_size)
-            tasks.start_soon(self._while_the_link_holds, self._reap_forwards)
+            tasks.start_soon(self._while_the_link_holds, reap_forwards, self)
             # It writes no packet, so it needs no guard against a link
             # that stopped taking them: ending the link is its whole job.
-            tasks.start_soon(self._watch_for_suspend, connection)
+            tasks.start_soon(self.relink.watch_for_suspend, connection)
 
             try:
                 # Inside the try, because the link can go between the
@@ -638,7 +548,7 @@ class SshClient(TerminalClient):
                 # the same failure, and it has to reach the retries
                 # rather than leave the terminal on the other screen.
                 self._start_gui(detach_other_clients, color_depth)
-                # What the table holds after `_connect` opened it
+                # What the table holds after `connect` opened it
                 # again. The server's copy is drawn from this, and it
                 # has to arrive after `start-gui`, because until then
                 # the connection has no client to hang it on.
@@ -646,7 +556,7 @@ class SshClient(TerminalClient):
                 # It carries a message only when something moved, so a
                 # first attach and a reconnect that changed nothing are
                 # both silent. Lillecarl/pymux#442.
-                self._report_forwards(self._forwards_moved)
+                report_forwards(self, self._forwards_moved)
                 self._forwards_moved = ""
 
                 async for packet in self._packets(reader):
@@ -656,7 +566,8 @@ class SshClient(TerminalClient):
                         # attachment rather than blocking the reader.
                         tasks.start_soon(
                             self._while_the_link_holds,
-                            self._forward_asked,
+                            forward_asked,
+                            self,
                             connection,
                             packet,
                         )
@@ -670,18 +581,19 @@ class SshClient(TerminalClient):
                         # Lillecarl/pymux#437.
                         tasks.start_soon(
                             self._while_the_link_holds,
-                            self._open_asked,
+                            open_asked,
+                            self,
                             connection,
                             packet,
                         )
                         continue
 
                     if packet[Field.CMD] == Packet.REPORT_FORWARDS:
-                        self._report_forwards()
+                        report_forwards(self)
                         continue
 
                     if packet[Field.CMD] == Packet.BROWSER:
-                        tasks.start_soon(self._while_the_link_holds, self._browser_asked, connection, packet)
+                        tasks.start_soon(self._while_the_link_holds, browser_asked, self, connection, packet)
                         continue
 
                     self._process(packet)
@@ -700,7 +612,7 @@ class SshClient(TerminalClient):
                 # closes them. Left open they would accept a browser
                 # and then carry nothing, which is a worse answer than
                 # a refused connection while the link is down. The
-                # wanted set stays, and `_connect` opens it again.
+                # wanted set stays, and `connect` opens it again.
                 self.forwards.close()
                 # The program that drove them is on the other side of
                 # the link that went.
@@ -711,176 +623,14 @@ class SshClient(TerminalClient):
                 with anyio.move_on_after(CLOSE_SECONDS, shield=True):
                     await connection.wait_closed()
 
-        if lost is None and self._slept_through is not None:
+        if lost is None and self.relink.slept_through is not None:
             # The link ended cleanly because this client ended it. Left
             # alone that reads as a detach, and the panes on the other
             # machine would be abandoned by the one thing that was
             # supposed to go back to them. Lillecarl/pymux#445.
-            lost = self._slept_through
+            lost = self.relink.slept_through
 
         return lost
-
-    # ------------------------------------------------------------------
-    # Forwarded ports.
-
-    async def _forward_asked(self, connection: SSHClientConnection, packet: Message) -> None:
-        """
-        Add or remove one forward, because the server asked.
-
-        **The server asks and this side acts**, the way it does for a
-        URL to open: only the machine a person sits at can bind their
-        port, and only this client holds the SSH connection that
-        carries it. Lillecarl/pymux#436, Lillecarl/pymux#261.
-
-        The answer is the whole table and not the one that changed. It
-        is a handful of lines, it makes the server's copy right after
-        a reconnect as well as after a change, and a person reading
-        `list-forwards` wants the set anyway.
-        """
-        if packet.get(Field.REMOVE):
-            where = (
-                Direction(packet[Field.DIRECTION]),
-                packet[Field.LISTEN_HOST],
-                packet[Field.LISTEN_PORT],
-            )
-            gone = self.forwards.remove(where)
-
-            if gone is None:
-                said = "Nothing was forwarding %s:%s." % (
-                    packet[Field.LISTEN_HOST],
-                    packet[Field.LISTEN_PORT],
-                )
-            else:
-                said = "Stopped forwarding %s." % (gone.spell(),)
-
-            self._report_forwards(said)
-            return
-
-        forward = Forward(
-            direction=Direction(packet[Field.DIRECTION]),
-            listen_host=packet[Field.LISTEN_HOST],
-            listen_port=packet[Field.LISTEN_PORT],
-            dest_host=packet[Field.DEST_HOST],
-            dest_port=packet[Field.DEST_PORT],
-        )
-        opened = await self.forwards.add(connection, forward)
-
-        if opened.error:
-            said = "Cannot forward %s: %s" % (forward.spell(), opened.error)
-        elif opened.port != forward.listen_port:
-            # The person asked for any free port, so the number is news.
-            said = "Forwarding %s:%d to %s." % (
-                forward.listen_host,
-                opened.port,
-                forward.dest,
-            )
-        else:
-            said = "Forwarding %s." % (forward.spell(),)
-
-        if not opened.error and the_far_side_may_narrow(forward):
-            # **The listener is open and the address may not be the one
-            # asked for.** Saying "Forwarding -R 0.0.0.0:2222" flat
-            # would be the client asserting something it cannot know:
-            # the reply to `tcpip-forward` carries a port and no
-            # address. Lillecarl/pymux#444.
-            said = "%s Asked for %s, but %s." % (
-                said,
-                forward.listen_host,
-                MAY_NARROW,
-            )
-
-        self._report_forwards(said)
-
-    async def _open_asked(self, connection: SSHClientConnection, packet: Message) -> None:
-        """
-        Forward the port a URL names, then open the URL.
-
-        **The port first, and the page after it.** A browser that
-        arrives before the listener does gets a refused connection and
-        an error page, and reloading is then the person's job.
-
-        The URL moves when its own port is taken here. Nothing else can
-        say so: the server named the address that a pane printed, and
-        by the time this knows the real number the packet has already
-        been sent. So the message about it comes from this side.
-        Lillecarl/pymux#437.
-        """
-        url = packet[Field.DATA]
-        asked = packet[Field.FORWARD]
-        host, port = asked["host"], asked["port"]
-
-        opened = await self.forwards.add(
-            connection,
-            Forward(Direction.LOCAL, host, port, host, port),
-            idle=asked["idle"],
-        )
-
-        if opened.error:
-            said = "Opened %s, but not %s:%d: %s" % (
-                url,
-                host,
-                port,
-                opened.error,
-            )
-        else:
-            if opened.port != port:
-                url = with_port(url, opened.port)
-            said = "Opened %s in the browser of this machine." % (url,)
-
-        reached = self.browsers.open_url(url)
-        self._report_forwards(said if reached else "")
-
-        if not reached:
-            self.send_packet({Field.CMD: Packet.OPEN_FAILED, Field.DATA: url})
-
-    async def _browser_asked(self, connection: SSHClientConnection, packet: Message) -> None:
-        """
-        Start the browser a program on the server asked for, forward its
-        port from the server's machine to this one, and say where it
-        listens, or why it does not. The forward goes with the browser.
-        Lillecarl/pymux#653.
-        """
-        port = packet[Field.PORT]
-
-        async def forward(port: int) -> str | None:
-            opened = await self.forwards.add(
-                connection, Forward(Direction.REMOTE, "127.0.0.1", port, "127.0.0.1", port)
-            )
-            if opened.error:
-                return "cannot forward port %d from the server: %s" % (port, opened.error)
-            return None
-
-        try:
-            await self.browsers.run(packet, forward)
-        finally:
-            self.forwards.remove((Direction.REMOTE, "127.0.0.1", port))
-
-    async def _reap_forwards(self) -> None:
-        "Give back the port of a URL that nobody is using any more."
-        while True:
-            await anyio.sleep(REAP_POLL)
-
-            gone = self.forwards.reap()
-            if gone:
-                self._report_forwards(
-                    "Stopped forwarding %s: nothing used it." % ("; ".join(one.listen for one in gone),)
-                )
-
-    def _report_forwards(self, message: str = "") -> None:
-        """
-        Tell the server what this client is forwarding.
-
-        The server keeps a copy to draw and never the truth: it has no
-        SSH connection, so it cannot know whether a listener is really
-        open. `list-forwards` reads the copy.
-        """
-        self.send_packet(
-            {
-                Field.CMD: Packet.FORWARDS,
-                Field.DATA: self.forwards.report(),
-                Field.MESSAGE: message,
-            }
-        )
 
     def _send_from_a_thread(self, packet: Message) -> None:
         """
@@ -907,224 +657,6 @@ class SshClient(TerminalClient):
         """
         with contextlib.suppress(BrokenPipeError):
             await work(*arguments)
-
-    def _clocks(self) -> tuple[float, float]:
-        """
-        The world's clock and the loop's, read together.
-
-        A method so that a test can move one of them without sleeping
-        a machine.
-        """
-        return time.time(), anyio.current_time()
-
-    async def _watch_for_suspend(self, connection: SSHClientConnection) -> None:
-        """
-        End the link when this machine has been asleep.
-
-        **A sleep is invisible to everything else here.** The loop's
-        clock is `time.monotonic`, which on Linux does not run while
-        the machine is suspended, so every timer that would notice a
-        dead link is suspended with it: asyncssh's keepalive resumes
-        counting from where it stopped and takes its full four
-        intervals *after* the lid opens. The person looks at a frozen
-        screen for that whole time, and the panes they are looking at
-        have been reachable for most of it.
-
-        So this watches the one thing a sleep cannot hide: the world
-        moved and the loop did not. It needs no signal, no bus and no
-        platform code, and it is right whichever way a platform
-        chooses. Where the loop's clock keeps running through a sleep
-        there is no gap to find, and there is nothing to fix either --
-        the keepalive timers ran too, so they have already given up by
-        the time anybody looks.
-
-        **A gap ends the link rather than testing it.** A machine that
-        has been asleep has almost always lost its TCP connections,
-        and the two outcomes are not equal: reconnecting a link that
-        was alive costs about a second and the panes are on the other
-        machine anyway, while waiting on a link that is dead costs the
-        twenty seconds the keepalive needs. A clock that was stepped
-        forwards by something other than a sleep pays the same second.
-
-        **A link this client ended reads as end of file either way**,
-        and end of file is how a server says the person detached. So
-        the reason is written down before the link goes, and
-        `_attached` uses it in place of the ending it would otherwise
-        read. `_packets` measured `ConnectionLost` for an abort, but
-        that was the far side aborting; aborting our own gives a clean
-        end here, and a client that trusted the measurement left
-        instead of coming back.
-
-        A reset is what the reason says, because that is what a sleep
-        did to the socket, and `link_may_come_back` retries an
-        `OSError`. Lillecarl/pymux#445.
-        """
-        was_wall, was_loop = self._clocks()
-
-        while True:
-            await anyio.sleep(SUSPEND_POLL)
-
-            wall, loop = self._clocks()
-            asleep = (wall - was_wall) - (loop - was_loop)
-            was_wall, was_loop = wall, loop
-
-            if asleep >= SUSPEND_GAP:
-                self._slept_through = ConnectionResetError("This machine was asleep for %s." % (_how_long(asleep),))
-                connection.abort()
-                return
-
-    # ------------------------------------------------------------------
-    # The link, when it goes.
-
-    async def _link_again(self, stdin_fd: int, waits: Backoff, lost: Exception) -> Link | None:
-        """
-        Show that the server is gone, and open the link again.
-
-        The connection and its reader, or `None` when the person
-        stopped it. A failure that never comes back is raised, because
-        there is nothing left for this client to do about it.
-
-        **The screen keeps saying what is happening.** A probe runs
-        beside the retries, so the notice can say whether this machine
-        can reach the internet at all, and each attempt is drawn while
-        it is in flight, because an attempt can outlast its wait by
-        far. `reconnect.notice` holds the lines.
-        """
-        output = Vt100_Output.from_pty(sys.stdout)
-        internet = Internet()
-        outcome = None
-        restart = lost if isinstance(lost, Restarting) else None
-
-        def restarting() -> bool:
-            return restart is not None and anyio.current_time() < restart.until
-
-        try:
-            async with anyio.create_task_group() as watching:
-                watching.start_soon(watch_internet, internet, WAN_INTERVAL)
-                # **A restart's refusals are not answers.** A socket that
-                # takes no channel is one that is not there, which never
-                # comes back -- except in the window the server named:
-                # the next image takes the socket over within it, and
-                # its queue may be full until then. Lillecarl/pymux#750.
-                while link_may_come_back(lost) or restarting():
-                    if restart is not None and restarting():
-                        outcome = await self._one_try(output, stdin_fd, RESTART_RETRY, restart, internet)
-                    else:
-                        outcome = await self._one_try(output, stdin_fd, waits.next(), lost, internet)
-                    if not isinstance(outcome, Exception):
-                        break
-                    lost = outcome
-                watching.cancel_scope.cancel()
-        finally:
-            output.show_cursor()
-            output.flush()
-
-        # Raised out here: inside the task group the person reads
-        # "unhandled errors in a TaskGroup" and not the reason.
-        if outcome is None or isinstance(outcome, Exception):
-            raise lost
-        return None if isinstance(outcome, _Left) else outcome
-
-    async def _one_try(
-        self, output: Vt100_Output, stdin_fd: int, wait: float, lost: Exception, internet: Internet
-    ) -> Link | Exception | _Left:
-        """
-        Count down one wait, then attempt the link.
-
-        `_LEFT`, the failure, or the connection. Any key but q ends the
-        wait at once, which is what somebody does who knows the link
-        is back.
-        """
-        ends_at = anyio.current_time() + wait
-
-        while True:
-            left = ends_at - anyio.current_time()
-            if left <= 0:
-                break
-
-            self._draw(output, lost, internet, left)
-            with anyio.move_on_after(min(left, COUNTDOWN_STEP)) as when:
-                await anyio.wait_readable(stdin_fd)
-            if when.cancelled_caught:
-                continue  # Nothing typed. Draw the countdown again.
-
-            typed = self._read_typed(stdin_fd)
-            if typed is None or any(one in typed for one in LEAVE):
-                return _LEFT  # No keyboard, or the person is done.
-            if typed:
-                break  # Somebody who knows the link is back already.
-
-        return await self._attempt(output, stdin_fd, lost, internet)
-
-    def _draw(
-        self, output: Vt100_Output, lost: Exception, internet: Internet, seconds: float, trying: bool = False
-    ) -> None:
-        "Put the notice of this moment on the terminal."
-        rows, columns = self.size()
-        draw(
-            output,
-            rows,
-            columns,
-            notice(self.target.host, why(lost), seconds, internet.value, trying),
-        )
-
-    def _read_typed(self, stdin_fd: int) -> str | None:
-        "What is typed right now, or None when the keyboard is gone."
-        with nonblocking(stdin_fd):
-            typed = self._stdin_reader.read()
-        if self._stdin_reader.closed:
-            return None
-        return typed
-
-    async def _attempt(
-        self, output: Vt100_Output, stdin_fd: int, lost: Exception, internet: Internet
-    ) -> Link | Exception | _Left:
-        """
-        Open the link while the screen keeps saying it is trying.
-
-        The connection, the failure, or `_LEFT`. The attempt runs as a
-        task of its own, so this one can draw and listen beside it;
-        cancelling the scope is how the winner ends the other.
-        """
-        link: Link | None = None
-        failure: Exception | None = None
-        left = False
-
-        async with anyio.create_task_group() as tasks:
-
-            async def connect() -> None:
-                nonlocal link, failure
-                try:
-                    link = await self._connect(CONNECT_TIMEOUT)
-                except Exception as error:
-                    failure = error
-                finally:
-                    tasks.cancel_scope.cancel()
-
-            tasks.start_soon(connect)
-
-            while True:
-                self._draw(output, lost, internet, 0.0, trying=True)
-                with anyio.move_on_after(COUNTDOWN_STEP) as when:
-                    await anyio.wait_readable(stdin_fd)
-                if when.cancelled_caught:
-                    continue
-
-                typed = self._read_typed(stdin_fd)
-                if typed is None or any(one in typed for one in LEAVE):
-                    left = True
-                    tasks.cancel_scope.cancel()
-                    break
-
-        if left:
-            return _LEFT
-        if failure is not None:
-            return failure
-        # `connect` cancels the loop only after it set `link` or `failure`.
-        assert link is not None
-        return link
-
-    # ------------------------------------------------------------------
 
     async def _packets(self, reader: SSHReader[bytes]) -> AsyncIterator[Message]:
         """
