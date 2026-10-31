@@ -28,6 +28,9 @@ dependencies = [
     "websockets>=13.0",
     # Refs drawn on a browser's picture.
     "pillow>=10.1.0",
+    # Whether a browser ended: a process its parent has not reaped is a
+    # zombie, and `kill(pid, 0)` still finds it.
+    "psutil",
 ]
 
 [project.urls]

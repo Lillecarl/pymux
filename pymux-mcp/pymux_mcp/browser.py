@@ -42,6 +42,7 @@ from pathlib import Path
 from typing import Any, Final, NamedTuple
 
 import anyio
+import psutil
 from libpymux import Job, Pane, Server, Window
 from PIL import Image, ImageDraw, ImageFont
 
@@ -367,6 +368,9 @@ async def _listening(browser: Browser) -> None:
 #: How long a browser asked to quit may take before its holder is killed.
 QUIT_TIMEOUT: Final = 10.0
 
+#: How long a SIGKILL may take to land.
+KILL_TIMEOUT: Final = 5.0
+
 
 async def close(browser: Browser) -> None:
     """
@@ -398,11 +402,12 @@ async def close(browser: Browser) -> None:
         elif await _held(browser):
             await browser.holder.kill()
         if pid is not None:
-            with anyio.move_on_after(QUIT_TIMEOUT):
-                while _alive(pid):
-                    await anyio.sleep(0.1)
+            await _ended(pid, QUIT_TIMEOUT)
             if _alive(pid):
-                os.kill(pid, signal.SIGKILL)
+                # A signal is delivered later, not when kill returns.
+                with contextlib.suppress(ProcessLookupError):
+                    os.kill(pid, signal.SIGKILL)
+                await _ended(pid, KILL_TIMEOUT)
     finally:
         _forget(browser.profile)
 
@@ -417,13 +422,18 @@ def _pid(profile: Path) -> int | None:
 
 
 def _alive(pid: int) -> bool:
+    "Whether the process runs. A zombie has ended: only its parent's reap is left."
     try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
+        return psutil.Process(pid).status() != psutil.STATUS_ZOMBIE
+    except psutil.NoSuchProcess:
         return False
-    except PermissionError:
-        return True
-    return True
+
+
+async def _ended(pid: int, timeout: float) -> None:
+    "Wait until the process ended, or for `timeout` seconds."
+    with anyio.move_on_after(timeout):
+        while _alive(pid):
+            await anyio.sleep(0.1)
 
 
 def _an_extension(directory: str) -> None:
