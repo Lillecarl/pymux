@@ -257,6 +257,11 @@ class PaneMaker:
                 backend.slave = None
         return pane
 
+    def _outer_term(self) -> str:
+        "The TERM of the terminal the newest client sits at, as `hacks_and_lies.outer_term` reads it."
+        client = self.pymux.latest_client()
+        return hacks_and_lies.outer_term(client.connection.colors.term if client is not None else "")
+
     def build_pane(
         self,
         backend: Backend | None = None,
@@ -372,9 +377,7 @@ class PaneMaker:
         pane = Pane(terminal)
         # The name the pane answers XTVERSION with, asked at each query:
         # the program in front may be one `hacks_and_lies` lies to.
-        terminal.screen.version = lambda: hacks_and_lies.version(
-            pane.process.get_name(), hacks_and_lies.outer_term(self.pymux.latest_client())
-        )
+        terminal.screen.version = lambda: hacks_and_lies.version(pane.process.get_name(), self._outer_term())
 
         terminal_control = terminal.terminal_control
         terminal_control.keep_rows = self.pymux.options.render_mode is RenderMode.OPTIMIZED

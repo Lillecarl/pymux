@@ -23,12 +23,11 @@ from ptyhost.ending import say_how_it_ends
 from pyte.keep import Keep
 from pyte.keys.events import KEY_PROFILES, KeyProfile
 
-from .. import hacks_and_lies, introspect, log
+from .. import introspect, log
 from ..answer import Answer, current_answer
 from ..audio import AudioServer
 from ..commands import call_command_handler, handle_command
 from ..connection.client_state import ClientState
-from ..connection.known_terminals import identify
 from ..connection.server import ServerConnection
 from ..enums import OpenUrlTarget, RenderMode, Woke
 from ..graphics import kernels
@@ -966,10 +965,9 @@ class Pymux:
         terminal it sits at, by its XTVERSION answer or its TERM, or
         else "key-profile". Lillecarl/pymux#706.
         """
-        version = client.connection.graphics.terminal_version if client is not None else ""
-        term = hacks_and_lies.outer_term(client) if client is not None else ""
+        named = client.connection.replies.identity.key_profile if client is not None else ""
         options = client.session.options if client is not None else self.session_defaults
-        return KEY_PROFILES[identify(version, term).key_profile or options.key_profile]
+        return KEY_PROFILES[named or options.key_profile]
 
     def finish_recordings(self, holders: Iterable[Pane | ServerConnection] | None = None) -> None:
         """

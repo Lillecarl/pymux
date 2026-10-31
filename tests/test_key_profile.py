@@ -70,6 +70,22 @@ async def test_a_client_whose_terminal_named_nothing_gets_the_option():
     assert await _super_delete_from(None) == "\x1b[3;9~"
 
 
+async def test_the_key_profile_is_the_identity_of_the_terminal(monkeypatch):
+    """
+    One place names a client's terminal. A client that reports no TERM,
+    as an integrated server's own does, is named by the server's TERM,
+    and the key profile reads that same name. Lillecarl/pymux#841.
+    """
+    monkeypatch.setenv("TERM", "wezterm")
+    async with over_connection() as session:
+        await session.pymux.panes.create_window(WAITS)
+        state, _ = await session.attach("one", SIZE)
+        state.connection.colors.term = ""
+        identity = state.connection.replies.identity
+        assert identity.key_profile == "wezterm"
+        assert session.pymux.key_profile_of(state) is KEY_PROFILES["wezterm"]
+
+
 def test_kitty_answers_for_nobody_by_default():
     assert Pymux().key_profile_of(None) is KEY_PROFILES["kitty"]
 

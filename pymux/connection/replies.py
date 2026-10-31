@@ -17,6 +17,7 @@ from pyte.osc import Osc
 
 from ..clusters import CLUSTER_WIDTH_PROBE, PROBE_ROWS, PROBES, Drawn, table_width
 from ..enums import ExtendedKeys, Woke
+from ..hacks_and_lies import outer_term
 from ..keys.replies import FOCUS_IN, FOCUS_OUT
 from ..log import logger
 from ..notify.notifications import QUERY as NOTIFICATION_QUERY
@@ -362,8 +363,12 @@ class TerminalReplies:
 
     @property
     def identity(self) -> Identity:
-        "This client's terminal, as its answers name it. Lillecarl/pymux#827."
-        return identify(self.connection.graphics.terminal_version, self.connection.colors.term)
+        """
+        This client's terminal, as its answers name it. Lillecarl/pymux#827.
+        The one place that names it: the key profile reads it too.
+        Lillecarl/pymux#841.
+        """
+        return identify(self.connection.graphics.terminal_version, outer_term(self.connection.colors.term))
 
     @property
     def notification_osc(self) -> Osc | None:

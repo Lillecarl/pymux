@@ -31,7 +31,8 @@ def test_yazi_elsewhere_hears_pymux():
 
 def test_an_integrated_server_reads_its_own_term(monkeypatch):
     monkeypatch.setenv("TERM", "xterm-kitty")
-    assert hacks_and_lies.outer_term(None) == "xterm-kitty"
+    assert hacks_and_lies.outer_term("") == "xterm-kitty"
+    assert hacks_and_lies.outer_term("foot") == "foot"
 
 
 @pytest.fixture
