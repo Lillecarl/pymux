@@ -22,6 +22,7 @@ from ..downloads import FILE_KEYS, DownloadRefused, FinishedDownload, file_packe
 from ..enums import Clipboard, FileTransfer, ForwardMode, OpenUrlMode, Woke
 from ..graphics.inline_images import as_png, cells_of
 from ..log import logger
+from ..mirror.program import RemoteProgram
 from ..notify.notifications import NotificationSource, Urgency, is_question
 from ..notify.osc import (
     build_osc,
@@ -86,7 +87,7 @@ class Outward:
     def __init__(self, pymux: Pymux) -> None:
         self.pymux = pymux
 
-    def open_url(self, url: str, confirmed: bool = False) -> None:
+    def open_url(self, url: str, confirmed: bool = False, pane: Pane | None = None) -> None:
         """
         Open a URL in the browser of a client, or ask first.
 
@@ -105,24 +106,49 @@ class Outward:
         opens anything. `url_forward` decides, and the question below
         says so, because binding a port here is part of what a yes
         allows. Lillecarl/pymux#437.
+
+        **A loopback URL of a mirrored pane means the owner's machine.**
+        `pane` is the pane the URL came from. This server listens on the
+        same port first and tunnels it there (`mirror.tunnel`), and the
+        URL then opens as one of this machine. Lillecarl/pymux#853.
         """
         options = self.pymux.current_session.options
         if options.open_url_mode == OpenUrlMode.OFF:
             logger.info("Not opening %s: open-url-mode is off.", url)
             return
 
+        # **A `-c` counts only from a person.** It is the answer to a
+        # question, and a pane that sends the flag itself answered
+        # nothing -- without this, `open-url-mode ask` reads as a gate
+        # and is not one. Lillecarl/pymux#443.
+        confirmed = confirmed and self.pymux.a_person_asked()
+
+        program = pane.process if pane is not None else None
+        if isinstance(program, RemoteProgram) and loopback_port(url) is not None:
+            assert self.pymux.tasks is not None
+            self.pymux.tasks.start_soon(self._open_through, program, url, confirmed)
+            return
+        self._open(url, confirmed)
+
+    async def _open_through(self, program: RemoteProgram, url: str, confirmed: bool) -> None:
+        "Open a loopback URL of a mirrored pane, once a port here leads to its machine."
+        idle = self.pymux.current_session.options.open_url_forward_idle
+        try:
+            here = await self.pymux.peers.tunnels.opened(program, url, idle)
+        except OSError as error:
+            self.pymux.show_message("Cannot open %s here: %s" % (url, error))
+            return
+        self._open(here, confirmed)
+
+    def _open(self, url: str, confirmed: bool) -> None:
+        "Open a URL on the clients `open-url-target` names, or ask them first."
+        options = self.pymux.current_session.options
         clients = self.pymux.clients_to_open_on()
         if not clients:
             self.pymux.add_command_error("Nobody is attached to open %s." % (url,))
             return
 
         forwards = [self.url_forward(url, client_state) for client_state in clients]
-
-        # **A `-c` counts only from a person.** It is the answer to a
-        # question, and a pane that sends the flag itself answered
-        # nothing -- without this, `open-url-mode ask` reads as a gate
-        # and is not one. Lillecarl/pymux#443.
-        confirmed = confirmed and self.pymux.a_person_asked()
 
         asking = options.open_url_mode == OpenUrlMode.ASK or (
             self.pymux.options.forward_mode == ForwardMode.ASK and any(forwards)
@@ -375,7 +401,7 @@ class Outward:
         """
         url = open_url_of(param)
         if url is not None:
-            self.open_url(url)
+            self.open_url(url, pane=pane)
             return False
 
         keyed = extension_key_of(param)

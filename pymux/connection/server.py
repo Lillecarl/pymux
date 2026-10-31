@@ -23,6 +23,7 @@ from ..enums import Woke
 from ..graphics.graphics import CELL_SIZE_QUERY, ClientGraphics
 from ..log import logger
 from ..mirror.link import PEER_PACKETS, PeerLink
+from ..mirror.tunnel import OwnerTunnel
 from ..notify.osc import NO_PROGRESS, Progress
 from ..pipes.base import BrokenPipeError
 from ..style.colors import ColorDetection, DefaultColors
@@ -122,6 +123,8 @@ class ServerConnection:
         "audio": Keep.DROPPED,
         # The peer reconnects to the next server and mirrors again.
         "peer": Keep.DROPPED,
+        # A tunnel's connections end with the server; a browser connects again.
+        "tunnel": Keep.DROPPED,
         "_tasks": Keep.DROPPED,
         "closed": Keep.DROPPED,
         "_unanswered": Keep.DROPPED,
@@ -248,6 +251,9 @@ class ServerConnection:
         #: The link of another server that mirrors panes of this one,
         #: when this connection is one. Lillecarl/pymux#759.
         self.peer: PeerLink | None = None
+        #: The tunnel a peer asked for on this connection, when it is
+        #: one (`mirror.tunnel`). Lillecarl/pymux#853.
+        self.tunnel: OwnerTunnel | None = None
 
         #: Whether this client answers a ping, and how many have gone
         #: unanswered. Only a client that said it answers is ever
@@ -523,6 +529,18 @@ class ServerConnection:
         if self.peer is None:
             self.peer = PeerLink(self, packet.get(Field.WIRE))
             self.spawn(self.peer.run())
+
+    @_PACKETS.handles(Packet.TUNNEL)
+    def _on_tunnel(self, packet: Message) -> None:
+        "A peer asks for a port on the machine a pane runs on."
+        if self.tunnel is None:
+            self.tunnel = OwnerTunnel(self)
+            self.spawn(self.tunnel.run(packet[Field.PANE_ID], packet[Field.DEST_HOST], packet[Field.DEST_PORT]))
+
+    @_PACKETS.handles(Packet.TUNNEL_DATA)
+    def _on_tunnel_data(self, packet: Message) -> None:
+        if self.tunnel is not None and packet.get(Field.DATA):
+            self.tunnel.near.take(packet[Field.DATA])
 
     @_PACKETS.handles(*PEER_PACKETS)
     def _on_peer_packet(self, packet: Message) -> None:

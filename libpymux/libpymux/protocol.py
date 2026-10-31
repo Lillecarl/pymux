@@ -244,6 +244,13 @@ class Packet(StrEnum):
     # `[[window_id, rows, columns], ...]`. The owner counts each in
     # `window-size` as it counts a client, and lays the window out.
     PEER_SIZES = "peer-sizes"
+    # On a stream of its own beside the link, in msgpack: "connect to
+    # `dest_host:dest_port` on the machine pane `pane_id` runs on". A
+    # server that only mirrors the pane asks its own owner the same.
+    # Then `tunnel-data` both ways, the bytes under `data`, until either
+    # end closes the stream. Lillecarl/pymux#853.
+    TUNNEL = "tunnel"
+    TUNNEL_DATA = "tunnel-data"
     # This server tells.
     # Every session with its windows, splits and panes, under `rows` as
     # the live tables name them, each row as `{column: value}` so two

@@ -648,7 +648,7 @@ class PymuxKeyBindings:
                     else:
                         # The person picked it, which is the question
                         # `open-url-mode ask` would put.
-                        pymux.outward.open_url(url, confirmed=True)
+                        pymux.outward.open_url(url, confirmed=True, pane=pymux.arrangement.get_active_pane())
             pymux.invalidate()
 
         @Condition

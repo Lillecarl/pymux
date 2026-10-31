@@ -11,13 +11,17 @@ terminal at the peer.
 
 from __future__ import annotations
 
+import base64
 import io
 import socket
 import sys
+from urllib.parse import urlparse
 
 import anyio
+import anyio.abc
 import apsw
 import pytest
+from libpymux.protocol import Field, Packet
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.input import create_pipe_input
@@ -30,6 +34,7 @@ from test_ssh_client import create_ssh_server
 
 from pymux.answer import Answer, current_answer
 from pymux.commands import handle_command
+from pymux.core.forwarding import with_port
 from pymux.core.main import Pymux
 from pymux.core.snapshot.read import load, start
 from pymux.core.snapshot.write import save
@@ -351,6 +356,89 @@ async def test_an_upgrade_saves_no_mirror_and_links_again(two_servers, tmp_path)
             assert list(fresh.peers.by_address) == [owner.socket_name]
         finally:
             fresh.stop()
+
+
+async def test_a_loopback_url_there_opens_through_a_port_here(two_servers, monkeypatch):
+    "The program's port is taken here, by the program itself: the URL moves, and its bytes still reach it."
+    owner, peer, client = two_servers
+    there, here = await shown_here(owner, peer, client)
+
+    async def shout(stream):
+        async with stream:
+            async for data in stream:
+                await stream.send(data.upper())
+
+    listener = await anyio.create_tcp_listener(local_host="127.0.0.1", local_port=0)
+    port = listener.extra(anyio.abc.SocketAttribute.local_port)
+    packets: list[dict] = []
+    monkeypatch.setattr(client.connection, "send_packet", packets.append)
+
+    def opened():
+        return [packet[Field.DATA] for packet in packets if packet.get(Field.CMD) == Packet.OPEN]
+
+    async with anyio.create_task_group() as tasks:
+        tasks.start_soon(listener.serve, shout)
+        url = "http://127.0.0.1:%d/callback" % (port,)
+        peer.outward.forward_osc(here, "1337", "OpenURL=:" + base64.b64encode(url.encode()).decode())
+        await until(lambda: opened(), "the URL opens here", seen=lambda: packets)
+        (moved,) = opened()
+        assert moved == with_port(url, urlparse(moved).port) and urlparse(moved).port != port
+        async with await anyio.connect_tcp("127.0.0.1", urlparse(moved).port) as stream:
+            await stream.send(b"hello")
+            with anyio.fail_after(5):
+                assert await stream.receive() == b"HELLO"
+        tasks.cancel_scope.cancel()
+
+
+async def test_a_tunnel_passes_a_server_that_only_mirrors_the_pane(two_servers):
+    "A third server mirrors the peer's mirror: its tunnel goes through the peer to the owner's machine."
+    owner, peer, client = two_servers
+    there, _ = await shown_here(owner, peer, client)
+
+    async def shout(stream):
+        async with stream:
+            async for data in stream:
+                await stream.send(data.upper())
+
+    listener = await anyio.create_tcp_listener(local_host="127.0.0.1", local_port=0)
+    port = listener.extra(anyio.abc.SocketAttribute.local_port)
+    leaf = Pymux()
+    leaf.options.test_mode = True
+    async with leaf.running(), anyio.create_task_group() as tasks:
+        tasks.start_soon(listener.serve, shout)
+        try:
+            await leaf.panes.create_window(STAYS)
+            link = leaf.peers.of(peer.socket_name)
+            link.watch()
+            # The peer's mirror of `there`, as the leaf mirrors it in turn.
+            middle = peer.peers.by_address[owner.socket_name].tree.panes[there.pane_id]
+            await until(lambda: middle.pane_id in link.tree.panes, "the peer's mirror arrives at the leaf")
+            far = link.tree.panes[middle.pane_id]
+            moved = await leaf.peers.tunnels.opened(far.process, "http://127.0.0.1:%d/" % (port,), 60)
+            async with await anyio.connect_tcp("127.0.0.1", urlparse(moved).port) as stream:
+                await stream.send(b"hello")
+                with anyio.fail_after(5):
+                    assert await stream.receive() == b"HELLO"
+        finally:
+            tasks.cancel_scope.cancel()
+            for pane in list(leaf.panes_by_id.values()):
+                process = getattr(pane, "process", None)
+                if process is not None and not process.is_terminated:
+                    process.kill()
+            leaf.stop()
+
+
+async def test_a_loopback_url_keeps_its_port_when_it_is_free_here(two_servers):
+    owner, peer, client = two_servers
+    there, here = await shown_here(owner, peer, client)
+    probe = await anyio.create_tcp_listener(local_host="127.0.0.1", local_port=0)
+    port = probe.extra(anyio.abc.SocketAttribute.local_port)
+    await probe.aclose()
+    url = "http://127.0.0.1:%d/callback" % (port,)
+
+    assert await peer.peers.tunnels.opened(here.process, url, 60) == url
+    assert await peer.peers.tunnels.opened(here.process, url, 60) == url
+    assert list(peer.peers.tunnels.listening) == [port]
 
 
 async def test_a_link_to_itself_mirrors_nothing(two_servers):

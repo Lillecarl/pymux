@@ -25,6 +25,7 @@ from ..log import logger
 from .dial import dial, dial_beside
 from .program import RemoteProgram
 from .tree import MirrorTree
+from .tunnel import Tunnels
 
 if TYPE_CHECKING:
     from prompt_toolkit.data_structures import Size
@@ -46,6 +47,7 @@ class Peers:
         # in `peers`, and a load reconnects (`reconnect`).
         "by_address": Keep.DROPPED,
         "returning": Keep.DROPPED,
+        "tunnels": Keep.DROPPED,
     }
 
     def __init__(self, pymux: Pymux) -> None:
@@ -53,6 +55,8 @@ class Peers:
         self.by_address: dict[str, Peer] = {}
         #: The addresses a loaded snapshot was linked to.
         self.returning: list[str] = []
+        #: The ports here for loopback URLs of mirrored panes.
+        self.tunnels = Tunnels(pymux)
 
     def reconnect(self) -> None:
         """
@@ -128,7 +132,7 @@ class Peer:
         "_receive": Keep.DROPPED,
         "_terminal_told": Keep.DROPPED,
         "_sizes_told": Keep.DROPPED,
-        "_stream": Keep.DROPPED,
+        "stream": Keep.DROPPED,
         "tree": Keep.DROPPED,
     }
 
@@ -145,7 +149,8 @@ class Peer:
         self._send, self._receive = anyio.create_memory_object_stream[bytes](math.inf)
         self._terminal_told: PeerTerminal | None = None
         self._sizes_told: dict[int, Size] = {}
-        self._stream: anyio.abc.ByteStream | None = None
+        #: The link's stream while it is up, which a stream beside it starts from.
+        self.stream: anyio.abc.ByteStream | None = None
         # Zstd only across a network, as a client offers it.
         offer = [MSGPACK_ZSTD, MSGPACK] if is_ssh_url(address) else [MSGPACK]
         self.send({Field.CMD: Packet.PEER, Field.WIRE: offer})
@@ -213,10 +218,10 @@ class Peer:
         stream of its own, because the owner answers a command and
         closes the connection it came on.
         """
-        if self._stream is None:
+        if self.stream is None:
             raise CommandException("the link to %s is down" % (self.address,))
         reply = Reply()
-        async with await dial_beside(self.address, self._stream) as stream:
+        async with await dial_beside(self.address, self.stream) as stream:
             await stream.send(
                 command_packet(text, None if pane_id is None else str(pane_id), None, targets, forwarded=True)
             )
@@ -242,7 +247,7 @@ class Peer:
             logger.warning("Could not reach the server at %s: %s", self.address, self.error)
             return
         self.connected = True
-        self._stream = stream
+        self.stream = stream
         # This runs in the server's own scope: what it raises would end
         # every client, so the link's trouble stays the link's.
         try:
@@ -263,7 +268,7 @@ class Peer:
             logger.exception("The link to %s failed.", self.address)
         finally:
             self.connected = False
-            self._stream = None
+            self.stream = None
             logger.info("The link to %s went: %s", self.address, self.error)
 
     async def _write(self, stream: anyio.abc.ByteStream) -> None:
