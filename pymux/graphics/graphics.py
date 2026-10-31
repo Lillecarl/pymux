@@ -42,7 +42,7 @@ import anyio
 from prompt_toolkit.output import ColorDepth
 from pyte import escape
 from pyte.images import GraphicsImage, GraphicsPlacement, GraphicsState, PixelFormat
-from pyte.sequences.csi import Csi, csi
+from pyte.sequences.csi import Csi, Marker, csi
 from pyte.sequences.escapes import esc
 from pyte.terminfo import DeviceExtension
 
@@ -92,7 +92,7 @@ CELL_SIZE_QUERY = csi(Csi.XTWINOPS, 16)
 # Ask the outer terminal its name and version (XTVERSION). It answers
 # "DCS > | text ST" whatever TERM says, so ssh and a TERM a person set
 # do not hide it.
-VERSION_QUERY = csi(Csi.XTVERSION, 0, private=">")
+VERSION_QUERY = csi(Csi.XTVERSION, 0, private=Marker.GREATER)
 
 # The cell size to assume when the terminal does not report one. It
 # matches the size that `pyte.images` assumes, so an image then

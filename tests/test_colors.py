@@ -18,7 +18,7 @@ from pyte import escape
 from pyte.colors import DEFAULT_COLORS, PALETTE, Color
 from pyte.osc import COLOR_BASE
 from pyte.screen import Screen
-from pyte.sequences.csi import Csi, csi
+from pyte.sequences.csi import Csi, Marker, csi
 from pyte.sequences.strings import apc, dcs, osc
 from test_server_tasks import FakePipe, FakePymux
 from test_theme import create_client as a_client
@@ -90,7 +90,7 @@ def test_reply_that_keeps_colour_means_truecolor(reply):
         # It kept a colour, but not the one that was asked for.
         dcs("1$r38;2;4;5;6m"),
         # Not a DECRQSS reply at all.
-        csi(escape.DA, 62, 1, 6, private="?"),
+        csi(escape.DA, 62, 1, 6, private=Marker.QUESTION),
         apc("Gi=31;OK"),
         "",
         # A reply that never ends.
