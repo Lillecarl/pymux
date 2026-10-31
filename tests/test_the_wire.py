@@ -175,11 +175,11 @@ def test_a_client_answers_the_turn_in_json_and_writes_msgpack_after():
     sent = []
 
     class Recording(TerminalClient):
-        def _send_packet(self, data):
+        def send_packet(self, data):
             sent.append(self._encode(data))
 
     client = Recording()
     client._process(TURN)
-    client._send_packet({"cmd": "in", "data": "x"})
+    client.send_packet({"cmd": "in", "data": "x"})
 
     assert sent == [encode_json(TURN), encode_msgpack({"cmd": "in", "data": "x"})]

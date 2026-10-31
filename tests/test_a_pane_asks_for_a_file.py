@@ -20,7 +20,8 @@ from prompt_toolkit.data_structures import Size
 from session import once, over_connection
 
 from pymux.client import uploads
-from pymux.client.terminal import BUSY, SAID_NO, TerminalClient
+from pymux.client.sending_files import BUSY, SAID_NO
+from pymux.client.terminal import TerminalClient
 from pymux.client.uploads import (
     Answer,
     Wanted,
@@ -68,14 +69,14 @@ class AskedClient(TerminalClient):
         self.drawn: list[bytes] = []
         self._send = send
         self.clock = Clock()
-        self._clock = self.clock
+        self.sending_files.clock = self.clock
 
-    def _send_packet(self, data) -> None:
+    def send_packet(self, data) -> None:
         self.sent.append(data)
         if self._send is not None:
             self._send(data)
 
-    def _write_terminal(self, data: bytes) -> None:
+    def write_terminal(self, data: bytes) -> None:
         self.drawn.append(data)
 
     def size(self):
@@ -119,7 +120,7 @@ def ask(client: AskedClient, paths: list[str], request: str) -> None:
 
 async def until_asked_or_done(client: AskedClient, request: str) -> None:
     await once(
-        lambda: client._asking is not None or client.done(request) is not None,
+        lambda: client.sending_files.asking is not None or client.done(request) is not None,
         10.0,
         lambda: "the client neither asked nor answered; it sent %r" % (client.sent,),
     )
@@ -141,12 +142,12 @@ async def test_y_sends_once_and_asks_again(home, config):
     (home / "x.pdf").write_bytes(DATA)
     client = AskedClient(config)
     async with anyio.create_task_group() as tasks:
-        client._tasks = tasks
+        client.tasks = tasks
         ask(client, ["~/x.pdf"], "one")
         await until_asked_or_done(client, "one")
 
         # Asked, and nothing read or sent before the answer.
-        assert client._asking is not None
+        assert client.sending_files.asking is not None
         assert client.of(Packet.UPLOAD) == []
         drawn = b"".join(client.drawn).decode()
         assert "pane %3" in drawn
@@ -162,11 +163,11 @@ async def test_y_sends_once_and_asks_again(home, config):
         assert client.uploaded("one") == DATA
         # The question is gone, and the server draws over where it was.
         assert client.of(Packet.REDRAW)
-        assert client._asking is None
+        assert client.sending_files.asking is None
 
         ask(client, ["~/x.pdf"], "two")
         await until_asked_or_done(client, "two")
-        assert client._asking is not None
+        assert client.sending_files.asking is not None
         tasks.cancel_scope.cancel()
 
 
@@ -174,7 +175,7 @@ async def test_n_sends_nothing(home, config):
     (home / "x.pdf").write_bytes(DATA)
     client = AskedClient(config)
     async with anyio.create_task_group() as tasks:
-        client._tasks = tasks
+        client.tasks = tasks
         ask(client, ["~/x.pdf"], "one")
         await until_asked_or_done(client, "one")
         client._take_input("n")
@@ -188,7 +189,7 @@ async def test_a_grants_this_server_until_it_ends(home, config):
     config.write_text("set-client-option upload-grant 5\n")
     client = AskedClient(config)
     async with anyio.create_task_group() as tasks:
-        client._tasks = tasks
+        client.tasks = tasks
         ask(client, ["~/x.pdf"], "one")
         await until_asked_or_done(client, "one")
         client._take_input("a")
@@ -198,7 +199,7 @@ async def test_a_grants_this_server_until_it_ends(home, config):
         client.clock.now += 5 * 60 - 1
         ask(client, ["~/x.pdf"], "two")
         await until_asked_or_done(client, "two")
-        assert client._asking is None
+        assert client.sending_files.asking is None
         await until_done(client, "two")
         assert client.uploaded("two") == DATA
 
@@ -206,7 +207,7 @@ async def test_a_grants_this_server_until_it_ends(home, config):
         client.clock.now += 2
         ask(client, ["~/x.pdf"], "three")
         await until_asked_or_done(client, "three")
-        assert client._asking is not None
+        assert client.sending_files.asking is not None
         tasks.cancel_scope.cancel()
 
 
@@ -214,7 +215,7 @@ async def test_no_key_reaches_the_server_while_it_asks(home, config):
     (home / "x.pdf").write_bytes(DATA)
     client = AskedClient(config)
     async with anyio.create_task_group() as tasks:
-        client._tasks = tasks
+        client.tasks = tasks
         ask(client, ["~/x.pdf"], "one")
         await until_asked_or_done(client, "one")
 
@@ -222,14 +223,14 @@ async def test_no_key_reaches_the_server_while_it_asks(home, config):
         # with one answers, or reaches the pane.
         client._take_input("x")
         client._take_input("yes")
-        assert client._asking is not None
+        assert client.sending_files.asking is not None
         assert client.of(Packet.IN) == []
 
         # A sequence the terminal answers with goes on: the server
         # waits for its status reports.
         client._take_input("\x1b[0n")
         assert client.of(Packet.IN) == [{Field.CMD: Packet.IN, Field.DATA: "\x1b[0n"}]
-        assert client._asking is not None
+        assert client.sending_files.asking is not None
 
         # The keys reach the server again after the answer.
         client._take_input("\x1b")
@@ -242,7 +243,7 @@ async def test_a_second_request_while_asking_is_refused(home, config):
     (home / "x.pdf").write_bytes(DATA)
     client = AskedClient(config)
     async with anyio.create_task_group() as tasks:
-        client._tasks = tasks
+        client.tasks = tasks
         ask(client, ["~/x.pdf"], "one")
         await until_asked_or_done(client, "one")
         ask(client, ["~/x.pdf"], "two")
@@ -255,7 +256,7 @@ async def test_a_frame_does_not_wipe_the_question(home, config):
     (home / "x.pdf").write_bytes(DATA)
     client = AskedClient(config)
     async with anyio.create_task_group() as tasks:
-        client._tasks = tasks
+        client.tasks = tasks
         ask(client, ["~/x.pdf"], "one")
         await until_asked_or_done(client, "one")
         client.drawn.clear()
@@ -270,11 +271,11 @@ async def test_a_withdrawn_request_takes_its_question_down(home, config):
     (home / "x.pdf").write_bytes(DATA)
     client = AskedClient(config)
     async with anyio.create_task_group() as tasks:
-        client._tasks = tasks
+        client.tasks = tasks
         ask(client, ["~/x.pdf"], "one")
         await until_asked_or_done(client, "one")
         client._process({Field.CMD: Packet.FILES_WITHDRAWN, Field.REQUEST: "one"})
-        assert client._asking is None
+        assert client.sending_files.asking is None
         assert client.of(Packet.REDRAW)
         client._take_input("y")
         assert client.of(Packet.IN) == [{Field.CMD: Packet.IN, Field.DATA: "y"}]
@@ -286,12 +287,12 @@ def test_a_request_withdrawn_while_looked_at_is_never_asked(home, config):
     (home / "x.pdf").write_bytes(DATA)
     client = AskedClient(config)
     looks = []
-    client._off_the_loop = lambda work, then: looks.append((work, then))
+    client.sending_files.off_the_loop = lambda work, then: looks.append((work, then))
     ask(client, ["~/x.pdf"], "one")
     client._process({Field.CMD: Packet.FILES_WITHDRAWN, Field.REQUEST: "one"})
     [(work, then)] = looks
     then(work())
-    assert client._asking is None
+    assert client.sending_files.asking is None
     assert client.done("one") is None
 
 
@@ -316,13 +317,13 @@ def test_the_keyboard_flags_are_off_while_it_asks(home, config):
     (home / "x.pdf").write_bytes(DATA)
     client = AskedClient(config)
     client._kitty_supported = True
-    client._set_kitty_flags(31)
-    client._decide("one", "%3", upload_settings([], home), inspect(["~/x.pdf"], home))
-    assert client._kitty_flags == 0
+    client.set_kitty_flags(31)
+    client.sending_files.decide("one", "%3", upload_settings([], home), inspect(["~/x.pdf"], home))
+    assert client.kitty_flags == 0
     client._process({Field.CMD: Packet.KITTY_KEYBOARD, Field.DATA: {"flags": 5}})
-    assert client._kitty_flags == 0
-    client._answer("n")
-    assert client._kitty_flags == 5
+    assert client.kitty_flags == 0
+    client.sending_files.answer("n")
+    assert client.kitty_flags == 5
 
 
 @pytest.mark.parametrize(
@@ -346,10 +347,10 @@ def test_the_answer_of_a_key(keys, answer):
 def test_the_question_shows_nothing_the_terminal_acts_on(home, config):
     (home / "x.pdf").write_bytes(DATA)
     client = AskedClient(config)
-    client._decide("one", "%3\x1b]0;evil\x07", upload_settings([], home), inspect(["~/x.pdf"], home))
-    assert client._asking is not None
-    assert "\x1b" not in client._asking.text
-    assert "\x07" not in client._asking.text
+    client.sending_files.decide("one", "%3\x1b]0;evil\x07", upload_settings([], home), inspect(["~/x.pdf"], home))
+    assert client.sending_files.asking is not None
+    assert "\x1b" not in client.sending_files.asking.text
+    assert "\x07" not in client.sending_files.asking.text
 
 
 @pytest.mark.parametrize(("size", "text"), [(0, "0 B"), (999, "999 B"), (2_100_000, "2.1 MB"), (10_240, "10.2 kB")])
@@ -369,16 +370,16 @@ async def test_a_path_under_upload_paths_passes_without_asking(home, config):
     config.write_text("set-client-option upload-paths ~/shared\n")
     client = AskedClient(config)
     async with anyio.create_task_group() as tasks:
-        client._tasks = tasks
+        client.tasks = tasks
         ask(client, ["~/shared/x.pdf"], "hit")
         await until_asked_or_done(client, "hit")
-        assert client._asking is None
+        assert client.sending_files.asking is None
         await until_done(client, "hit")
         assert client.uploaded("hit") == DATA
 
         ask(client, ["~/elsewhere.pdf"], "miss")
         await until_asked_or_done(client, "miss")
-        assert client._asking is not None
+        assert client.sending_files.asking is not None
         tasks.cancel_scope.cancel()
 
 
@@ -433,13 +434,13 @@ async def test_the_client_answers_a_listing_without_asking(home, config):
     config.write_text("set-client-option upload-paths ~\n")
     client = AskedClient(config)
     async with anyio.create_task_group() as tasks:
-        client._tasks = tasks
+        client.tasks = tasks
         client._process({Field.CMD: Packet.LIST_FILES, Field.REQUEST: "one", Field.PATH: "~"})
         [answered] = await once(
             lambda: client.of(Packet.FILES_LISTED), 10.0, lambda: "no listing; sent %r" % (client.sent,)
         )
         assert answered == {Field.CMD: Packet.FILES_LISTED, Field.REQUEST: "one", Field.PATHS: ["x.pdf"]}
-        assert client._asking is None
+        assert client.sending_files.asking is None
 
 
 async def test_the_server_waits_for_a_listing_then_gives_up():
@@ -628,7 +629,7 @@ async def test_pymux_receive_gets_a_file_from_the_client(tmp_path, home, config)
         state.connection.sends_files = True
         connection_of.append(state.connection)
         async with anyio.create_task_group() as tasks:
-            client._tasks = tasks
+            client.tasks = tasks
             with set_app(state.app):
                 await pymux.panes.create_window(
                     "/bin/sh -c %s"
@@ -639,7 +640,7 @@ async def test_pymux_receive_gets_a_file_from_the_client(tmp_path, home, config)
                 )
 
             await once(
-                lambda: client._asking is not None,
+                lambda: client.sending_files.asking is not None,
                 20.0,
                 lambda: "the client was never asked; receive said %r" % (said.exists() and said.read_text(),),
             )
@@ -678,7 +679,7 @@ async def test_a_shell_in_a_pane_completes_the_persons_paths(tmp_path, home, con
     pymux.serving.listen_on_socket(str(tmp_path / "pymux.sock"))
     connection_of: list = []
     client = AskedClient(config, send=lambda packet: connection_of[0]._process(packet))
-    client._grant_until = client.clock.now + 60
+    client.sending_files.grant_until = client.clock.now + 60
 
     def read_packet(packet: dict) -> None:
         if packet[Field.CMD] == Packet.LIST_FILES:
@@ -694,7 +695,7 @@ async def test_a_shell_in_a_pane_completes_the_persons_paths(tmp_path, home, con
         state.connection.sends_files = True
         connection_of.append(state.connection)
         async with anyio.create_task_group() as tasks:
-            client._tasks = tasks
+            client.tasks = tasks
             with set_app(state.app):
                 await pymux.panes.create_window(
                     "/bin/sh -c %s"

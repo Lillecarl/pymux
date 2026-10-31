@@ -840,14 +840,14 @@ async def test_only_the_first_attach_detaches_the_other_clients(monkeypatch):
     reconnect that repeated the flag would throw them off.
     """
     asked = []
-    original = SshClient._send_packet
+    original = SshClient.send_packet
 
-    def _send_packet(self, data) -> None:
+    def send_packet(self, data) -> None:
         if data.get(Field.CMD) == Packet.START_GUI:
             asked.append(data[Field.DETACH_OTHERS])
         original(self, data)
 
-    monkeypatch.setattr(SshClient, "_send_packet", _send_packet)
+    monkeypatch.setattr(SshClient, "send_packet", send_packet)
 
     async with attached(monkeypatch, detach_other_clients=True) as it:
         await it.until(lambda: len(it.pymux.connections) == 1, "the first attach")

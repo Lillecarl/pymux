@@ -1036,7 +1036,7 @@ async def test_the_client_opens_what_the_server_asked_for():
 
     async with echoing() as echo_port, ssh_connection() as connection:
         client = SshClient("ssh://127.0.0.1:1%s" % (socket_path,))
-        client._send_packet = sent.append
+        client.send_packet = sent.append
 
         await client._forward_asked(
             connection,
@@ -1092,7 +1092,7 @@ async def test_the_client_removes_by_the_number_it_reported():
 
     async with echoing() as echo_port, ssh_connection() as connection:
         client = SshClient("ssh://127.0.0.1:1%s" % (socket_path,))
-        client._send_packet = sent.append
+        client.send_packet = sent.append
 
         await client._forward_asked(
             connection,
@@ -1140,7 +1140,7 @@ async def test_the_message_does_not_claim_an_address_it_cannot_know():
 
     async with echoing() as echo_port, ssh_connection() as connection:
         client = SshClient("ssh://127.0.0.1/tmp/nowhere.sock")
-        client._send_packet = sent.append
+        client.send_packet = sent.append
 
         await client._forward_asked(
             connection,
@@ -1166,7 +1166,7 @@ async def test_a_loopback_forward_is_reported_without_a_caveat():
 
     async with echoing() as echo_port, ssh_connection() as connection:
         client = SshClient("ssh://127.0.0.1/tmp/nowhere.sock")
-        client._send_packet = sent.append
+        client.send_packet = sent.append
 
         await client._forward_asked(
             connection,
@@ -1187,7 +1187,7 @@ async def test_a_loopback_forward_is_reported_without_a_caveat():
 def _browser(client) -> list:
     "What this client's machine was asked to open."
     opened = []
-    client._open_url = lambda url: (opened.append(url), True)[1]
+    client.browsers.open_url = lambda url: (opened.append(url), True)[1]
     yield opened
 
 
@@ -1204,7 +1204,7 @@ async def test_the_client_keeps_the_url_when_its_port_was_free():
 
     async with ssh_connection() as connection:
         client = SshClient("ssh://127.0.0.1/tmp/nowhere.sock")
-        client._send_packet = sent.append
+        client.send_packet = sent.append
 
         with _browser(client) as opened:
             await client._open_asked(
@@ -1238,7 +1238,7 @@ async def test_the_client_moves_the_url_when_its_port_was_taken():
     async with echoing() as echo_port, ssh_connection() as connection:
         url = "http://127.0.0.1:%d/app?x=1" % (echo_port,)
         client = SshClient("ssh://127.0.0.1/tmp/nowhere.sock")
-        client._send_packet = sent.append
+        client.send_packet = sent.append
 
         with _browser(client) as opened:
             await client._open_asked(
@@ -1279,7 +1279,7 @@ async def test_the_client_opens_the_page_even_when_it_cannot_forward():
 
     async with ssh_connection() as connection:
         client = SshClient("ssh://127.0.0.1/tmp/nowhere.sock")
-        client._send_packet = sent.append
+        client.send_packet = sent.append
 
         with _browser(client) as opened:
             await client._open_asked(
@@ -1303,7 +1303,7 @@ async def test_the_client_gives_an_idle_port_back_and_says_so(monkeypatch):
 
     async with echoing() as echo_port, ssh_connection() as connection:
         client = SshClient("ssh://127.0.0.1/tmp/nowhere.sock")
-        client._send_packet = sent.append
+        client.send_packet = sent.append
 
         opened = await client.forwards.add(
             connection,

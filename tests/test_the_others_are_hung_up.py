@@ -162,7 +162,7 @@ async def test_without_the_flag_nobody_is_told_anything():
 
 async def test_the_packet_arrives_before_the_close():
     """
-    **The write has to be awaited.** `_send_packet` spawns it into the
+    **The write has to be awaited.** `send_packet` spawns it into the
     scope of the connection, and closing cancels that scope, so a send
     followed by a close is a race the client usually loses.
 

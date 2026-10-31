@@ -400,7 +400,7 @@ def test_client_asks_its_platform_to_open(monkeypatch):
 def test_client_reports_browser_it_could_not_open(monkeypatch):
     sent = []
     client = TerminalClient()
-    monkeypatch.setattr(client, "_send_packet", sent.append)
+    monkeypatch.setattr(client, "send_packet", sent.append)
     monkeypatch.setattr(webbrowser, "open", lambda url: False)
     monkeypatch.delenv("DISPLAY", raising=False)
     monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
@@ -413,7 +413,7 @@ def test_client_reports_browser_it_could_not_open(monkeypatch):
 def test_client_reports_browser_that_raised(monkeypatch):
     sent = []
     client = TerminalClient()
-    monkeypatch.setattr(client, "_send_packet", sent.append)
+    monkeypatch.setattr(client, "send_packet", sent.append)
 
     def broken(url):
         raise webbrowser.Error("could not locate a browser")
@@ -429,7 +429,7 @@ def test_client_reports_browser_that_raised(monkeypatch):
 def test_client_reports_nothing_when_browser_opened(monkeypatch):
     sent = []
     client = TerminalClient()
-    monkeypatch.setattr(client, "_send_packet", sent.append)
+    monkeypatch.setattr(client, "send_packet", sent.append)
     monkeypatch.setattr(webbrowser, "open", lambda url: True)
     monkeypatch.setenv("DISPLAY", ":0")
 
@@ -442,7 +442,7 @@ def test_linux_machine_without_display_tries_no_browser(monkeypatch):
     asked = []
     sent = []
     client = TerminalClient()
-    monkeypatch.setattr(client, "_send_packet", sent.append)
+    monkeypatch.setattr(client, "send_packet", sent.append)
     monkeypatch.setattr(webbrowser, "open", asked.append)
     monkeypatch.setattr("pymux.client.terminal.sys.platform", "linux")
     monkeypatch.delenv("DISPLAY", raising=False)
@@ -458,7 +458,7 @@ def test_mac_tries_its_opener_with_no_display(monkeypatch):
     "macOS opens through `open`, which needs neither variable."
     asked = []
     client = TerminalClient()
-    monkeypatch.setattr(client, "_send_packet", lambda packet: None)
+    monkeypatch.setattr(client, "send_packet", lambda packet: None)
     monkeypatch.setattr(webbrowser, "open", lambda url: asked.append(url) or True)
     monkeypatch.setattr("pymux.client.terminal.sys.platform", "darwin")
     monkeypatch.delenv("DISPLAY", raising=False)

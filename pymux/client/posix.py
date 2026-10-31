@@ -61,7 +61,7 @@ class PosixClient(TerminalClient):
 
         #: Sound, where this machine can play it. Lillecarl/pymux#657.
         devices = sound_devices()
-        self.audio = AudioClient(devices, self._send_packet) if devices is not None else None
+        self.audio = AudioClient(devices, self.send_packet) if devices is not None else None
 
     @override
     def attach(self, detach_other_clients: bool = False, color_depth: ColorDepth | None = None) -> None:
@@ -88,8 +88,8 @@ class PosixClient(TerminalClient):
                     socket_fd = self.socket.fileno()
                     # A browser that ends says nothing on either fd, so
                     # the loop looks once a second while one runs.
-                    r, _, _ = select([stdin_fd, socket_fd], (), (), BROWSER_POLL if self._browsers else None)
-                    self._reap_browsers()
+                    r, _, _ = select([stdin_fd, socket_fd], (), (), BROWSER_POLL if self.browsers.held else None)
+                    self.browsers.reap()
 
                     if socket_fd in r:
                         # Received packet from server.
@@ -131,7 +131,7 @@ class PosixClient(TerminalClient):
                 signal.signal(signal.SIGWINCH, signal.SIG_IGN)
                 if self.audio is not None:
                     self.audio.close()
-                self.stop_browsers()
+                self.browsers.stop_all()
                 self._leave_the_terminal()
 
     def _wait_for_the_next_server(self, stdin_fd: int) -> bool:
@@ -149,7 +149,7 @@ class PosixClient(TerminalClient):
         self.restart_wait = None
         # The old socket stays open until a new one replaces it: a
         # resize sends on it meanwhile, and a send to a closed peer is
-        # a broken pipe `_send_packet` ignores, where a closed socket
+        # a broken pipe `send_packet` ignores, where a closed socket
         # raises.
         self._restore_modes()
         self._pop_kitty_flags()
@@ -195,7 +195,7 @@ class PosixClient(TerminalClient):
         return False
 
     @override
-    def _send_packet(self, data: Message) -> None:
+    def send_packet(self, data: Message) -> None:
         """
         Send to server, and say nothing when the server has gone.
 

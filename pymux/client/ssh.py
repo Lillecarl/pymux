@@ -332,7 +332,7 @@ class SshClient(TerminalClient):
         return self.target.host
 
     @override
-    def _send_packet(self, data: Message) -> None:
+    def send_packet(self, data: Message) -> None:
         "Send to the server."
         if self._writer is None:
             raise BrokenPipeError("This client is not connected.")
@@ -466,7 +466,7 @@ class SshClient(TerminalClient):
         connection, reader = await self._connect()
 
         try:
-            self._send_packet(
+            self.send_packet(
                 {
                     Field.CMD: Packet.RUN_COMMAND,
                     Field.DATA: command,
@@ -623,7 +623,7 @@ class SshClient(TerminalClient):
                         connection.close()
                         return
 
-            self._tasks = tasks
+            self.tasks = tasks
             tasks.start_soon(self._while_the_link_holds, read_keyboard)
             tasks.start_soon(self._while_the_link_holds, self._watch_signal)
             tasks.start_soon(self._while_the_link_holds, self._watch_size)
@@ -690,10 +690,10 @@ class SshClient(TerminalClient):
             finally:
                 # The three readers above end with this scope.
                 tasks.cancel_scope.cancel()
-                self._tasks = None
+                self.tasks = None
                 # Restore the keyboard mode of the outer terminal, also
                 # when the loop ends through an exception.
-                self._set_kitty_flags(0)
+                self.set_kitty_flags(0)
                 self._restore_modes()
                 self._writer = None
                 # The listeners are this table's own, so nothing else
@@ -704,7 +704,7 @@ class SshClient(TerminalClient):
                 self.forwards.close()
                 # The program that drove them is on the other side of
                 # the link that went.
-                self.stop_browsers()
+                self.browsers.stop_all()
                 if self.audio is not None:
                     self.audio.close()
                 connection.close()
@@ -827,11 +827,11 @@ class SshClient(TerminalClient):
                 url = with_port(url, opened.port)
             said = "Opened %s in the browser of this machine." % (url,)
 
-        reached = self._open_url(url)
+        reached = self.browsers.open_url(url)
         self._report_forwards(said if reached else "")
 
         if not reached:
-            self._send_packet({Field.CMD: Packet.OPEN_FAILED, Field.DATA: url})
+            self.send_packet({Field.CMD: Packet.OPEN_FAILED, Field.DATA: url})
 
     async def _browser_asked(self, connection: SSHClientConnection, packet: Message) -> None:
         """
@@ -851,7 +851,7 @@ class SshClient(TerminalClient):
             return None
 
         try:
-            await self.run_browser(packet, forward)
+            await self.browsers.run(packet, forward)
         finally:
             self.forwards.remove((Direction.REMOTE, "127.0.0.1", port))
 
@@ -874,7 +874,7 @@ class SshClient(TerminalClient):
         SSH connection, so it cannot know whether a listener is really
         open. `list-forwards` reads the copy.
         """
-        self._send_packet(
+        self.send_packet(
             {
                 Field.CMD: Packet.FORWARDS,
                 Field.DATA: self.forwards.report(),
@@ -893,7 +893,7 @@ class SshClient(TerminalClient):
 
     def _send_quietly(self, packet: Message) -> None:
         with contextlib.suppress(BrokenPipeError):
-            self._send_packet(packet)
+            self.send_packet(packet)
 
     async def _while_the_link_holds(self, work: Callable[..., Awaitable[None]], *arguments: object) -> None:
         """

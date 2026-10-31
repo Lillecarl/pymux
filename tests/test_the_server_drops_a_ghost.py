@@ -104,7 +104,7 @@ async def test_a_client_answers_a_ping():
     sent = []
 
     client = SshClient("ssh://127.0.0.1/tmp/nowhere.sock")
-    client._send_packet = sent.append
+    client.send_packet = sent.append
 
     client._process({"cmd": "ping"})
 

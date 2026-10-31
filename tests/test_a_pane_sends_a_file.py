@@ -502,7 +502,7 @@ class AClient(TerminalClient):
         super().__init__()
         self.sent: list[dict] = []
 
-    def _send_packet(self, data) -> None:
+    def send_packet(self, data) -> None:
         self.sent.append(data)
 
 
@@ -533,7 +533,7 @@ async def test_a_client_on_a_loop_draws_on_while_a_file_is_written(tmp_path, mon
     monkeypatch.setattr(client_downloads, "save", slow_save)
     client = AClient()
     async with anyio.create_task_group() as tasks:
-        client._tasks = tasks
+        client.tasks = tasks
         for packet in file_packets(FinishedDownload(NAME, DATA, multipart=False)):
             client._process(packet)
         # The save is still held, and the loop runs on.

@@ -21,11 +21,6 @@ import signal
 import socket
 import sys
 import threading
-import time
-import webbrowser
-from collections.abc import Callable
-from dataclasses import dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import anyio
@@ -45,29 +40,15 @@ from pymux.style.colors import COLOR_QUERIES, TRUECOLOR_PROBE
 from pymux.utils import nonblocking
 
 from ..connection.packet_table import PacketTable
-from . import browser
 from .base import Client
+from .browsers import Browsers
 from .downloads import save_whole
+from .sending_files import SendingFiles
 from .uploads import (
-    ESCAPE,
     LOCAL_CLIENT_OPTIONS,
-    Answer,
-    UploadSettings,
-    Wanted,
-    allowed,
-    answer_of,
-    done_packet,
-    inspect,
-    listed_packet,
-    listing,
-    outcome_packets,
-    question,
-    upload_settings,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable
-
     from prompt_toolkit.output import ColorDepth
 
     from pymux.graphics.kitty_frames import Rect
@@ -150,31 +131,6 @@ def _write_all(fd: int, data: bytes) -> None:
             select.select((), (fd,), ())
 
 
-#: Go to the start of a row, and erase it.
-_ROW = "\x1b[%d;1H\x1b[2K"
-REVERSE = "\x1b[7m"
-NO_ATTRIBUTES = "\x1b[m"
-
-#: Why a request is refused without a question.
-BUSY = "the client is asking the person about another request"
-SAID_NO = "the person said no"
-
-
-@dataclass(slots=True)
-class _Asking:
-    """
-    A request the person has not answered yet. `flags_after` holds the
-    keyboard flags the server asked for meanwhile.
-    """
-
-    request: str
-    wanted: list[Wanted]
-    text: str
-    grant_seconds: float
-    flags_before: int | None
-    flags_after: int | None = None
-
-
 def _ttyname() -> str:
     """
     The terminal this client draws on, or "" when it has none.
@@ -198,7 +154,7 @@ class TerminalClient(Client):
     """
     The terminal side of a client. A subclass adds the transport.
 
-    A subclass has to give `_send_packet`, and an `attach` that reads
+    A subclass has to give `send_packet`, and an `attach` that reads
     the transport and the keyboard until one of them ends.
     """
 
@@ -234,7 +190,7 @@ class TerminalClient(Client):
         # ("CSI ? u" query + device attributes). The currently enabled
         # flags follow the focused pane.
         self._kitty_supported = False
-        self._kitty_flags: int | None = None
+        self.kitty_flags: int | None = None
 
         self.__stdin_reader: PosixStdinReader | None = None
 
@@ -287,30 +243,19 @@ class TerminalClient(Client):
         #: Each window pane's picture, so a frame goes as one edit.
         #: Lillecarl/pymux#644.
         self._pictures = Pictures()
-        #: The browsers a program on the server drives, by launch.
-        #: Lillecarl/pymux#653.
-        self._browsers: dict[str, Any] = {}
+        #: The browsers a program on the server drives.
+        self.browsers = Browsers(self)
         #: The files a pane sends the person, until each is whole.
         #: Lillecarl/pymux#743.
         self.downloads = ArrivingFiles()
         #: The attachment's task group, for a client that runs on a loop.
         #: A download is written from it, and from a thread without it.
-        self._tasks: anyio.abc.TaskGroup | None = None
-        #: The request for files the person is being asked about, and
-        #: until when "a" lets the server read without asking. A client
-        #: serves one server, so the grant is that server's.
-        #: Lillecarl/pymux#743.
-        self._asking: _Asking | None = None
-        self._grant_until: float | None = None
-        #: Requests whose paths are being looked at, off the loop. One the
-        #: server withdraws meanwhile leaves, and is never asked about.
-        self._looking: set[str] = set()
+        self.tasks: anyio.abc.TaskGroup | None = None
+        #: The files a pane asks for: `pymux receive`. Lillecarl/pymux#743.
+        self.sending_files = SendingFiles(self)
         #: One write to the terminal at a time: the socket client draws
         #: a question from a thread.
         self._terminal_lock = threading.Lock()
-
-    #: The clock a grant runs on.
-    _clock = staticmethod(time.monotonic)
 
     def server_host(self) -> str:
         "The machine the server runs on, as this client knows it, for the person to read."
@@ -339,7 +284,7 @@ class TerminalClient(Client):
             self.__stdin_reader = PosixStdinReader(sys.stdin.fileno(), errors="replace")
         return self.__stdin_reader
 
-    def _send_packet(self, data: Message) -> None:
+    def send_packet(self, data: Message) -> None:
         "Send one packet to the server. (The transport gives this.)"
         raise NotImplementedError
 
@@ -356,13 +301,9 @@ class TerminalClient(Client):
         # And the rest of a file the last connection was sending never
         # arrives.
         self.downloads.clear()
-        # A question about a request of the last connection has nobody
-        # to answer to.
-        self._looking.clear()
-        if self._asking is not None:
-            self._stop_asking()
+        self.sending_files.connection_started()
         self._send_size()
-        self._send_packet(
+        self.send_packet(
             {
                 Field.CMD: Packet.START_GUI,
                 Field.DETACH_OTHERS: detach_other_clients and first,
@@ -447,8 +388,8 @@ class TerminalClient(Client):
         self._frame_parts.clear()
         self._decoders.clear()
         self._pictures.clear()
-        self._write_terminal(detection_queries(self._shm_probe()))
-        self._send_packet({Field.CMD: Packet.DETECT})
+        self.write_terminal(detection_queries(self._shm_probe()))
+        self.send_packet({Field.CMD: Packet.DETECT})
 
     def _shm_probe(self) -> str:
         "The shared memory probe, or nothing where no shared memory can be made."
@@ -520,7 +461,7 @@ class TerminalClient(Client):
         output.reset_attributes()
         output.flush()
 
-    def _write_terminal(self, data: bytes) -> None:
+    def write_terminal(self, data: bytes) -> None:
         "Write a frame of the server, or a sequence of this client's, to the terminal."
         with self._terminal_lock:
             _write_all(sys.stdout.fileno(), data)
@@ -586,7 +527,7 @@ class TerminalClient(Client):
             commands = frame_commands(image, whole, width, height, rects, self._carrier, answer)
         text = commands + packet.get(Field.AFTER, "")
         if text:
-            self._write_terminal((SAVE_CURSOR + text + RESTORE_CURSOR).encode("ascii"))
+            self.write_terminal((SAVE_CURSOR + text + RESTORE_CURSOR).encode("ascii"))
             self.placed_images = True
         return answer
 
@@ -619,17 +560,17 @@ class TerminalClient(Client):
         # The server writes msgpack from here on, and the reader has
         # turned already. This side turns too, saying so first. Its
         # packets are keystrokes, too small for zstd to win on.
-        self._send_packet({Field.CMD: Packet.WIRE, Field.WIRE: MSGPACK})
+        self.send_packet({Field.CMD: Packet.WIRE, Field.WIRE: MSGPACK})
         self._encode = encode_msgpack
 
     @_PACKETS.handles(Packet.OUT)
     def _on_output(self, packet: Message) -> None:
         data = packet[Field.DATA]
-        self._write_terminal(data.encode("utf-8"))
+        self.write_terminal(data.encode("utf-8"))
         if KITTY_GRAPHICS in data:
             self.placed_images = True
         # The frame drew over the question.
-        self._draw_question()
+        self.sending_files.draw_question()
 
     @_PACKETS.handles(Packet.WINDOW_FRAME)
     def _on_window_frame(self, packet: Message) -> None:
@@ -640,9 +581,9 @@ class TerminalClient(Client):
             # Whatever came of it, the server waits for an answer:
             # the terminal's, or this one.
             if packet.get(Field.LAST) and not answered:
-                self._send_packet({Field.CMD: Packet.FRAME_SHOWN})
+                self.send_packet({Field.CMD: Packet.FRAME_SHOWN})
         if packet.get(Field.LAST):
-            self._draw_question()
+            self.sending_files.draw_question()
 
     @_PACKETS.handles(Packet.SHM)
     def _on_shm(self, packet: Message) -> None:
@@ -673,7 +614,7 @@ class TerminalClient(Client):
         # The server measures the round trip that sizes the sound
         # buffers: the answer goes at once, before anything else.
         # Lillecarl/pymux#657.
-        self._send_packet({Field.CMD: Packet.ECHO, Field.TIME: packet.get(Field.TIME)})
+        self.send_packet({Field.CMD: Packet.ECHO, Field.TIME: packet.get(Field.TIME)})
 
     @_PACKETS.handles(Packet.SOUND, Packet.AUDIO, Packet.LATENCY, Packet.MICROPHONE)
     def _on_sound(self, packet: Message) -> None:
@@ -686,7 +627,7 @@ class TerminalClient(Client):
         # answer costs one packet and keeps this client's place;
         # silence is what tells the server the person is gone.
         # Lillecarl/pymux#446.
-        self._send_packet({Field.CMD: Packet.PONG})
+        self.send_packet({Field.CMD: Packet.PONG})
 
     @_PACKETS.handles(Packet.SUSPEND)
     def _on_suspend(self, packet: Message) -> None:
@@ -699,12 +640,12 @@ class TerminalClient(Client):
         # server, to open the URL. A machine with no browser says
         # so back, where the request was made visible.
         url = packet[Field.DATA]
-        if not self._open_url(url):
-            self._send_packet({Field.CMD: Packet.OPEN_FAILED, Field.DATA: url})
+        if not self.browsers.open_url(url):
+            self.send_packet({Field.CMD: Packet.OPEN_FAILED, Field.DATA: url})
 
     @_PACKETS.handles(Packet.BROWSER)
     def _on_browser(self, packet: Message) -> None:
-        self._start_browser(packet)
+        self.browsers.start(packet)
 
     @_PACKETS.handles(Packet.FILE)
     def _on_file(self, packet: Message) -> None:
@@ -714,23 +655,23 @@ class TerminalClient(Client):
         if isinstance(arrived, Whole):
             self._save(arrived)
         elif arrived is not None:
-            self._send_packet({Field.CMD: Packet.FILE_SAVED, Field.MESSAGE: arrived})
+            self.send_packet({Field.CMD: Packet.FILE_SAVED, Field.MESSAGE: arrived})
 
     @_PACKETS.handles(Packet.SEND_FILES)
     def _on_send_files(self, packet: Message) -> None:
-        self._files_asked(packet)
+        self.sending_files.asked(packet)
 
     @_PACKETS.handles(Packet.FILES_WITHDRAWN)
     def _on_files_withdrawn(self, packet: Message) -> None:
-        self._files_withdrawn(str(packet.get(Field.REQUEST) or ""))
+        self.sending_files.withdrawn(str(packet.get(Field.REQUEST) or ""))
 
     @_PACKETS.handles(Packet.LIST_FILES)
     def _on_list_files(self, packet: Message) -> None:
-        self._listing_asked(packet)
+        self.sending_files.listing_asked(packet)
 
     @_PACKETS.handles(Packet.BROWSER_STOP)
     def _on_browser_stop(self, packet: Message) -> None:
-        self.stop_browser(packet[Field.BROWSER])
+        self.browsers.stop(packet[Field.BROWSER])
 
     @_PACKETS.handles(Packet.KITTY_KEYBOARD)
     def _on_kitty_keyboard(self, packet: Message) -> None:
@@ -740,11 +681,8 @@ class TerminalClient(Client):
         if "supported" in data:
             self._kitty_supported = data["supported"]
         if "flags" in data:
-            # A question takes plain keys; the flags wait for it.
-            if self._asking is not None:
-                self._asking.flags_after = data["flags"]
-            else:
-                self._set_kitty_flags(data["flags"])
+            if not self.sending_files.hold_flags(data["flags"]):
+                self.set_kitty_flags(data["flags"])
 
     @_PACKETS.handles(Packet.MODE)
     def _on_mode(self, packet: Message) -> None:
@@ -765,7 +703,7 @@ class TerminalClient(Client):
             cm = self._mode_context_managers.pop()
             cm.__exit__()
 
-    def _set_kitty_flags(self, flags: int) -> None:
+    def set_kitty_flags(self, flags: int) -> None:
         """
         Put the outer terminal in the keyboard encoding the focused
         pane wants. (Ignored when the terminal does not support the
@@ -781,25 +719,25 @@ class TerminalClient(Client):
         """
         if not self._kitty_supported and flags != 0:
             return
-        if flags == self._kitty_flags:
+        if flags == self.kitty_flags:
             return
-        if self._kitty_flags is None:
+        if self.kitty_flags is None:
             if flags == 0:
                 return  # Nothing of ours is on the stack; 0 changes nothing.
-            self._write_terminal(("\x1b[>%du" % flags).encode())
+            self.write_terminal(("\x1b[>%du" % flags).encode())
         else:
-            self._write_terminal(("\x1b[=%d;1u" % flags).encode())
-        self._kitty_flags = flags
+            self.write_terminal(("\x1b[=%d;1u" % flags).encode())
+        self.kitty_flags = flags
 
     def _pop_kitty_flags(self) -> None:
         """
         Take our push off the outer terminal's stack. The state
         beneath it comes back: the shell's, or a nested pymux's.
         """
-        if self._kitty_flags is None:
+        if self.kitty_flags is None:
             return  # Never enabled anything.
         os.write(sys.stdout.fileno(), b"\x1b[<1u")
-        self._kitty_flags = None
+        self.kitty_flags = None
 
     def _save(self, whole: Whole) -> None:
         """
@@ -810,276 +748,19 @@ class TerminalClient(Client):
         memory stream are not safe from a thread. The socket client has
         no loop, and its send takes a lock.
         """
-        if self._tasks is not None:
-            self._tasks.start_soon(self._save_and_say, whole)
+        if self.tasks is not None:
+            self.tasks.start_soon(self._save_and_say, whole)
             return
 
         def save_and_say() -> None:
-            self._send_packet({Field.CMD: Packet.FILE_SAVED, Field.MESSAGE: save_whole(whole)})
+            self.send_packet({Field.CMD: Packet.FILE_SAVED, Field.MESSAGE: save_whole(whole)})
 
         threading.Thread(target=save_and_say, name="pymux-download", daemon=True).start()
 
     async def _save_and_say(self, whole: Whole) -> None:
         said = await anyio.to_thread.run_sync(save_whole, whole)
         with contextlib.suppress(BrokenPipeError):
-            self._send_packet({Field.CMD: Packet.FILE_SAVED, Field.MESSAGE: said})
-
-    # ------------------------------------------------------------------
-    # Files a pane asks for: `pymux receive`. Lillecarl/pymux#743.
-
-    def _off_the_loop[T](self, work: Callable[[], T], then: Callable[[T], None]) -> None:
-        """
-        Run `work`, which blocks, away from the loop that draws, and
-        `then` with its result. A client on a loop runs `then` on it.
-        The socket client has no loop, so `then` runs on the thread.
-        """
-        if self._tasks is not None:
-
-            async def on_the_loop() -> None:
-                result = await anyio.to_thread.run_sync(work)
-                with contextlib.suppress(BrokenPipeError):
-                    then(result)
-
-            self._tasks.start_soon(on_the_loop)
-            return
-
-        def on_a_thread() -> None:
-            then(work())
-
-        threading.Thread(target=on_a_thread, name="pymux-upload", daemon=True).start()
-
-    def _upload_settings(self) -> UploadSettings:
-        "What this client's own configuration file says. **It blocks.**"
-        return upload_settings(client_options_in(self.config_file or find_config()), Path.home())
-
-    def _granted(self) -> bool:
-        return self._grant_until is not None and self._clock() < self._grant_until
-
-    def _files_asked(self, packet: Message) -> None:
-        """
-        A pane asks for files on this machine. Look at the paths and
-        the settings off the loop, then send or ask.
-        """
-        request = str(packet.get(Field.REQUEST) or "")
-        paths = [str(path) for path in packet.get(Field.PATHS) or []]
-        pane = str(packet.get(Field.PANE) or "?")
-        if self._asking is not None:
-            self._send_packet(done_packet(request, BUSY))
-            return
-
-        def look() -> tuple[UploadSettings, list[Wanted]]:
-            return self._upload_settings(), inspect(paths, Path.home())
-
-        def then(found: tuple[UploadSettings, list[Wanted]]) -> None:
-            if request in self._looking:
-                self._looking.discard(request)
-                self._decide(request, pane, *found)
-
-        self._looking.add(request)
-        self._off_the_loop(look, then)
-
-    def _listing_asked(self, packet: Message) -> None:
-        "A completion of `pymux receive` asks what a directory here holds. Nobody is asked."
-        request = str(packet.get(Field.REQUEST) or "")
-        asked = str(packet.get(Field.PATH) or "")
-        granted = self._granted()
-
-        def look() -> list[str]:
-            return listing(asked, Path.home(), self._upload_settings().roots, granted)
-
-        self._off_the_loop(look, lambda names: self._send_packet(listed_packet(request, names)))
-
-    def _files_withdrawn(self, request: str) -> None:
-        "The `pymux receive` that asked stopped waiting: ask nothing more about it."
-        self._looking.discard(request)
-        if self._asking is not None and self._asking.request == request:
-            self._stop_asking()
-
-    def _decide(self, request: str, pane: str, settings: UploadSettings, wanted: list[Wanted]) -> None:
-        "Send what a grant or `upload-paths` lets pass, and ask the person about the rest."
-        if self._granted() or allowed(wanted, settings.roots):
-            self._send_files(request, wanted)
-            return
-        if self._asking is not None:
-            self._send_packet(done_packet(request, BUSY))
-            return
-        _rows, columns = self.size()
-        text = question(pane, self.server_host(), wanted, settings.grant_seconds, Path.home(), columns)
-        self._asking = _Asking(request, wanted, text, settings.grant_seconds, self._kitty_flags)
-        # The answer has to arrive as a plain key.
-        if self._kitty_flags:
-            self._set_kitty_flags(0)
-        self._draw_question()
-
-    def _draw_question(self) -> None:
-        "Draw the question on the last row, and put the cursor back."
-        asking = self._asking
-        if asking is None:
-            return
-        rows, _columns = self.size()
-        drawn = SAVE_CURSOR + _ROW % (rows,) + REVERSE + asking.text + NO_ATTRIBUTES + RESTORE_CURSOR
-        self._write_terminal(drawn.encode("utf-8"))
-
-    def _stop_asking(self) -> _Asking | None:
-        "Take the question off the terminal, and ask the server to draw over where it was."
-        asking, self._asking = self._asking, None
-        if asking is None:
-            return None
-        rows, _columns = self.size()
-        self._write_terminal((SAVE_CURSOR + _ROW % (rows,) + RESTORE_CURSOR).encode("ascii"))
-        flags = asking.flags_after if asking.flags_after is not None else asking.flags_before
-        if flags:
-            self._set_kitty_flags(flags)
-        with contextlib.suppress(BrokenPipeError):
-            self._send_packet({Field.CMD: Packet.REDRAW})
-        return asking
-
-    def _answer(self, keys: str) -> bool:
-        """
-        Take one read of the keyboard as the answer to the question.
-        False when it is for the server instead.
-
-        **A sequence goes on.** The server waits for the answers of the
-        terminal, a status report among them, and they arrive here as
-        input. A key that the question takes never starts with an
-        escape: the keyboard flags are off while it shows.
-        """
-        if keys.startswith(ESCAPE) and keys != ESCAPE:
-            return False
-        answer = answer_of(keys)
-        if answer is None:
-            return True
-        asking = self._stop_asking()
-        if asking is None:
-            return True
-        if answer is Answer.NO:
-            self._send_packet(done_packet(asking.request, SAID_NO))
-            return True
-        if answer is Answer.GRANT:
-            self._grant_until = self._clock() + asking.grant_seconds
-        self._send_files(asking.request, asking.wanted)
-        return True
-
-    def _send_files(self, request: str, wanted: list[Wanted]) -> None:
-        "Read each file off the loop, one at a time, and send it."
-        if self._tasks is not None:
-            self._tasks.start_soon(self._send_files_from_the_loop, request, wanted)
-            return
-        threading.Thread(target=self._send_files_here, args=(request, wanted), name="pymux-upload", daemon=True).start()
-
-    async def _send_files_from_the_loop(self, request: str, wanted: list[Wanted]) -> None:
-        with contextlib.suppress(BrokenPipeError):
-            for one in wanted:
-                packets = await anyio.to_thread.run_sync(lambda one=one: list(outcome_packets(request, one)))
-                for packet in packets:
-                    self._send_packet(packet)
-            self._send_packet(done_packet(request))
-
-    def _send_files_here(self, request: str, wanted: list[Wanted]) -> None:
-        with contextlib.suppress(BrokenPipeError):
-            for one in wanted:
-                for packet in outcome_packets(request, one):
-                    self._send_packet(packet)
-            self._send_packet(done_packet(request))
-
-    def _start_browser(self, packet: Message) -> None:
-        """
-        Start the browser a program on the server asked for, and say
-        where it listens, or why it does not. This machine is the
-        server's too, so the port needs no forward. Lillecarl/pymux#653.
-        """
-        launch = packet[Field.BROWSER]
-        try:
-            process, path, kind, profile = browser.start(
-                packet.get(Field.PROGRAM) or "",
-                packet.get(Field.PROFILE) or "",
-                packet[Field.PORT],
-                packet.get(Field.ARGUMENTS) or [],
-            )
-        except (browser.BrowserError, OSError) as error:
-            self._send_packet({Field.CMD: Packet.BROWSER_STARTED, Field.BROWSER: launch, Field.ERROR: str(error)})
-            return
-        self._browsers[launch] = (process, profile)
-        self._send_packet(
-            {Field.CMD: Packet.BROWSER_STARTED, Field.BROWSER: launch, Field.PATH: path, Field.REMOTE: kind}
-        )
-
-    async def run_browser(self, packet: Message, forward: Callable[[int], Awaitable[str | None]] | None = None) -> None:
-        """
-        `_start_browser` for a client with an event loop, which holds
-        the browser until it ends and then says so. `forward(port)`,
-        when given, opens the way to it from the server's machine and
-        answers why not, or None. Lillecarl/pymux#653.
-        """
-        launch, port = packet[Field.BROWSER], packet[Field.PORT]
-
-        def failed(why: str) -> None:
-            self._send_packet({Field.CMD: Packet.BROWSER_STARTED, Field.BROWSER: launch, Field.ERROR: why})
-
-        try:
-            process, path, kind, profile = await browser.start_async(
-                packet.get(Field.PROGRAM) or "",
-                packet.get(Field.PROFILE) or "",
-                port,
-                packet.get(Field.ARGUMENTS) or [],
-            )
-        except (browser.BrowserError, OSError) as error:
-            failed(str(error))
-            return
-        if forward is not None:
-            error = await forward(port)
-            if error is not None:
-                browser.end(process, profile)
-                failed(error)
-                return
-        self._browsers[launch] = (process, profile)
-        self._send_packet(
-            {Field.CMD: Packet.BROWSER_STARTED, Field.BROWSER: launch, Field.PATH: path, Field.REMOTE: kind}
-        )
-        try:
-            await process.wait()
-        finally:
-            if self._browsers.pop(launch, None) is not None:
-                self._send_packet({Field.CMD: Packet.BROWSER_ENDED, Field.BROWSER: launch})
-
-    def stop_browser(self, launch: str) -> None:
-        "End a browser this client started, if it still runs."
-        held = self._browsers.pop(launch, None)
-        if held is not None:
-            browser.end(*held)
-
-    def stop_browsers(self) -> None:
-        "End every browser this client started: the program that drove it cannot reach it any more."
-        for launch in list(self._browsers):
-            self.stop_browser(launch)
-
-    def _reap_browsers(self) -> None:
-        "Tell the server about each browser that ended by itself."
-        for launch, (process, _profile) in list(self._browsers.items()):
-            if process.poll() is not None:
-                del self._browsers[launch]
-                self._send_packet({Field.CMD: Packet.BROWSER_ENDED, Field.BROWSER: launch})
-
-    def _open_url(self, url: str) -> bool:
-        """
-        Ask this platform to open the URL in a browser, the way
-        `webbrowser` picks: "open" on macOS, "xdg-open" or what $BROWSER
-        names on Linux.
-
-        True is a best effort: an opener can still fail after it
-        started. A Linux machine without a display says False without
-        trying, because the openers it does have say yes and fail
-        anyway: `xdg-open` starts, finds no display and exits, and
-        `webbrowser.open` counts the start as success. Knowing sooner
-        is worth more than the chance of a `BROWSER` that names a
-        browser which runs without a display.
-        """
-        if sys.platform != "darwin" and not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
-            return False
-        try:
-            return bool(webbrowser.open(url))
-        except Exception:
-            return False
+            self.send_packet({Field.CMD: Packet.FILE_SAVED, Field.MESSAGE: said})
 
     def _process_stdin(self) -> bool:
         """
@@ -1104,14 +785,14 @@ class TerminalClient(Client):
         What the person typed: the answer to this client's question
         while one shows, and the server's otherwise.
         """
-        if data and self._asking is not None and self._answer(data):
+        if data and self.sending_files.asking is not None and self.sending_files.answer(data):
             return
 
         # Send the input in chunks, so that a long paste reaches the
         # server as keystrokes rather than as one packet the server
         # only dispatches when the whole of it has arrived.
         #
-        # Nothing enforces the size. `_send_packet` sets the socket
+        # Nothing enforces the size. `send_packet` sets the socket
         # blocking and hands `send` whatever it is given, so this is a
         # choice and not a limit. Four thousand and ninety six is a
         # page, and the forty bytes under it are room for the JSON
@@ -1125,7 +806,7 @@ class TerminalClient(Client):
         # is for.
         step = 4096 - 40
         for i in range(0, len(data), step):
-            self._send_packet(
+            self.send_packet(
                 {
                     Field.CMD: Packet.IN,
                     Field.DATA: data[i : i + step],
@@ -1139,7 +820,7 @@ class TerminalClient(Client):
     def _send_size(self):
         "Report terminal size to server."
         rows, cols = self.size()
-        self._send_packet({Field.CMD: Packet.SIZE, Field.DATA: [rows, cols]})
+        self.send_packet({Field.CMD: Packet.SIZE, Field.DATA: [rows, cols]})
 
     async def _watch_signal(self) -> None:
         """

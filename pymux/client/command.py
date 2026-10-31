@@ -50,7 +50,7 @@ class CommandClient(Client):
             the path. `None`, the default, waits the way the attach
             always has.
         """
-        self._send_packet(
+        self.send_packet(
             {
                 Field.CMD: Packet.RUN_COMMAND,
                 Field.DATA: command,
@@ -97,7 +97,7 @@ class CommandClient(Client):
             return 1
         return exit_code
 
-    def _send_packet(self, data: Message) -> None:
+    def send_packet(self, data: Message) -> None:
         "Send to the server, and say nothing when it has gone: the read says that."
         with contextlib.suppress(BrokenPipeError, ConnectionResetError):
             self.socket.sendall(encode_json(data))

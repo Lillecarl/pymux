@@ -78,7 +78,7 @@ class MemoryClient(TerminalClient):
         connection.held_for_terminal = lambda: len(self._backlog)
 
     @override
-    def _write_terminal(self, data: bytes) -> None:
+    def write_terminal(self, data: bytes) -> None:
         """
         Hand the frame to the writer and return. A terminal that stops
         reading -- XOFF, a stalled link, a stopped emulator -- blocked a
@@ -111,7 +111,7 @@ class MemoryClient(TerminalClient):
             del self._backlog[:written]
 
     @override
-    def _send_packet(self, data: Message) -> None:
+    def send_packet(self, data: Message) -> None:
         "Send to the server. (The queue has no limit, so this waits for nothing.)"
         # The server is gone. The read loop ends on its own.
         with contextlib.suppress(BrokenPipeError):
@@ -137,7 +137,7 @@ class MemoryClient(TerminalClient):
         os.set_blocking(stdout_fd, False)
         with raw_mode(stdin_fd):
             async with anyio.create_task_group() as tasks:
-                self._tasks = tasks
+                self.tasks = tasks
                 tasks.start_soon(self._write_backlog, stdout_fd)
                 tasks.start_soon(self._read_keyboard, stdin_fd)
                 tasks.start_soon(self._watch_signal)
@@ -150,9 +150,9 @@ class MemoryClient(TerminalClient):
                         except BrokenPipeError:
                             return  # The server closed the connection.
                         if packet[Field.CMD] == Packet.BROWSER:
-                            # Not `_start_browser`, which would hold the
+                            # Not `Browsers.start`, which would hold the
                             # loop the server runs on while it starts.
-                            tasks.start_soon(self.run_browser, packet, None)
+                            tasks.start_soon(self.browsers.run, packet, None)
                             continue
                         self._process(packet)
                 finally:
@@ -163,8 +163,8 @@ class MemoryClient(TerminalClient):
                             await anyio.sleep(0.01)
                     # The four tasks above end with this scope.
                     tasks.cancel_scope.cancel()
-                    self._tasks = None
-                    self.stop_browsers()
+                    self.tasks = None
+                    self.browsers.stop_all()
                     os.set_blocking(stdout_fd, was_blocking)
                     self._leave_the_terminal()
 

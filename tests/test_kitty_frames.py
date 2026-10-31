@@ -227,7 +227,7 @@ class _Client(TerminalClient):
         super().__init__()
         self.sent: list[dict] = []
 
-    def _send_packet(self, data) -> None:
+    def send_packet(self, data) -> None:
         self.sent.append(data)
 
 

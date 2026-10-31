@@ -1263,7 +1263,7 @@ class Pymux:
         stays for the life of the server, so a person who attaches and
         detaches each morning leaves a `ServerConnection` behind each
         time, with its pipe input and its parser. Nothing draws for
-        them -- `_send_packet` answers a closed connection with nothing
+        them -- `send_packet` answers a closed connection with nothing
         -- so the cost is memory and a longer walk for every broadcast.
         Lillecarl/pymux#226.
         """

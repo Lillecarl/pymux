@@ -112,7 +112,7 @@ def test_a_client_leaves_with_what_the_server_named():
 
 async def test_the_reason_reaches_the_client_before_the_close():
     """
-    **The write is awaited.** `_send_packet` spawns one into the scope
+    **The write is awaited.** `send_packet` spawns one into the scope
     of the connection, and closing cancels that scope, so the reason
     would reach the client only if the cancel lost the race. A client
     closed with nothing said leaves a person looking at their shell for

@@ -35,7 +35,7 @@ class _Listening(TerminalClient):
         # The real one asks the terminal, and a test runner has none.
         return 24, 80
 
-    def _send_packet(self, data) -> None:
+    def send_packet(self, data) -> None:
         self.packets.append(data)
 
 

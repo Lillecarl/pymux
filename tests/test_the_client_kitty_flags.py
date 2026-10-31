@@ -23,7 +23,7 @@ class Recorder(TerminalClient):
         super().__init__()
         self.sent = []
 
-    def _send_packet(self, data):
+    def send_packet(self, data):
         self.sent.append(data)
 
 
@@ -52,7 +52,7 @@ def test_the_first_enable_is_a_push(monkeypatch):
     _process(client, flags=1)
 
     assert written == [b"\x1b[>1u"]
-    assert client._kitty_flags == 1
+    assert client.kitty_flags == 1
 
 
 def test_a_later_change_is_a_set_over_our_push(monkeypatch):
@@ -75,7 +75,7 @@ def test_the_way_out_pops_what_we_pushed(monkeypatch):
     client._pop_kitty_flags()
 
     assert written[-1] == b"\x1b[<1u"
-    assert client._kitty_flags is None
+    assert client.kitty_flags is None
 
 
 def test_a_second_pop_writes_nothing(monkeypatch):
@@ -99,7 +99,7 @@ def test_zero_before_any_push_writes_nothing(monkeypatch):
     _process(client, flags=0)
 
     assert written == []
-    assert client._kitty_flags is None
+    assert client.kitty_flags is None
 
 
 def test_an_unsupported_terminal_enables_nothing(monkeypatch):
@@ -110,4 +110,4 @@ def test_an_unsupported_terminal_enables_nothing(monkeypatch):
     client._pop_kitty_flags()
 
     assert written == []
-    assert client._kitty_flags is None
+    assert client.kitty_flags is None

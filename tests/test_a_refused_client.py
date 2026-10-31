@@ -55,7 +55,7 @@ def refused():
 
 def test_the_next_packet_of_the_handshake_does_not_raise(refused):
     "`_start_gui` sends one more after the server has already gone."
-    refused._send_packet({"cmd": Packet.DETECT})
+    refused.send_packet({"cmd": Packet.DETECT})
 
 
 def test_the_reason_is_still_there_to_read(refused):
@@ -63,7 +63,7 @@ def test_the_reason_is_still_there_to_read(refused):
     The whole point. What the server wrote before it closed waits in the
     buffer on this side, and a client that died sending never read it.
     """
-    refused._send_packet({"cmd": Packet.DETECT})
+    refused.send_packet({"cmd": Packet.DETECT})
 
     said = b""
     while True:
@@ -77,7 +77,7 @@ def test_the_reason_is_still_there_to_read(refused):
 
 def test_the_code_to_leave_with_is_there_too(refused):
     "A script has only the code to tell a refusal from a detach. #332."
-    refused._send_packet({"cmd": Packet.DETECT})
+    refused.send_packet({"cmd": Packet.DETECT})
 
     codes = [json.loads(one.decode("utf-8")) for one in refused.socket.recv(4096).split(b"\0") if one]
     assert [one["code"] for one in codes if one["cmd"] == Packet.EXIT] == [1]

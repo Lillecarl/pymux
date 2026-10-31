@@ -252,7 +252,7 @@ class _Recording(TerminalClient):
     def size(self):
         return 24, 80
 
-    def _send_packet(self, data) -> None:
+    def send_packet(self, data) -> None:
         self.sent.append(data)
 
 
