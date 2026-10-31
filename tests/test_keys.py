@@ -15,15 +15,9 @@ from prompt_toolkit.input.vt100_parser import Vt100Parser
 from prompt_toolkit.key_binding.key_processor import _Flush
 from prompt_toolkit.keys import Keys
 
-from pymux.keys.keys import (
-    FOCUS_IN,
-    FOCUS_OUT,
-    KittyVt100Parser,
-    Unnamed,
-    UnnamedReason,
-    parse_kitty_key,
-    pixels_to_cells,
-)
+from pymux.keys.keys import KittyVt100Parser, parse_kitty_key
+from pymux.keys.names import Unnamed, UnnamedReason
+from pymux.keys.replies import FOCUS_IN, FOCUS_OUT, pixels_to_cells
 
 
 def fed(data: str, speaks_protocol: bool = True):
@@ -551,7 +545,7 @@ def test_key_with_no_name_is_one_key_and_not_taken_apart():
 def test_ctrl_escape_does_not_reach_pane_as_five_keys():
     """
     ctrl+escape has no prompt_toolkit name. It used to leave
-    `_apply_modifiers` as None, which is what the parser reads as "not
+    `apply_modifiers` as None, which is what the parser reads as "not
     a key sequence", so a pane read "[27;5u".
     """
     assert parse("\x1b[27;5u") == [(Keys.UnnamedKey, "\x1b[27;5u")]
@@ -564,14 +558,14 @@ def test_functional_key_is_not_character():
     is not a name, and raised inside the parser.
 
     prompt_toolkit's own table matches "CSI 1 ; 5 A", so nothing ever
-    got here through the parser. `_apply_modifiers` is asked directly.
+    got here through the parser. `apply_modifiers` is asked directly.
     """
-    from pymux.keys.keys import _apply_modifiers
+    from pymux.keys.names import apply_modifiers
 
-    assert _apply_modifiers(Keys.Up, 0b100) == Keys.ControlUp
-    assert _apply_modifiers(Keys.F5, 0b100) == Keys.ControlF5
-    assert _apply_modifiers(Keys.Up, 0) == Keys.Up
-    assert _apply_modifiers("u", 0b100) == Keys.ControlU
+    assert apply_modifiers(Keys.Up, 0b100) == Keys.ControlUp
+    assert apply_modifiers(Keys.F5, 0b100) == Keys.ControlF5
+    assert apply_modifiers(Keys.Up, 0) == Keys.Up
+    assert apply_modifiers("u", 0b100) == Keys.ControlU
 
 
 def test_shift_and_functional_key_is_that_key():

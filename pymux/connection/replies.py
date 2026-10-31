@@ -17,7 +17,7 @@ from pyte.osc import Osc
 
 from ..clusters import CLUSTER_WIDTH_PROBE, PROBE_ROWS, PROBES, Drawn, table_width
 from ..enums import ExtendedKeys, Woke
-from ..keys.keys import FOCUS_IN, FOCUS_OUT
+from ..keys.replies import FOCUS_IN, FOCUS_OUT
 from ..log import logger
 from ..notify.notifications import QUERY as NOTIFICATION_QUERY
 from ..notify.notifications import QUERY_IDENTIFIER, can_close, is_click, read_identifier, split_payload

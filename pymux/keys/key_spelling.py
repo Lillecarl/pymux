@@ -51,7 +51,7 @@ from .key_mappings import (
     PYMUX_TO_PROMPT_TOOLKIT_KEYS,
     pymux_key_to_prompt_toolkit_key_sequence,
 )
-from .keys import (
+from .names import (
     CODE_AND_FORM_OF,
     KEY_BY_ITS_NAME,
     KEYS_A_KEYBOARD_SPELLS_OUT,

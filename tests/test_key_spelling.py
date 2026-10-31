@@ -36,7 +36,7 @@ from pymux.keys.key_spelling import (
     keys_of,
     why_pane_cannot_read,
 )
-from pymux.keys.keys import KEYS_A_KEYBOARD_SPELLS_OUT
+from pymux.keys.names import KEYS_A_KEYBOARD_SPELLS_OUT
 
 # ----------------------------------------------------------------------
 # Everything the older spelling reaches.
