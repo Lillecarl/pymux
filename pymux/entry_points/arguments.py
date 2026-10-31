@@ -10,12 +10,8 @@ import argparse
 import logging
 import shlex
 from enum import StrEnum
-from typing import TYPE_CHECKING
 
 from pymux import __version__, log
-
-if TYPE_CHECKING:
-    pass
 
 __all__ = ["Mode", "parse_arguments"]
 
@@ -259,13 +255,26 @@ def parse_arguments(
     a = _build_parser().parse_args(argv)
 
     rest: list[str] = a.args
+    if rest:
+        # Imported here: the help reads the whole command table, and a
+        # command line that asks for none never pays for it.
+        from .help import asks_for_help, help_of
+
+        if asks_for_help(rest):
+            said = help_of(rest[0])
+            if said is not None:
+                print(said, end="")
+                raise SystemExit(0)
     command = None
     mode: Mode | None = _mode_of(rest[0]) if rest else None
 
     if mode is not None:
         # A mode word was given. The options after the mode word are parsed
         # as well. (argparse.REMAINDER above collected them verbatim.)
-        mode_parser = argparse.ArgumentParser(prog="pymux", description="pymux: terminal multiplexer.")
+        # No help of its own: `help.asks_for_help` answers above, and a
+        # `--help` it left alone is a word of `integrated`'s program or
+        # of `imgcat`.
+        mode_parser = argparse.ArgumentParser(prog="pymux", add_help=False)
         add_options(mode_parser, suppress_defaults=True)
         mode_args, extra = mode_parser.parse_known_args(rest[1:])
         for key, value in vars(mode_args).items():

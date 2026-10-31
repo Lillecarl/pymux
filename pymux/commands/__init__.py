@@ -263,10 +263,15 @@ def add_command(
     """
     if name is None:
         name = handler.__name__.replace("_", "-")
+    described = inspect.getdoc(handler) or ""
     parser = subparsers.add_parser(
         name,
         aliases=list(aliases),
-        help=(inspect.getdoc(handler) or "").partition("\n")[0],
+        help=described.partition("\n")[0],
+        # The whole docstring, paragraphs kept, for `pymux <command>
+        # --help`. Lillecarl/pymux#845.
+        description=described,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
         # `-h` is an option of `split-window`, and no command answers
         # a help flag on its own: the help of the command bar and of
         # the shell come from this tree, not from a `-h`.
