@@ -144,6 +144,12 @@ class Requests:
                     if answer is not None:
                         await answer
             finally:
+                # The command ran under a client of its own, and a client
+                # that watches syncs its focus only after its own keys:
+                # a wheel over the pane a split just made would be over
+                # an unfocused pane. Before the exit, so a script that
+                # scrolls next finds it synced. Lillecarl/pymux#507.
+                pymux.focus.sync_clients()
                 # Send the output of the command back to the client, and
                 # close the connection.
                 pymux.answer = None

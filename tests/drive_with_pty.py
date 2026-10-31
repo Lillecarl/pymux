@@ -1766,9 +1766,11 @@ def check_strip_follows_resize(tmp):
             "the session never had a window",
         )
 
-        # The other columns, so that there is a strip to lay out.
+        # The other columns, so that there is a strip to lay out. Behind
+        # the first, which keeps the focus: the strip shows the focused
+        # column, and the border this reads is the first one's.
         for _ in range(HOW_MANY - 1):
-            opened = run_cli(terminal.sock_path, ["split-window", "-h", "sleep 600"])
+            opened = run_cli(terminal.sock_path, ["split-window", "-d", "-h", "sleep 600"])
             assert opened.returncode == 0, opened.stderr
 
         mark = terminal.mark()
