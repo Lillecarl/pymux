@@ -13,6 +13,7 @@ import re
 import zlib
 
 from pyte.images import GraphicsImage, GraphicsPlacement, GraphicsState, PixelFormat
+from pyte.sequences.replies import parse_reply
 from pyte.sequences.strings import apc
 from pyte.sixel import store_payload
 
@@ -472,17 +473,17 @@ def test_query_reply_enables_output():
     client = ClientGraphics(written.append, lambda: None)
     assert not client.kitty_supported
 
-    client.handle_reply(apc("Gi=1;OK"))  # Another image: not ours.
-    client.handle_reply(apc("Gi=311;OK"))  # An id that only looks like it.
-    client.handle_reply(apc("Gi=31;ENOENT:no such image"))
+    client.handle_reply(parse_reply(apc("Gi=1;OK")))  # Another image: not ours.
+    client.handle_reply(parse_reply(apc("Gi=311;OK")))  # An id that only looks like it.
+    client.handle_reply(parse_reply(apc("Gi=31;ENOENT:no such image")))
     assert not client.kitty_supported
 
-    client.handle_reply(apc("Gi=31;OK"))
+    client.handle_reply(parse_reply(apc("Gi=31;OK")))
     assert client.kitty_supported
 
 
 def test_query_reply_is_recognised_with_extra_keys():
     written = []
     client = ClientGraphics(written.append, lambda: None)
-    client.handle_reply(apc("GI=2,i=31,p=1;OK"))
+    client.handle_reply(parse_reply(apc("GI=2,i=31,p=1;OK")))
     assert client.kitty_supported

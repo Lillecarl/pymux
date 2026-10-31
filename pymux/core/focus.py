@@ -11,10 +11,10 @@ from typing import TYPE_CHECKING, ClassVar
 
 from prompt_toolkit.application.current import set_app
 from pyte.keep import Keep
+from pyte.sequences.reports import FocusReport
 
 from ..connection.client_state import ClientState
 from ..ids import PaneId
-from ..keys.replies import FOCUS_IN, FOCUS_OUT
 from ..log import logger
 from ..wayland.window_pane import WindowProcess, WindowScreen
 from .pane import Pane
@@ -58,8 +58,8 @@ class Focus:
                     focused.add(pane.pane_id)
         if focused == self._focused_panes:
             return
-        for pane_id, report in [(one, FOCUS_IN) for one in focused - self._focused_panes] + [
-            (one, FOCUS_OUT) for one in self._focused_panes - focused
+        for pane_id, report in [(one, str(FocusReport(True))) for one in focused - self._focused_panes] + [
+            (one, str(FocusReport(False))) for one in self._focused_panes - focused
         ]:
             pane = self.pymux.panes_by_id.get(pane_id)
             if pane is None:

@@ -43,13 +43,16 @@ from pymux.commands import handle_command
 from pymux.connection.server import ServerConnection
 from pymux.core.main import Pymux
 from pymux.enums import WindowSize
-from pymux.keys.replies import FOCUS_IN, FOCUS_OUT
 from pymux.layout.plan_container import PlanContainer
 
 #: One client with room, and one without. The columns differ by enough
 #: that a pane of the big plane cannot fit in the small client.
 BIG = Size(rows=24, columns=100)
 SMALL = Size(rows=12, columns=40)
+
+#: DEC 1004's reports, as a terminal sends them and a pane reads them.
+FOCUS_IN = "\x1b[I"
+FOCUS_OUT = "\x1b[O"
 
 
 class _Client:

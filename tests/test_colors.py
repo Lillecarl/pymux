@@ -19,6 +19,7 @@ from pyte.colors import DEFAULT_COLORS, PALETTE, Color
 from pyte.osc import COLOR_BASE
 from pyte.screen import Screen
 from pyte.sequences.csi import Csi, Marker, csi
+from pyte.sequences.replies import parse_reply
 from pyte.sequences.strings import apc, dcs, osc
 from test_server_tasks import FakePipe, FakePymux
 from test_theme import create_client as a_client
@@ -77,7 +78,7 @@ def test_probe_sets_colour_and_asks_for_it_back():
     ],
 )
 def test_reply_that_keeps_colour_means_truecolor(reply):
-    assert reports_truecolor(reply)
+    assert reports_truecolor(parse_reply(reply))
 
 
 @pytest.mark.parametrize(
@@ -98,22 +99,22 @@ def test_reply_that_keeps_colour_means_truecolor(reply):
     ],
 )
 def test_other_replies_do_not_mean_truecolor(reply):
-    assert not reports_truecolor(reply)
+    assert not reports_truecolor(parse_reply(reply))
 
 
 def test_probe_reply_raises_depth():
     detect = detection(term="xterm-256color")
     assert detect.depth == ColorDepth.DEPTH_8_BIT
 
-    detect.handle_reply(dcs("1$r38:2::1:2:3m"))
+    detect.handle_reply(parse_reply(dcs("1$r38:2::1:2:3m")))
     assert detect.truecolor
     assert detect.depth == ColorDepth.DEPTH_24_BIT
 
 
 def test_unrelated_reply_changes_nothing():
     detect = detection(term="xterm-256color")
-    detect.handle_reply(csi(Csi.XTWINOPS, 6, 20, 10))
-    detect.handle_reply(apc("Gi=31;OK"))
+    detect.handle_reply(parse_reply(csi(Csi.XTWINOPS, 6, 20, 10)))
+    detect.handle_reply(parse_reply(apc("Gi=31;OK")))
     assert not detect.truecolor
     assert detect.depth == ColorDepth.DEPTH_8_BIT
 
@@ -165,7 +166,7 @@ def test_forced_depth_beats_environment():
 
 def test_forced_depth_beats_probe():
     detect = detection(term="xterm-256color", forced=ColorDepth.DEPTH_4_BIT)
-    detect.handle_reply(dcs("1$r38;2;1;2;3m"))
+    detect.handle_reply(parse_reply(dcs("1$r38;2;1;2;3m")))
     assert detect.truecolor  # The probe still came back.
     assert detect.depth == ColorDepth.DEPTH_4_BIT  # But the flag wins.
 

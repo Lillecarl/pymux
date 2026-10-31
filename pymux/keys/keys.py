@@ -48,6 +48,7 @@ if TYPE_CHECKING:
     from prompt_toolkit.key_binding.key_processor import KeyPress
 from pyte.keys.events import FIRST_FUNCTIONAL_KEY, EventType, KeyEvent
 from pyte.keys.parse import parse_key_data
+from pyte.sequences.reports import SgrMouseReport
 
 from .names import (
     ALT,
@@ -65,18 +66,7 @@ from .names import (
     key_named,
     with_alt,
 )
-from .replies import (
-    CELL_SIZE_REPLY,
-    DA1_REPLY,
-    FLAGS_REPLY,
-    FOCUS_REPORT,
-    MODE_REPLY,
-    SGR_MOUSE_RE,
-    STATUS_REPLY,
-    STRING_REPLY,
-    pixels_to_cells,
-    reply_of,
-)
+from .replies import TERMINAL_REPLY, pixels_to_cells, reply_of
 
 __all__ = ["CSI", "MAX_KEYS_TO_REMEMBER", "MAX_STRING_LENGTH", "KittyVt100Parser", "logger", "parse_kitty_key"]
 
@@ -422,16 +412,7 @@ class KittyVt100Parser(Vt100Parser):
         # A cursor position report answers a probe of the server's: a
         # full screen application asks for none of its own.
         # Lillecarl/pymux#539.
-        if key in (
-            FLAGS_REPLY,
-            DA1_REPLY,
-            STRING_REPLY,
-            CELL_SIZE_REPLY,
-            MODE_REPLY,
-            STATUS_REPLY,
-            FOCUS_REPORT,
-            Keys.CPRResponse,
-        ):
+        if key is TERMINAL_REPLY or key is Keys.CPRResponse:
             if self.reply_callback is not None:
                 self.reply_callback(insert_text)
             return
@@ -444,9 +425,9 @@ class KittyVt100Parser(Vt100Parser):
                 insert_text, *fraction = converted
                 self.pointer_fraction = (fraction[0], fraction[1])
         if key is Keys.Vt100MouseEvent:
-            match = SGR_MOUSE_RE.match(insert_text)
-            if match is not None:
-                self.pointer_cell = (int(match.group(2)) - 1, int(match.group(3)) - 1)
+            report = SgrMouseReport.parse(insert_text)
+            if report is not None:
+                self.pointer_cell = (report.column - 1, report.row - 1)
                 if self.pointer_moved is not None:
                     self.pointer_moved()
         if key is _KEY_RELEASE:

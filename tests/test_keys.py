@@ -17,7 +17,7 @@ from prompt_toolkit.keys import Keys
 
 from pymux.keys.keys import KittyVt100Parser, parse_kitty_key
 from pymux.keys.names import Unnamed, UnnamedReason
-from pymux.keys.replies import FOCUS_IN, FOCUS_OUT, pixels_to_cells
+from pymux.keys.replies import pixels_to_cells
 
 
 def fed(data: str, speaks_protocol: bool = True):
@@ -259,9 +259,9 @@ def test_focus_reports_go_to_reply_callback():
     pressed = []
     replies = []
     parser = KittyVt100Parser(pressed.append, reply_callback=replies.append)
-    parser.feed_and_flush(FOCUS_IN + "a" + FOCUS_OUT)
+    parser.feed_and_flush("\x1b[I" + "a" + "\x1b[O")
     assert [kp.key for kp in pressed] == ["a"]
-    assert replies == [FOCUS_IN, FOCUS_OUT]
+    assert replies == ["\x1b[I", "\x1b[O"]
 
 
 def test_theme_report_goes_to_reply_callback():

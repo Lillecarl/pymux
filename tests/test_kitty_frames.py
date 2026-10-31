@@ -13,6 +13,7 @@ from multiprocessing import shared_memory
 import pytest
 from libpymux.protocol import Field, Packet
 from prompt_toolkit.data_structures import Size
+from pyte.sequences.replies import parse_reply
 from session import once, over_connection
 
 from pymux.client.terminal import TerminalClient
@@ -368,10 +369,10 @@ async def test_the_server_says_when_the_terminal_read_the_probe():
     got: list[dict] = []
     async with over_connection(read_packet=got.append) as session:
         state, _size = await session.attach("one", Size(rows=24, columns=80), frames=True)
-        state.connection.graphics.handle_reply("\x1b_Gi=%d;OK\x1b\\" % SHM_PROBE_ID)
+        state.connection.graphics.handle_reply(parse_reply("\x1b_Gi=%d;OK\x1b\\" % SHM_PROBE_ID))
         await once(lambda: any(packet.get("cmd") == "shm" for packet in got), 5.0, "no shm packet")
         # An error is not an answer that it can.
-        state.connection.graphics.handle_reply("\x1b_Gi=%d;EBADF:no\x1b\\" % SHM_PROBE_ID)
+        state.connection.graphics.handle_reply(parse_reply("\x1b_Gi=%d;EBADF:no\x1b\\" % SHM_PROBE_ID))
         assert not state.connection.graphics.kitty_supported
 
 

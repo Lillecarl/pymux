@@ -11,6 +11,7 @@ import pytest
 from pyte import escape
 from pyte.images import PixelFormat
 from pyte.sequences.csi import Csi, Marker, csi
+from pyte.sequences.replies import parse_reply
 from pyte.sequences.strings import apc
 from pyte.sixel import decode_sixel
 from test_graphics_output import IMAGE_DATA, make_state, placement, view
@@ -40,21 +41,21 @@ def sixels(written):
 
 def test_graphics_query_reply_turns_on_kitty():
     client, _written = make_client()
-    client.handle_reply(apc("Gi=31;OK"))
+    client.handle_reply(parse_reply(apc("Gi=31;OK")))
     assert client.kitty_supported
     assert not client.sixel_supported
 
 
 def test_device_attributes_with_four_turn_on_sixel():
     client, _written = make_client()
-    client.handle_reply(csi(escape.DA, 62, 1, 4, 6, private=Marker.QUESTION))
+    client.handle_reply(parse_reply(csi(escape.DA, 62, 1, 4, 6, private=Marker.QUESTION)))
     assert client.sixel_supported
     assert client.supported
 
 
 def test_device_attributes_without_four_leave_sixel_off():
     client, _written = make_client()
-    client.handle_reply(csi(escape.DA, 62, 1, 6, private=Marker.QUESTION))
+    client.handle_reply(parse_reply(csi(escape.DA, 62, 1, 6, private=Marker.QUESTION)))
     assert not client.sixel_supported
     # It still draws: half blocks need nothing but colour.
     assert client.supported
@@ -63,28 +64,28 @@ def test_device_attributes_without_four_leave_sixel_off():
 
 def test_forty_in_attributes_is_not_four():
     client, _written = make_client()
-    client.handle_reply(csi(escape.DA, 62, 40, 46, private=Marker.QUESTION))
+    client.handle_reply(parse_reply(csi(escape.DA, 62, 40, 46, private=Marker.QUESTION)))
     assert not client.sixel_supported
 
 
 def test_cell_size_report_is_read():
     client, _written = make_client()
     assert (client.cell_width, client.cell_height) == (10, 20)
-    client.handle_reply(csi(Csi.XTWINOPS, 6, 17, 8))  # Height first, then width.
+    client.handle_reply(parse_reply(csi(Csi.XTWINOPS, 6, 17, 8)))  # Height first, then width.
     assert (client.cell_width, client.cell_height) == (8, 17)
 
 
 def test_impossible_cell_size_is_ignored():
     client, _written = make_client()
-    client.handle_reply(csi(Csi.XTWINOPS, 6, 0, 0))
-    client.handle_reply(csi(Csi.XTWINOPS, 6, 9999, 9999))
+    client.handle_reply(parse_reply(csi(Csi.XTWINOPS, 6, 0, 0)))
+    client.handle_reply(parse_reply(csi(Csi.XTWINOPS, 6, 9999, 9999)))
     assert (client.cell_width, client.cell_height) == (10, 20)
 
 
 def test_terminal_that_answers_nothing_draws_half_blocks():
     "It used to draw nothing at all. Every client shows something now."
     client, written = make_client()
-    client.handle_reply(csi(escape.DA, 62, 1, 6, private=Marker.QUESTION))
+    client.handle_reply(parse_reply(csi(escape.DA, 62, 1, 6, private=Marker.QUESTION)))
     client.render([view(make_state(placement()))])
     joined = "".join(written)
     assert UPPER_HALF in joined or LOWER_HALF in joined
@@ -134,7 +135,7 @@ def test_sixel_batch_saves_and_restores_cursor():
 def test_half_blocks_land_on_cells_of_placement():
     "One cursor move for each row, at the left edge of the placement."
     client, written = make_client()
-    client.handle_reply(csi(escape.DA, 62, 1, 6, private=Marker.QUESTION))
+    client.handle_reply(parse_reply(csi(escape.DA, 62, 1, 6, private=Marker.QUESTION)))
     client.render([view(make_state(placement(columns=3, rows=2)), x=4, y=2)])
     joined = "".join(written)
     moves = re.findall(r"\x1b\[(\d+);(\d+)H", joined)
@@ -143,7 +144,7 @@ def test_half_blocks_land_on_cells_of_placement():
 
 def test_half_blocks_save_and_restore_cursor():
     client, written = make_client()
-    client.handle_reply(csi(escape.DA, 62, 1, 6, private=Marker.QUESTION))
+    client.handle_reply(parse_reply(csi(escape.DA, 62, 1, 6, private=Marker.QUESTION)))
     client.render([view(make_state(placement()))])
     assert written[-1].startswith("\x1b7")
     assert written[-1].endswith("\x1b8")
@@ -151,7 +152,7 @@ def test_half_blocks_save_and_restore_cursor():
 
 def test_second_frame_that_did_not_change_writes_nothing():
     client, written = make_client()
-    client.handle_reply(csi(escape.DA, 62, 1, 6, private=Marker.QUESTION))
+    client.handle_reply(parse_reply(csi(escape.DA, 62, 1, 6, private=Marker.QUESTION)))
     views = [view(make_state(placement()))]
     client.render(views)
     assert written
@@ -251,7 +252,7 @@ def test_sixel_image_of_a_pane_is_drawn_in_half_blocks():
     from test_graphics_output import SIXEL_DATA
 
     client, written = make_client()
-    client.handle_reply(csi(escape.DA, 62, 1, 6, private=Marker.QUESTION))
+    client.handle_reply(parse_reply(csi(escape.DA, 62, 1, 6, private=Marker.QUESTION)))
     state = make_state(placement(columns=2, rows=1), data=SIXEL_DATA, format=PixelFormat.SIXEL)
     client.render([view(state)])
     assert UPPER_HALF in "".join(written) or LOWER_HALF in "".join(written)
@@ -406,7 +407,7 @@ def make_spawning_client(blocks=False):
     repaints = []
     client, written = make_client(sixel=not blocks, repaint=lambda: repaints.append(1))
     if blocks:
-        client.handle_reply(csi(escape.DA, 62, 1, 6, private=Marker.QUESTION))
+        client.handle_reply(parse_reply(csi(escape.DA, 62, 1, 6, private=Marker.QUESTION)))
     client.spawn = spawned.append
     return client, written, spawned, repaints
 

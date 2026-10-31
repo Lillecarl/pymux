@@ -33,7 +33,6 @@ from __future__ import annotations
 
 import base64
 import random
-import re
 import zlib
 from collections.abc import Callable, Coroutine, Iterable, Iterator, Sequence
 from typing import TYPE_CHECKING, Any, NamedTuple
@@ -44,6 +43,10 @@ from pyte import escape
 from pyte.images import GraphicsImage, GraphicsPlacement, GraphicsState, PixelFormat
 from pyte.sequences.csi import Csi, Marker, csi
 from pyte.sequences.escapes import esc
+from pyte.sequences.kitty_graphics import GraphicsReply
+from pyte.sequences.replies import Reply
+from pyte.sequences.reports import AttributesKind, CellSizeReport, DeviceAttributes
+from pyte.sequences.strings import VersionReport
 from pyte.terminfo import DeviceExtension
 
 from ..layout.rects import Rect
@@ -67,7 +70,6 @@ __all__ = [
     "ClientGraphics",
     "OuterImageIds",
     "PaneView",
-    "is_query_reply",
 ]
 
 # Image id of the support query. The reply repeats it, which is how the
@@ -117,32 +119,6 @@ MAX_TOTAL_BYTES = 256 * 1024 * 1024
 # left it.
 SAVE_CURSOR = esc(escape.DECSC)
 RESTORE_CURSOR = esc(escape.DECRC)
-
-# The reply of the query: "ESC _ G i=31;OK ESC \". (Terminals add other
-# keys before the semicolon, so the image id is matched on its own.)
-_QUERY_REPLY_RE = re.compile(r"^\x1b_G(?:[^;]*,)?i=%i(?:,[^;]*)?;OK" % QUERY_IMAGE_ID)
-
-# The reply of the shared memory probe, when kitty read the object.
-# Lillecarl/pymux#634.
-_SHM_REPLY_RE = re.compile(r"^\x1b_G(?:[^;]*,)?i=%i(?:,[^;]*)?;OK" % SHM_PROBE_ID)
-
-
-# Reply of the cell size query: "CSI 6 ; height ; width t". The 6 is
-# xterm's answer code for the 16 that was asked; it is not a
-# `WindowOp`, which numbers the questions.
-_CELL_SIZE_REPLY_RE = re.compile(r"^\x1b\[6;(\d+);(\d+)t$")
-
-# Primary device attributes reply. One of the numbers it lists is the
-# terminal saying it draws sixels.
-_DEVICE_ATTRIBUTES_RE = re.compile(r"^\x1b\[\?([\d;]*)c$")
-_SIXEL_ATTRIBUTE = str(int(DeviceExtension.SIXEL))
-
-_VERSION_REPLY_RE = re.compile(r"^\x1bP>\|(.*)\x1b\\$", re.DOTALL)
-
-
-def is_query_reply(data: str) -> bool:
-    "True when `data` is the reply of `QUERY_SEQUENCE`."
-    return bool(_QUERY_REPLY_RE.match(data))
 
 
 class PaneView(NamedTuple):
@@ -366,10 +342,9 @@ class ClientGraphics:
         self._write_raw(SAVE_CURSOR + commands + RESTORE_CURSOR)
         self.flush()
 
-    def take_cell_size(self, data: str) -> bool | None:
+    def take_cell_size(self, report: CellSizeReport) -> bool:
         """
-        Read a cell size report: None when `data` is none, else whether
-        the cell is new.
+        Read a cell size report, and say whether the cell is new.
 
         **It is read whenever it comes, not in the detection alone.** A
         terminal moved to a display of another density keeps its columns
@@ -378,10 +353,7 @@ class ClientGraphics:
         342 columns, and reported the mouse in the second all along: each
         click landed at half its column. Lillecarl/pymux#774.
         """
-        match = _CELL_SIZE_REPLY_RE.match(data)
-        if match is None:
-            return None
-        return self.set_cell_size(width=int(match.group(2)), height=int(match.group(1)))
+        return self.set_cell_size(width=report.width, height=report.height)
 
     def set_cell_size(self, width: int, height: int) -> bool:
         "Take a cell size in pixels, and say whether it is new. A size out of range changes nothing."
@@ -393,49 +365,48 @@ class ClientGraphics:
         self.cell_size_known = True
         return new
 
-    def handle_reply(self, data: str) -> None:
+    def handle_reply(self, reply: Reply | None) -> None:
         "Read what a terminal reply says about the outer terminal."
-        if is_query_reply(data):
-            self.kitty_supported = True
-            return
+        # A bare name in a pattern captures, so the ids are compared in
+        # the guards.
+        match reply:
+            case GraphicsReply(image_id=image_id) if image_id == QUERY_IMAGE_ID and reply.ok:
+                self.kitty_supported = True
+            case GraphicsReply(image_id=image_id) if image_id == SHM_PROBE_ID and reply.ok:
+                if self.on_shm is not None:
+                    self.on_shm()
+            case VersionReport(version=version):
+                self.terminal_version = version
+            case CellSizeReport():
+                self.take_cell_size(reply)
+            case DeviceAttributes(kind=AttributesKind.PRIMARY, params=params):
+                self._attributes_answered(params)
 
-        if _SHM_REPLY_RE.match(data):
-            if self.on_shm is not None:
-                self.on_shm()
+    def _attributes_answered(self, params: tuple[int, ...]) -> None:
+        """
+        The primary device attributes, the last reply of the detection.
+        What did not answer by now is not there, so the half blocks know
+        where they stand.
+        """
+        self.sixel_supported = DeviceExtension.SIXEL in params
+        was_detected = self.detected
+        self.detected = True
+        if was_detected:
             return
-
-        match = _VERSION_REPLY_RE.match(data)
-        if match is not None:
-            self.terminal_version = match.group(1)
-            return
-
-        if self.take_cell_size(data) is not None:
-            return
-
-        match = _DEVICE_ATTRIBUTES_RE.match(data)
-        if match is not None:
-            attributes = [p for p in match.group(1).split(";") if p]
-            self.sixel_supported = _SIXEL_ATTRIBUTE in attributes
-            # The last reply of the detection. What did not answer by
-            # now is not there, so the half blocks know where they
-            # stand.
-            was_detected = self.detected
-            self.detected = True
-            if not was_detected:
-                # What the window pane features rest on, per terminal.
-                # Lillecarl/pymux#651.
-                logger.info(
-                    "The terminal %s: kitty graphics %s, sixel %s.",
-                    self.terminal_version or "with no version",
-                    "yes" if self.kitty_supported else "no",
-                    "yes" if self.sixel_supported else "no",
-                )
-            if not was_detected and self.repaint is not None:
-                # The frames drawn so far carried no image, because
-                # nothing knew yet whether this terminal takes one. Ask
-                # for another, or an image on a quiet pane waits for
-                # the next thing that happens to the pane.
-                self.repaint()
+        # What the window pane features rest on, per terminal.
+        # Lillecarl/pymux#651.
+        logger.info(
+            "The terminal %s: kitty graphics %s, sixel %s.",
+            self.terminal_version or "with no version",
+            "yes" if self.kitty_supported else "no",
+            "yes" if self.sixel_supported else "no",
+        )
+        if self.repaint is not None:
+            # The frames drawn so far carried no image, because nothing
+            # knew yet whether this terminal takes one. Ask for another,
+            # or an image on a quiet pane waits for the next thing that
+            # happens to the pane.
+            self.repaint()
 
     # ------------------------------------------------------------------
     # Frames.

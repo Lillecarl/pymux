@@ -9,11 +9,11 @@ Lillecarl/pymux#631, Lillecarl/pymux#634, Lillecarl/pymux#639.
 
 from __future__ import annotations
 
-import re
 from collections.abc import Awaitable, Callable, Iterable, Sequence
 from typing import TYPE_CHECKING, Any, NamedTuple
 
 from libpymux.protocol import Codec, Field, Message, Packet
+from pyte.sequences.kitty_graphics import GraphicsReply
 
 # Through the modules, so the kernels `pymux.graphics.kernels.install()` puts there
 # are the ones that run.
@@ -24,10 +24,6 @@ if TYPE_CHECKING:
     from .graphics import ClientGraphics
 
 __all__ = ["WindowFrames"]
-
-#: A kitty graphics reply naming an image: OK or an error, both say the
-#: terminal processed the command.
-_IMAGE_REPLY_RE = re.compile(r"^\x1b_G(?:[^;]*,)?i=(\d+)(?:,[^;]*)?;")
 
 
 class WindowView(NamedTuple):
@@ -209,13 +205,9 @@ class WindowFrames:
             self._shown = {}
             self.graphics.flush()
 
-    def is_frame_answer(self, data: str) -> bool:
-        "Whether `data` is the terminal's answer to a window pane's frame. Lillecarl/pymux#643."
-        match = _IMAGE_REPLY_RE.match(data)
-        if match is None:
-            return False
-        outer_id = int(match.group(1))
-        return any(window.outer_id == outer_id for window in self._shown.values())
+    def is_frame_answer(self, reply: GraphicsReply) -> bool:
+        "Whether `reply` is the terminal's answer to a window pane's frame. Lillecarl/pymux#643."
+        return reply.image_id is not None and any(window.outer_id == reply.image_id for window in self._shown.values())
 
     def render(self, views: Iterable[WindowView]) -> None:
         """

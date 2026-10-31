@@ -14,6 +14,7 @@ import sys
 import pytest
 from prompt_toolkit.data_structures import Size
 from pyte.keys.events import KEY_PROFILES
+from pyte.sequences.replies import parse_reply
 from session import once, over_connection
 
 from pymux.core.main import Pymux
@@ -38,7 +39,7 @@ async def _super_delete_from(version: str | None, fallback: str | None = None) -
         await session.pymux.panes.create_window(WAITS)
         state, _ = await session.attach("one", SIZE)
         if version is not None:
-            state.connection.graphics.handle_reply("\x1bP>|%s\x1b\\" % version)
+            state.connection.graphics.handle_reply(parse_reply("\x1bP>|%s\x1b\\" % version))
         written = _what_the_pane_reads(session.pymux)
         session.typed(state, SUPER_DELETE)
         await once(lambda: written, 5.0, "the key never reached the pane")
@@ -58,7 +59,7 @@ async def test_f13_from_wezterm_reaches_a_legacy_pane_as_rxvt_writes_it():
     async with over_connection() as session:
         await session.pymux.panes.create_window(WAITS)
         state, _ = await session.attach("one", SIZE)
-        state.connection.graphics.handle_reply("\x1bP>|WezTerm 20240203-110809-5046fc22\x1b\\")
+        state.connection.graphics.handle_reply(parse_reply("\x1bP>|WezTerm 20240203-110809-5046fc22\x1b\\"))
         written = _what_the_pane_reads(session.pymux)
         session.typed(state, "\x1b[57376u")
         await once(lambda: written, 5.0, "F13 never reached the pane")

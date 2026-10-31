@@ -18,6 +18,7 @@ from pyte import escape
 from pyte.placeholders import DIACRITICS, PLACEHOLDER
 from pyte.screen import Screen
 from pyte.sequences.csi import csi
+from pyte.sequences.replies import parse_reply
 from pyte.streams import Stream
 
 from pymux.graphics.graphics import ClientGraphics, PaneView
@@ -354,7 +355,7 @@ def test_the_terminal_names_itself_in_the_detection():
 
 def test_the_version_reply_is_kept():
     client, _written = make_client()
-    client.handle_reply("\x1bP>|ghostty 1.3.1\x1b\\")
+    client.handle_reply(parse_reply("\x1bP>|ghostty 1.3.1\x1b\\"))
     assert client.terminal_version == "ghostty 1.3.1"
 
 

@@ -6,19 +6,34 @@ the client's detection starts.
 
 from __future__ import annotations
 
-import re
 from typing import TYPE_CHECKING, ClassVar
 
 from libpymux.protocol import Field, Packet
 from prompt_toolkit.data_structures import Size
 from ptterm import Terminal
 from pyte.keep import Keep
+from pyte.modes import ModeState, PrivateMode
 from pyte.osc import Osc
+from pyte.sequences.csi import ask_mode
+from pyte.sequences.kitty_graphics import GraphicsReply
+from pyte.sequences.replies import Reply, parse_reply
+from pyte.sequences.reports import (
+    AttributesKind,
+    CellSizeReport,
+    ColorSchemeReport,
+    CursorPositionReport,
+    DeviceAttributes,
+    FocusReport,
+    InBandSizeReport,
+    KeyboardFlagsReport,
+    ModeReport,
+    StatusReport,
+)
+from pyte.sequences.strings import OscString
 
 from ..clusters import CLUSTER_WIDTH_PROBE, PROBE_ROWS, PROBES, Drawn, table_width
 from ..enums import ExtendedKeys, Woke
 from ..hacks_and_lies import outer_term
-from ..keys.replies import FOCUS_IN, FOCUS_OUT
 from ..log import logger
 from ..notify.notifications import QUERY as NOTIFICATION_QUERY
 from ..notify.notifications import QUERY_IDENTIFIER, can_close, is_click, read_identifier, split_payload
@@ -33,16 +48,13 @@ if TYPE_CHECKING:
 
 __all__ = ["TerminalReplies"]
 
-#: The answer to "CSI ? 2026 $ p" (DECRQM): "CSI ? 2026 ; <state> $ y".
-#: A state of 0 means the terminal does not know the mode. 1 and 2 are
-#: set and reset, and 4 means it is on and cannot be turned off; all
-#: three say the terminal understands it.
-_SYNCHRONIZED_REPLY_RE = re.compile(r"^\x1b\[\?2026;(\d+)\$y$")
-
 #: Whether the terminal reports the mouse in pixels (SGR pixel mode,
-#: 1016): asked with DECRQM, answered like 2026. Lillecarl/pymux#648.
-PIXEL_MOUSE_QUERY = "\x1b[?1016$p"
-_PIXEL_MOUSE_REPLY_RE = re.compile(r"^\x1b\[\?1016;(\d+)\$y$")
+#: 1016). Lillecarl/pymux#648.
+PIXEL_MOUSE_QUERY = ask_mode(PrivateMode.SGR_PIXEL_MOUSE)
+
+#: What a pixel mouse answer must say for the mode to be turned on:
+#: the terminal has it, and it can be set.
+_PIXEL_MOUSE_STATES = (ModeState.SET, ModeState.RESET, ModeState.PERMANENTLY_SET)
 
 #: Where a terminal draws a text emoji with U+FE0F after it. The probe
 #: writes one at the start of row 2 and asks where the cursor is:
@@ -50,24 +62,8 @@ _PIXEL_MOUSE_REPLY_RE = re.compile(r"^\x1b\[\?1016;(\d+)\$y$")
 #: kitty alone of seven does. Row 2, because "CSI 1;2R" is shift+F3 as
 #: well. The two cells are erased again, and the answer repaints.
 #: Lillecarl/pymux#539.
+EMOJI_WIDTH_ROW = 2
 EMOJI_WIDTH_PROBE = "\x1b7\x1b[2;1H✳️\x1b[6n\x1b[2;1H\x1b[2X\x1b8"
-_EMOJI_WIDTH_REPLY_RE = re.compile(r"^\x1b\[2;(\d+)R$")
-
-#: The answers to `CLUSTER_WIDTH_PROBE`, one per row. Lillecarl/pymux#801.
-_CLUSTER_WIDTH_REPLY_RE = re.compile(r"^\x1b\[([%s]);(\d+)R$" % "".join(map(str, PROBES)))
-
-#: The terminal switched between light and dark (DEC 2031).
-_THEME_REPORT_RE = re.compile(r"^\x1b\[\?997;[12]n$")
-
-#: The size and the pixels in one report (DEC 2048).
-_INBAND_RESIZE_RE = re.compile(r"^\x1b\[48;(\d+);(\d+);(\d+);(\d+)t$")
-
-#: The answer to `pacing.STATUS_REPORT`: 0 is ready, 3 a malfunction.
-_STATUS_REPLY_RE = re.compile(r"^\x1b\[[03]n$")
-
-#: An OSC reply of the outer terminal: the code, and everything between
-#: the code and the terminator.
-_OSC_REPLY_RE = re.compile(r"^(?:\x1b\]|\x9d)(\d+);(.*?)(?:\x1b\\|\x9c|\x07)$", re.DOTALL)
 
 
 class TerminalReplies:
@@ -175,20 +171,15 @@ class TerminalReplies:
         arrive at any time, long after the detection, and it belongs to
         one pane.
         """
+        reply = parse_reply(data)
         # Not kept: one arrives at every switch between windows.
-        if data in (FOCUS_IN, FOCUS_OUT):
-            logger.debug("The terminal %s the focus.", "took" if data == FOCUS_IN else "lost")
-            if self.connection.client_state is not None:
-                self.connection.client_state.terminal_focused = data == FOCUS_IN
-                self.connection.pymux.focus.sync_panes()
-                if data == FOCUS_IN:
-                    self.connection.pymux.client_was_used(self.connection.client_state)
-                    self.connection.pymux.invalidate(Woke.CLIENT_FOCUSED)
+        if isinstance(reply, FocusReport):
+            self._focus_changed(reply.focused)
             return
         # The terminal switched between light and dark. The report says
         # which, not the colours: those are asked again, and their
         # answers match the theme as at attach. Lillecarl/pymux#796.
-        if _THEME_REPORT_RE.match(data):
+        if isinstance(reply, ColorSchemeReport):
             self.connection.write_output_raw(COLOR_QUERIES)
             self.connection.flush_output()
             return
@@ -197,133 +188,131 @@ class TerminalReplies:
         # Lillecarl/pymux#725.
         self.terminal_said.heard(data)
 
-        # The terminal reports the mouse in pixels if asked: from here on
-        # it is asked, with the rest of the mouse. Lillecarl/pymux#648.
-        pixel_mouse = _PIXEL_MOUSE_REPLY_RE.match(data)
-        if pixel_mouse is not None:
-            # Only with a cell to divide by. xterm reports pixels and, by
-            # default, keeps its cell size to itself; its answer to that
-            # query came before this one, or never. Lillecarl/pymux#651.
-            # DECRPM: 1 set, 2 reset, 3 always set; 4 is always reset,
-            # which iTerm2 answers, and 0 a mode it does not know.
-            if pixel_mouse.group(1) in ("1", "2", "3") and self.connection.graphics.cell_size_known:
-                self._turn_on_pixel_mouse()
+        if self._took(reply) or not self.detection_pending:
             return
+        self._detected(reply)
 
-        emoji_width = _EMOJI_WIDTH_REPLY_RE.match(data)
-        if emoji_width is not None:
-            widens = int(emoji_width.group(1)) > 2
-            if widens != self.widens_text_emoji:
-                self.widens_text_emoji = widens
-                logger.info(
-                    "The terminal of client %s draws a text emoji with U+FE0F wide.", self.connection.client_id or "?"
-                )
-                # The emoji already on its screen were written for the
-                # other reading.
-                self.connection.request_repaint()
+    def _focus_changed(self, focused: bool) -> None:
+        logger.debug("The terminal %s the focus.", "took" if focused else "lost")
+        if self.connection.client_state is None:
             return
+        self.connection.client_state.terminal_focused = focused
+        self.connection.pymux.focus.sync_panes()
+        if focused:
+            self.connection.pymux.client_was_used(self.connection.client_state)
+            self.connection.pymux.invalidate(Woke.CLIENT_FOCUSED)
 
-        cluster_width = _CLUSTER_WIDTH_REPLY_RE.match(data)
-        if cluster_width is not None:
-            fit = self.cluster_fit()
-            row = int(cluster_width.group(1))
-            self.clusters_drawn = self.clusters_drawn.answered(row, int(cluster_width.group(2)))
-            self._compare_with_the_table(row)
-            # The clusters already on its screen were fitted otherwise.
-            if self.cluster_fit() != fit:
-                self.connection.request_repaint()
-            return
-
-        # The terminal read a frame. Lillecarl/pymux#259.
-        if _STATUS_REPLY_RE.match(data):
-            self.connection.pacing.status_answered()
-            return
-
-        # The terminal processed a window pane's frame. Lillecarl/pymux#643.
-        if self.connection.graphics.windows.frame_room is not None and self.connection.graphics.windows.is_frame_answer(
-            data
-        ):
-            self.connection.pacing.frame_answered()
-            return
-
-        osc = _OSC_REPLY_RE.match(data)
-        if osc is not None:
-            if osc.group(1) == "99":
-                self._route_notification(osc.group(2))
-            else:
-                # The colours the terminal draws with, defaults and
-                # palette alike. It answers each on the code that
-                # asked, so this reads them whenever they arrive: a
-                # terminal that reports a theme change later says it
-                # the same way. Anything learned is what the panes
-                # answer their programs with, so they are told again.
-                if self.connection.default_colors.handle_osc_reply(osc.group(1), osc.group(2)):
+    def _took(self, reply: Reply | None) -> bool:
+        "Read a reply that may come at any time. True when it was one."
+        match reply:
+            # The terminal reports the mouse in pixels if asked: from here
+            # on it is asked, with the rest of the mouse. Lillecarl/pymux#648.
+            case ModeReport(mode=PrivateMode.SGR_PIXEL_MOUSE, state=state):
+                # Only with a cell to divide by. xterm reports pixels and,
+                # by default, keeps its cell size to itself; its answer to
+                # that query came before this one, or never.
+                # Lillecarl/pymux#651. Permanently reset is what iTerm2
+                # answers.
+                if state in _PIXEL_MOUSE_STATES and self.connection.graphics.cell_size_known:
+                    self._turn_on_pixel_mouse()
+            case CursorPositionReport(row=row, column=column) if row == EMOJI_WIDTH_ROW:
+                self._emoji_width_answered(column)
+            case CursorPositionReport(row=row, column=column) if row in PROBES:
+                self._cluster_width_answered(row, column)
+            # The terminal read a frame. Lillecarl/pymux#259.
+            case StatusReport():
+                self.connection.pacing.status_answered()
+            # The terminal processed a window pane's frame. Lillecarl/pymux#643.
+            case GraphicsReply() if (
+                self.connection.graphics.windows.frame_room is not None
+                and self.connection.graphics.windows.is_frame_answer(reply)
+            ):
+                self.connection.pacing.frame_answered()
+            case OscString(code=Osc.NOTIFICATION, payload=payload):
+                self._route_notification(payload)
+            case OscString(code=code, payload=payload):
+                # The colours the terminal draws with, defaults and palette
+                # alike. It answers each on the code that asked, so this
+                # reads them whenever they arrive: a terminal that reports
+                # a theme change later says it the same way. Anything
+                # learned is what the panes answer their programs with, so
+                # they are told again.
+                if self.connection.default_colors.handle_osc_reply(code, payload):
                     self._match_the_theme()
                     self.connection.pymux.terminals.sync_color_bases()
-            return
-
-        # The cell size, whenever it comes: asked again at each resize.
-        # The client that attached before its terminal answered can
-        # first speak for the panes now, and one whose cell changed
-        # speaks again. Lillecarl/pymux#369, Lillecarl/pymux#774.
-        new_cell = self.connection.graphics.take_cell_size(data)
-        if new_cell is not None:
-            if new_cell:
-                self.connection.pymux.terminals.sync_cell_size()
-            return
-
-        # DEC 2048: the size and the pixels in one report, which the
-        # terminal sends when the mode is set and at each resize. From
-        # here on a resize needs no cell size query. Lillecarl/pymux#797.
-        resize = _INBAND_RESIZE_RE.match(data)
-        if resize is not None:
-            rows, columns, height, width = map(int, resize.groups())
-            self.sizes_in_band = True
-            if rows and columns:
-                self.connection.resized(Size(rows=rows, columns=columns))
-                if self.connection.graphics.set_cell_size(width=width // columns, height=height // rows):
+            # The cell size, whenever it comes: asked again at each resize.
+            # The client that attached before its terminal answered can
+            # first speak for the panes now, and one whose cell changed
+            # speaks again. Lillecarl/pymux#369, Lillecarl/pymux#774.
+            case CellSizeReport():
+                if self.connection.graphics.take_cell_size(reply):
                     self.connection.pymux.terminals.sync_cell_size()
-            return
+            # DEC 2048: the size and the pixels in one report, which the
+            # terminal sends when the mode is set and at each resize. From
+            # here on a resize needs no cell size query. Lillecarl/pymux#797.
+            case InBandSizeReport(rows=rows, columns=columns, height=height, width=width):
+                self.sizes_in_band = True
+                if rows and columns:
+                    self.connection.resized(Size(rows=rows, columns=columns))
+                    if self.connection.graphics.set_cell_size(width=width // columns, height=height // rows):
+                        self.connection.pymux.terminals.sync_cell_size()
+            case _:
+                return False
+        return True
 
-        if not self.detection_pending:
-            return
+    def _emoji_width_answered(self, column: int) -> None:
+        widens = column > 2
+        if widens != self.widens_text_emoji:
+            self.widens_text_emoji = widens
+            logger.info(
+                "The terminal of client %s draws a text emoji with U+FE0F wide.", self.connection.client_id or "?"
+            )
+            # The emoji already on its screen were written for the
+            # other reading.
+            self.connection.request_repaint()
 
-        if data.startswith("\x1b[?") and data.endswith("u"):
-            # Reply of the "CSI ? u" query: the terminal supports the
-            # keyboard protocol. The detection asks for every flag
-            # first, so the number says which ones the terminal took,
-            # and that is what it can report.
-            self._kitty_supported = True
-            try:
-                self.kitty_source_flags = int(data[3:-1] or 0)
-            except ValueError:
-                self.kitty_source_flags = 0
-            self.connection.pymux.terminals.sync_keyboard_source_flags()
-            return
+    def _cluster_width_answered(self, row: int, column: int) -> None:
+        fit = self.cluster_fit()
+        self.clusters_drawn = self.clusters_drawn.answered(row, column)
+        self._compare_with_the_table(row)
+        # The clusters already on its screen were fitted otherwise.
+        if self.cluster_fit() != fit:
+            self.connection.request_repaint()
 
-        # The answer to the synchronised output query. A terminal that
-        # holds a frame back does not need the cursor hidden while the
-        # frame is painted, and hiding it restarts the blink: at a frame
-        # rate that is a cursor which never blinks.
-        synchronized = _SYNCHRONIZED_REPLY_RE.match(data)
-        if synchronized is not None:
-            if self.connection.client_state is not None:
-                self.connection.client_state.output.synchronized_output = synchronized.group(1) != "0"
-            return
+    def _detected(self, reply: Reply | None) -> None:
+        "Read a reply of the detection, and close it at the device attributes."
+        match reply:
+            case KeyboardFlagsReport(flags=flags):
+                # Reply of the "CSI ? u" query: the terminal supports the
+                # keyboard protocol. The detection asks for every flag
+                # first, so the number says which ones the terminal took,
+                # and that is what it can report.
+                self._kitty_supported = True
+                self.kitty_source_flags = int(flags)
+                self.connection.pymux.terminals.sync_keyboard_source_flags()
+                return
+            case ModeReport(mode=PrivateMode.SYNCHRONIZED_OUTPUT, state=state):
+                # A terminal that holds a frame back does not need the
+                # cursor hidden while the frame is painted, and hiding it
+                # restarts the blink: at a frame rate that is a cursor
+                # which never blinks.
+                if self.connection.client_state is not None:
+                    self.connection.client_state.output.synchronized_output = state is not ModeState.UNKNOWN
+                return
 
         # The graphics query reply and the device attributes say
         # something about the images. The reply of the colour probe says
         # how many colours the terminal takes.
         fit = self.cluster_fit()
-        self.connection.graphics.handle_reply(data)
-        self.connection.colors.handle_reply(data)
+        self.connection.graphics.handle_reply(reply)
+        self.connection.colors.handle_reply(reply)
         # The clusters already on its screen were fitted otherwise.
         if self.cluster_fit() != fit:
             self.connection.request_repaint()
 
-        # The secondary attributes end in `c` too, and are the survey's,
-        # never the fence. Lillecarl/pymux#725.
-        if not data.endswith("c") or data.startswith("\x1b[>"):
+        # The secondary attributes are the survey's, never the fence.
+        # Lillecarl/pymux#725.
+        if not (isinstance(reply, DeviceAttributes) and reply.kind is AttributesKind.PRIMARY):
             return
 
         # Device attributes reply: the fence of the detection. What did

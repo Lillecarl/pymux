@@ -40,13 +40,15 @@ terminal is -- and nothing here decides what to do about it.
 
 from __future__ import annotations
 
-import re
-
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.utils import is_dumb_terminal
+from pyte import escape
 from pyte.colors import DEFAULT_COLORS, PALETTE, Color, parse_color
+from pyte.control import CSI
 from pyte.osc import DYNAMIC_COLOR_CODES, QUERY, ColorBase, Osc
-from pyte.sequences.strings import osc
+from pyte.sequences.csi import CsiSequence, Parameter
+from pyte.sequences.replies import Reply
+from pyte.sequences.strings import SettingReport, osc
 
 __all__ = [
     "COLOR_QUERIES",
@@ -94,15 +96,8 @@ COLOR_QUERIES = "".join(osc(code, QUERY) for code in _COLOR_CODES) + "".join(
     osc(Osc.PALETTE_COLOR, "%i;?" % index) for index in range(16)
 )
 
-# The reply of a DECRQSS request: "DCS <valid> $ r <answer> ST". The
-# validity digit is not read: terminals disagree about which value
-# means valid, and the answer itself says whether the colour survived.
-_DECRQSS_REPLY_RE = re.compile(r"^\x1b[P\x90]\d*\$r(.*?)(?:\x1b\\|\x9c)$", re.DOTALL)
-
-# A 24 bit colour in the answer. The components follow the "2" either
-# after semicolons or after colons, with an empty colour space id in
-# the colon form.
-_TRUECOLOR_RE = re.compile(r"38[:;]2[:;]([\d:;]*)")
+#: SGR 38 ; 2: a foreground colour by its components.
+_FOREGROUND, _DIRECT = 38, 2
 
 # Terminals that are known to take only the sixteen ANSI colours.
 _ANSI_ONLY_TERMS = frozenset(
@@ -118,27 +113,43 @@ _ANSI_ONLY_TERMS = frozenset(
 )
 
 
-def reports_truecolor(reply: str) -> bool:
+def reports_truecolor(reply: Reply | None) -> bool:
     """
     True when a DECRQSS reply gives the three components of the probe
     colour back. That means the terminal kept them.
+
+    The validity code is not read: terminals disagree about which value
+    means valid, and the setting itself says whether the colour
+    survived.
     """
-    match = _DECRQSS_REPLY_RE.match(reply)
-    if match is None:
+    if not isinstance(reply, SettingReport):
         return False
-
-    found = _TRUECOLOR_RE.search(match.group(1))
-    if found is None:
+    rendition = CsiSequence.parse(CSI + reply.setting)
+    if rendition is None or rendition.final != escape.SGR:
         return False
-
-    numbers = [int(part) for part in re.split(r"[:;]", found.group(1)) if part != ""][:4]
+    numbers = _direct_foreground(rendition.params)
+    if numbers is None:
+        return False
     probe = [PROBE_RED, PROBE_GREEN, PROBE_BLUE]
-
     # The colon form may carry a colour space id before the three
     # components, and the semicolon form may be followed by further
     # attributes. Both shapes put the components in the first four
     # numbers.
     return numbers[:3] == probe or numbers[1:4] == probe
+
+
+def _direct_foreground(params: tuple[Parameter, ...]) -> list[int] | None:
+    """
+    The numbers after "38 ; 2" or "38 : 2", the empty ones left out, or
+    None when the rendition sets no direct foreground.
+    """
+    for at, param in enumerate(params):
+        if isinstance(param, tuple):
+            if tuple(param[:2]) == (_FOREGROUND, _DIRECT):
+                return [part for part in param[2:] if part is not None][:4]
+        elif param == _FOREGROUND and params[at + 1 : at + 2] == (_DIRECT,):
+            return [part for part in params[at + 2 : at + 6] if isinstance(part, int)]
+    return None
 
 
 class ColorDetection:
@@ -157,9 +168,9 @@ class ColorDetection:
         #: True once the probe came back with its own colour.
         self.truecolor = False
 
-    def handle_reply(self, data: str) -> None:
+    def handle_reply(self, reply: Reply | None) -> None:
         "Read what a terminal reply says about the colours."
-        if reports_truecolor(data):
+        if reports_truecolor(reply):
             self.truecolor = True
 
     @property
