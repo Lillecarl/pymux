@@ -82,10 +82,7 @@ def the_control(mux):
 
 
 def a_peer():
-    sink: MirrorSink | None = None
-    control = TerminalControl(backend=Quiet(), get_history_limit=lambda: sink.history_limit())
-    sink = MirrorSink(control)
-    return sink
+    return MirrorSink(TerminalControl(backend=Quiet()))
 
 
 def picture(control: TerminalControl):

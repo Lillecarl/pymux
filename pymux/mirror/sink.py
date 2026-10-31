@@ -28,15 +28,18 @@ class MirrorSink:
     """
     Applies the mirror packets of one pane to a control that mirrors it.
 
-    The control's `get_history_limit` should be `history_limit`: the owner
-    trims its history at each read by its own limit, and the mirror has
-    to trim at the same reads by the same one.
+    The owner trims its history at each read by its own limit, and the
+    mirror has to trim at the same reads by the same one, so the
+    screen's limit is the owner's and not this server's option.
     """
 
     def __init__(self, control: TerminalControl) -> None:
         self.control = control
         control.mirrored = True
+        control.screen.get_history_limit = self.history_limit
         self.limit = _NOT_YET_TOLD
+        #: Why the owner will not send this pane, once it said so.
+        self.refused: str | None = None
 
     def history_limit(self) -> int:
         return self.limit
@@ -64,6 +67,13 @@ class MirrorSink:
     @_PACKETS.handles(Packet.MIRROR_SURROUNDED)
     def _on_surrounded(self, packet: Message) -> None:
         self.control.screen.surround(thaw_value(packet[Field.SURROUNDINGS]))
+
+    @_PACKETS.handles(Packet.MIRROR_REFUSED)
+    def _on_refused(self, packet: Message) -> None:
+        self.refused = str(packet.get(Field.ERROR) or "refused")
+        # The mirror ends here, so a line of this side's own no longer
+        # parts it from the screen it copied.
+        self.control.feed_output("\r\n[the owner stopped sending this pane: %s]\r\n" % self.refused)
 
     @_PACKETS.handles(Packet.MIRROR_HISTORY_LIMIT)
     def _on_history_limit(self, packet: Message) -> None:

@@ -174,6 +174,7 @@ MODULES = [
     "kill_job",
     "view_job",
     "tail_job",
+    "mirror_pane",
     "sql",
     "wl",
     "launch_browser",

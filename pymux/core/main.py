@@ -38,6 +38,7 @@ from ..keys.actions import ActionLog, Origin, awaited_as, started_by
 from ..keys.key_bindings import PymuxKeyBindings
 from ..layout.error_notice import ErrorNotice
 from ..log import logger
+from ..mirror.peer import Peers
 from ..notify.notifications import NotificationCenter, NotificationRoutes
 from ..notify.notifier import Notifier
 from ..options.options import ALL_CLIENT_OPTIONS, ALL_OPTIONS, ALL_SERVER_OPTIONS, ALL_WINDOW_OPTIONS, Scope
@@ -164,6 +165,8 @@ class Pymux:
         "overlays": Keep.REBUILT,
         "forward_requests": Keep.REBUILT,
         "port_offers": Keep.REBUILT,
+        # A mirror's program asks the next server's link again.
+        "peers": Keep.REBUILT,
         "waking": Keep.REBUILT,
         "focus": Keep.REBUILT,
         # The running server.
@@ -279,6 +282,9 @@ class Pymux:
         self.serving = Serving(self)
         self.panes = PaneMaker(self)
         self.outward = Outward(self)
+        #: The links to other servers whose panes this one mirrors.
+        #: Lillecarl/pymux#759.
+        self.peers = Peers(self)
 
         #: The task group every route runs in. `running()` owns it, so
         #: it is there for exactly as long as this server serves, and
