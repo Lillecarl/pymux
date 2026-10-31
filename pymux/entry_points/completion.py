@@ -13,13 +13,9 @@ import json
 import os
 import shlex
 from functools import partial
-from typing import TYPE_CHECKING
 
 from pymux.client import is_ssh_url
 from pymux.entry_points.arguments import Mode, add_options
-
-if TYPE_CHECKING:
-    pass
 
 __all__ = ["ASK_SECONDS"]
 

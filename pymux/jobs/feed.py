@@ -9,7 +9,7 @@ import codecs
 import re
 from collections.abc import Callable
 from contextlib import suppress
-from typing import TYPE_CHECKING, ClassVar
+from typing import ClassVar
 
 import anyio
 import anyio.abc
@@ -17,9 +17,6 @@ from anyio.streams.memory import MemoryObjectSendStream
 from pyte.keep import Keep
 
 from pymux.log import logger
-
-if TYPE_CHECKING:
-    pass
 
 from .job import Job
 

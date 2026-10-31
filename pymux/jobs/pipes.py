@@ -7,16 +7,12 @@ from __future__ import annotations
 
 import os
 from contextlib import suppress
-from typing import TYPE_CHECKING
 
 import anyio
 import anyio.abc
 from ptyhost.backends.posix import reaped_now, stranger_ended
 
 from pymux.log import logger
-
-if TYPE_CHECKING:
-    pass
 
 from .job import Job, land
 
