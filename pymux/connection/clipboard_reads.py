@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING, ClassVar
 
 import anyio
 from pyte.keep import Keep
+from pyte.osc import QUERY, Osc
+from pyte.sequences.strings import osc
 
 from ..enums import Woke
 
@@ -79,7 +81,7 @@ class ClipboardReader:
         answer: list[str] = []
         self._waiters.append((done, answer))
         self._asked = True
-        self.connection.forward_osc("\x1b]52;%s;?\x1b\\" % (selection,))
+        self.connection.forward_osc(osc(Osc.CLIPBOARD, selection, QUERY))
         self.connection.pymux.invalidate(Woke.CLIPBOARD_ASKED)
         with anyio.move_on_after(CLIPBOARD_READ_SECONDS):
             await done.wait()

@@ -20,7 +20,6 @@ from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
 import anyio
-from pyte.modes import PrivateMode
 
 from pymux.commands import CommandException
 from pymux.commands.common import send_key
@@ -197,6 +196,4 @@ def _a_paste(screen: Screen, text: str) -> str:
     lines in it. A program that did not ask reads plain text, and
     wrapping it anyway would put the two markers on its screen.
     """
-    if PrivateMode.BRACKETED_PASTE.flag not in screen.mode:
-        return text
-    return "\x1b[200~%s\x1b[201~" % (text,)
+    return screen.wrap_paste(text)

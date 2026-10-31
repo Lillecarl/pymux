@@ -26,6 +26,9 @@ import string
 from typing import Final, NamedTuple
 from urllib.parse import unquote
 
+from pyte.osc import Osc
+from pyte.sequences.strings import Terminator, osc
+
 __all__ = [
     "MAX_OSC_LENGTH",
     "NO_PROGRESS",
@@ -75,7 +78,7 @@ def build_osc(code: str, param: str) -> str | None:
         return None
     if code == "52" and not _is_clipboard_payload(param):
         return None
-    return "\x1b]%s;%s\x1b\\" % (code, param)
+    return osc(code, param)
 
 
 def _is_plain_text(param: str) -> bool:
@@ -194,8 +197,9 @@ def set_user_var(name: str, value: str | None) -> str:
     value clears the variable.
     """
     if value is None:
-        return "\x1b]1337;SetUserVar=%s\x07" % (name,)
-    return "\x1b]1337;SetUserVar=%s=%s\x07" % (name, base64.b64encode(value.encode()).decode("ascii"))
+        return osc(Osc.TERMINAL_EXTENSION, "SetUserVar=%s" % (name,), end=Terminator.BEL)
+    encoded = base64.b64encode(value.encode()).decode("ascii")
+    return osc(Osc.TERMINAL_EXTENSION, "SetUserVar=%s=%s" % (name, encoded), end=Terminator.BEL)
 
 
 def current_dir_of(rest: str) -> str | None:

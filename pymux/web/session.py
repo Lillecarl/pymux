@@ -32,7 +32,6 @@ from typing import Any
 import anyio
 from libpymux.protocol import Field, Packet
 from pyte.keys.unhearable import Unhearable
-from pyte.modes import PrivateMode
 from pyte.screen import Screen
 from pyte.streams import GroundTimer, Stream
 
@@ -196,9 +195,7 @@ class SessionScreen:
         is held here and nowhere else.
         """
         if not typed.named:
-            if typed.bracketed and PrivateMode.BRACKETED_PASTE.flag in self.screen.mode:
-                return "\x1b[200~%s\x1b[201~" % (typed.text,)
-            return typed.text
+            return self.screen.wrap_paste(typed.text) if typed.bracketed else typed.text
 
         spelled = []
         for name in typed.text.split():

@@ -15,6 +15,7 @@ from typing import (
 
 import anyio
 from pyte.keep import Keep
+from pyte.sequences.reports import ask_status
 
 from ..log import logger
 from ..options.client_options import ClientOptions
@@ -28,7 +29,7 @@ __all__ = ["FramePacing"]
 #: A status report and its answer: 0 is ready, 3 a malfunction, and
 #: either says the terminal read everything sent before the report.
 #: Lillecarl/pymux#259.
-STATUS_REPORT = "\x1b[5n"
+STATUS_REPORT = ask_status()
 
 #: How long a window pane's frame may go unanswered before the next one
 #: goes all the same. Lillecarl/pymux#643.

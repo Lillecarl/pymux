@@ -15,6 +15,8 @@ from libpymux.wire import encode_json
 from prompt_toolkit.application.current import create_app_session
 from prompt_toolkit.data_structures import Size
 from pyte.keep import Keep
+from pyte.osc import Osc
+from pyte.sequences.strings import osc
 
 from ..audio import AudioLink
 from ..enums import Woke
@@ -420,7 +422,7 @@ class ServerConnection:
         if shape == self._pointer_shape_sent:
             return False
         self._pointer_shape_sent = shape
-        self.forward_osc("\x1b]22;%s\x1b\\" % shape)
+        self.forward_osc(osc(Osc.POINTER_SHAPE, shape))
         return True
 
     def set_progress(self, progress: Progress) -> None:
@@ -432,7 +434,7 @@ class ServerConnection:
         if progress == self._progress_sent or not self.replies.identity.draws_progress():
             return
         self._progress_sent = progress
-        self.forward_osc("\x1b]9;%s\x1b\\" % progress.sequence)
+        self.forward_osc(osc(Osc.MESSAGE, progress.sequence))
 
     def request_repaint(self) -> None:
         """

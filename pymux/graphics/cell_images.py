@@ -18,7 +18,9 @@ from typing import TYPE_CHECKING, Any
 
 import anyio
 from prompt_toolkit.output import ColorDepth
+from pyte import escape
 from pyte.images import GraphicsImage, PixelFormat
+from pyte.sequences.csi import csi
 from pyte.sixel import stored_payload
 
 from ..log import logger
@@ -166,7 +168,7 @@ class CellImages:
                     live.add(key)
                     data = self._as_sent(key, image)
                     if data is not None:
-                        desired[(view.pane_id, placement.image_id, slot)] = "\x1b[%i;%iH%s" % (y + 1, x + 1, data)
+                        desired[(view.pane_id, placement.image_id, slot)] = csi(escape.CUP, y + 1, x + 1) + data
                         continue
 
                 key = (
@@ -181,11 +183,7 @@ class CellImages:
                 data = self._sixel_for(key, image, source, columns, rows, own_size)
                 if data is None:
                     continue
-                desired[(view.pane_id, placement.image_id, slot)] = "\x1b[%i;%iH%s" % (
-                    y + 1,
-                    x + 1,
-                    data,
-                )
+                desired[(view.pane_id, placement.image_id, slot)] = csi(escape.CUP, y + 1, x + 1) + data
 
         return desired, live
 
@@ -220,7 +218,7 @@ class CellImages:
                 # not the rows of the screen once a pane is not at the
                 # left edge.
                 desired[(view.pane_id, placement.image_id, slot)] = "".join(
-                    "\x1b[%i;%iH%s" % (y + offset + 1, x + 1, line) for offset, line in enumerate(lines) if line
+                    csi(escape.CUP, y + offset + 1, x + 1) + line for offset, line in enumerate(lines) if line
                 )
 
         return desired, live

@@ -29,6 +29,11 @@ from libpymux.wire import MSGPACK, encode_json, encode_msgpack
 from prompt_toolkit.input.posix_utils import PosixStdinReader
 from prompt_toolkit.input.vt100 import cooked_mode, raw_mode
 from prompt_toolkit.output.vt100 import Vt100_Output, _get_size
+from pyte import escape
+from pyte.keys.events import KeyboardFlag
+from pyte.modes import PrivateMode
+from pyte.sequences.csi import ask_mode, csi
+from pyte.sequences.kitty_keyboard import ask_flags, pop_flags, push_flags, set_flags
 
 from pymux.config import client_options_in, find_config
 from pymux.files import ArrivingFiles, Whole
@@ -39,6 +44,7 @@ from pymux.notify.osc import PASSTHROUGH_VARIABLE, set_user_var
 from pymux.style.colors import COLOR_QUERIES, TRUECOLOR_PROBE
 from pymux.utils import nonblocking
 
+from ..connection.client_io import PIXEL_MOUSE_OFF, REPORTS_OFF
 from ..connection.packet_table import PacketTable
 from .base import Client
 from .browsers import Browsers
@@ -59,25 +65,14 @@ __all__ = [
     "TerminalClient",
 ]
 
-#: What the client asks the outer terminal at attach time.
-#:
-#: The replies arrive as input and the server reads them: keyboard
-#: flags, the kitty graphics protocol, the cell size, the terminal's
-#: name and version, the colour depth,
-#: the two colours the terminal draws with, and last the device
-#: attributes, which also say whether sixel works. Every terminal
-#: answers the device attributes query, so a feature that did not
-#: answer before it is not supported.
-#:
-#: The keyboard query asks for every flag first, so that the reply says
-#: which ones the terminal took. A terminal that speaks a part of the
-#: protocol only says so that way. The pop puts the terminal back as it
-#: was.
-#: Does the terminal hold a frame back until it is complete?
-#: ("CSI ? 2026 $ p", DECRQM.) A terminal that does answers
-#: "CSI ? 2026 ; <state> $ y" with a state of 1, 2 or 4; one that does
-#: not answers 0, or does not answer at all.
-SYNCHRONIZED_OUTPUT_QUERY = b"\x1b[?2026$p"
+#: Does the terminal hold a frame back until it is complete? A terminal
+#: that does answers that it knows the mode; one that does not answers
+#: that it does not, or nothing at all.
+SYNCHRONIZED_OUTPUT_QUERY = ask_mode(PrivateMode.SYNCHRONIZED_OUTPUT).encode()
+
+#: Every flag of the kitty keyboard protocol, which the detection asks
+#: the terminal to take.
+EVERY_KEYBOARD_FLAG = KeyboardFlag(sum(KeyboardFlag))
 
 #: How often a client reads the size of its terminal, in seconds.
 #: `Application.terminal_size_polling_interval` is the same number, and
@@ -98,10 +93,23 @@ RESTARTING = "pymux is restarting."
 
 #: The device attributes query, which closes the detection. The shared
 #: memory probe goes in front of it, so its answer comes first.
-DEVICE_ATTRIBUTES_QUERY = b"\x1b[c"
+DEVICE_ATTRIBUTES_QUERY = csi(escape.DA).encode()
 
+#: What the client asks the outer terminal at attach time.
+#:
+#: The replies arrive as input and the server reads them: keyboard
+#: flags, the kitty graphics protocol, the cell size, the terminal's
+#: name and version, the colour depth, the two colours the terminal
+#: draws with, and last the device attributes, which also say whether
+#: sixel works. Every terminal answers the device attributes query, so
+#: a feature that did not answer before it is not supported.
+#:
+#: The keyboard query asks for every flag first, so that the reply says
+#: which ones the terminal took. A terminal that speaks a part of the
+#: protocol only says so that way. The pop puts the terminal back as it
+#: was.
 DETECTION_QUERIES = (
-    b"\x1b[>31u\x1b[?u\x1b[<u"
+    (push_flags(EVERY_KEYBOARD_FLAG) + ask_flags() + pop_flags()).encode()
     + SYNCHRONIZED_OUTPUT_QUERY
     + GRAPHICS_QUERY.encode("ascii")
     + CELL_SIZE_QUERY.encode("ascii")
@@ -448,10 +456,10 @@ class TerminalClient(Client):
         output.disable_mouse_support()
         # SGR pixel mouse, which the server may have turned on: the next
         # program would read pixels as cells. Lillecarl/pymux#648.
-        output.write_raw("\x1b[?1016l")
+        output.write_raw(PIXEL_MOUSE_OFF)
         # Focus, theme and size reports, which the server turns on.
         # Lillecarl/pymux#794, Lillecarl/pymux#796, Lillecarl/pymux#797.
-        output.write_raw("\x1b[?1004l\x1b[?2031l\x1b[?2048l")
+        output.write_raw(REPORTS_OFF)
         # The user variable passthrough sets, which a terminal may hold
         # its own shortcuts back on. Cleared whatever mode the client
         # was in, because a detach in passthrough leaves no leave-mode.
@@ -724,9 +732,9 @@ class TerminalClient(Client):
         if self.kitty_flags is None:
             if flags == 0:
                 return  # Nothing of ours is on the stack; 0 changes nothing.
-            self.write_terminal(("\x1b[>%du" % flags).encode())
+            self.write_terminal(push_flags(KeyboardFlag(flags)).encode())
         else:
-            self.write_terminal(("\x1b[=%d;1u" % flags).encode())
+            self.write_terminal(set_flags(KeyboardFlag(flags)).encode())
         self.kitty_flags = flags
 
     def _pop_kitty_flags(self) -> None:
@@ -736,7 +744,7 @@ class TerminalClient(Client):
         """
         if self.kitty_flags is None:
             return  # Never enabled anything.
-        os.write(sys.stdout.fileno(), b"\x1b[<1u")
+        os.write(sys.stdout.fileno(), pop_flags().encode())
         self.kitty_flags = None
 
     def _save(self, whole: Whole) -> None:

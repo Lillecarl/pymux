@@ -17,6 +17,11 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 
+from pyte import escape
+from pyte.modes import PrivateMode
+from pyte.parameters import WindowOp
+from pyte.sequences.csi import Csi, Marker, ask_mode, csi
+
 __all__ = ["SURVEY", "Answer", "TerminalAnswers", "readable"]
 
 #: Asked once, when a client's terminal has been detected, for nothing
@@ -26,8 +31,26 @@ __all__ = ["SURVEY", "Answer", "TerminalAnswers", "readable"]
 #: and the window in pixels, against the cell size: a terminal whose
 #: mouse pixels are not its cell's pixels shows here. pymux asks the
 #: version, the colours, the keyboard and the graphics already.
-SURVEY = "\x1b[>c\x1b[14t\x1b[14;2t" + "".join(
-    "\x1b[?%d$p" % mode for mode in (1000, 1002, 1003, 1004, 1006, 1007, 2004, 2027, 2031, 2048)
+SURVEY = (
+    csi(escape.DA, private=Marker.GREATER)
+    + csi(Csi.XTWINOPS, WindowOp.REPORT_TEXT_AREA_PIXELS)
+    # The same with a 2: the whole window, and not its text area.
+    + csi(Csi.XTWINOPS, WindowOp.REPORT_TEXT_AREA_PIXELS, 2)
+    + "".join(
+        ask_mode(mode)
+        for mode in (
+            PrivateMode.MOUSE_REPORTING,
+            PrivateMode.BUTTON_EVENT_MOUSE,
+            PrivateMode.ANY_EVENT_MOUSE,
+            PrivateMode.FOCUS_EVENTS,
+            PrivateMode.SGR_MOUSE,
+            PrivateMode.ALTERNATE_SCROLL,
+            PrivateMode.BRACKETED_PASTE,
+            PrivateMode.GRAPHEME_CLUSTERS,
+            PrivateMode.COLOR_SCHEME_UPDATES,
+            PrivateMode.INBAND_RESIZE,
+        )
+    )
 )
 
 #: More different replies than this from one terminal is a terminal

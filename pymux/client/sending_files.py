@@ -18,6 +18,10 @@ from typing import TYPE_CHECKING
 
 import anyio
 from libpymux.protocol import Field, Message, Packet
+from pyte import escape
+from pyte.parameters import EraseExtent
+from pyte.sequences.csi import csi
+from pyte.sequences.rendition import Sgr, sgr
 
 from pymux.config import client_options_in, find_config
 from pymux.graphics.graphics import RESTORE_CURSOR, SAVE_CURSOR
@@ -43,10 +47,14 @@ if TYPE_CHECKING:
 
 __all__ = ["BUSY", "SAID_NO", "Asking", "SendingFiles"]
 
-#: Go to the start of a row, and erase it.
-_ROW = "\x1b[%d;1H\x1b[2K"
-REVERSE = "\x1b[7m"
-NO_ATTRIBUTES = "\x1b[m"
+REVERSE = sgr(Sgr.REVERSE)
+NO_ATTRIBUTES = sgr()
+
+
+def _row(number: int) -> str:
+    "Go to the start of a row, and erase it."
+    return csi(escape.CUP, number, 1) + csi(escape.EL, EraseExtent.ALL)
+
 
 #: Why a request is refused without a question.
 BUSY = "the client is asking the person about another request"
@@ -189,7 +197,7 @@ class SendingFiles:
         if asking is None:
             return
         rows, _columns = self.client.size()
-        drawn = SAVE_CURSOR + _ROW % (rows,) + REVERSE + asking.text + NO_ATTRIBUTES + RESTORE_CURSOR
+        drawn = SAVE_CURSOR + _row(rows) + REVERSE + asking.text + NO_ATTRIBUTES + RESTORE_CURSOR
         self.client.write_terminal(drawn.encode("utf-8"))
 
     def stop_asking(self) -> Asking | None:
@@ -199,7 +207,7 @@ class SendingFiles:
             return None
         client = self.client
         rows, _columns = client.size()
-        client.write_terminal((SAVE_CURSOR + _ROW % (rows,) + RESTORE_CURSOR).encode("ascii"))
+        client.write_terminal((SAVE_CURSOR + _row(rows) + RESTORE_CURSOR).encode("ascii"))
         flags = asking.flags_after if asking.flags_after is not None else asking.flags_before
         if flags:
             client.set_kitty_flags(flags)

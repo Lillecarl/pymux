@@ -24,7 +24,11 @@ from enum import StrEnum
 from functools import lru_cache
 from typing import Final, NamedTuple
 
+from pyte import escape
 from pyte.cells import character_width
+from pyte.sequences.csi import csi
+from pyte.sequences.escapes import esc
+from pyte.sequences.reports import ask_cursor_position
 from wcwidth import iter_graphemes
 from wcwidth import width as terminal_width
 
@@ -64,9 +68,12 @@ PROBE_ROWS: Final = max(PROBES)
 #: cursor went, and erases the row again: xterm draws the family six
 #: columns wide. The answers repaint.
 CLUSTER_WIDTH_PROBE: Final = (
-    "\x1b7"
-    + "".join("\x1b[%d;1H%s\x1b[6n\x1b[%d;1H\x1b[8X" % (row, cluster, row) for row, (_, cluster) in PROBES.items())
-    + "\x1b8"
+    esc(escape.DECSC)
+    + "".join(
+        csi(escape.CUP, row, 1) + cluster + ask_cursor_position() + csi(escape.CUP, row, 1) + csi(escape.ECH, 8)
+        for row, (_, cluster) in PROBES.items()
+    )
+    + esc(escape.DECRC)
 )
 
 

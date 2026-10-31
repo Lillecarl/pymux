@@ -16,7 +16,9 @@ from prompt_toolkit.input.defaults import create_pipe_input
 from prompt_toolkit.input.vt100 import Vt100Input
 from prompt_toolkit.output.vt100 import Vt100_Output
 from pyte.cells import VS16, without_widening_selectors
+from pyte.modes import PrivateMode
 from pyte.placeholders import PLACEHOLDER, blanked
+from pyte.sequences.csi import reset_mode, set_mode
 
 from ..clusters import Drawn, fitted
 from ..keys.keys import KittyVt100Parser
@@ -28,14 +30,15 @@ if TYPE_CHECKING:
 
 __all__ = ["ClientInput", "FrameOutput", "NoStdout", "SocketStdout"]
 
-PIXEL_MOUSE_ON = "\x1b[?1016h"
-PIXEL_MOUSE_OFF = "\x1b[?1016l"
-FOCUS_REPORTS_ON = "\x1b[?1004h"
-FOCUS_REPORTS_OFF = "\x1b[?1004l"
-THEME_REPORTS_ON = "\x1b[?2031h"
-THEME_REPORTS_OFF = "\x1b[?2031l"
-INBAND_RESIZE_ON = "\x1b[?2048h"
-INBAND_RESIZE_OFF = "\x1b[?2048l"
+PIXEL_MOUSE_ON = set_mode(PrivateMode.SGR_PIXEL_MOUSE)
+PIXEL_MOUSE_OFF = reset_mode(PrivateMode.SGR_PIXEL_MOUSE)
+
+#: What the terminal reports on its own while the server is attached:
+#: its focus, its colour scheme and its size. One sequence each, as a
+#: terminal that knows one of them and not the next still reads it.
+REPORTS = (PrivateMode.FOCUS_EVENTS, PrivateMode.COLOR_SCHEME_UPDATES, PrivateMode.INBAND_RESIZE)
+REPORTS_ON = "".join(set_mode(mode) for mode in REPORTS)
+REPORTS_OFF = "".join(reset_mode(mode) for mode in REPORTS)
 
 
 class SocketStdout:
@@ -145,11 +148,11 @@ class FrameOutput(Vt100_Output):
     @override
     def enter_alternate_screen(self) -> None:
         super().enter_alternate_screen()
-        self.write_raw(FOCUS_REPORTS_ON + THEME_REPORTS_ON + INBAND_RESIZE_ON)
+        self.write_raw(REPORTS_ON)
 
     @override
     def quit_alternate_screen(self) -> None:
-        self.write_raw(FOCUS_REPORTS_OFF + THEME_REPORTS_OFF + INBAND_RESIZE_OFF)
+        self.write_raw(REPORTS_OFF)
         super().quit_alternate_screen()
 
     def write_after_frame(self, data: str) -> None:

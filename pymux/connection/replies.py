@@ -11,10 +11,12 @@ from typing import TYPE_CHECKING, ClassVar
 from libpymux.protocol import Field, Packet
 from prompt_toolkit.data_structures import Size
 from ptterm import Terminal
+from pyte import escape
 from pyte.keep import Keep
 from pyte.modes import ModeState, PrivateMode
 from pyte.osc import Osc
-from pyte.sequences.csi import ask_mode
+from pyte.sequences.csi import ask_mode, csi
+from pyte.sequences.escapes import esc
 from pyte.sequences.kitty_graphics import GraphicsReply
 from pyte.sequences.replies import Reply, parse_reply
 from pyte.sequences.reports import (
@@ -28,8 +30,9 @@ from pyte.sequences.reports import (
     KeyboardFlagsReport,
     ModeReport,
     StatusReport,
+    ask_cursor_position,
 )
-from pyte.sequences.strings import OscString
+from pyte.sequences.strings import OscString, osc
 
 from ..clusters import CLUSTER_WIDTH_PROBE, PROBE_ROWS, PROBES, Drawn, table_width
 from ..enums import ExtendedKeys, Woke
@@ -63,7 +66,15 @@ _PIXEL_MOUSE_STATES = (ModeState.SET, ModeState.RESET, ModeState.PERMANENTLY_SET
 #: well. The two cells are erased again, and the answer repaints.
 #: Lillecarl/pymux#539.
 EMOJI_WIDTH_ROW = 2
-EMOJI_WIDTH_PROBE = "\x1b7\x1b[2;1H✳️\x1b[6n\x1b[2;1H\x1b[2X\x1b8"
+EMOJI_WIDTH_PROBE = (
+    esc(escape.DECSC)
+    + csi(escape.CUP, EMOJI_WIDTH_ROW, 1)
+    + "✳️"
+    + ask_cursor_position()
+    + csi(escape.CUP, EMOJI_WIDTH_ROW, 1)
+    + csi(escape.ECH, 2)
+    + esc(escape.DECRC)
+)
 
 
 class TerminalReplies:
@@ -138,9 +149,7 @@ class TerminalReplies:
             + EMOJI_WIDTH_PROBE
             + (CLUSTER_WIDTH_PROBE if self.connection.size.rows >= PROBE_ROWS else "")
             + SURVEY
-            + "\x1b]99;"
-            + NOTIFICATION_QUERY
-            + "\x1b\\"
+            + osc(Osc.NOTIFICATION, NOTIFICATION_QUERY)
         )
         self.connection.flush_output()
 
