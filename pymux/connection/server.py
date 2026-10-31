@@ -41,11 +41,11 @@ from ..pipes.base import BrokenPipeError
 from ..style.colors import ColorDetection, DefaultColors
 from .client_io import ClientInput, FrameOutput, NoStdout, SocketStdout
 from .clipboard_reads import ClipboardReader
+from .files import Files
 from .pacing import FramePacing
 from .packet_table import PacketTable
 from .rate import Rate
 from .replies import TerminalReplies
-from .uploads import LIST_SECONDS, Listing, Upload
 
 if TYPE_CHECKING:
     from pymux.connection.client_state import ClientState
@@ -117,6 +117,7 @@ class ServerConnection:
         "replies": Keep.REBUILT,
         "pacing": Keep.REBUILT,
         "clipboard": Keep.REBUILT,
+        "files": Keep.REBUILT,
         "size": Keep.REBUILT,
         "hostname": Keep.REBUILT,
         "ttyname": Keep.REBUILT,
@@ -135,9 +136,6 @@ class ServerConnection:
         "starts_browsers": Keep.REBUILT,
         "saves_files": Keep.REBUILT,
         "sends_files": Keep.REBUILT,
-        # A `pymux receive` that waits ends when the client goes.
-        "uploads": Keep.DROPPED,
-        "listings": Keep.DROPPED,
         "may_attach": Keep.REBUILT,
         "forwards": Keep.DROPPED,
         "pipe_connection": Keep.DROPPED,
@@ -270,10 +268,9 @@ class ServerConnection:
         #: Whether this client saves a download. Lillecarl/pymux#745.
         self.saves_files = False
         #: Whether this client sends files for `pymux receive`, and the
-        #: requests that wait for its answer, by id. Lillecarl/pymux#743.
+        #: requests that wait for its answer. Lillecarl/pymux#743.
         self.sends_files = False
-        self.uploads: dict[str, Upload] = {}
-        self.listings: dict[str, Listing] = {}
+        self.files = Files(self)
         #: This client's sound, when it plays it. Lillecarl/pymux#657.
         self._audio: AudioLink | None = None
 
@@ -707,26 +704,15 @@ class ServerConnection:
 
     @_PACKETS.handles(Packet.FILE_SAVED)
     def _on_file_saved(self, packet: Message) -> None:
-        # Where the client saved a pane's download, or why it did not.
-        # Only the client knows the path. Lillecarl/pymux#743.
-        if self.client_state is not None:
-            self.client_state.message = str(packet.get(Field.MESSAGE) or "")
-            self.client_state.app.invalidate()
+        self.files.saved(packet)
 
     @_PACKETS.handles(Packet.UPLOAD, Packet.UPLOAD_DONE)
     def _on_upload(self, packet: Message) -> None:
-        # A file `pymux receive` asked this client for, a part at a
-        # time. Only the connection that was asked holds the request,
-        # so another client cannot answer it. Lillecarl/pymux#743.
-        upload = self.uploads.get(str(packet.get(Field.REQUEST)))
-        if upload is not None:
-            upload.take(packet)
+        self.files.took_part(packet)
 
     @_PACKETS.handles(Packet.FILES_LISTED)
     def _on_files_listed(self, packet: Message) -> None:
-        listed = self.listings.pop(str(packet.get(Field.REQUEST)), None)
-        if listed is not None:
-            listed.take(packet)
+        self.files.listed(packet)
 
     @_PACKETS.handles(Packet.REDRAW)
     def _on_redraw(self, packet: Message) -> None:
@@ -1018,48 +1004,6 @@ class ServerConnection:
                     pass
                 self._close_connection()
 
-    def ask_for_files(self, paths: list[str], pane: str) -> Upload:
-        """
-        Ask this client for files on the person's machine, for
-        `pymux receive` in `pane`. The caller removes the request from
-        `uploads` when it stops waiting. Lillecarl/pymux#743.
-        """
-        upload = Upload(paths)
-        if self.closed:
-            upload.end("the client went before it answered")
-            return upload
-        self.uploads[upload.request] = upload
-        self.send_packet(upload.packet(pane))
-        return upload
-
-    def stop_waiting_for_files(self, upload: Upload) -> None:
-        """
-        Forget a request whose `pymux receive` stopped waiting. One the
-        client has not finished is withdrawn, or its question stays up
-        and a later "y" sends a file nobody takes.
-        """
-        self.uploads.pop(upload.request, None)
-        if upload.ended or self.closed:
-            return
-        with suppress(BrokenPipeError):
-            self.send_packet({Field.CMD: Packet.FILES_WITHDRAWN, Field.REQUEST: upload.request})
-
-    async def list_files(self, path: str) -> list[str]:
-        """
-        The names the client lets show in a directory on the person's
-        machine, for completing `pymux receive`. Empty when it answers
-        nothing within `LIST_SECONDS`, or goes.
-        """
-        if self.closed:
-            return []
-        listed = Listing(path)
-        self.listings[listed.request] = listed
-        self.send_packet(listed.packet())
-        with anyio.move_on_after(LIST_SECONDS):
-            await listed.answered.wait()
-        self.listings.pop(listed.request, None)
-        return listed.names
-
     async def answer(self, exit_code: int) -> None:
         "Send the exit code of a command, for one that ends the server before it returns."
         with suppress(BrokenPipeError):
@@ -1252,13 +1196,7 @@ class ServerConnection:
         self.client_state = None
         self.closed = True
         self.pacing.frames_shown.set()
-        # A `pymux receive` waiting for this client would wait for ever.
-        for upload in self.uploads.values():
-            upload.end("the client went before it answered")
-        self.uploads.clear()
-        for listed in self.listings.values():
-            listed.answered.set()
-        self.listings.clear()
+        self.files.client_went()
 
         # The background work of this connection ends with the read
         # loop that `serve` runs: leaving that scope cancels the group.

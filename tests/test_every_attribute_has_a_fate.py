@@ -101,6 +101,7 @@ def live_objects(pymux):
     yield from pymux.jobs.listing()
     for connection in pymux.connections:
         yield connection
+        yield connection.files
         yield connection.replies
         yield connection.pacing
         yield connection.clipboard

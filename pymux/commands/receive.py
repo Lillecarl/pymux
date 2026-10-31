@@ -38,7 +38,7 @@ def receive(pymux: Pymux, args: argparse.Namespace):
     if not directory.is_dir():
         raise CommandException("%s is not a directory." % (directory,))
 
-    upload = connection.ask_for_files(list(args.paths), "%%%d" % (pane.pane_id,))
+    upload = connection.files.ask_for(list(args.paths), "%%%d" % (pane.pane_id,))
     return wait_for_files(pymux, connection, upload, directory)
 
 
@@ -72,7 +72,7 @@ def list_person_files(pymux: Pymux, args: argparse.Namespace):
 
 
 async def _print_listing(pymux: Pymux, connection: ServerConnection, directory: str) -> None:
-    for name in await connection.list_files(directory):
+    for name in await connection.files.names_in(directory):
         answer(pymux, name)
 
 
@@ -80,7 +80,7 @@ async def wait_for_files(pymux: Pymux, connection: ServerConnection, upload: Upl
     try:
         failed = await receive_into(upload, directory, lambda text: answer(pymux, text))
     finally:
-        connection.stop_waiting_for_files(upload)
+        connection.files.stop_waiting(upload)
     if failed:
         raise CommandException("\n".join("Did not receive %s." % (why,) for why in failed))
 
