@@ -167,7 +167,7 @@ WRITES: dict[str, frozenset[str]] = {
     # A viewer's row, in `pane_viewers`.
     "pymux.jobs.feed.JobFeed": frozenset({"job", "sx", "sy"}),
     "ptterm.terminal.Terminal": frozenset({"terminal_control"}),
-    "ptterm.terminal._TerminalControl": frozenset({"screen", "stream", "process"}),
+    "ptterm.control.TerminalControl": frozenset({"screen", "stream", "process"}),
     # What `pyte.freeze` walks writes every saved field, by construction.
     **{
         "%s.%s" % (cls.__module__, cls.__qualname__): frozenset(saved_fields(cls))
