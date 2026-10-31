@@ -72,13 +72,37 @@ async def test_a_terminal_that_never_answered_is_not_waited_for():
         assert not state.connection.pacing.waits_for_terminal
 
 
-async def answered_all(session, state, in_flight: int = 1) -> None:
-    "Every report answered, so the terminal is known to answer; `in_flight` frames allowed out."
+async def answered_all(session, state, packets, in_flight: int = 1) -> None:
+    """
+    Every report answered, so the terminal is known to answer; `in_flight` frames allowed out.
+
+    **Answer what arrived, until nothing is unread.** An answer can let
+    a held frame go, and that frame carries a report of its own. Counting
+    `unread` once answered the frames out then and left that one unread
+    for ever, under load. The count here is of the reports that reached
+    the client, so no report is answered twice. Lillecarl/pymux#846.
+    """
     connection = state.connection
     state.options.frames_in_flight = in_flight
-    for _ in range(len(connection.pacing.unread)):
-        session.typed(state, ANSWER)
-    await once(lambda: connection.pacing.answers_reports and not connection.pacing.unread, 5.0, "answers not read")
+    typed = 0
+
+    def all_read() -> bool:
+        nonlocal typed
+        arrived = sum(frame.count(STATUS_REPORT) for frame in frames_of(packets))
+        for _ in range(arrived - typed):
+            session.typed(state, ANSWER)
+        typed = arrived
+        return connection.pacing.answers_reports and not connection.pacing.unread
+
+    await once(
+        all_read,
+        5.0,
+        # Built at the deadline, so it says what held then.
+        lambda: (
+            "answers not read: answers_reports=%r, unread=%r, typed %d"
+            % (connection.pacing.answers_reports, list(connection.pacing.unread), typed)
+        ),
+    )
 
 
 async def test_after_an_answer_the_next_frame_waits_for_the_next_one():
@@ -86,7 +110,7 @@ async def test_after_an_answer_the_next_frame_waits_for_the_next_one():
     async with over_connection(read_packet=packets.append) as session:
         state = await attach_paced(session, packets)
         connection = state.connection
-        await answered_all(session, state)
+        await answered_all(session, state, packets)
 
         state.message = "one"
         redraw(state)
@@ -118,7 +142,7 @@ async def test_small_frames_go_until_the_count_is_out():
     async with over_connection(read_packet=packets.append) as session:
         state = await attach_paced(session, packets)
         connection = state.connection
-        await answered_all(session, state, in_flight=3)
+        await answered_all(session, state, packets, in_flight=3)
 
         for word in ("one", "two", "three", "four"):
             state.message = word
@@ -142,7 +166,7 @@ async def test_a_frame_past_the_bytes_waits_however_few_frames():
     async with over_connection(read_packet=packets.append) as session:
         state = await attach_paced(session, packets)
         connection = state.connection
-        await answered_all(session, state, in_flight=5)
+        await answered_all(session, state, packets, in_flight=5)
         state.options.bytes_in_flight = 64
 
         state.message = "x" * 70
