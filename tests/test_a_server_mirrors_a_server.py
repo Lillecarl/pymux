@@ -26,6 +26,7 @@ from pyte.osc import ColorBase
 from session import Connection
 from test_ssh_client import create_ssh_server
 
+from pymux.answer import Answer, current_answer
 from pymux.commands import handle_command
 from pymux.core.main import Pymux
 from pymux.layout.geometry import plan_of
@@ -247,6 +248,40 @@ async def test_a_target_here_names_the_pane_there(two_servers):
     await run_as(peer, client, "kill-pane -t %%%d" % (here.pane_id,))
     assert owner.session_holding(gone) is None
     await until(lambda: gone.pane_id not in link.tree.panes, "the tree loses the pane")
+
+
+async def test_record_pane_records_there_and_says_so_here(two_servers, tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    owner, peer, client = two_servers
+    there, here = await shown_here(owner, peer, client)
+
+    await run_as(peer, client, "record-pane")
+    assert there.recording is not None and here.recording is None
+    assert client.message.startswith("Recording "), "the owner's message reaches the person here"
+
+    await run_as(peer, client, "record-pane")
+    assert there.recording is None
+    assert client.message.startswith("Recorded ")
+    assert list((tmp_path / "pymux" / "recordings").glob("*.bin"))
+
+
+async def test_capture_pane_reads_the_pane_there_while_nobody_sees_it(two_servers):
+    owner, peer, client = two_servers
+    there, here = await shown_here(owner, peer, client)
+    own = next(session for session in peer.sessions if session.remote is None)
+    peer.attach_client_to(client, own)
+    peer.invalidate()
+    there.terminal.terminal_control.feed_output("written while paused")
+
+    with set_app(client.app):
+        reply = Answer()
+        current_answer.set(reply)
+        try:
+            answer = handle_command(peer, "capture-pane -p -t %%%d" % (here.pane_id,))
+        finally:
+            current_answer.set(None)
+    await answer
+    assert "written while paused" in "\n".join(reply.output)
 
 
 async def test_a_pane_cannot_move_between_servers(two_servers):

@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING, Any
 
 import anyio
 
-from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands import CommandException, CommandParser, Target, add_command
 from pymux.commands.common import refuse_without_a_waiter, terminal_of
 from pymux.commands.wait_pane_change import DEFAULT_TIMEOUT, pane_to_wait_on, timeout_of
 
@@ -258,6 +258,6 @@ def add_condition_arguments(parser: argparse.ArgumentParser, prefix: str, requir
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    parser = add_command(subparsers, wait_pane, name="wait-pane")
+    parser = add_command(subparsers, wait_pane, name="wait-pane", acts_on={"target_pane": Target.PANE})
     parser.add_argument("-t", dest="target_pane", metavar="<target-pane>", help="The pane to watch.")
     add_condition_arguments(parser, "", required=True)

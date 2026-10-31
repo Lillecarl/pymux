@@ -19,7 +19,7 @@ from pyte.osc import ColorOverrides
 from pyte.screen import Page, Screen
 
 from pymux import screenshot
-from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands import CommandException, CommandParser, Target, add_command
 from pymux.commands.common import show_listing, terminal_of, the_pane
 from pymux.commands.pictures import (
     FRAME_WAIT,
@@ -279,7 +279,7 @@ def capture_pane(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None] | No
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    parser = add_command(subparsers, capture_pane)
+    parser = add_command(subparsers, capture_pane, acts_on={"target_pane": Target.PANE})
     parser.add_argument(
         "-p", dest="p", action="store_true", help="Print to the output of the command line, not a pop-up."
     )
