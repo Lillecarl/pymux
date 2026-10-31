@@ -16,6 +16,7 @@ import socket
 import sys
 
 import anyio
+import apsw
 import pytest
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
@@ -24,11 +25,14 @@ from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 from pyte.osc import ColorBase
 from session import Connection
+from test_snapshot import _Copied
 from test_ssh_client import create_ssh_server
 
 from pymux.answer import Answer, current_answer
 from pymux.commands import handle_command
 from pymux.core.main import Pymux
+from pymux.core.snapshot.read import load, start
+from pymux.core.snapshot.write import save
 from pymux.layout.geometry import plan_of
 from pymux.mirror.program import RemoteProgram
 from pymux.query import ask
@@ -321,6 +325,32 @@ async def test_a_link_back_brings_no_session_home(two_servers):
     assert [session.remote.server_ids for session in peer.sessions if session.remote is not None] == [
         (owner.server_id,)
     ]
+
+
+async def test_an_upgrade_saves_no_mirror_and_links_again(two_servers, tmp_path):
+    "The snapshot holds the owner's address and none of its sessions; the next server links again."
+    owner, peer, client = two_servers
+    await shown_here(owner, peer, client)
+    path = tmp_path / "peer.sqlite"
+    save(peer, path)
+    db = apsw.Connection(str(path), flags=apsw.SQLITE_OPEN_READONLY)
+    assert list(db.execute("SELECT session_name FROM sessions")) == [(peer.sessions[0].name,)]
+    db.close()
+
+    fresh = Pymux()
+    fresh.options.test_mode = True
+    async with fresh.running():
+        try:
+            load(fresh, path, _Copied())
+            await start(fresh)
+            await until(
+                lambda: [session.remote is not None for session in fresh.sessions] == [False, True],
+                "the owner's session comes back",
+                seen=lambda: [session.name for session in fresh.sessions],
+            )
+            assert list(fresh.peers.by_address) == [owner.socket_name]
+        finally:
+            fresh.stop()
 
 
 async def test_a_link_to_itself_mirrors_nothing(two_servers):

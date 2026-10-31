@@ -53,7 +53,7 @@ async def test_the_live_tables_answer_what_the_objects_hold():
     counts = ", ".join("(SELECT count(*) FROM live.%s)" % table for table in tables.LIVE_TABLES)
     async with create_session(window=None) as (pymux, _state):
         held = dict.fromkeys(tables.LIVE_TABLES, 0)
-        for row in rows_of(pymux):
+        for row in rows_of(pymux, mirrored=True):
             held[row.TABLE] += 1
         (answered,) = await _rows(pymux, "SELECT %s" % counts)
 

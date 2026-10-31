@@ -42,12 +42,27 @@ class Peers:
 
     KEEP: ClassVar[dict[str, Keep]] = {
         "pymux": Keep.REBUILT,
+        # A link ends with the server; the snapshot holds its address
+        # in `peers`, and a load reconnects (`reconnect`).
         "by_address": Keep.DROPPED,
+        "returning": Keep.DROPPED,
     }
 
     def __init__(self, pymux: Pymux) -> None:
         self.pymux = pymux
         self.by_address: dict[str, Peer] = {}
+        #: The addresses a loaded snapshot was linked to.
+        self.returning: list[str] = []
+
+    def reconnect(self) -> None:
+        """
+        Link again to every server a loaded snapshot was linked to. The
+        owners send their trees again, so nothing of theirs is saved.
+        """
+        returning = self.returning
+        self.returning = []
+        for address in returning:
+            self.of(address).watch()
 
     def of(self, address: str, **connect_with: Any) -> Peer:
         "The link to `address`, opened in the server's scope if there is none yet."

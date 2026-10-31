@@ -422,7 +422,7 @@ class NamedBufferRow:
 class ServerListRow:
     TABLE: ClassVar[str] = "server_lists"
     KEY: ClassVar[tuple[str, ...]] = ("list", "position")
-    list: str = field(metadata=column(check="list IN ('prompt_history', 'message_log')"))
+    list: str = field(metadata=column(check="list IN ('prompt_history', 'message_log', 'peers')"))
     position: int
     text: str
 

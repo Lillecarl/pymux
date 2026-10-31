@@ -166,8 +166,8 @@ class Snapshot:
             if not job.is_done and (job.backend is None or job.pid is None):
                 raise SnapshotError("job %d is still starting; try again" % job.job_id)
         with self.db:
-            written = self.rows.write(self.db, rows_of(pymux))
-            modes = self.modes.write(self.db, _client_mode_rows(pymux))
+            written = self.rows.write(self.db, rows_of(pymux, mirrored=False))
+            modes = self.modes.write(self.db, _client_mode_rows(pymux, mirrored=False))
             self._write_jobs(jobs)
             alive = {pane.pane_id for pane in panes}
             for gone in set(self.freezers) - alive:
@@ -342,8 +342,12 @@ def _refuse_the_server(pymux: Pymux) -> None:
             raise SnapshotError("a command waits on channel %s; signal it first" % name)
 
 
-def rows_of(pymux: Pymux) -> Iterator[Row]:
-    "Every row of `LIVE_TABLES` that `pymux` holds now."
+def rows_of(pymux: Pymux, *, mirrored: bool) -> Iterator[Row]:
+    """
+    Every row of `LIVE_TABLES` that `pymux` holds now. A snapshot leaves
+    out what `mirrored` is: the sessions another server owns, which a
+    link brings again after an upgrade, by its address in `peers`.
+    """
     listener = pymux.listener
     clipboard = pymux.clipboard.get_data()
     for name, value in (
@@ -366,6 +370,8 @@ def rows_of(pymux: Pymux) -> Iterator[Row]:
         yield ServerListRow("prompt_history", position, text)
     for position, text in enumerate(pymux.message_log):
         yield ServerListRow("message_log", position, text)
+    for position, address in enumerate(pymux.peers.by_address):
+        yield ServerListRow("peers", position, address)
     for hook, commands in sorted(pymux.hooks.commands.items()):
         for position, command in enumerate(commands):
             yield HookRow(hook, position, command)
@@ -409,10 +415,14 @@ def rows_of(pymux: Pymux) -> Iterator[Row]:
     for name, value in sorted(pymux.global_environment.items()):
         yield GlobalEnvironmentRow(name, value)
 
-    for position, session in enumerate(pymux.sessions):
+    for position, session in enumerate(_sessions(pymux, mirrored)):
         yield from session_rows(session, position)
 
-    yield from _client_rows(pymux)
+    yield from _client_rows(pymux, mirrored)
+
+
+def _sessions(pymux: Pymux, mirrored: bool) -> list[Session]:
+    return [session for session in pymux.sessions if mirrored or session.remote is None]
 
 
 def session_rows(session: Session, position: int) -> Iterator[Row]:
@@ -537,19 +547,25 @@ def _title_of(pane: Pane) -> str | None:
     return screen.titles.window if screen is not None else None
 
 
-def _clients(pymux: Pymux) -> dict[str, dict[str, Any]]:
+def _clients(pymux: Pymux, mirrored: bool) -> dict[str, dict[str, Any]]:
     """
     Each client by the id it keeps across reattaches, and the windows it
     was on in each session. A client the server loaded and that has not
-    come back yet is written again as it was read.
+    come back yet is written again as it was read. Without `mirrored`, a
+    client on a mirrored session is on none.
     """
+    sessions = _sessions(pymux, mirrored)
+
+    def session_id(session: Session | None) -> int | None:
+        return session.session_id if session is not None and session in sessions else None
+
     clients: dict[str, dict[str, Any]] = {key: dict(value) for key, value in pymux.returning_clients.items()}
     for connection in pymux.connections:
         state: ClientState | None = connection.client_state
         if state is None or not connection.client_id:
             continue
         windows = {}
-        for session in pymux.sessions:
+        for session in sessions:
             arrangement = session.arrangement
             active = arrangement._active_window_for_cli.get(state.app)
             previous = arrangement.previous_window_for(state.app)
@@ -559,8 +575,8 @@ def _clients(pymux: Pymux) -> dict[str, dict[str, Any]]:
                     previous.window_id if previous is not None else None,
                 )
         clients[connection.client_id] = {
-            "session_id": state.session.session_id if state.session is not None else None,
-            "previous_session_id": state.previous_session.session_id if state.previous_session is not None else None,
+            "session_id": session_id(state.session),
+            "previous_session_id": session_id(state.previous_session),
             "windows": windows,
             "settings": {name: _value(getattr(state, name)) for name in CLIENT_SETTINGS},
             "options": values_of(state.options),
@@ -571,8 +587,8 @@ def _clients(pymux: Pymux) -> dict[str, dict[str, Any]]:
     return clients
 
 
-def _client_rows(pymux: Pymux) -> Iterator[Row]:
-    for client_id, client in sorted(_clients(pymux).items()):
+def _client_rows(pymux: Pymux, mirrored: bool) -> Iterator[Row]:
+    for client_id, client in sorted(_clients(pymux, mirrored).items()):
         settings = client["settings"]
         yield ClientRow(
             client_id=client_id,
@@ -587,9 +603,9 @@ def _client_rows(pymux: Pymux) -> Iterator[Row]:
             yield ClientWindowRow(client_id, session_id, active, previous)
 
 
-def _client_mode_rows(pymux: Pymux) -> Iterator[ClientModesRow]:
+def _client_mode_rows(pymux: Pymux, mirrored: bool) -> Iterator[ClientModesRow]:
     "What each client is in the middle of, which only the hand-over file holds."
-    for client_id, client in sorted(_clients(pymux).items()):
+    for client_id, client in sorted(_clients(pymux, mirrored).items()):
         modes = client.get("modes")
         if modes is not None:
             yield ClientModesRow(client_id, json.dumps(modes))

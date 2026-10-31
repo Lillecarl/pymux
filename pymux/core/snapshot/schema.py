@@ -200,9 +200,11 @@ WRITES: dict[str, frozenset[str]] = {
 
 
 def panes_of(pymux: Pymux) -> list[Pane]:
-    "Every pane a snapshot holds, in the order the tables write them."
+    "Every pane a snapshot holds, in the order the tables write them. A mirrored session's are its owner's."
     panes = []
     for session in pymux.sessions:
+        if session.remote is not None:
+            continue
         arrangement = session.arrangement
         for window in [*arrangement.windows, *arrangement._unlinked_windows]:
             panes.extend(window.panes)

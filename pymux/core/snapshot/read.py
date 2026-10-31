@@ -207,6 +207,7 @@ async def start(pymux: Pymux) -> None:
         control = terminal_of(pane).terminal_control
         if not control._running:
             await control.start(pymux.tasks)
+    pymux.peers.reconnect()
 
 
 def _open(path: str | os.PathLike[str]) -> apsw.Connection:
@@ -350,6 +351,7 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
     pymux.message_log.extend(
         row.text for row in select(db, ServerListRow, "WHERE list = 'message_log' ORDER BY position")
     )
+    pymux.peers.returning = [row.text for row in select(db, ServerListRow, "WHERE list = 'peers' ORDER BY position")]
     _read_bindings(pymux, db)
     pymux.startup_command = server["startup_command"]
     pymux.wait_channels = {}
