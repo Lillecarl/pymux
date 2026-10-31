@@ -63,6 +63,8 @@ class CommandResult(NamedTuple):
     exit_code: int
     #: The pane the command left its caller on, when the server said.
     pane_id: int | None = None
+    #: What the command showed, for a command a peer forwarded.
+    messages: tuple[str, ...] = ()
 
     @property
     def ok(self) -> bool:
@@ -98,6 +100,7 @@ def command_packet(
     pane_id: str | None = None,
     caller: dict[str, object] | None = None,
     targets: dict[str, str] | None = None,
+    forwarded: bool = False,
 ) -> bytes:
     """
     The bytes that ask the server to run one command.
@@ -105,11 +108,14 @@ def command_packet(
     `caller` is the fields `agentic.caller_fields` makes: who sent the
     command, and from which directory. `targets` stand in for the
     targets the words name, by argparse dest: a server that forwards a
-    command resolved them already, in this server's ids.
+    command resolved them already, in this server's ids. `forwarded`
+    says a server sent it for a person there, who gets its messages.
     """
     packet = {Field.CMD: Packet.RUN_COMMAND, Field.DATA: text, Field.PANE_ID: pane_id, **(caller or {})}
     if targets:
         packet[Field.TARGETS] = targets
+    if forwarded:
+        packet[Field.FORWARDED] = True
     return json.dumps(packet).encode("utf-8") + END
 
 
@@ -128,6 +134,7 @@ class Reply:
         self._err: list[str] = []
         self._exit_code = 0
         self._pane_id: int | None = None
+        self._messages: tuple[str, ...] = ()
 
     def feed(self, data: bytes) -> None:
         for raw in self._framer.feed(data):
@@ -143,9 +150,11 @@ class Reply:
                 self._exit_code = packet[Field.CODE]
                 pane_id = packet.get(Field.PANE_ID)
                 self._pane_id = pane_id if isinstance(pane_id, int) else None
+                messages = packet.get(Field.MESSAGE) or ()
+                self._messages = tuple(message for message in messages if isinstance(message, str))
 
     def result(self) -> CommandResult:
-        return CommandResult("".join(self._out), "".join(self._err), self._exit_code, self._pane_id)
+        return CommandResult("".join(self._out), "".join(self._err), self._exit_code, self._pane_id, self._messages)
 
 
 def checked(text: str, result: CommandResult, check: bool) -> CommandResult:

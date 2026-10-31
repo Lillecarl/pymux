@@ -42,6 +42,11 @@ class Answer:
     #: with the job's exit, 124 past its timeout. `None` sends 1 when
     #: there are errors and 0 when there are none.
     exit_code: int | None = None
+    #: A peer forwarded the command (`mirror.forward`): the person who
+    #: ran it sits at the peer, so what it shows goes back in
+    #: `messages`, not to a client of this server.
+    forwarded: bool = False
+    messages: list[str] = field(default_factory=list)
 
     def warn(self, message: str) -> None:
         if message not in self.warnings:

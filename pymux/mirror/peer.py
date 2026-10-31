@@ -202,7 +202,9 @@ class Peer:
             raise CommandException("the link to %s is down" % (self.address,))
         reply = Reply()
         async with await dial_beside(self.address, self._stream) as stream:
-            await stream.send(command_packet(text, None if pane_id is None else str(pane_id), None, targets))
+            await stream.send(
+                command_packet(text, None if pane_id is None else str(pane_id), None, targets, forwarded=True)
+            )
             while True:
                 try:
                     data = await stream.receive()

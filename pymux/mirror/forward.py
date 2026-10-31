@@ -140,6 +140,12 @@ async def _run(
     client: ClientState | None,
 ) -> None:
     result = await peer.run_command(text, caller_id, targets)
+    # What the owner would have shown its own client, shown here. An
+    # error is a message there too, and the refusal below shows it.
+    errors = set(result.stderr.splitlines())
+    for message in result.messages:
+        if "pymux: %s" % (message,) not in errors:
+            pymux.show_message(message)
     if result.exit_code != 0:
         raise CommandException(result.stderr.strip() or "%s failed on %s" % (text, peer.address))
     if result.stdout:

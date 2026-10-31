@@ -420,8 +420,11 @@ class Field(StrEnum):
     SIZES = "sizes"
     #: In `run-command` from a peer: `{dest: target}`, the targets the
     #: peer resolved, which stand in for what its words name. In its
-    #: `exit`, `pane_id` is the pane the command left its caller on.
+    #: `exit`, `pane_id` is the pane the command left its caller on, and
+    #: `message` the messages the command showed.
     TARGETS = "targets"
+    #: In `run-command`: a peer forwarded it, for a person at the peer.
+    FORWARDED = "forwarded"
 
 
 class Codec(StrEnum):

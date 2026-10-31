@@ -1136,6 +1136,11 @@ class Pymux:
         """
         self.message_log.append(message)
 
+        answer = self.answer
+        if answer is not None and answer.forwarded:
+            answer.messages.append(message)
+            return
+
         # Not `get_client_state`. A command from a pane runs under a fake
         # client that draws nothing, and a message left there is a message
         # nobody sees. Lillecarl/pymux#272.

@@ -125,7 +125,10 @@ class Requests:
         # on every invocation and says them in the packet, because the
         # server's own environment names nothing about the caller.
         # `libpymux/agentic.py` holds the names.
-        pymux.answer = reply = Answer(caller=caller_context(packet.get(Field.ENVIRONMENT), packet.get(Field.CWD)))
+        pymux.answer = reply = Answer(
+            caller=caller_context(packet.get(Field.ENVIRONMENT), packet.get(Field.CWD)),
+            forwarded=bool(packet.get(Field.FORWARDED)),
+        )
 
         client_state = self.connection.client_state
         if client_state is None:
@@ -167,7 +170,12 @@ class Requests:
                     if exit_code is None:
                         exit_code = 1 if reply.errors else 0
                     await self.connection.write_packet(
-                        {Field.CMD: Packet.EXIT, Field.CODE: exit_code, Field.PANE_ID: _left_on(client_state)}
+                        {
+                            Field.CMD: Packet.EXIT,
+                            Field.CODE: exit_code,
+                            Field.PANE_ID: _left_on(client_state),
+                            Field.MESSAGE: reply.messages,
+                        }
                     )
                 except BrokenPipeError:
                     pass
