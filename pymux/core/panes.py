@@ -6,7 +6,6 @@ opens. `Pymux` keeps the registry of panes; this builds what goes in it.
 
 from __future__ import annotations
 
-import os
 import shlex
 import weakref
 from collections.abc import Callable
@@ -37,6 +36,8 @@ from .session import Session
 from .window_tree import Window
 
 if TYPE_CHECKING:
+    from ptterm.control import TerminalControl
+    from ptterm.program import Program
     from pyte.keys.events import KeyEvent
 
     from .main import Pymux
@@ -233,28 +234,14 @@ class PaneMaker:
         starts. Nothing forks.
         """
         pane = self.build_pane(
-            command=[self.pymux.session_defaults.default_shell],
             # A viewer never ends on its own: the job ending feeds an
             # exit line and the pane stays, so there is nothing to call
             # back. `JobFeed.kill` stops the follow; whoever kills
             # removes the pane.
             watch_end=False,
+            program=lambda control: JobFeed(job, control.feed_output),
         )
         assert isinstance(pane.terminal, Terminal), "`_build_pane` builds a terminal pane"
-        terminal_control = pane.terminal.terminal_control
-        old_process = terminal_control.process
-        terminal_control.process = JobFeed(job, terminal_control.feed_output)
-        # No fork, so the pty the construction opened is dead weight:
-        # give both ends back. The reader never connected, so `close`
-        # only drops the master; the slave would otherwise stay open
-        # until the server exits, which closes it only on a reap that
-        # never comes.
-        backend = old_process.backend
-        if isinstance(backend, PosixBackend):
-            backend.close()
-            if backend.slave is not None:
-                os.close(backend.slave)
-                backend.slave = None
         return pane
 
     def _outer_term(self) -> str:
@@ -270,12 +257,14 @@ class PaneMaker:
         directory: str | None = None,
         on_done: Callable[[], None] | None = None,
         watch_end: bool = True,
+        program: Callable[[TerminalControl], Program] | None = None,
     ) -> Pane:
         """
         A pane and its widget, wired to this server, with nothing started.
 
         `backend` is the program's pty: a new one from `command` when
-        none is given, or one a snapshot's load adopted. Building is
+        none is given, or one a snapshot's load adopted. `program` runs
+        something with no pty instead: a job's tail. Building is
         synchronous, so a load builds every pane before anything runs.
         Lillecarl/pymux#399.
         """
@@ -350,6 +339,7 @@ class PaneMaker:
         terminal = Terminal(
             done_callback=done_callback if watch_end else None,
             backend=backend,
+            program=program,
             bell_func=bell,
             osc_func=forward_osc,
             # What copy mode copied. The pane does not build the
