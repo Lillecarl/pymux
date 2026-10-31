@@ -361,7 +361,7 @@ class Pymux:
 
         #: What a loaded snapshot says about each client, by the id it
         #: keeps across reattaches, until that client comes back.
-        #: `snapshot.py` fills it. Lillecarl/pymux#399.
+        #: `snapshot/read.py` fills it. Lillecarl/pymux#399.
         self.returning_clients: dict[str, dict[str, Any]] = {}
 
         # `new-session -x -y` on the route that starts a server: the

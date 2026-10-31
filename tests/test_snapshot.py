@@ -29,9 +29,10 @@ from test_a_session_on_a_pyte_screen import attached, settled, shows
 from test_every_attribute_has_a_fate import declared, live_objects
 
 from pymux.commands.wait_for import WaitChannel
-from pymux.core import snapshot
 from pymux.core.main import Pymux
-from pymux.core.snapshot import _values_of
+from pymux.core.snapshot.read import Program, Takeover, load, start
+from pymux.core.snapshot.schema import OLD_CLIENT_COLUMNS, SNAPSHOT_VERSION, WRITES, SnapshotError, panes_of
+from pymux.core.snapshot.write import Snapshot, fds_of, save, values_of
 from pymux.core.upgrade import welcome_back
 from pymux.core.window_tree import LayoutTypes
 from pymux.enums import (
@@ -72,10 +73,10 @@ def _class(name: str) -> type:
     return getattr(importlib.import_module(module), qualname)
 
 
-@pytest.mark.parametrize("name", sorted(snapshot.WRITES))
+@pytest.mark.parametrize("name", sorted(WRITES))
 def test_a_snapshot_writes_every_saved_field(name):
     saved = {attribute for attribute, fate in declared(_class(name)).items() if fate == Keep.SAVED}
-    writes = snapshot.WRITES[name]
+    writes = WRITES[name]
 
     assert writes == saved, "saved and not written: %s; written and not saved: %s" % (
         sorted(saved - writes),
@@ -122,10 +123,10 @@ def test_a_shown_column_comes_after_every_stored_one():
 
 
 async def test_every_class_with_a_saved_field_is_written(pymux):
-    "A class the walk finds and nothing in `snapshot.py` names would be lost whole."
+    "A class the walk finds and nothing in `WRITES` names would be lost whole."
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
-        named = snapshot.WRITES.keys()
+        named = WRITES.keys()
         missing = set()
         for one in live_objects(pymux):
             cls = type(one)
@@ -137,21 +138,21 @@ async def test_every_class_with_a_saved_field_is_written(pymux):
 
 def test_a_path_that_needs_quoting_saves_and_loads(pymux, tmp_path):
     path = tmp_path / "a b?c#d%e.sqlite"
-    snapshot.save(pymux, path)
-    snapshot.load(Pymux(), path)
+    save(pymux, path)
+    load(Pymux(), path)
 
 
 def test_a_crashed_saves_journal_does_not_reach_the_next_save(pymux, tmp_path):
     path = tmp_path / "snapshot.sqlite"
     stale = tmp_path / "snapshot.sqlite.partial-journal"
     stale.write_bytes(b"not a journal")
-    snapshot.save(pymux, path)
+    save(pymux, path)
     assert not stale.exists()
     assert _rows(path, "SELECT count(*) FROM sessions") == [(1,)]
 
 
 def test_a_snapshot_is_private_from_its_first_byte(pymux, tmp_path):
-    written = snapshot.Snapshot(tmp_path / "snapshot.sqlite")
+    written = Snapshot(tmp_path / "snapshot.sqlite")
     try:
         assert written.partial.stat().st_mode & 0o777 == 0o600
         written.write(pymux)
@@ -165,10 +166,10 @@ def test_a_snapshot_is_private_from_its_first_byte(pymux, tmp_path):
 def test_a_loaded_server_adopts_the_listener_it_names(pymux, tmp_path):
     pymux.serving.listen_on_socket(str(tmp_path / "server.sock"))
     path = tmp_path / "snapshot.sqlite"
-    snapshot.save(pymux, path)
+    save(pymux, path)
 
     fresh = Pymux()
-    fd = snapshot.load(fresh, path)
+    fd = load(fresh, path)
     assert fd == pymux.listener.socket.fileno()
     assert fresh.socket_name == pymux.socket_name
     fresh.serving.adopt_listener(fd)
@@ -345,7 +346,7 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
             "ignore_size": True,
             "message": "job 2 exited 4",
         },
-        "options": _values_of(
+        "options": values_of(
             ClientOptions(
                 name="phone",
                 swap_light_and_dark_colors=True,
@@ -382,7 +383,7 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
         "windows": {},
         "connected": None,
         "settings": {},
-        "options": _values_of(ClientOptions()),
+        "options": values_of(ClientOptions()),
         "modes": {
             "has_prefix": False,
             "key_tables": [],
@@ -579,13 +580,13 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
         questions = await _questions_of(pymux)
 
         first = tmp_path / "first.sqlite"
-        snapshot.save(pymux, first)
+        save(pymux, first)
         shell = pymux.sessions[0].arrangement.windows[0].panes[0]
         before = _text(shell)
 
         # What an upgrade does to the old server: its programs go on, and
         # it no longer reads them.
-        for pane in snapshot._panes_of(pymux):
+        for pane in panes_of(pymux):
             if not isinstance(pane.process, JobFeed):
                 pane.process.backend.pause_reading()
         pymux.jobs.pause_reading()
@@ -599,9 +600,9 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
         second = tmp_path / "second.sqlite"
         try:
             async with fresh.running():
-                snapshot.load(fresh, first, _Copied())
-                snapshot.save(fresh, second)
-                await snapshot.start(fresh)
+                load(fresh, first, _Copied())
+                save(fresh, second)
+                await start(fresh)
                 assert _jobs_of(fresh) == jobs
                 # The jobs run on under the new server, which can end them.
                 adopted = [job for job in fresh.jobs.listing() if not job.is_done]
@@ -707,7 +708,7 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
     )
 
 
-class _Copied(snapshot.Takeover):
+class _Copied(Takeover):
     """
     A copy of each fd the snapshot names, for a second server in this
     process. The first server stays each program's parent and reaps it,
@@ -715,7 +716,7 @@ class _Copied(snapshot.Takeover):
     """
 
     @override
-    def pane(self, program: snapshot.Program) -> PosixBackend:
+    def pane(self, program: Program) -> PosixBackend:
         row = program.row
         assert row.master_fd is not None
         return PosixBackend.adopt(os.dup(row.master_fd), row.pane_pid, parent=False)
@@ -745,13 +746,13 @@ def _as_the_takeover_leaves_it(path, copy):
 @pytest.mark.parametrize("off_by", [1, -2], ids=["newer", "older with no step"])
 def test_a_snapshot_of_another_version_is_refused(pymux, tmp_path, off_by):
     path = tmp_path / "old.sqlite"
-    snapshot.save(pymux, path)
+    save(pymux, path)
     db = apsw.Connection(str(path))
-    db.execute("PRAGMA user_version = %d" % (snapshot.SNAPSHOT_VERSION + off_by))
+    db.execute("PRAGMA user_version = %d" % (SNAPSHOT_VERSION + off_by))
     db.close()
 
-    with pytest.raises(snapshot.SnapshotError, match="version"):
-        snapshot.load(Pymux(), path)
+    with pytest.raises(SnapshotError, match="version"):
+        load(Pymux(), path)
 
 
 def _shape(db: apsw.Connection) -> dict[str, list[tuple]]:
@@ -770,7 +771,7 @@ def _as_version_39(path) -> None:
     "Put each client's options back as columns of `clients`, as 39 kept them."
     db = apsw.Connection(str(path))
     for attribute in tables.columns_of(ClientOptionRow).keys() - set(ClientOptionRow.KEY):
-        old = snapshot._OLD_CLIENT_COLUMNS.get(attribute, attribute)
+        old = OLD_CLIENT_COLUMNS.get(attribute, attribute)
         db.execute(f"ALTER TABLE clients ADD COLUMN {old}")
         db.execute(
             f"UPDATE clients SET {old} = (SELECT {attribute} FROM client_options o WHERE o.client_id = clients.client_id)"
@@ -789,14 +790,14 @@ def test_a_version_39_snapshot_loads_its_client_options(pymux, tmp_path):
         "previous_session_id": None,
         "windows": {},
         "settings": {"message": "bye"},
-        "options": _values_of(ClientOptions(name="phone", swap_light_and_dark_colors=True, audio=ClientAudio.OFF)),
+        "options": values_of(ClientOptions(name="phone", swap_light_and_dark_colors=True, audio=ClientAudio.OFF)),
     }
     path = tmp_path / "v39.sqlite"
-    snapshot.save(pymux, path)
+    save(pymux, path)
     _as_version_39(path)
 
     loaded = Pymux()
-    snapshot.load(loaded, path)
+    load(loaded, path)
 
     options = loaded.returning_clients["gone"]["options"]
     assert options["name"] == "phone"
@@ -810,14 +811,14 @@ async def test_a_column_this_build_declares_and_the_file_lacks_takes_its_default
     path = tmp_path / "older.sqlite"
     async with pymux.running():
         await pymux.panes.create_window("true")
-        snapshot.save(pymux, path)
+        save(pymux, path)
     db = apsw.Connection(str(path))
     db.execute("ALTER TABLE window_options DROP COLUMN monitor_silence")
     db.execute("ALTER TABLE window_defaults DROP COLUMN monitor_silence")
     db.close()
 
     loaded = Pymux()
-    snapshot.load(loaded, path)
+    load(loaded, path)
 
     assert loaded.arrangement.windows
     assert all(window.options.monitor_silence == 0 for window in loaded.arrangement.windows)
@@ -828,14 +829,14 @@ async def test_a_table_or_column_the_file_lacks_needs_no_step(pymux, tmp_path):
     path = tmp_path / "older.sqlite"
     async with pymux.running():
         await pymux.panes.create_window("true")
-        snapshot.save(pymux, path)
+        save(pymux, path)
     db = apsw.Connection(str(path))
     db.execute("ALTER TABLE panes DROP COLUMN bell")
     db.execute("DROP TABLE forgotten_seeds")
     db.close()
 
     loaded = Pymux()
-    snapshot.load(loaded, path)
+    load(loaded, path)
 
     assert loaded.arrangement.windows
 
@@ -844,10 +845,10 @@ def test_a_session_s_own_value_survives_and_the_rest_follow_the_default(pymux, t
     pymux.create_session("second")
     pymux.sessions[0].options.status_right = "mine"
     path = tmp_path / "own.sqlite"
-    snapshot.save(pymux, path)
+    save(pymux, path)
 
     loaded = Pymux()
-    snapshot.load(loaded, path)
+    load(loaded, path)
 
     first, second = loaded.sessions
     assert first.options.own()["status_right"] == "mine"
@@ -866,9 +867,9 @@ async def test_a_running_job_this_server_forked_is_carried_by_its_fds(pymux, tmp
         await once(lambda: job.pid is not None, 10.0, "the job never started")
         try:
             path = tmp_path / "carried.sqlite"
-            snapshot.save(pymux, path)
-            assert _rows(path, "SELECT pid, fds, parent FROM jobs") == [(job.pid, json.dumps(snapshot._fds_of(job)), 1)]
-            assert len(snapshot._fds_of(job)) == (1 if pty else 2)
+            save(pymux, path)
+            assert _rows(path, "SELECT pid, fds, parent FROM jobs") == [(job.pid, json.dumps(fds_of(job)), 1)]
+            assert len(fds_of(job)) == (1 if pty else 2)
         finally:
             pymux.jobs.kill(job)
 
@@ -884,7 +885,7 @@ async def test_a_job_that_ends_between_two_writes_is_written_ended(pymux, tmp_pa
         job = pymux.jobs.submit("while [ ! -e %s ]; do sleep 0.02; done; exit 3" % go)
         pymux.tasks.start_soon(pymux.jobs.supervise, job)
         await once(lambda: job.pid is not None, 10.0, "the job never started")
-        written = snapshot.Snapshot(tmp_path / "twice.sqlite")
+        written = Snapshot(tmp_path / "twice.sqlite")
         try:
             written.write(pymux)
             go.touch()
@@ -910,7 +911,7 @@ async def test_a_viewer_is_written_again_by_the_second_write(pymux, tmp_path):
         with set_app(pymux.connections[-1].client_state.app):
             pymux.handle_command("view-job -k %d" % job.job_id)
         await once(lambda: job.job_id in _viewers_of(pymux), 10.0, "the viewer never came")
-        written = snapshot.Snapshot(tmp_path / "twice.sqlite")
+        written = Snapshot(tmp_path / "twice.sqlite")
         try:
             written.write(pymux)
             written.write(pymux)
@@ -926,5 +927,5 @@ async def test_a_snapshot_is_refused_while_a_command_waits(pymux, tmp_path):
     channel = WaitChannel()
     channel.waiters.append(anyio.Event())
     pymux.wait_channels["done"] = channel
-    with pytest.raises(snapshot.SnapshotError, match="channel done"):
-        snapshot.save(pymux, tmp_path / "waiting.sqlite")
+    with pytest.raises(SnapshotError, match="channel done"):
+        save(pymux, tmp_path / "waiting.sqlite")

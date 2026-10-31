@@ -8,7 +8,7 @@ reads waits in the kernel. Lillecarl/pymux#399, Lillecarl/pymux#736.
 
 The order:
 
-1. Write the snapshot (`pymux/core/snapshot.py`) while the server serves.
+1. Write the snapshot (`pymux/core/snapshot/`) while the server serves.
    This costs the depth of every history.
 2. The check: the new build, in a process of its own (`check-snapshot`),
    imports every module of pymux and loads that file into a server that
@@ -56,7 +56,9 @@ from ..commands.kill_server import RESTART_WAIT
 from ..enums import Woke
 from ..log import logger
 from ..pipes.posix import PosixSocketListener
-from . import snapshot
+from .snapshot.read import Inherited, load, read_server, start
+from .snapshot.schema import SnapshotError, panes_of
+from .snapshot.write import Snapshot, fds_of
 
 if TYPE_CHECKING:
     from ..connection.client_state import ClientState
@@ -101,7 +103,7 @@ async def upgrade(pymux: Pymux, command: list[str]) -> None:
     pymux.panes.close_window_panes()
 
     path = Path(socket_directory()) / ("pymux.core.upgrade.%d.sqlite" % os.getpid())
-    written = snapshot.Snapshot(path)
+    written = Snapshot(path)
     paused = False
     try:
         # Sound stops too: the PipeWire is this server's child, and the
@@ -126,7 +128,7 @@ async def upgrade(pymux: Pymux, command: list[str]) -> None:
             _pause(pymux)
             paused = True
             written.write(pymux)
-        except snapshot.SnapshotError as e:
+        except SnapshotError as e:
             raise CommandException(str(e))
         written.finish()
 
@@ -202,7 +204,7 @@ def _pause(pymux: Pymux) -> None:
     "Take no client and read no pane: what arrives now is the new image's."
     assert isinstance(pymux.listener, PosixSocketListener)
     pymux.listener.pause()
-    for pane in snapshot._panes_of(pymux):
+    for pane in panes_of(pymux):
         if isinstance(backend := pane.process.backend, PosixBackend):
             backend.pause_reading()
     pymux.jobs.pause_reading()
@@ -212,7 +214,7 @@ def _resume(pymux: Pymux) -> None:
     "Serve again, as before the pause. Copy mode keeps the panes it stopped."
     if isinstance(pymux.listener, PosixSocketListener):
         pymux.listener.resume()
-    for pane in snapshot._panes_of(pymux):
+    for pane in panes_of(pymux):
         if isinstance(backend := pane.process.backend, PosixBackend) and not pane.process.suspended:
             backend.resume_reading()
     pymux.jobs.resume_reading()
@@ -221,13 +223,13 @@ def _resume(pymux: Pymux) -> None:
 def carried(pymux: Pymux) -> list[int]:
     "Every fd that crosses the exec. Nothing else may be inheritable."
     fds = []
-    for pane in snapshot._panes_of(pymux):
+    for pane in panes_of(pymux):
         backend = getattr(pane.process, "backend", None)
         if isinstance(backend, PosixBackend) and backend.master is not None:
             fds.append(backend.master)
     for job in pymux.jobs.listing():
         if not job.is_done and job.backend is not None:
-            fds.extend(snapshot._fds_of(job))
+            fds.extend(fds_of(job))
     listener = pymux.listener
     if isinstance(listener, PosixSocketListener):
         fds.append(listener.socket.fileno())
@@ -270,11 +272,11 @@ def check(path: str) -> None:
     _import_everything()
     from .main import Pymux
 
-    async def load() -> None:
+    async def load_it() -> None:
         # In a loop, because a job's `done` is an event.
-        snapshot.load(Pymux(), path)
+        load(Pymux(), path)
 
-    anyio.run(load)
+    anyio.run(load_it)
 
 
 def _import_everything() -> None:
@@ -317,7 +319,7 @@ def resume(path: str) -> None:
     started = time.monotonic()
     try:
         pymux = Pymux()
-        server = snapshot.read_server(path)
+        server = read_server(path)
         pymux.source_file = server["source_file"]
         pymux.socket_name = server["socket_name"]
     except Exception as error:
@@ -331,9 +333,9 @@ def resume(path: str) -> None:
         # A configuration file may make a window, and the snapshot's
         # sessions replace whatever it made.
         strays = list(pymux.panes_by_id.values())
-        listener = snapshot.load(pymux, path, snapshot.Inherited())
+        listener = load(pymux, path, Inherited())
         if listener is None:
-            raise snapshot.SnapshotError("the snapshot names no listening socket")
+            raise SnapshotError("the snapshot names no listening socket")
         pymux.serving.adopt_listener(listener)
         # Nothing this server forks from here on may get one.
         for fd in carried(pymux):
@@ -341,7 +343,7 @@ def resume(path: str) -> None:
         pymux.serving.serve_listener()
         for pane in strays:
             pane.process.kill()
-        await snapshot.start(pymux)
+        await start(pymux)
         Path(path).unlink(missing_ok=True)
         introspect.note_for_a_crash(None)
         logger.info("Resumed %d panes from %s.", len(pymux.panes_by_id), path)

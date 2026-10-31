@@ -316,7 +316,7 @@ def _forwards(pymux: Pymux) -> Iterator[ForwardView]:
 
 def _live(pymux: Pymux, table: str) -> Iterator[Any]:
     # Here and not at the top: the snapshot reaches `pymux.core.main`.
-    from .core.snapshot import rows_of
+    from .core.snapshot.write import rows_of
 
     return (row for row in rows_of(pymux) if row.TABLE == table)
 

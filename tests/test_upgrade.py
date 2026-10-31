@@ -37,8 +37,8 @@ LOG = "server.log"
 CANNOT_RESUME = """#!/bin/sh
 exec %(python)s -c '
 import sys
-from pymux.core import snapshot
-snapshot.SNAPSHOT_VERSION += 1
+from pymux.core.snapshot import read
+read.SNAPSHOT_VERSION += 1
 from pymux.entry_points.run_pymux import run
 run()
 ' "$@"
@@ -60,10 +60,10 @@ BROKEN_MODULE = 'raise RuntimeError("broken on purpose, at import")\n'
 #: A new build that passes the check, then crashes as it resumes.
 CRASHES_AFTER_THE_EXEC = """#!/bin/sh
 exec %(python)s -c '
-from pymux.core import snapshot
+from pymux.core import upgrade
 async def start(pymux):
     raise RuntimeError("broken on purpose, after the exec")
-snapshot.start = start
+upgrade.start = start
 from pymux.entry_points.run_pymux import run
 run()
 ' "$@"
