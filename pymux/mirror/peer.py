@@ -25,7 +25,10 @@ from .program import RemoteProgram
 from .tree import MirrorTree
 
 if TYPE_CHECKING:
+    from prompt_toolkit.data_structures import Size
+
     from ..core.main import Pymux
+    from ..core.window_tree import Window
     from ..terminals import PeerTerminal
     from .sink import MirrorSink
 
@@ -59,12 +62,14 @@ class Peers:
         """
         Tell every mirrored pane whether a client here shows it: the
         panes of the window each client looks at, in a mirrored session.
-        `Pymux.invalidate` calls this, since a switch and a split both
-        reach it.
+        And tell each owner how much room those windows have here, so
+        it lays them out at that size. `Pymux.invalidate` calls this,
+        since a switch, a split and a resize all reach it.
         """
         if not self.by_address:
             return
         seen: set[int] = set()
+        windows: list[Window] = []
         for client_state in self.pymux._client_states.values():
             session = client_state.session
             if client_state.temporary or session.remote is None:
@@ -72,9 +77,17 @@ class Peers:
             window = session.arrangement.get_active_window_for(client_state.app)
             if window is not None:
                 seen.update(id(pane) for pane in window.panes)
+                windows.append(window)
         for peer in self.by_address.values():
             for pane in peer.tree.panes.values():
                 cast(RemoteProgram, pane.process).seen(id(pane) in seen)
+            peer.tell_sizes(
+                {
+                    remote_id: self.pymux.planes.size(window)
+                    for remote_id, window in peer.tree.windows.items()
+                    if any(window is one for one in windows)
+                }
+            )
 
 
 class Peer:
@@ -97,6 +110,7 @@ class Peer:
         "_send": Keep.DROPPED,
         "_receive": Keep.DROPPED,
         "_terminal_told": Keep.DROPPED,
+        "_sizes_told": Keep.DROPPED,
         "tree": Keep.DROPPED,
     }
 
@@ -112,6 +126,7 @@ class Peer:
         self.error: str | None = None
         self._send, self._receive = anyio.create_memory_object_stream[bytes](math.inf)
         self._terminal_told: PeerTerminal | None = None
+        self._sizes_told: dict[int, Size] = {}
         # Zstd only across a network, as a client offers it.
         offer = [MSGPACK_ZSTD, MSGPACK] if is_ssh_url(address) else [MSGPACK]
         self.send({Field.CMD: Packet.PEER, Field.WIRE: offer})
@@ -137,6 +152,18 @@ class Peer:
 
     def type(self, pane_id: int, data: str) -> None:
         self.send({Field.CMD: Packet.MIRROR_INPUT, Field.PANE_ID: pane_id, Field.DATA: data})
+
+    def tell_sizes(self, sizes: dict[int, Size]) -> None:
+        "Tell the owner the room each of its windows has here, when that changed."
+        if sizes == self._sizes_told:
+            return
+        self._sizes_told = sizes
+        self.send(
+            {
+                Field.CMD: Packet.PEER_SIZES,
+                Field.SIZES: [[window_id, size.rows, size.columns] for window_id, size in sorted(sizes.items())],
+            }
+        )
 
     def watch(self) -> None:
         "Ask the owner for its sessions, now and on every change."

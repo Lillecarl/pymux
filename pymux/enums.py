@@ -296,6 +296,8 @@ class Woke(StrEnum):
     #: Another server's sessions changed, and the mirrors here follow.
     #: Lillecarl/pymux#759.
     TREE_MIRRORED = "the sessions of another server changed"
+    #: A server that mirrors this one has another size for a window.
+    PEER_RESIZED = "a server that mirrors a window here has another size for it"
 
 
 class ExtendedKeys(StrEnum):

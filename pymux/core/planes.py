@@ -22,6 +22,8 @@ from .window_tree import Window
 
 if TYPE_CHECKING:
     from ..connection.client_state import ClientState
+    from ..ids import WindowId
+    from ..mirror.link import PeerLink
     from .main import Pymux
     from .pane import Pane
 
@@ -90,6 +92,10 @@ class Planes:
 
     def __init__(self, pymux: Pymux) -> None:
         self.pymux = pymux
+        #: The room each server that mirrors windows of this one has for
+        #: them, by window id. A link with none is not here, so a frame
+        #: on a server nobody mirrors pays one test. Lillecarl/pymux#759.
+        self.peer_rooms: dict[PeerLink, dict[WindowId, Size]] = {}
 
     def _anyone_is_full_screen(self) -> bool:
         """
@@ -176,11 +182,44 @@ class Planes:
             return window.manual_size
 
         watchers = self.pymux.clients_watching(window)
+        peers = self._peers_watching(window)
 
-        if not watchers:
+        if not watchers and not peers:
             return self.size_with_no_client(self.pymux.session_of_window(window), window)
 
-        return _plane_of_clients(watchers, window.options.window_size)
+        rule = window.options.window_size
+        if not peers:
+            return _plane_of_clients(watchers, rule)
+
+        # (room, last used): the clients here as one plane, each peer as
+        # the room it has, its own status rows already off it.
+        viewers = list(peers)
+        if watchers:
+            viewers.append(
+                (_plane_of_clients(watchers, rule), max(client.last_used for client in watchers)),
+            )
+        if rule is WindowSize.LATEST:
+            return max(viewers, key=lambda viewer: viewer[1])[0]
+        pick = max if rule is WindowSize.LARGEST else min
+        return Size(
+            rows=pick(room.rows for room, _ in viewers),
+            columns=pick(room.columns for room, _ in viewers),
+        )
+
+    def _peers_watching(self, window: Window) -> list[tuple[Size, int]]:
+        """
+        The room each server that mirrors this window has for it, and
+        when a person there last used a mirror here. A peer counts as a
+        client does, and its room is what its own clients give the
+        window. Lillecarl/pymux#759.
+        """
+        if not self.peer_rooms:
+            return []
+        return [
+            (rooms[window.window_id], link.last_used)
+            for link, rooms in self.peer_rooms.items()
+            if window.window_id in rooms
+        ]
 
     def size_with_no_client(self, session: Session | None, window: Window | None = None) -> Size:
         """

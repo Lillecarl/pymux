@@ -25,6 +25,7 @@ from pyte.osc import ColorBase
 from session import Connection
 
 from pymux.core.main import Pymux
+from pymux.layout.geometry import plan_of
 from pymux.mirror.program import RemoteProgram
 from pymux.style.colors import theme_color_base
 from pymux.terminals import PeerTerminal
@@ -134,6 +135,33 @@ async def test_a_pane_streams_only_while_seen(two_servers):
     peer.attach_client_to(client, here_session(peer))
     peer.invalidate()
     await until(lambda: rows_of(control) == rows_of(owner_control), "the mirror catches up when seen again")
+
+
+async def test_the_owner_lays_out_at_the_size_of_the_peer(two_servers):
+    """
+    Nobody is attached to the owner, so the client at the peer decides
+    the window's size. Both servers lay the window out from the same
+    splits at that size, so the mirror's screen fills the box the peer
+    draws it in.
+    """
+    owner, peer, client = two_servers
+    there, here = await shown_here(owner, peer, client)
+    owner_window = owner.arrangement.get_active_window()
+    (link,) = peer.peers.by_address.values()
+    (mirror_window,) = link.tree.windows.values()
+
+    await until(
+        lambda: owner.planes.size(owner_window) == peer.planes.size(mirror_window),
+        "the owner's window takes the room the peer has",
+        lambda: (owner.planes.size(owner_window), peer.planes.size(mirror_window)),
+    )
+    (rect,) = [rect for slot, rect in plan_of(peer, mirror_window).rects.items() if here in slot.panes]
+    screen = here.terminal.terminal_control.screen
+    await until(
+        lambda: (screen.columns, screen.lines) == (rect.width, rect.height),
+        "the mirror fills its box here",
+        lambda: ((screen.columns, screen.lines), (rect.width, rect.height)),
+    )
 
 
 def here_session(peer):

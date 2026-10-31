@@ -239,6 +239,11 @@ class Packet(StrEnum):
     # "Show me your sessions": the owner sends `tree` now and on every
     # change after.
     WATCH = "watch"
+    # The windows of the owner a client at the peer looks at, and the
+    # room the peer has for each, under `sizes` as
+    # `[[window_id, rows, columns], ...]`. The owner counts each in
+    # `window-size` as it counts a client, and lays the window out.
+    PEER_SIZES = "peer-sizes"
     # This server tells.
     # Every session with its windows, splits and panes, under `rows` as
     # the live tables name them, each row as `{column: value}` so two
@@ -411,6 +416,8 @@ class Field(StrEnum):
     #: In `tree`: `{table: [row, ...]}`, and the owner's name.
     ROWS = "rows"
     SERVER = "server"
+    #: In `peer-sizes`.
+    SIZES = "sizes"
 
 
 class Codec(StrEnum):

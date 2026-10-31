@@ -19,12 +19,15 @@ from typing import TYPE_CHECKING, ClassVar
 import anyio
 from libpymux.protocol import Field, Message, Packet
 from libpymux.wire import MSGPACK_ZSTD, choose, encode_json, encode_msgpack
+from prompt_toolkit.data_structures import Size
 from ptterm import Terminal
 from pyte.freeze import thaw_value
 from pyte.keep import Keep
 
 from ..connection.packet_table import PacketTable
-from ..ids import PaneId
+from ..enums import Woke
+from ..ids import PaneId, WindowId
+from ..layout.geometry import size_the_panes_of
 from ..pipes.base import BrokenPipeError
 from ..style.style import DEFAULT_THEME
 from ..terminals import PeerTerminal
@@ -49,6 +52,7 @@ PEER_PACKETS = (
     Packet.MIRROR_FOCUS,
     Packet.PEER_TERMINAL,
     Packet.WATCH,
+    Packet.PEER_SIZES,
 )
 
 #: How long a change to the sessions waits for more before the tree
@@ -150,6 +154,7 @@ class PeerLink:
         self.sources.clear()
         self._queue.clear()
         self._ready.set()
+        self._sized({})
         if viewed:
             self.connection.pymux.terminals.sync_viewers()
             self.connection.pymux.focus.sync_panes()
@@ -226,6 +231,34 @@ class PeerLink:
         if source is not None:
             self.connection.pymux.peer_was_used(self)
             source.control.process.write_input(packet.get(Field.DATA, ""))
+
+    @_PACKETS.handles(Packet.PEER_SIZES)
+    def _on_sizes(self, packet: Message) -> None:
+        self._sized(
+            {
+                WindowId(int(window_id)): Size(rows=int(rows), columns=int(columns))
+                for window_id, rows, columns in packet.get(Field.SIZES) or ()
+            }
+        )
+
+    def _sized(self, sizes: dict[WindowId, Size]) -> None:
+        "Take the peer's room for each window it looks at (`Planes.peer_rooms`), and lay out the windows that changed."
+        pymux = self.connection.pymux
+        rooms = pymux.planes.peer_rooms
+        before = rooms.get(self, {})
+        changed = {window_id for window_id in set(sizes) | set(before) if sizes.get(window_id) != before.get(window_id)}
+        if not changed:
+            return
+        if sizes:
+            rooms[self] = sizes
+        else:
+            rooms.pop(self, None)
+        # A window nobody here watches gets no frame to size its panes.
+        for session in pymux.sessions:
+            for window in session.arrangement.windows:
+                if window.window_id in changed:
+                    size_the_panes_of(pymux, window)
+        pymux.invalidate(Woke.PEER_RESIZED)
 
     @_PACKETS.handles(Packet.WATCH)
     def _on_watch(self, packet: Message) -> None:
