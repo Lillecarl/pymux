@@ -281,15 +281,14 @@ class Terminals:
             screen: Any = pane.screen
         except Exception:
             return
-        try:
-            screen.keyboard_source_flags = self.keyboard_source_flags()
-            screen.synthesize_key_events = self.pymux.options_of_pane(pane).synthesize_key_events
-            screen.extended_keys_allowed = self.pymux.options.extended_keys is not ExtendedKeys.OFF
-        except AttributeError:
-            # A window pane's screen, or an older ptterm's, knows nothing
-            # about the keyboard of the host. It then claims what a pane
-            # asks for.
-            pass
+        # A window pane's screen knows nothing about the keyboard of the
+        # host. It then claims what a pane asks for.
+        with suppress(AttributeError):
+            screen.set_keyboard_source(
+                self.keyboard_source_flags(),
+                self.pymux.options_of_pane(pane).synthesize_key_events,
+                self.pymux.options.extended_keys is not ExtendedKeys.OFF,
+            )
 
     def tell_pane_about_colours(self, pane: Pane) -> None:
         """

@@ -67,6 +67,11 @@ class FakeScreen:
         self.synthesize_key_events = False
         self.extended_keys_allowed = True
 
+    def set_keyboard_source(self, flags: int, synthesize: bool, extended_allowed: bool) -> None:
+        self.keyboard_source_flags = flags
+        self.synthesize_key_events = synthesize
+        self.extended_keys_allowed = extended_allowed
+
 
 class FakePane:
     def __init__(self, pane_id):
