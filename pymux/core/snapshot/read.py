@@ -21,7 +21,8 @@ from pyte.freeze import Frozen, thaw
 
 from ...commands.wait_for import WaitChannel
 from ...ids import PaneId, SessionId, WindowId, WindowIndex
-from ...jobs import Job, JobId, JobPipes
+from ...jobs.job import Job, JobId
+from ...jobs.pipes import JobPipes
 from ...notify.notifications import Notification, NotificationSource, Route
 from ...options.client_options import ClientOptions
 from ...options.option_fields import Options

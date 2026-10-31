@@ -408,7 +408,7 @@ class ChooserView:
 
             return rows_of(self.pymux, self.pymux.notification_center.notifications(), text)
         if kind is Chooser.JOB:
-            from pymux.jobs import describe
+            from pymux.jobs.job import describe
 
             jobs = list(reversed(self.pymux.jobs.listing()))
             if not text:
@@ -588,7 +588,7 @@ class ChooserView:
         out, and a row answers a click by showing its job in the
         overlay, the way Enter does.
         """
-        from pymux.jobs import describe
+        from pymux.jobs.job import describe
 
         matches = self.chooser_matches()
         if not matches:

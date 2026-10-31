@@ -34,7 +34,7 @@ from ..enums import OpenUrlTarget, RenderMode, Woke
 from ..graphics import kernels
 from ..graphics.graphics import OuterImageIds
 from ..ids import PaneId, SessionId
-from ..jobs import JobTable
+from ..jobs.table import JobTable
 from ..keys.actions import ActionLog, Origin, awaited_as, started_by
 from ..keys.key_bindings import PymuxKeyBindings
 from ..layout.error_notice import ErrorNotice

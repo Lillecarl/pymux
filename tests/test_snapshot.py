@@ -47,7 +47,8 @@ from pymux.enums import (
     WindowScroll,
     WindowSize,
 )
-from pymux.jobs import JobFeed, JobPipes
+from pymux.jobs.feed import JobFeed
+from pymux.jobs.pipes import JobPipes
 from pymux.notify.notifications import Urgency
 from pymux.options import tables
 from pymux.options.client_options import ClientOptions

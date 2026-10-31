@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import is_agent, refuse_without_a_waiter
 from pymux.commands.run import report_outcome
-from pymux.jobs import find_job
+from pymux.jobs.table import find_job
 
 
 def wait_job(pymux: Pymux, args: argparse.Namespace):

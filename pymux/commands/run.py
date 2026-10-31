@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import answer, is_agent, refuse_without_a_waiter
-from pymux.jobs import SESSION_TAG, Job, outcome_text, parse_env
+from pymux.jobs.job import SESSION_TAG, Job, outcome_text, parse_env
 from pymux.tags import parse_tags
 
 

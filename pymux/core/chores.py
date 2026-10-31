@@ -15,7 +15,7 @@ import anyio
 import anyio.abc
 
 from ..enums import Woke
-from ..jobs import JOB_SWEEP_EVERY
+from ..jobs.table import JOB_SWEEP_EVERY
 from ..log import logger
 
 if TYPE_CHECKING:

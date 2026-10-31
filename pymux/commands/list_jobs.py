@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 
 from pymux.commands import CommandParser, add_command
 from pymux.commands.common import add_tag_filter, answer
-from pymux.jobs import describe
+from pymux.jobs.job import describe
 from pymux.tags import carries, parse_tag
 
 

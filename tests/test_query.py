@@ -8,7 +8,7 @@ from __future__ import annotations
 import apsw
 from session import create_session
 
-import pymux.jobs as jobs_module
+import pymux.jobs.table as job_table
 from pymux.core.snapshot.write import rows_of
 from pymux.options import tables
 from pymux.options.options import Scope
@@ -105,7 +105,7 @@ async def test_an_empty_table_still_names_its_columns():
 
 
 async def test_a_job_reads_as_it_is_now(monkeypatch):
-    monkeypatch.setattr(jobs_module, "FINISHED_KEEP", 1)
+    monkeypatch.setattr(job_table, "FINISHED_KEEP", 1)
     async with create_session() as (pymux, _state):
         first = pymux.jobs.submit("exit 3", None)
         assert await _rows(pymux, "SELECT id, status FROM jobs") == [(first.job_id, "running")]

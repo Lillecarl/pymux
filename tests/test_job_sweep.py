@@ -18,7 +18,7 @@ from session import create_session
 
 from pymux.answer import Answer
 from pymux.commands import handle_command
-from pymux.jobs import JobTable
+from pymux.jobs.table import JobTable
 from pymux.query import ask
 
 

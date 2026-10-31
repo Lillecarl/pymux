@@ -23,7 +23,7 @@ from session import create_session
 from pymux.answer import Answer
 from pymux.commands import CommandException
 from pymux.commands.view_job import view_job
-from pymux.jobs import JobFeed
+from pymux.jobs.feed import JobFeed
 
 
 async def _run_answering(pymux, state, command) -> None:

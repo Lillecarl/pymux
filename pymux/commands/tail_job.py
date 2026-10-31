@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import answer, is_agent, refuse_without_a_waiter
-from pymux.jobs import find_job
+from pymux.jobs.table import find_job
 
 #: How long a tail follows when nobody said: a person at a keyboard
 #: gets a patient default, and an agent names its own -- a wait

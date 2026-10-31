@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..enums import Woke
-from ..jobs import Job, describe
+from ..jobs.job import Job, describe
 from .planes import remember_the_size_made_at
 from .session import Session
 from .window_tree import Window

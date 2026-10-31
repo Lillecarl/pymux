@@ -20,7 +20,7 @@ from pyte.screen import Screen
 from pyte.streams import Stream
 from pyte.titles import Titles
 
-from ...jobs import Job
+from ...jobs.job import Job
 from ...options.client_options import ClientOptions
 from ...options.option_fields import Declared, Options
 from ...options.server_options import ServerOptions
@@ -161,11 +161,11 @@ WRITES: dict[str, frozenset[str]] = {
     "pymux.connection.server.ServerConnection": frozenset({"client_state", "created"}),
     # In `hooks`, one row per command.
     "pymux.core.hooks.Hooks": frozenset({"commands"}),
-    "pymux.jobs.JobTable": frozenset({"_jobs", "last_id", "saved_queries", "forgotten_seeds"}),
+    "pymux.jobs.table.JobTable": frozenset({"_jobs", "last_id", "saved_queries", "forgotten_seeds"}),
     # The kept counts are the lengths of the chunks `job_output` holds.
-    "pymux.jobs.Job": frozenset(name for name, fate in Job.KEEP.items() if fate == Keep.SAVED),
+    "pymux.jobs.job.Job": frozenset(name for name, fate in Job.KEEP.items() if fate == Keep.SAVED),
     # A viewer's row, in `pane_viewers`.
-    "pymux.jobs.JobFeed": frozenset({"job", "sx", "sy"}),
+    "pymux.jobs.feed.JobFeed": frozenset({"job", "sx", "sy"}),
     "ptterm.terminal.Terminal": frozenset({"terminal_control"}),
     "ptterm.terminal._TerminalControl": frozenset({"screen", "stream", "process"}),
     # What `pyte.freeze` walks writes every saved field, by construction.

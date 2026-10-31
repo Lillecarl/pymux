@@ -28,7 +28,8 @@ from pymux.answer import Answer
 from pymux.commands import CommandException, handle_command
 from pymux.commands.run import run_job
 from pymux.commands.show_job import show_job
-from pymux.jobs import find_job, parse_env
+from pymux.jobs.job import parse_env
+from pymux.jobs.table import find_job
 from pymux.query import ask
 
 #: A caller that an agent harness named: its session is `s1`.
@@ -56,7 +57,7 @@ async def test_a_question_reads_the_tags_of_a_job():
 
 
 def test_a_repeated_key_keeps_its_last_value():
-    from pymux.jobs import JobTable
+    from pymux.jobs.table import JobTable
 
     job = JobTable().submit("true", None, [("k", "first"), ("k", "second")])
     assert job.tags == {"k": "second"}
@@ -126,9 +127,9 @@ async def test_by_tag_finds_what_a_key_names():
 
 
 async def test_reaping_forgets_the_tags_with_the_job(monkeypatch):
-    import pymux.jobs as jobs_module
+    import pymux.jobs.table as job_table
 
-    monkeypatch.setattr(jobs_module, "FINISHED_KEEP", 1)
+    monkeypatch.setattr(job_table, "FINISHED_KEEP", 1)
     async with create_session() as (pymux, state):
         first = pymux.jobs.submit("true", None, [("gone", None)])
         await pymux.jobs.supervise(first)

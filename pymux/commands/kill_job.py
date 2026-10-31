@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import answer
-from pymux.jobs import find_job
+from pymux.jobs.table import find_job
 
 
 def kill_job(pymux: Pymux, args: argparse.Namespace):

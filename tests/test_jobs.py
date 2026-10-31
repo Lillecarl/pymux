@@ -25,7 +25,8 @@ from prompt_toolkit.application.current import set_app
 from run_commands import answered, run_as
 from session import create_session
 
-import pymux.jobs as jobs_module
+import pymux.jobs.job as job_module
+import pymux.jobs.table as job_table
 from pymux.answer import Answer
 from pymux.commands import CommandException
 from pymux.commands.kill_job import kill_job
@@ -252,7 +253,7 @@ async def test_a_job_that_never_starts_says_why():
 
 async def test_the_table_forgets_the_oldest_finished_past_its_cap(monkeypatch):
     async with create_session() as (pymux, state):
-        monkeypatch.setattr(jobs_module, "FINISHED_KEEP", 2)
+        monkeypatch.setattr(job_table, "FINISHED_KEEP", 2)
         await _run_answering(pymux, state, "run -w echo one")
         await _run_answering(pymux, state, "run -w echo two")
         await _run_answering(pymux, state, "run -w echo three")
@@ -263,7 +264,7 @@ async def test_the_table_forgets_the_oldest_finished_past_its_cap(monkeypatch):
 
 async def test_the_table_never_forgets_a_running_job(monkeypatch):
     async with create_session() as (pymux, state):
-        monkeypatch.setattr(jobs_module, "FINISHED_KEEP", 0)
+        monkeypatch.setattr(job_table, "FINISHED_KEEP", 0)
         await run_as(pymux, state, "run sleep 30")
         await _run_answering(pymux, state, "run -w echo quick")
 
@@ -273,7 +274,7 @@ async def test_the_table_never_forgets_a_running_job(monkeypatch):
 
 async def test_a_stream_keeps_its_tail_to_the_byte(monkeypatch):
     async with create_session() as (pymux, state):
-        monkeypatch.setattr(jobs_module, "STREAM_KEEP", 1000)
+        monkeypatch.setattr(job_module, "STREAM_KEEP", 1000)
         big = "%s -c \"import sys; sys.stdout.write('x' * 100000)\"" % sys.executable
         await _run_answering(pymux, state, "run -w " + big)
 

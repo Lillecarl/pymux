@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import session_of_target, the_pane, the_window
-from pymux.jobs import JobId
+from pymux.jobs.job import JobId
 from pymux.tags import parse_tag
 
 

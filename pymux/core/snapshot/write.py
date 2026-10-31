@@ -16,7 +16,9 @@ import apsw
 from ptyhost.backends.posix import PosixBackend
 from pyte.freeze import Freezer, freeze
 
-from ...jobs import Job, JobFeed, JobPipes
+from ...jobs.feed import JobFeed
+from ...jobs.job import Job
+from ...jobs.pipes import JobPipes
 from ...options.client_options import ClientOptions
 from ...options.option_fields import Options
 from ...options.server_options import ServerOptions

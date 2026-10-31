@@ -9,7 +9,8 @@ if TYPE_CHECKING:
 
 from pymux.commands import CommandParser, add_command
 from pymux.commands.common import answer
-from pymux.jobs import Job, decode, find_job
+from pymux.jobs.job import Job, decode
+from pymux.jobs.table import find_job
 
 
 def show_job(pymux: Pymux, args: argparse.Namespace):

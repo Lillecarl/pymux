@@ -24,7 +24,8 @@ from .. import hacks_and_lies
 from ..commands import CommandException
 from ..enums import EditingKeys, RenderMode, Woke
 from ..ids import PaneId, WindowIndex
-from ..jobs import Job, JobFeed
+from ..jobs.feed import JobFeed
+from ..jobs.job import Job
 from ..keys.actions import Kind, Origin, note, note_keys, started_by
 from ..keys.key_spelling import why_pane_cannot_read
 from ..log import logger

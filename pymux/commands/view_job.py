@@ -6,13 +6,13 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pymux.core.main import Pymux
     from pymux.core.window_tree import Pane
-    from pymux.jobs import Job
+    from pymux.jobs.job import Job
 
 
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import the_pane
 from pymux.enums import Woke
-from pymux.jobs import find_job
+from pymux.jobs.table import find_job
 
 
 def view_job(pymux: Pymux, args: argparse.Namespace):
