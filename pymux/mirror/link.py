@@ -25,6 +25,7 @@ from pyte.keep import Keep
 from ..connection.packet_table import PacketTable
 from ..ids import PaneId
 from ..pipes.base import BrokenPipeError
+from ..style.style import DEFAULT_THEME
 from ..terminals import PeerTerminal
 from .source import MirrorSource
 
@@ -204,6 +205,7 @@ class PeerLink:
             None if cell_size is None else (int(cell_size[0]), int(cell_size[1])),
             None if color_base is None else thaw_value(color_base),
             int(packet.get(Field.KEYBOARD, 0)),
+            str(packet.get(Field.THEME) or DEFAULT_THEME),
         )
         if self.sources:
             self.connection.pymux.terminals.sync_viewers()

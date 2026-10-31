@@ -392,10 +392,12 @@ class Field(StrEnum):
     EXPIRED = "expired"
     #: In `peer-terminal`: the cell in pixels as `[width, height]` or
     #: null when no terminal said, the colours (`pyte.freeze`) or null,
-    #: and the keyboard protocol flags every client there can report.
+    #: the keyboard protocol flags every client there can report, and
+    #: the theme of the client used last there.
     CELL_SIZE = "cell-size"
     COLOR_BASE = "color-base"
     KEYBOARD = "keyboard"
+    THEME = "theme"
     #: In `mirror-focus`: true while the mirror has the focus.
     FOCUSED = "focused"
 

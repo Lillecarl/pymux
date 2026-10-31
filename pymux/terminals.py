@@ -54,6 +54,9 @@ class PeerTerminal(NamedTuple):
     color_base: ColorBase | None
     #: What every keyboard there can report, in kitty's flags.
     keyboard_source_flags: int
+    #: The theme of the client used last there, which a painted screen
+    #: answers colour queries with.
+    theme: str
 
 
 def pointer_shape_of(pane: Pane | None) -> str:
@@ -245,7 +248,9 @@ class Terminals:
         What this server's viewers' terminals say, for a server whose
         panes it mirrors: the answers its own panes get.
         """
-        return PeerTerminal(self._known_cell_size(), self.latest_client_color_base(), self.keyboard_source_flags())
+        return PeerTerminal(
+            self._known_cell_size(), self.latest_client_color_base(), self.keyboard_source_flags(), self.latest_theme()
+        )
 
     def tell_peers(self) -> None:
         "Tell every server this one mirrors panes of what the terminals here say, when it changed."
@@ -460,8 +465,19 @@ class Terminals:
         attached falls back to the theme a new client starts on.
         Lillecarl/pymux#223.
         """
+        peer = self._latest_peer()
+        if peer is not None:
+            return peer.theme
         latest = self.pymux.latest_client()
         return DEFAULT_THEME if latest is None else latest.theme_in_use
+
+    def _latest_peer(self) -> PeerTerminal | None:
+        "What a peer's terminals say, when a person used it after every client here; else None."
+        latest = self.pymux.latest_client()
+        peer = max(self.viewing_peers(), key=lambda viewing: viewing[0].last_used, default=None)
+        if peer is not None and (latest is None or peer[0].last_used > latest.last_used):
+            return peer[1]
+        return None
 
     def latest_client_color_base(self) -> ColorBase | None:
         """
@@ -470,10 +486,10 @@ class Terminals:
         nothing. A peer used after every client here speaks for its own
         terminals.
         """
+        peer = self._latest_peer()
+        if peer is not None:
+            return peer.color_base
         latest = self.pymux.latest_client()
-        peer = max(self.viewing_peers(), key=lambda viewing: viewing[0].last_used, default=None)
-        if peer is not None and (latest is None or peer[0].last_used > latest.last_used):
-            return peer[1].color_base
         if latest is None:
             return None
         try:

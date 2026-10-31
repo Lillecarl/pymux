@@ -126,6 +126,7 @@ class Peer:
                 Field.CELL_SIZE: None if terminal.cell_size is None else list(terminal.cell_size),
                 Field.COLOR_BASE: None if terminal.color_base is None else freeze_value(terminal.color_base),
                 Field.KEYBOARD: terminal.keyboard_source_flags,
+                Field.THEME: terminal.theme,
             }
         )
 

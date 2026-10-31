@@ -19,6 +19,7 @@ from pyte.osc import ColorBase
 from pymux.commands.mirror_pane import _open
 from pymux.core.main import Pymux
 from pymux.mirror.program import RemoteProgram
+from pymux.style.colors import theme_color_base
 from pymux.terminals import PeerTerminal
 
 STAYS = '%s -c "import time; time.sleep(60)"' % (sys.executable,)
@@ -124,7 +125,7 @@ async def test_the_owner_answers_for_the_terminal_at_the_peer(two_servers):
     # A painted screen answers with the theme's colours, whoever looks.
     owner.options_of_pane(there).paint_screen = False
     base = owner_screen.color_base
-    theirs = PeerTerminal((7, 15), ColorBase(list(reversed(base.palette)), base.defaults), 1)
+    theirs = PeerTerminal((7, 15), ColorBase(list(reversed(base.palette)), base.defaults), 1, "pygments:dracula")
     peer.terminals.peer_terminal = lambda: theirs
 
     here = await _open(peer, owner.socket_name, int(there.pane_id), detached=False)
@@ -155,6 +156,12 @@ async def test_the_owner_answers_for_the_terminal_at_the_peer(two_servers):
     peer.terminals.sync_keyboard_source_flags()
     peer.terminals.sync_color_bases()
     assert told(mirror_screen), "only the owner tells a mirrored pane about its surroundings"
+
+    # A painted screen answers with the theme the person at the peer sees.
+    owner.options_of_pane(there).paint_screen = True
+    owner.terminals.sync_color_bases()
+    assert owner_screen.color_base == theme_color_base("pygments:dracula")
+    await until(lambda: mirror_screen.color_base == owner_screen.color_base, "the mirror takes the theme")
 
     here.process.kill()
     (link,) = [connection.peer for connection in owner.connections if connection.peer is not None]
