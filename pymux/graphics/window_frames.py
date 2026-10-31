@@ -15,8 +15,6 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 from libpymux.protocol import Codec, Field, Message, Packet
 from pyte.sequences.kitty_graphics import GraphicsReply
 
-# Through the modules, so the kernels `pymux.graphics.kernels.install()` puts there
-# are the ones that run.
 from ..log import logger
 from .placements import Scroll, moved_by, put_command
 
