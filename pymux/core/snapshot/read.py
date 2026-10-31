@@ -93,7 +93,14 @@ from .schema import (
 )
 
 __all__ = [
-    "loaded_options","Inherited", "Program", "Takeover", "load", "read_server", "start"]
+    "Inherited",
+    "Program",
+    "Takeover",
+    "load",
+    "loaded_options",
+    "read_server",
+    "start",
+]
 
 
 def loaded_options(scope: type[Options], row: Any) -> dict[str, Any]:
@@ -329,6 +336,9 @@ def _read_notifications(pymux: Pymux, db: apsw.Connection, counters: dict[str, i
 def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
     server = {row.name: row.value for row in select(db, ServerRow)}
     pymux.created = server["created"]
+    # A snapshot of a build that gave a server no id holds none; the
+    # fresh one serves.
+    pymux.server_id = server.get("server_id", pymux.server_id)
     pymux.socket_name = server["socket_name"]
     pymux.original_cwd = server["original_cwd"]
     pymux.source_file = server["source_file"]

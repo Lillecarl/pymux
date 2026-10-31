@@ -107,10 +107,15 @@ def read_tree(tree: Tree) -> dict[type, list[Any]]:
 
 
 class RemoteSession(NamedTuple):
-    "Where a mirrored session lives: the link to its owner, and its id there."
+    """
+    Where a mirrored session lives: the link to its owner, its id there,
+    and the servers it lies behind, nearest first, by name and by id.
+    """
 
     peer: Peer
     session_id: int
+    servers: tuple[str, ...]
+    server_ids: tuple[str, ...]
 
 
 class MirrorTree:
@@ -138,12 +143,19 @@ class MirrorTree:
         self._shapes: dict[int, tuple[object, ...]] = {}
         self._updated = anyio.Event()
 
-    def update(self, server: str, tree: Tree) -> None:
-        "Make the sessions here what the owner's tree says."
+    def update(self, server: str, server_id: str, tree: Tree) -> None:
+        """
+        Make the sessions here what the owner's tree says, but for a
+        session whose path holds this server: a mirror of this server's
+        own, which would come back once more with every tree.
+        """
+        own = self.pymux.server_id
         rows = read_tree(tree)
+        looped = {row.session_id for row in rows[SessionRow] if server_id == own or own in row.server_ids.split("/")}
+        rows = _without_sessions(rows, looped)
         self._update_panes(rows)
         self._update_windows(rows)
-        self._update_sessions(server, rows)
+        self._update_sessions(server, server_id, rows)
         self._updated.set()
         self._updated = anyio.Event()
         self.pymux.invalidate(Woke.TREE_MIRRORED)
@@ -302,7 +314,7 @@ class MirrorTree:
 
     # -- sessions --------------------------------------------------------
 
-    def _update_sessions(self, server: str, rows: dict[type, list[Any]]) -> None:
+    def _update_sessions(self, server: str, server_id: str, rows: dict[type, list[Any]]) -> None:
         windows = _grouped([row for row in rows[WindowRow] if row.linked], "session_id")
         tags = _grouped(rows[SessionTagRow], "session_id")
         kept: dict[int, Session] = {}
@@ -311,7 +323,12 @@ class MirrorTree:
             name = "%s/%s" % (server, row.session_name)
             if session is None:
                 session = self.pymux.create_session(name)
-                session.remote = RemoteSession(self.peer, row.session_id)
+            session.remote = RemoteSession(
+                self.peer,
+                row.session_id,
+                (server, *_path(row.server)),
+                (server_id, *_path(row.server_ids)),
+            )
             session.name = name
             session.tags = {tag.key: tag.value for tag in tags.get(row.session_id, ())}
             ordered = sorted(windows.get(row.session_id, ()), key=lambda window: window.position)
@@ -329,6 +346,25 @@ class MirrorTree:
             # The last session stays, empty, rather than stop this
             # server: it was never this server's to end.
             session.arrangement.windows.clear()
+
+
+def _path(column: str) -> tuple[str, ...]:
+    "A `server` or `server_ids` column, one server for each part."
+    return tuple(column.split("/")) if column else ()
+
+
+def _without_sessions(rows: dict[type, list[Any]], sessions: set[int]) -> dict[type, list[Any]]:
+    "The rows of a tree but those of `sessions`: their windows, splits and panes too."
+    if not sessions:
+        return rows
+    gone: dict[str, set[int]] = {"session_id": sessions}
+    gone["window_id"] = {row.window_id for row in rows[WindowRow] if row.session_id in sessions}
+    gone["split_id"] = {row.split_id for row in rows[SplitRow] if row.window_id in gone["window_id"]}
+    gone["pane_id"] = {row.pane_id for row in rows[PaneRow] if row.window_id in gone["window_id"]}
+    return {
+        kind: [row for row in each if not any(getattr(row, key, None) in ids for key, ids in gone.items())]
+        for kind, each in rows.items()
+    }
 
 
 def _grouped(rows: list[Any], column: str) -> dict[Any, list[Any]]:

@@ -413,9 +413,10 @@ class Field(StrEnum):
     THEME = "theme"
     #: In `mirror-focus`: true while the mirror has the focus.
     FOCUSED = "focused"
-    #: In `tree`: `{table: [row, ...]}`, and the owner's name.
+    #: In `tree`: `{table: [row, ...]}`, and the owner's name and id.
     ROWS = "rows"
     SERVER = "server"
+    SERVER_ID = "server-id"
     #: In `peer-sizes`.
     SIZES = "sizes"
     #: In `run-command` from a peer: `{dest: target}`, the targets the

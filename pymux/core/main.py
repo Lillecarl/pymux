@@ -4,6 +4,7 @@ import asyncio
 import datetime
 import os
 import time
+import uuid
 import weakref
 from collections import deque
 from collections.abc import Coroutine, Iterable
@@ -111,6 +112,7 @@ class Pymux:
         "_uses": Keep.SAVED,
         "returning_clients": Keep.SAVED,
         "created": Keep.SAVED,
+        "server_id": Keep.SAVED,
         "socket_name": Keep.SAVED,
         "listener": Keep.SAVED,
         "original_cwd": Keep.SAVED,
@@ -337,6 +339,10 @@ class Pymux:
 
         # Time when this server was started.
         self.created = time.time()
+        #: Which server this is, for a peer: a session whose path of
+        #: servers holds it already is one this server mirrors back to
+        #: itself (`mirror.tree`). Lillecarl/pymux#759.
+        self.server_id = uuid.uuid4().hex
 
         #: What this server has done since it started. `pymux counters`
         #: reads it, and `pymux/introspect.py` says why the reasons

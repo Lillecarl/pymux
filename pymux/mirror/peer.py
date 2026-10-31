@@ -261,7 +261,11 @@ class Peer:
     def _take(self, packet: Message) -> None:
         if packet.get(Field.CMD) == Packet.TREE:
             try:
-                self.tree.update(str(packet.get(Field.SERVER) or self.address), packet.get(Field.ROWS) or {})
+                self.tree.update(
+                    str(packet.get(Field.SERVER) or self.address),
+                    str(packet.get(Field.SERVER_ID) or ""),
+                    packet.get(Field.ROWS) or {},
+                )
             except Exception:
                 # A tree this side cannot build leaves the last one standing.
                 logger.exception("The sessions of %s could not be mirrored.", self.address)

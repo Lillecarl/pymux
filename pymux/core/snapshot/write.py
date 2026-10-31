@@ -348,6 +348,7 @@ def rows_of(pymux: Pymux) -> Iterator[Row]:
     clipboard = pymux.clipboard.get_data()
     for name, value in (
         ("created", pymux.created),
+        ("server_id", pymux.server_id),
         ("socket_name", pymux.socket_name),
         # The new server gets it under this number (`upgrade._hand_over`).
         ("listener_fd", listener.socket.fileno() if isinstance(listener, PosixSocketListener) else None),
@@ -418,6 +419,7 @@ def session_rows(session: Session, position: int) -> Iterator[Row]:
     "Every row of one session: itself, its windows and their splits and panes."
     arrangement = session.arrangement
     last = arrangement._last_active_window
+    remote = session.remote
     yield SessionRow(
         session_id=session.session_id,
         session_name=session.name,
@@ -431,6 +433,8 @@ def session_rows(session: Session, position: int) -> Iterator[Row]:
         overlay_title=session.overlay_title,
         overlay_width=session.overlay_width,
         overlay_height=session.overlay_height,
+        server="/".join(remote.servers) if remote is not None else "",
+        server_ids="/".join(remote.server_ids) if remote is not None else "",
     )
     for name, value in sorted(session.environment.items()):
         yield SessionEnvironmentRow(session.session_id, name, value)

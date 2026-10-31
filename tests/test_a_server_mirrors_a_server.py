@@ -31,6 +31,7 @@ from pymux.commands import handle_command
 from pymux.core.main import Pymux
 from pymux.layout.geometry import plan_of
 from pymux.mirror.program import RemoteProgram
+from pymux.query import ask
 from pymux.style.colors import theme_color_base
 from pymux.terminals import PeerTerminal
 
@@ -60,6 +61,8 @@ async def two_servers(tmp_path):
     owner.serving.listen_on_socket(str(tmp_path / "owner.sock"))
     peer = Pymux()
     peer.options.test_mode = True
+    # So the owner can link back, and the peer to itself.
+    peer.serving.listen_on_socket(str(tmp_path / "peer.sock"))
     async with owner.running(), peer.running():
         # Started, so the first command from the peer opens no window.
         owner.startup_command = STAYS
@@ -293,6 +296,41 @@ async def test_a_pane_cannot_move_between_servers(two_servers):
     assert run_as(peer, client, "move-pane -s %%%d -t @%d" % (here.pane_id, own_window.window_id)) is None
     assert any("different servers" in line for line in peer.message_log)
     assert len(owner.arrangement.get_active_window().panes) == 1
+
+
+async def test_sql_says_which_server_a_session_is_on(two_servers):
+    owner, peer, client = two_servers
+    await shown_here(owner, peer, client)
+    answer = await ask(peer, "SELECT server, server_ids FROM live.sessions ORDER BY position", {}, 0, 0)
+    assert answer.rows == [("", ""), (socket.gethostname().partition(".")[0], owner.server_id)]
+
+
+async def test_a_link_back_brings_no_session_home(two_servers):
+    "Each server mirrors the other's own session, and not its mirror of its own."
+    owner, peer, client = two_servers
+    await shown_here(owner, peer, client)
+    owner.handle_command("connect %s" % (peer.socket_name,))
+
+    def mirrored():
+        return [session for session in owner.sessions if session.remote is not None]
+
+    # One tree carries both of the peer's sessions, so one seen is both read.
+    await until(lambda: mirrored(), "the peer's session arrives", seen=lambda: owner.sessions)
+    (session,) = mirrored()
+    assert session.remote.server_ids == (peer.server_id,)
+    assert [session.remote.server_ids for session in peer.sessions if session.remote is not None] == [
+        (owner.server_id,)
+    ]
+
+
+async def test_a_link_to_itself_mirrors_nothing(two_servers):
+    owner, peer, client = two_servers
+    link = peer.peers.of(peer.socket_name)
+    updated = link.tree._updated
+    link.watch()
+    with anyio.fail_after(5):
+        await updated.wait()
+    assert [session.remote for session in peer.sessions] == [None]
 
 
 async def test_a_pane_that_ends_there_ends_here(two_servers):

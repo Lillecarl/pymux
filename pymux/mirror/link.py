@@ -141,7 +141,10 @@ class PeerLink:
             tree = tree_of(pymux)
             if tree != self._tree_sent:
                 self._tree_sent = tree
-                self.queue(None, {Field.CMD: Packet.TREE, Field.SERVER: server, Field.ROWS: tree})
+                self.queue(
+                    None,
+                    {Field.CMD: Packet.TREE, Field.SERVER: server, Field.SERVER_ID: pymux.server_id, Field.ROWS: tree},
+                )
             with anyio.move_on_after(TREE_EVERY):
                 await self._tree_changed.wait()
             self._tree_changed = anyio.Event()

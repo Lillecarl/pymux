@@ -241,6 +241,11 @@ class SessionRow:
     overlay_title: str
     overlay_width: str | None
     overlay_height: str | None
+    #: The servers a mirrored session lies behind, nearest first, as
+    #: `dynhetz/hetztop`; empty for this server's own.
+    server: str = shown("")
+    #: The same path by server id, which the loop guard reads (`mirror.tree`).
+    server_ids: str = shown("")
 
 
 @dataclass(frozen=True, slots=True)

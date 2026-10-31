@@ -191,7 +191,7 @@ WRITES: dict[str, frozenset[str]] = {
     },
     "pymux.core.main.Pymux": frozenset(
         {"sessions", "_session_counter", "_uses", "global_environment", "returning_clients", "jobs"}
-        | {"created", "socket_name", "listener", "original_cwd", "source_file", "_startup_done"}
+        | {"created", "server_id", "socket_name", "listener", "original_cwd", "source_file", "_startup_done"}
         | {"clipboard", "named_buffers", "prompt_history", "message_log", "hooks", "key_bindings_manager"}
         | {"notifications", "notification_center", "wait_channels"}
         | {"startup_command", "options", "session_defaults"}
