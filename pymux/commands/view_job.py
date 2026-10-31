@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import the_pane
 from pymux.enums import Woke
+from pymux.jobs.feed import JobFeed
 from pymux.jobs.table import find_job
 
 
@@ -46,7 +47,7 @@ async def _replace(pymux: Pymux, pane: Pane, job: Job, args: argparse.Namespace)
         raise CommandException("Pane is busy: -k kills a program that runs.")
 
     pymux.panes.hang_up(pane)
-    new_pane = await pymux.panes.create_pane(job=job)
+    new_pane = await pymux.panes.create_pane(program=JobFeed.viewing(job))
     pymux.arrangement.replace_pane(pane, new_pane)
     pymux.invalidate(Woke.PANE_WAS_RESPAWNED)
 

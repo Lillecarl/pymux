@@ -9,7 +9,7 @@ import codecs
 import re
 from collections.abc import Callable
 from contextlib import suppress
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 import anyio
 import anyio.abc
@@ -19,6 +19,9 @@ from pyte.keep import Keep
 from pymux.log import logger
 
 from .job import Job
+
+if TYPE_CHECKING:
+    from ptterm.control import TerminalControl
 
 __all__ = ["JobFeed"]
 
@@ -66,6 +69,11 @@ class JobFeed:
         "_started": Keep.REBUILT,
         "_hint": Keep.DROPPED,
     }
+
+    @classmethod
+    def viewing(cls, job: Job) -> Callable[[TerminalControl], JobFeed]:
+        "What builds a viewer of `job` for a pane's control (`PaneMaker.create_pane`)."
+        return lambda control: cls(job, control.feed_output)
 
     def __init__(self, job: Job, feed_output: Callable[[str], None]) -> None:
         self.job = job

@@ -21,6 +21,7 @@ from pyte.freeze import Frozen, thaw
 
 from ...commands.wait_for import WaitChannel
 from ...ids import PaneId, SessionId, WindowId, WindowIndex
+from ...jobs.feed import JobFeed
 from ...jobs.job import Job, JobId
 from ...jobs.pipes import JobPipes
 from ...notify.notifications import Notification, NotificationSource, Route
@@ -168,7 +169,7 @@ def _viewer(pymux: Pymux, row: ViewerRow) -> Pane:
     job = pymux.jobs.get(JobId(row.job_id))
     if job is None:
         raise SnapshotError("pane %d views job %d, which the snapshot does not hold" % (row.pane_id, row.job_id))
-    pane = pymux.panes.build_viewer(job)
+    pane = pymux.panes.build_program_pane(JobFeed.viewing(job))
     pane.pane_id = PaneId(row.pane_id)
     terminal_of(pane).terminal_control.set_size(row.pane_width, row.pane_height)
     pymux.panes.register_pane(pane)

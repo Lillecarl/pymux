@@ -23,8 +23,6 @@ from .. import hacks_and_lies
 from ..commands import CommandException
 from ..enums import EditingKeys, RenderMode, Woke
 from ..ids import PaneId, WindowIndex
-from ..jobs.feed import JobFeed
-from ..jobs.job import Job
 from ..keys.actions import Kind, Origin, note, note_keys, started_by
 from ..keys.key_spelling import why_pane_cannot_read
 from ..log import logger
@@ -96,7 +94,7 @@ class PaneMaker:
         start_directory: str | None = None,
         on_done: Callable[[], None] | None = None,
         session: Session | None = None,
-        job: Job | None = None,
+        program: Callable[[TerminalControl], Program] | None = None,
         task_group: anyio.abc.TaskGroup | None = None,
     ):
         """
@@ -110,9 +108,10 @@ class PaneMaker:
         :param session: Where this pane is going, which says how big it
             is until a client renders it. The pane is not in a window
             yet, so it cannot be asked.
-        :param job: If given, show this job instead of running anything:
-            a viewer pane, read-only, that replays the tail and follows
-            the rest. Nothing forks and no program runs.
+        :param program: If given, run what it builds for the pane's
+            control instead of a command on a pty: a job's tail
+            (`JobFeed.viewing`), or a pane of another server. Nothing
+            forks.
         :param task_group: Whose scope the program runs in. Without one
             it is the server's, and a pane made outside `Pymux.running`
             names its own: tests hold one for the test. Nothing is
@@ -183,8 +182,8 @@ class PaneMaker:
 
         self.pymux.shims.make(options)
 
-        if job is not None:
-            pane = self.build_viewer(job)
+        if program is not None:
+            pane = self.build_program_pane(program)
         else:
             pane = self.build_pane(
                 command=command_list,
@@ -220,26 +219,24 @@ class PaneMaker:
 
         self.register_pane(pane)
 
-        if job is not None:
-            logger.info("Viewing job %d in a new pane.", job.job_id)
+        if program is not None:
+            logger.info("Showing %s in a new pane.", pane.process.get_name())
         else:
             logger.info("Created process %r.", command_list)
 
         return pane
 
-    def build_viewer(self, job: Job) -> Pane:
+    def build_program_pane(self, program: Callable[[TerminalControl], Program]) -> Pane:
         """
-        A pane that shows `job` where a program would run, with nothing
-        started. The feed replays the tail and follows the rest once it
-        starts. Nothing forks.
+        A pane that runs what `program` builds where a program on a pty
+        would run, with nothing started. Nothing forks.
         """
         pane = self.build_pane(
-            # A viewer never ends on its own: the job ending feeds an
-            # exit line and the pane stays, so there is nothing to call
-            # back. `JobFeed.kill` stops the follow; whoever kills
+            # Such a program never ends on its own: a job's feed says
+            # how the job ended and the pane stays. Whoever kills it
             # removes the pane.
             watch_end=False,
-            program=lambda control: JobFeed(job, control.feed_output),
+            program=program,
         )
         assert isinstance(pane.terminal, Terminal), "`_build_pane` builds a terminal pane"
         return pane

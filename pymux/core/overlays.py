@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..enums import Woke
+from ..jobs.feed import JobFeed
 from ..jobs.job import Job, describe
 from .planes import remember_the_size_made_at
 from .session import Session
@@ -117,7 +118,7 @@ class Overlays:
             session = self.pymux.current_session
         self.close(session)
 
-        pane = await self.pymux.panes.create_pane(session=session, job=job)
+        pane = await self.pymux.panes.create_pane(session=session, program=JobFeed.viewing(job))
         self._show(session, pane, describe(job), width, height)
         return pane
 
@@ -142,7 +143,7 @@ class Overlays:
         if session is None:
             session = self.pymux.current_session
 
-        pane = await self.pymux.panes.create_pane(session=session, job=job)
+        pane = await self.pymux.panes.create_pane(session=session, program=JobFeed.viewing(job))
         remember_the_size_made_at(session.arrangement.create_window(pane, name="job %d" % job.job_id), pane)
         if session is self.pymux.current_session:
             pane.focus()
