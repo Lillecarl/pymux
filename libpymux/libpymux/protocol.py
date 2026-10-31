@@ -210,6 +210,38 @@ class Packet(StrEnum):
     # which is how macOS refuses a terminal the microphone.
     MICROPHONE = "microphone"
 
+    # A peer link: another server shows panes of this one, and may be
+    # shown panes of a third the same way. Each mirror names its pane
+    # by `pane_id`. Lillecarl/pymux#759.
+    #
+    # The peer asks. `peer` opens the link, with the `wire` formats the
+    # peer reads; the connection is a peer link from then on.
+    PEER = "peer"
+    # "Mirror this pane": its screen frozen, then every read it takes.
+    MIRROR = "mirror"
+    # "Nobody here watches it": no more reads until `mirror-resume`.
+    MIRROR_PAUSE = "mirror-pause"
+    # "Watched again": the rows written since the pause, then reads.
+    MIRROR_RESUME = "mirror-resume"
+    MIRROR_STOP = "mirror-stop"
+    # A person at the peer typed: bytes for the program, under `data`,
+    # already encoded for the pane's keyboard mode.
+    MIRROR_INPUT = "mirror-input"
+    # This server tells. The pane's screen, its parser and its
+    # surroundings, frozen: the first whole, a later one only what
+    # changed since the pause or the lag that stopped the reads.
+    MIRROR_SCREEN = "mirror-screen"
+    # One read, under `data`, with `expired` when the ground timer
+    # dropped an open sequence first.
+    MIRROR_READ = "mirror-read"
+    MIRROR_RESIZED = "mirror-resized"
+    MIRROR_SURROUNDED = "mirror-surrounded"
+    # The pane's history limit changed, under `history-limit`. The
+    # mirror trims its history at the same reads the pane does.
+    MIRROR_HISTORY_LIMIT = "mirror-history-limit"
+    # "That pane is not mirrored": there is none, under `error`.
+    MIRROR_REFUSED = "mirror-refused"
+
     # Either side: "every packet I write after this one is in `wire`".
     # `wire.py` holds the format. Lillecarl/pymux#633.
     WIRE = "wire"
@@ -339,6 +371,16 @@ class Field(StrEnum):
     #: share. Lillecarl/pymux#743.
     NAME = "name"
     TRANSFER = "transfer"
+    #: In the mirror packets: a frozen screen, its parser and its
+    #: surroundings (`pyte.freeze`), and the pane's history limit, size
+    #: and ground timer decision. Lillecarl/pymux#759.
+    SCREEN = "screen"
+    STREAM = "stream"
+    SURROUNDINGS = "surroundings"
+    HISTORY_LIMIT = "history-limit"
+    LINES = "lines"
+    COLUMNS = "columns"
+    EXPIRED = "expired"
 
 
 class Codec(StrEnum):

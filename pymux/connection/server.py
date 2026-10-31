@@ -22,6 +22,7 @@ from ..audio import AudioLink
 from ..enums import Woke
 from ..graphics.graphics import CELL_SIZE_QUERY, ClientGraphics
 from ..log import logger
+from ..mirror.link import PEER_PACKETS, PeerLink
 from ..notify.osc import NO_PROGRESS, Progress
 from ..pipes.base import BrokenPipeError
 from ..style.colors import ColorDetection, DefaultColors
@@ -119,6 +120,8 @@ class ServerConnection:
         "pipeinput": Keep.DROPPED,
         # The next server measures the client's round trip again.
         "audio": Keep.DROPPED,
+        # The peer reconnects to the next server and mirrors again.
+        "peer": Keep.DROPPED,
         "_tasks": Keep.DROPPED,
         "closed": Keep.DROPPED,
         "_unanswered": Keep.DROPPED,
@@ -242,6 +245,9 @@ class ServerConnection:
         self.files = Files(self)
         #: This client's sound, when it plays it. Lillecarl/pymux#657.
         self.audio: AudioLink | None = None
+        #: The link of another server that mirrors panes of this one,
+        #: when this connection is one. Lillecarl/pymux#759.
+        self.peer: PeerLink | None = None
 
         #: Whether this client answers a ping, and how many have gone
         #: unanswered. Only a client that said it answers is ever
@@ -511,6 +517,20 @@ class ServerConnection:
         # and writes many packets, so it is not a command that prints.
         self.spawn(self.requests.stream_pane(packet))
 
+    @_PACKETS.handles(Packet.PEER)
+    def _on_peer(self, packet: Message) -> None:
+        "Another server mirrors panes of this one over this connection."
+        if self.peer is None:
+            self.peer = PeerLink(self, packet.get(Field.WIRE))
+            self.spawn(self.peer.run())
+
+    @_PACKETS.handles(*PEER_PACKETS)
+    def _on_peer_packet(self, packet: Message) -> None:
+        if self.peer is None:
+            logger.warning("A mirror packet on a connection that is no peer link. Ignoring.")
+        else:
+            self.peer.handle(packet)
+
     @_PACKETS.handles(Packet.SOUND, Packet.ECHO, Packet.MICROPHONE, Packet.BEHIND)
     def _on_sound(self, packet: Message) -> None:
         # Sound from a client that plays it. Lillecarl/pymux#657.
@@ -659,7 +679,7 @@ class ServerConnection:
             self.recording.hear("out", data[Field.DATA])
         # Serialised now: the write runs later, and the packet is what
         # was true when it was sent, in the format of the moment.
-        self.spawn(self._write(self.encode(data), compress_after))
+        self.spawn(self.write_encoded(self.encode(data), compress_after))
 
     async def say_restarting(self, wait: float, why: str) -> None:
         """
@@ -707,7 +727,7 @@ class ServerConnection:
         """
         if self.closed:
             return
-        await self._write(self.encode(data_obj))
+        await self.write_encoded(self.encode(data_obj))
 
     def _terminal_reads_shm(self) -> None:
         logger.info("The terminal of client %s reads window frames from shared memory.", self.client_id or "?")
@@ -733,7 +753,7 @@ class ServerConnection:
         for part in parts:
             if self.closed:
                 return
-            await self._write(self.encode(part))
+            await self.write_encoded(self.encode(part))
             await anyio.lowlevel.checkpoint()
 
     @property
@@ -755,7 +775,7 @@ class ServerConnection:
     def pointer_shape_sent(self) -> str:
         return self._pointer_shape_sent
 
-    async def _write(self, frame: bytes, compress_after: bool = False) -> None:
+    async def write_encoded(self, frame: bytes, compress_after: bool = False) -> None:
         "Write one encoded packet; a client that is gone is let go."
         try:
             await self.pipe_connection.write(frame, compress_after)

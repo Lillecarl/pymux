@@ -79,13 +79,13 @@ async def attached(pymux, read_only: bool = False):
         read_only=read_only,
     )
 
-    # Every packet the server sends is a call of `_write`, made when it
+    # Every packet the server sends is a call of `write_encoded`, made when it
     # is sent and awaited later. The calls against the packets taken is
     # the fence `caught_up` waits on. Lillecarl/pymux#572.
     # Patched on the class: an attribute on the connection is state the
     # hot upgrade would have to give a fate.
     session.written = session.taken = 0
-    write = ServerConnection._write
+    write = ServerConnection.write_encoded
 
     def counted(self, frame, compress_after=False):
         if self is connection:
@@ -119,7 +119,7 @@ async def attached(pymux, read_only: bool = False):
     session.logged = logged
 
     session.start()
-    with patch.object(ServerConnection, "_write", counted):
+    with patch.object(ServerConnection, "write_encoded", counted):
         async with anyio.create_task_group() as tg:
             tg.start_soon(feed)
             try:
@@ -327,7 +327,7 @@ async def test_the_comparison_waits_for_a_slow_wire(pymux):
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
         connection = pymux.connections[-1]
-        counted = connection._write
+        counted = connection.write_encoded
 
         def late(frame, compress_after=False):
             sent = counted(frame, compress_after)
@@ -338,7 +338,7 @@ async def test_the_comparison_waits_for_a_slow_wire(pymux):
 
             return deliver()
 
-        connection._write = late
+        connection.write_encoded = late
         said(session, type="text", text="echo slow-wire")
 
         def committed_text() -> str:
