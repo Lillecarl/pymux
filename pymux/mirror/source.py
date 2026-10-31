@@ -55,6 +55,8 @@ class MirrorSource:
         self.lagging = False
         #: Bytes queued for this mirror and not yet written.
         self.queued = 0
+        #: A terminal window with the focus shows the mirror (`Focus.sync_panes`).
+        self.focused = False
         self._history_limit: int | None = None
 
     def start(self) -> None:

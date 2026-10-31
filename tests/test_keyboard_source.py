@@ -28,6 +28,8 @@ class FakeConnection(Connection):
     def __init__(self, flags=0):
         super().__init__()
         self.replies.kitty_source_flags = flags
+        # No other server mirrors panes over it.
+        self.peer = None
 
 
 class FakeClientState:
@@ -77,6 +79,7 @@ class FakePane:
     def __init__(self, pane_id):
         self.pane_id = pane_id
         self.screen = FakeScreen()
+        self.process = None
 
 
 def make_pymux(*masks):

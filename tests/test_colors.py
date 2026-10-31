@@ -332,7 +332,7 @@ async def test_theme_that_owns_screen_gives_pane_its_palette():
     async with a_client() as (pymux, client):
         pymux.session_defaults.paint_screen = True
         client.options.theme = "pygments:dracula"
-        pane = SimpleNamespace(screen=Screen(24, 80, write_process_input=lambda data: None))
+        pane = SimpleNamespace(screen=Screen(24, 80, write_process_input=lambda data: None), process=None)
 
         pymux.terminals.tell_pane_about_colours(pane)
 
@@ -353,7 +353,7 @@ def test_pane_keeps_convention_while_terminal_owns_colours():
     ALL_OPTIONS["paint-screen"].set_value(pymux, "off")
     assert pymux.session_defaults.paint_screen is False
     screen = Screen(24, 80, write_process_input=lambda data: None)
-    pane = SimpleNamespace(screen=screen)
+    pane = SimpleNamespace(screen=screen, process=None)
 
     pymux.terminals.tell_pane_about_colours(pane)
 

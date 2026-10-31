@@ -85,6 +85,11 @@ class RemoteProgram:
         if not self._stopped:
             self.peer.type(self.pane_id, data)
 
+    def focus(self, focused: bool) -> None:
+        "A terminal window with the focus shows this pane, or stopped (`Focus.sync_panes`)."
+        if not self._stopped:
+            self.peer.focus(self.pane_id, focused)
+
     def suspend(self) -> None:
         if not self.suspended and not self._stopped:
             self.suspended = True

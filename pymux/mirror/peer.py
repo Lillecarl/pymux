@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 import anyio
 from libpymux.protocol import Field, Message, Packet
 from libpymux.wire import MSGPACK, MSGPACK_ZSTD, PacketReader, encode_json
+from pyte.freeze import freeze_value
 from pyte.keep import Keep
 
 from ..client.defaults import is_ssh_url
@@ -23,6 +24,7 @@ from .dial import dial
 
 if TYPE_CHECKING:
     from ..core.main import Pymux
+    from ..terminals import PeerTerminal
     from .sink import MirrorSink
 
 __all__ = ["Peer", "Peers"]
@@ -47,6 +49,7 @@ class Peers:
             if self.pymux.tasks is None:
                 raise RuntimeError("A peer link was asked for outside `Pymux.running`, so nothing would hold it.")
             peer = self.by_address[address] = Peer(address, **connect_with)
+            peer.tell_terminal(self.pymux.terminals.peer_terminal())
             self.pymux.tasks.start_soon(peer.run)
         return peer
 
@@ -70,6 +73,7 @@ class Peer:
         "error": Keep.DROPPED,
         "_send": Keep.DROPPED,
         "_receive": Keep.DROPPED,
+        "_terminal_told": Keep.DROPPED,
     }
 
     def __init__(self, address: str, **connect_with: Any) -> None:
@@ -81,6 +85,7 @@ class Peer:
         #: Why the link went or never came, for the person to read.
         self.error: str | None = None
         self._send, self._receive = anyio.create_memory_object_stream[bytes](math.inf)
+        self._terminal_told: PeerTerminal | None = None
         # Zstd only across a network, as a client offers it.
         offer = [MSGPACK_ZSTD, MSGPACK] if is_ssh_url(address) else [MSGPACK]
         self.send({Field.CMD: Packet.PEER, Field.WIRE: offer})
@@ -106,6 +111,23 @@ class Peer:
 
     def type(self, pane_id: int, data: str) -> None:
         self.send({Field.CMD: Packet.MIRROR_INPUT, Field.PANE_ID: pane_id, Field.DATA: data})
+
+    def focus(self, pane_id: int, focused: bool) -> None:
+        self.send({Field.CMD: Packet.MIRROR_FOCUS, Field.PANE_ID: pane_id, Field.FOCUSED: focused})
+
+    def tell_terminal(self, terminal: PeerTerminal) -> None:
+        "Tell the owner what the terminals here say, when it changed (`Terminals.tell_peers`)."
+        if terminal == self._terminal_told:
+            return
+        self._terminal_told = terminal
+        self.send(
+            {
+                Field.CMD: Packet.PEER_TERMINAL,
+                Field.CELL_SIZE: None if terminal.cell_size is None else list(terminal.cell_size),
+                Field.COLOR_BASE: None if terminal.color_base is None else freeze_value(terminal.color_base),
+                Field.KEYBOARD: terminal.keyboard_source_flags,
+            }
+        )
 
     # -- the link ------------------------------------------------------
 

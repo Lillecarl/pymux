@@ -16,6 +16,7 @@ from pyte.sequences.reports import FocusReport
 from ..connection.client_state import ClientState
 from ..ids import PaneId
 from ..log import logger
+from ..mirror.program import RemoteProgram
 from ..wayland.window_pane import WindowProcess, WindowScreen
 from .pane import Pane
 
@@ -47,6 +48,11 @@ class Focus:
         whose terminal window has it. Several clients can give several
         panes the focus at once; tmux has one client and one focus.
         Lillecarl/pymux#795.
+
+        A mirror that has the focus at another server gives the pane
+        here the focus too, and a mirror here tells its owner rather
+        than its program: the owner alone reports, for every viewer.
+        Lillecarl/pymux#759.
         """
         self.pymux.notifier.close_seen_notifications()
         self.pymux.notifier.drop_seen_popups()
@@ -56,10 +62,13 @@ class Focus:
                 pane = client_state.session.arrangement.get_active_pane_for(client_state.app)
                 if pane is not None:
                     focused.add(pane.pane_id)
+        for connection in self.pymux.connections:
+            if connection.peer is not None:
+                focused.update(pane_id for pane_id, source in connection.peer.sources.items() if source.focused)
         if focused == self._focused_panes:
             return
-        for pane_id, report in [(one, str(FocusReport(True))) for one in focused - self._focused_panes] + [
-            (one, str(FocusReport(False))) for one in self._focused_panes - focused
+        for pane_id, gained in [(one, True) for one in focused - self._focused_panes] + [
+            (one, False) for one in self._focused_panes - focused
         ]:
             pane = self.pymux.panes_by_id.get(pane_id)
             if pane is None:
@@ -68,8 +77,10 @@ class Focus:
             screen, process = pane.screen, pane.process
             if isinstance(screen, WindowScreen) or isinstance(process, WindowProcess):
                 continue
-            if screen.reports_focus and not process.is_terminated:
-                process.write_input(report)
+            if isinstance(process, RemoteProgram):
+                process.focus(gained)
+            elif screen.reports_focus and not process.is_terminated:
+                process.write_input(str(FocusReport(gained)))
         self._focused_panes = focused
 
     def sync_clients(self) -> None:

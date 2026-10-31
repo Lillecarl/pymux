@@ -72,6 +72,7 @@ if TYPE_CHECKING:
     from prompt_toolkit.output import ColorDepth, Output
 
     from ..commands.wait_for import WaitChannel
+    from ..mirror.link import PeerLink
     from ..pipes.posix import PosixSocketListener
 
 __all__ = [
@@ -805,6 +806,20 @@ class Pymux:
         # The panes take this client's cell. Lillecarl/pymux#753.
         self.terminals.sync_cell_size()
         self.terminals.sync_color_scheme()
+
+    def peer_was_used(self, link: PeerLink) -> None:
+        """
+        Note that a person at another server just used a mirror of a
+        pane here. Its terminal then speaks for the panes as a client's
+        does (`Terminals.cell_size`). Lillecarl/pymux#759.
+        """
+        was_latest = link.last_used > 0 and link.last_used == self._uses
+        self._uses += 1
+        link.last_used = self._uses
+        self.terminals.sync_cell_size()
+        if not was_latest:
+            # Another viewer was used since, so the colours change hands.
+            self.terminals.sync_color_bases()
 
     def clients_watching(self, window: Window | None = None) -> list[ClientState]:
         """

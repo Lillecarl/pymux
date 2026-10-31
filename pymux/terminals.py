@@ -5,12 +5,18 @@ A pane learns the cell size, the keyboard and the colours of the
 clients that look at it; a client learns the pointer shape and the
 keyboard flags of the pane it looks at. Each `sync_` sends only when the
 answer changed since it last sent. Lillecarl/pymux#775.
+
+**A server that mirrors panes of this one is a viewer too.** It sends
+what its own clients' terminals say (`PeerTerminal`), and this server
+weighs that with its own clients, by the same rules, for the panes the
+peer mirrors. A mirrored pane here is told nothing: its owner settles
+its surroundings, and they arrive with its reads. Lillecarl/pymux#759.
 """
 
 from __future__ import annotations
 
 from contextlib import suppress
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
 
 from libpymux.protocol import Field, Packet
 from pyte.images import ASSUMED_CELL_HEIGHT, ASSUMED_CELL_WIDTH
@@ -19,20 +25,35 @@ from pyte.keys.events import KeyboardFlag
 
 from .enums import ExtendedKeys
 from .log import logger
+from .mirror.program import RemoteProgram
 from .notify.osc import NO_PROGRESS
 from .style.colors import theme_color_base
 from .style.style import DEFAULT_THEME
 from .wayland.portal import color_scheme_of, theme_background
 
 if TYPE_CHECKING:
+    from pyte.osc import ColorBase
+
     from .connection.client_state import ClientState
     from .connection.server import ServerConnection
     from .core.main import Pymux
     from .core.pane import Pane
     from .core.session import Session
     from .ids import SessionId
+    from .mirror.link import PeerLink
 
-__all__ = ["Terminals", "pointer_shape_of"]
+__all__ = ["PeerTerminal", "Terminals", "pointer_shape_of"]
+
+
+class PeerTerminal(NamedTuple):
+    "What a peer's clients' terminals say, as the peer weighed them (`Terminals.peer_terminal`)."
+
+    #: One cell in pixels, or None when no terminal there said.
+    cell_size: tuple[int, int] | None
+    #: The colours of the terminal there used last, or None.
+    color_base: ColorBase | None
+    #: What every keyboard there can report, in kitty's flags.
+    keyboard_source_flags: int
 
 
 def pointer_shape_of(pane: Pane | None) -> str:
@@ -45,6 +66,15 @@ def pointer_shape_of(pane: Pane | None) -> str:
     if pane is None:
         return ""
     return pane.screen.pointer_shapes.shape
+
+
+def _mirrored(pane: Pane) -> bool:
+    """
+    Whether another server owns this pane. The owner answers its
+    program, so it alone settles the pane's surroundings: two screens
+    that place an image with two cell sizes reserve different cells.
+    """
+    return isinstance(pane.process, RemoteProgram)
 
 
 class Terminals:
@@ -173,6 +203,7 @@ class Terminals:
             for connection, client_state in self.pymux._client_states.items()
             if not client_state.temporary
         ]
+        masks += [terminal.keyboard_source_flags for _link, terminal in self.viewing_peers()]
         if not masks:
             return 0
         common = masks[0]
@@ -198,6 +229,35 @@ class Terminals:
         self._keyboard_state_sent = state
         for pane in list(self.pymux.panes_by_id.values()):
             self.tell_pane_about_keyboard(pane)
+        self.tell_peers()
+
+    def viewing_peers(self) -> list[tuple[PeerLink, PeerTerminal]]:
+        "The servers that mirror a pane of this one, each with what its terminals say."
+        viewing = []
+        for connection in self.pymux.connections:
+            link = connection.peer
+            if link is not None and link.sources and link.terminal is not None:
+                viewing.append((link, link.terminal))
+        return viewing
+
+    def peer_terminal(self) -> PeerTerminal:
+        """
+        What this server's viewers' terminals say, for a server whose
+        panes it mirrors: the answers its own panes get.
+        """
+        return PeerTerminal(self._known_cell_size(), self.latest_client_color_base(), self.keyboard_source_flags())
+
+    def tell_peers(self) -> None:
+        "Tell every server this one mirrors panes of what the terminals here say, when it changed."
+        terminal = self.peer_terminal()
+        for peer in self.pymux.peers.by_address.values():
+            peer.tell_terminal(terminal)
+
+    def sync_viewers(self) -> None:
+        "Tell every pane again what its viewers' terminals are: a peer's changed, came or went."
+        self.sync_cell_size()
+        self.sync_keyboard_source_flags()
+        self.sync_color_bases()
 
     def cell_size(self, session: Session | None = None) -> tuple[int, int]:
         """
@@ -218,17 +278,32 @@ class Terminals:
         command and leaves is not a terminal anybody is looking at.
         With nobody to ask, the panes keep the size `pyte` assumes.
         Lillecarl/pymux#369.
+
+        A peer that mirrors a pane of `session` watches it, and a peer
+        is used when a person there types into a mirror.
         """
-        known = [
-            client_state
+        return self._known_cell_size(session) or (ASSUMED_CELL_WIDTH, ASSUMED_CELL_HEIGHT)
+
+    def _known_cell_size(self, session: Session | None = None) -> tuple[int, int] | None:
+        "`cell_size` when some terminal said one, else None."
+        # (last used, cell size, watches `session`)
+        known: list[tuple[int, tuple[int, int], bool]] = [
+            (
+                client_state.last_used,
+                (connection.graphics.cell_width, connection.graphics.cell_height),
+                client_state.session is session,
+            )
             for connection, client_state in self.pymux._client_states.items()
             if connection is not None and not client_state.temporary and connection.graphics.cell_size_known
         ]
-        watching = [client_state for client_state in known if client_state.session is session] or known
+        for link, terminal in self.viewing_peers():
+            if terminal.cell_size is not None:
+                watches = any(self.pymux.session_holding(source.pane) is session for source in link.sources.values())
+                known.append((link.last_used, terminal.cell_size, watches))
+        watching = [viewer for viewer in known if viewer[2]] or known
         if not watching:
-            return (ASSUMED_CELL_WIDTH, ASSUMED_CELL_HEIGHT)
-        graphics = max(watching, key=lambda client_state: client_state.last_used).connection.graphics
-        return (graphics.cell_width, graphics.cell_height)
+            return None
+        return max(watching, key=lambda viewer: viewer[0])[1]
 
     def sync_cell_size(self) -> None:
         """
@@ -246,6 +321,7 @@ class Terminals:
         self._cell_size_sent = size
         for pane in list(self.pymux.panes_by_id.values()):
             self.tell_pane_about_cell_size(pane)
+        self.tell_peers()
 
     def tell_pane_about_cell_size(self, pane: Pane) -> None:
         """
@@ -255,9 +331,10 @@ class Terminals:
         """
         # A window pane's screen, or an older ptterm's, cannot be told.
         # It then keeps the size `pyte` assumes.
-        screen: Any = pane.screen
         with suppress(AttributeError):
-            screen.set_cell_size(*self.cell_size())
+            screen: Any = pane.screen
+            if not _mirrored(pane):
+                screen.set_cell_size(*self.cell_size())
 
     def sync_keyboard(self) -> None:
         """
@@ -279,6 +356,8 @@ class Terminals:
         """
         try:
             screen: Any = pane.screen
+            if _mirrored(pane):
+                return
         except Exception:
             return
         # A window pane's screen knows nothing about the keyboard of the
@@ -300,6 +379,8 @@ class Terminals:
         Lillecarl/pymux#283.
         """
         try:
+            if _mirrored(pane):
+                return
             # The theme colours the whole screen, and the palette
             # a program asks for is part of that screen.
             #
@@ -337,6 +418,7 @@ class Terminals:
         for pane in list(self.pymux.panes_by_id.values()):
             self.tell_pane_about_colours(pane)
         self.sync_color_scheme()
+        self.tell_peers()
 
     def sync_color_scheme(self) -> None:
         """
@@ -381,13 +463,17 @@ class Terminals:
         latest = self.pymux.latest_client()
         return DEFAULT_THEME if latest is None else latest.theme_in_use
 
-    def latest_client_color_base(self):
+    def latest_client_color_base(self) -> ColorBase | None:
         """
         The colour base of the client a person used last, or `None`
         when nobody is attached, or when that client asked its terminal
-        nothing.
+        nothing. A peer used after every client here speaks for its own
+        terminals.
         """
         latest = self.pymux.latest_client()
+        peer = max(self.viewing_peers(), key=lambda viewing: viewing[0].last_used, default=None)
+        if peer is not None and (latest is None or peer[0].last_used > latest.last_used):
+            return peer[1].color_base
         if latest is None:
             return None
         try:

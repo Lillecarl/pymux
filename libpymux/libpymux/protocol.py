@@ -227,6 +227,15 @@ class Packet(StrEnum):
     # A person at the peer typed: bytes for the program, under `data`,
     # already encoded for the pane's keyboard mode.
     MIRROR_INPUT = "mirror-input"
+    # Whether a terminal window with the focus shows the mirror, under
+    # `focused`. The owner sends the program one focus report for all
+    # its viewers (DEC 1004), so a peer never types one.
+    MIRROR_FOCUS = "mirror-focus"
+    # The terminal of the person at the peer, as the peer worked it out
+    # from its own clients: `cell-size`, `color-base` and `keyboard`.
+    # The owner weighs it with its own clients' terminals, and the
+    # screens it settles on reach every mirror as `mirror-surrounded`.
+    PEER_TERMINAL = "peer-terminal"
     # This server tells. The pane's screen, its parser and its
     # surroundings, frozen: the first whole, a later one only what
     # changed since the pause or the lag that stopped the reads.
@@ -381,6 +390,14 @@ class Field(StrEnum):
     LINES = "lines"
     COLUMNS = "columns"
     EXPIRED = "expired"
+    #: In `peer-terminal`: the cell in pixels as `[width, height]` or
+    #: null when no terminal said, the colours (`pyte.freeze`) or null,
+    #: and the keyboard protocol flags every client there can report.
+    CELL_SIZE = "cell-size"
+    COLOR_BASE = "color-base"
+    KEYBOARD = "keyboard"
+    #: In `mirror-focus`: true while the mirror has the focus.
+    FOCUSED = "focused"
 
 
 class Codec(StrEnum):

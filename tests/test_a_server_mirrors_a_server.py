@@ -14,10 +14,12 @@ import sys
 
 import anyio
 import pytest
+from pyte.osc import ColorBase
 
 from pymux.commands.mirror_pane import _open
 from pymux.core.main import Pymux
 from pymux.mirror.program import RemoteProgram
+from pymux.terminals import PeerTerminal
 
 STAYS = '%s -c "import time; time.sleep(60)"' % (sys.executable,)
 
@@ -27,14 +29,14 @@ def rows_of(control) -> list[str]:
     return ["".join(screen.page.data_buffer[y][x].char for x in range(screen.columns)) for y in range(screen.lines)]
 
 
-async def until(condition, what: str) -> None:
-    "Wait for `condition`, which the other server's packets make true."
+async def until(condition, what: str, seen=None) -> None:
+    "Wait for `condition`, which the other server's packets make true. `seen` says what was there instead."
     try:
         with anyio.fail_after(5):
             while not condition():
                 await anyio.sleep(0.01)
     except TimeoutError:
-        raise AssertionError("never: %s" % what) from None
+        raise AssertionError("never: %s%s" % (what, "" if seen is None else "; saw %r" % (seen(),))) from None
 
 
 @pytest.fixture
@@ -85,3 +87,76 @@ async def test_a_window_here_shows_a_pane_there(two_servers):
     await until(lambda: not link.sources, "killing the window stops the mirror there")
     assert not owner_control.followers
     assert not there.process.is_terminated, "the pane runs on, on its own server"
+
+
+async def test_the_owner_reports_the_focus_of_a_mirror(two_servers):
+    "The program hears the focus from its owner once, never as keys from the peer."
+    owner, peer = two_servers
+    there = owner.arrangement.get_active_window().active_pane
+    owner_control = there.terminal.terminal_control
+    owner_control.feed_output("\x1b[?1004h")
+    typed: list[str] = []
+    owner_control.process.write_input = typed.append
+
+    here = await _open(peer, owner.socket_name, int(there.pane_id), detached=False)
+    await until(lambda: here.terminal.terminal_control.screen.reports_focus, "the mirror shows the mode")
+    here.process.focus(True)
+    await until(lambda: typed == ["\x1b[I"], "the program hears the focus come", lambda: typed)
+    here.process.focus(False)
+    await until(lambda: typed == ["\x1b[I", "\x1b[O"], "the program hears the focus go", lambda: typed)
+
+    here.process.focus(True)
+    await until(lambda: len(typed) == 3, "the focus comes again", lambda: typed)
+    here.process.kill()
+    await until(lambda: typed[3:] == ["\x1b[O"], "a mirror that stops takes its focus along", lambda: typed)
+
+
+async def test_the_owner_answers_for_the_terminal_at_the_peer(two_servers):
+    """
+    Nobody is attached to the owner, so the terminal at the peer is the
+    only one looking: the owner's pane takes its cell, colours and
+    keyboard, and the mirror takes them back from the owner. The peer's
+    own idea of its panes never reaches the mirror.
+    """
+    owner, peer = two_servers
+    there = owner.arrangement.get_active_window().active_pane
+    owner_screen = there.terminal.terminal_control.screen
+    # A painted screen answers with the theme's colours, whoever looks.
+    owner.options_of_pane(there).paint_screen = False
+    base = owner_screen.color_base
+    theirs = PeerTerminal((7, 15), ColorBase(list(reversed(base.palette)), base.defaults), 1)
+    peer.terminals.peer_terminal = lambda: theirs
+
+    here = await _open(peer, owner.socket_name, int(there.pane_id), detached=False)
+    peer.terminals.tell_peers()
+    mirror_screen = here.terminal.terminal_control.screen
+
+    def surroundings(screen) -> tuple[int, int, bool, int]:
+        return (
+            screen.cell_width,
+            screen.cell_height,
+            screen.color_base == theirs.color_base,
+            screen.keyboard_source_flags,
+        )
+
+    def told(screen) -> bool:
+        return surroundings(screen) == (7, 15, True, 1)
+
+    await until(
+        lambda: told(owner_screen), "the owner's pane takes the peer's terminal", lambda: surroundings(owner_screen)
+    )
+    await until(
+        lambda: told(mirror_screen), "the mirror takes what the owner settled on", lambda: surroundings(mirror_screen)
+    )
+
+    peer.terminals._cell_size_sent = None
+    peer.terminals._keyboard_state_sent = None
+    peer.terminals.sync_cell_size()
+    peer.terminals.sync_keyboard_source_flags()
+    peer.terminals.sync_color_bases()
+    assert told(mirror_screen), "only the owner tells a mirrored pane about its surroundings"
+
+    here.process.kill()
+    (link,) = [connection.peer for connection in owner.connections if connection.peer is not None]
+    await until(lambda: not link.sources, "the mirror stops")
+    assert owner_screen.keyboard_source_flags == 0, "a peer that watches nothing stops counting"

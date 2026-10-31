@@ -19,11 +19,13 @@ import anyio
 from libpymux.protocol import Field, Message, Packet
 from libpymux.wire import MSGPACK_ZSTD, choose, encode_json, encode_msgpack
 from ptterm import Terminal
+from pyte.freeze import thaw_value
 from pyte.keep import Keep
 
 from ..connection.packet_table import PacketTable
 from ..ids import PaneId
 from ..pipes.base import BrokenPipeError
+from ..terminals import PeerTerminal
 from .source import MirrorSource
 
 if TYPE_CHECKING:
@@ -41,6 +43,8 @@ PEER_PACKETS = (
     Packet.MIRROR_RESUME,
     Packet.MIRROR_STOP,
     Packet.MIRROR_INPUT,
+    Packet.MIRROR_FOCUS,
+    Packet.PEER_TERMINAL,
 )
 
 
@@ -53,11 +57,18 @@ class PeerLink:
         "sources": Keep.DROPPED,
         "_queue": Keep.DROPPED,
         "_ready": Keep.DROPPED,
+        "terminal": Keep.DROPPED,
+        "last_used": Keep.DROPPED,
     }
 
     def __init__(self, connection: ServerConnection, offered: object) -> None:
         self.connection = connection
         self.sources: dict[PaneId, MirrorSource] = {}
+        #: What the terminals at the peer say, once it said.
+        self.terminal: PeerTerminal | None = None
+        #: When a person at the peer last used a mirror, by the
+        #: server's count of uses (`Pymux.peer_was_used`).
+        self.last_used = 0
         # Each packet with the mirror it is for, and whether the stream
         # turns to zstd after it.
         self._queue: deque[tuple[MirrorSource | None, bytes, bool]] = deque()
@@ -97,9 +108,13 @@ class PeerLink:
     def close(self) -> None:
         for source in self.sources.values():
             source.stop()
+        viewed = bool(self.sources)
         self.sources.clear()
         self._queue.clear()
         self._ready.set()
+        if viewed:
+            self.connection.pymux.terminals.sync_viewers()
+            self.connection.pymux.focus.sync_panes()
 
     def lost(self, source: MirrorSource) -> None:
         "A mirror this side could not keep sending: it ends, and the peer hears why."
@@ -115,6 +130,11 @@ class PeerLink:
     def _drop(self, source: MirrorSource) -> None:
         source.stop()
         self.sources.pop(source.pane.pane_id, None)
+        if source.focused:
+            self.connection.pymux.focus.sync_panes()
+        if not self.sources:
+            # The peer watches nothing here: its terminals stop counting.
+            self.connection.pymux.terminals.sync_viewers()
 
     def handle(self, packet: Message) -> None:
         _PACKETS.handle(self, packet)
@@ -135,7 +155,13 @@ class PeerLink:
                 {Field.CMD: Packet.MIRROR_REFUSED, Field.PANE_ID: int(pane_id), Field.ERROR: "no such pane"}
             )
             return
+        first = not self.sources
         source = self.sources[pane_id] = MirrorSource(self, pane, terminal.terminal_control)
+        # A person there asked for it, so the peer's terminal counts as
+        # the one used last. The screen this sends then carries it.
+        self.connection.pymux.peer_was_used(self)
+        if first:
+            self.connection.pymux.terminals.sync_viewers()
         source.start()
 
     @_PACKETS.handles(Packet.MIRROR_PAUSE)
@@ -160,4 +186,24 @@ class PeerLink:
     def _on_input(self, packet: Message) -> None:
         source = self._source_of(packet)
         if source is not None:
+            self.connection.pymux.peer_was_used(self)
             source.control.process.write_input(packet.get(Field.DATA, ""))
+
+    @_PACKETS.handles(Packet.MIRROR_FOCUS)
+    def _on_focus(self, packet: Message) -> None:
+        source = self._source_of(packet)
+        if source is not None:
+            source.focused = bool(packet.get(Field.FOCUSED))
+            self.connection.pymux.focus.sync_panes()
+
+    @_PACKETS.handles(Packet.PEER_TERMINAL)
+    def _on_terminal(self, packet: Message) -> None:
+        cell_size = packet.get(Field.CELL_SIZE)
+        color_base = packet.get(Field.COLOR_BASE)
+        self.terminal = PeerTerminal(
+            None if cell_size is None else (int(cell_size[0]), int(cell_size[1])),
+            None if color_base is None else thaw_value(color_base),
+            int(packet.get(Field.KEYBOARD, 0)),
+        )
+        if self.sources:
+            self.connection.pymux.terminals.sync_viewers()
