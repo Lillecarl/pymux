@@ -92,10 +92,11 @@ from .schema import (
     terminal_of,
 )
 
-__all__ = ["Inherited", "Program", "Takeover", "load", "read_server", "start"]
+__all__ = [
+    "loaded_options","Inherited", "Program", "Takeover", "load", "read_server", "start"]
 
 
-def _loaded_options(scope: type[Options], row: Any) -> dict[str, Any]:
+def loaded_options(scope: type[Options], row: Any) -> dict[str, Any]:
     "The options a row of a scope's table holds, by attribute; a NULL is not set."
     return {
         each.attribute: each.loaded(getattr(row, each.attribute))
@@ -351,10 +352,10 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
     counters = {row.name: row.value for row in select(db, CounterRow)}
 
     for row in select(db, ServerOptionRow):
-        for attribute, value in _loaded_options(ServerOptions, row).items():
+        for attribute, value in loaded_options(ServerOptions, row).items():
             setattr(pymux.options, attribute, value)
     for row in select(db, SessionDefaultRow):
-        for attribute, value in _loaded_options(SessionOptions, row).items():
+        for attribute, value in loaded_options(SessionOptions, row).items():
             setattr(pymux.session_defaults, attribute, value)
     pymux.global_environment = {row.name: row.value for row in select(db, GlobalEnvironmentRow)}
 
@@ -424,11 +425,11 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
             tag.key: tag.value for tag in select(db, SessionTagRow, "WHERE session_id = ?", session.session_id)
         }
         for own in select(db, SessionOptionRow, "WHERE session_id = ?", session.session_id):
-            for attribute, value in _loaded_options(SessionOptions, own).items():
+            for attribute, value in loaded_options(SessionOptions, own).items():
                 setattr(session.options, attribute, value)
         arrangement = session.arrangement
         for default in select(db, WindowDefaultRow, "WHERE session_id = ?", session.session_id):
-            arrangement.window_defaults.update(_loaded_options(WindowOptions, default))
+            arrangement.window_defaults.update(loaded_options(WindowOptions, default))
 
         for window_row in select(
             db, WindowRow, "WHERE session_id = ? ORDER BY linked DESC, position", session.session_id
@@ -447,7 +448,7 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
             layout = window_row.previous_layout
             window.previous_selected_layout = LayoutTypes(layout) if layout is not None else None
             for own in select(db, WindowOptionRow, "WHERE window_id = ?", window.window_id):
-                for attribute, value in _loaded_options(WindowOptions, own).items():
+                for attribute, value in loaded_options(WindowOptions, own).items():
                     setattr(window.options, attribute, value)
             if window_row.manual_height is not None and window_row.manual_width is not None:
                 window.manual_size = Size(rows=window_row.manual_height, columns=window_row.manual_width)
@@ -497,7 +498,7 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
             "options": {
                 attribute: value
                 for row in select(db, ClientOptionRow, "WHERE client_id = ?", client.client_id)
-                for attribute, value in _loaded_options(ClientOptions, row).items()
+                for attribute, value in loaded_options(ClientOptions, row).items()
             },
             "modes": modes.get(client.client_id),
             "connected": client.connected,

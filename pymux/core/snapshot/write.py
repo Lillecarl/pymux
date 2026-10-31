@@ -84,7 +84,7 @@ if TYPE_CHECKING:
 
 from .schema import CLIENT_SETTINGS, SAVED, SNAPSHOT_VERSION, SnapshotError, panes_of, terminal_of
 
-__all__ = ["Snapshot", "fds_of", "rows_of", "save", "values_of"]
+__all__ = ["Snapshot", "fds_of", "rows_of", "save", "session_rows", "values_of"]
 
 
 _SPLIT_KINDS: dict[type[Split], str] = {HSplit: "hsplit", VSplit: "vsplit"}
@@ -409,37 +409,42 @@ def rows_of(pymux: Pymux) -> Iterator[Row]:
         yield GlobalEnvironmentRow(name, value)
 
     for position, session in enumerate(pymux.sessions):
-        arrangement = session.arrangement
-        last = arrangement._last_active_window
-        yield SessionRow(
-            session_id=session.session_id,
-            session_name=session.name,
-            position=position,
-            session_created=session.created,
-            last_used=session.last_used,
-            default_height=session.default_size.rows if session.default_size is not None else None,
-            default_width=session.default_size.columns if session.default_size is not None else None,
-            last_active_window_id=last.window_id if last is not None else None,
-            overlay_pane_id=_optional_id(session.overlay_pane),
-            overlay_title=session.overlay_title,
-            overlay_width=session.overlay_width,
-            overlay_height=session.overlay_height,
-        )
-        for name, value in sorted(session.environment.items()):
-            yield SessionEnvironmentRow(session.session_id, name, value)
-        for key, value in sorted(session.tags.items()):
-            yield SessionTagRow(session.session_id, key, value)
-        if own := session.options.own():
-            yield SessionOptionRow(session.session_id, **_stored_options(SessionOptions, own))
-        if arrangement.window_defaults:
-            yield WindowDefaultRow(session.session_id, **_stored_options(WindowOptions, arrangement.window_defaults))
-        for linked, windows in ((True, arrangement.windows), (False, arrangement._unlinked_windows)):
-            for place, window in enumerate(windows):
-                yield from _window_rows(session, window, linked, place)
-        if session.overlay_pane is not None:
-            yield from _pane_rows(session.overlay_pane, None, None, None)
+        yield from session_rows(session, position)
 
     yield from _client_rows(pymux)
+
+
+def session_rows(session: Session, position: int) -> Iterator[Row]:
+    "Every row of one session: itself, its windows and their splits and panes."
+    arrangement = session.arrangement
+    last = arrangement._last_active_window
+    yield SessionRow(
+        session_id=session.session_id,
+        session_name=session.name,
+        position=position,
+        session_created=session.created,
+        last_used=session.last_used,
+        default_height=session.default_size.rows if session.default_size is not None else None,
+        default_width=session.default_size.columns if session.default_size is not None else None,
+        last_active_window_id=last.window_id if last is not None else None,
+        overlay_pane_id=_optional_id(session.overlay_pane),
+        overlay_title=session.overlay_title,
+        overlay_width=session.overlay_width,
+        overlay_height=session.overlay_height,
+    )
+    for name, value in sorted(session.environment.items()):
+        yield SessionEnvironmentRow(session.session_id, name, value)
+    for key, value in sorted(session.tags.items()):
+        yield SessionTagRow(session.session_id, key, value)
+    if own := session.options.own():
+        yield SessionOptionRow(session.session_id, **_stored_options(SessionOptions, own))
+    if arrangement.window_defaults:
+        yield WindowDefaultRow(session.session_id, **_stored_options(WindowOptions, arrangement.window_defaults))
+    for linked, windows in ((True, arrangement.windows), (False, arrangement._unlinked_windows)):
+        for place, window in enumerate(windows):
+            yield from _window_rows(session, window, linked, place)
+    if session.overlay_pane is not None:
+        yield from _pane_rows(session.overlay_pane, None, None, None)
 
 
 def _window_rows(session: Session, window: Window, linked: bool, place: int) -> Iterator[Row]:
