@@ -78,6 +78,8 @@ if TYPE_CHECKING:
 __all__ = [
     "SshClient",
     "SshTarget",
+    "find_socket",
+    "open_socket",
     "ssh_target",
 ]
 
@@ -147,7 +149,7 @@ def default_socket(username: str) -> str:
     channel, or a pymux over there that predates it and answered
     with an error. A server with no name takes the lowest free
     number, so the first one is always `.0`, and most machines have
-    exactly one. `SshClient._socket` is what asks rather than
+    exactly one. `find_socket` is what asks rather than
     guesses.
     """
     return "/tmp/pymux.sock.%s.0" % (username,)
@@ -158,7 +160,7 @@ def ssh_target(url: str) -> SshTarget:
     Read `ssh://[user@]host[:port][/path/to/socket]`.
 
     With no path the socket is found after connecting, so the path is
-    `None` here and `SshClient._socket` fills it in.
+    `None` here and `find_socket` fills it in.
     """
     parsed = urlparse(url)
 
@@ -177,6 +179,94 @@ def ssh_target(url: str) -> SshTarget:
         username=parsed.username,
         port=parsed.port,
     )
+
+
+async def open_socket(
+    target: SshTarget, connect_with: dict[str, Any], connect_timeout: float | None = None
+) -> tuple[SSHClientConnection, SSHReader[bytes], SSHWriter[bytes], str]:
+    """
+    Connect to `target` and open a channel to its pymux socket: the
+    connection, the channel's two ends, and the path it opened.
+
+    A client and a server that mirrors another's panes both reach a
+    server this way. `connect_timeout` bounds the attempt, and only a
+    reconnection passes one: `relink.CONNECT_TIMEOUT` says why.
+    """
+    import asyncssh
+
+    # Only what the address actually said. asyncssh reads its own
+    # defaults -- the agent, `~/.ssh`, `known_hosts`, and the
+    # config -- for everything left out, which is what makes this
+    # behave like `ssh` without configuring anything twice.
+    #
+    # The keepalive is the one exception, and it is deliberate: a
+    # caller that can wait for its link to come back has to learn
+    # that the link went, and `ServerAliveInterval` is off by
+    # default. So this overrides that key of `~/.ssh/config`.
+    asking = dict(connect_with)
+    asking.setdefault("keepalive_interval", KEEPALIVE_INTERVAL)
+    asking.setdefault("keepalive_count_max", KEEPALIVE_MISSES)
+    # A bound, when the caller named one, for the reason
+    # `CONNECT_TIMEOUT` gives. `setdefault`, so a person who named
+    # one in the address or their `~/.ssh/config` keeps it.
+    if connect_timeout is not None:
+        asking.setdefault("connect_timeout", connect_timeout)
+    if target.port is not None:
+        asking.setdefault("port", target.port)
+    if target.username is not None:
+        asking.setdefault("username", target.username)
+
+    connection = await asyncssh.connect(target.host, **asking)
+    try:
+        path = target.path or await find_socket(connection)
+        reader, writer = await connection.open_unix_connection(path)
+    except Exception:
+        connection.close()
+        raise
+    return connection, reader, writer, path
+
+
+async def find_socket(connection: SSHClientConnection) -> str:
+    """
+    Which socket to open, when the address named none.
+
+    **One command runs on the other machine, and it only prints.**
+    `pymux find` answers with the socket a local attach would
+    take, found by the same `servers_newest_first` that binds and
+    attaches on that machine -- the room of Lillecarl/pymux#405
+    and the flat place before it, newest first. The client
+    guesses no shape at all: a discovery that lived here would
+    drift from the one that binds there, which is how the room
+    changed and this client kept looking in `/tmp`.
+
+    The channel to the socket is `direct-streamlocal@openssh.com`,
+    which is sshd itself. So the far side needs a pymux server, an
+    sshd, and a `pymux` on the PATH this session's login shell
+    gives -- or a path named in the address.
+
+    The user is the one that was really authenticated, which is
+    better than a guess here: `~/.ssh/config` can name a different
+    one, and asyncssh has already applied it.
+    """
+    username = connection.get_extra_info("username")
+
+    try:
+        result = await connection.run(FIND_COMMAND)
+    except Exception:
+        # No exec channel: some servers refuse sessions entirely.
+        return default_socket(username)
+
+    # `run` decodes as UTF-8 unless told otherwise.
+    assert not isinstance(result.stdout, bytes)
+    found = (result.stdout or "").splitlines()
+    if result.exit_status == 0 and found:
+        return found[0].strip()
+
+    # `find` found nothing, or the pymux over there predates it
+    # and answered with an error. The flat first server is the
+    # guess that is left; naming the path in the address is the
+    # answer that always works.
+    return default_socket(username)
 
 
 class SshClient(TerminalClient):
@@ -265,40 +355,7 @@ class SshClient(TerminalClient):
         `connect_timeout` bounds the attempt, and only a reconnection
         passes one: `relink.CONNECT_TIMEOUT` says why.
         """
-        import asyncssh
-
-        target = self.target
-
-        # Only what the address actually said. asyncssh reads its own
-        # defaults -- the agent, `~/.ssh`, `known_hosts`, and the
-        # config -- for everything left out, which is what makes this
-        # behave like `ssh` without configuring anything twice.
-        #
-        # The keepalive is the one exception, and it is deliberate: a
-        # client that can wait for its link to come back has to learn
-        # that the link went, and `ServerAliveInterval` is off by
-        # default. So this overrides that key of `~/.ssh/config`.
-        asking = dict(self.connect_with)
-        asking.setdefault("keepalive_interval", KEEPALIVE_INTERVAL)
-        asking.setdefault("keepalive_count_max", KEEPALIVE_MISSES)
-        # A bound, when the caller named one, for the reason
-        # `CONNECT_TIMEOUT` gives. `setdefault`, so a person who named
-        # one in the address or their `~/.ssh/config` keeps it.
-        if connect_timeout is not None:
-            asking.setdefault("connect_timeout", connect_timeout)
-        if target.port is not None:
-            asking.setdefault("port", target.port)
-        if target.username is not None:
-            asking.setdefault("username", target.username)
-
-        connection = await asyncssh.connect(target.host, **asking)
-        try:
-            path = target.path or await self._socket(connection)
-            reader, writer = await connection.open_unix_connection(path)
-        except Exception:
-            connection.close()
-            raise
-
+        connection, reader, writer, path = await open_socket(self.target, self.connect_with, connect_timeout)
         self.path = path
         self._writer = writer
 
@@ -313,48 +370,6 @@ class SshClient(TerminalClient):
         self._forwards_moved = await self.forwards.reopen(connection)
 
         return connection, reader
-
-    async def _socket(self, connection: SSHClientConnection) -> str:
-        """
-        Which socket to open, when the address named none.
-
-        **One command runs on the other machine, and it only prints.**
-        `pymux find` answers with the socket a local attach would
-        take, found by the same `servers_newest_first` that binds and
-        attaches on that machine -- the room of Lillecarl/pymux#405
-        and the flat place before it, newest first. The client
-        guesses no shape at all: a discovery that lived here would
-        drift from the one that binds there, which is how the room
-        changed and this client kept looking in `/tmp`.
-
-        The channel to the socket is `direct-streamlocal@openssh.com`,
-        which is sshd itself. So the far side needs a pymux server, an
-        sshd, and a `pymux` on the PATH this session's login shell
-        gives -- or a path named in the address.
-
-        The user is the one that was really authenticated, which is
-        better than a guess here: `~/.ssh/config` can name a different
-        one, and asyncssh has already applied it.
-        """
-        username = connection.get_extra_info("username")
-
-        try:
-            result = await connection.run(FIND_COMMAND)
-        except Exception:
-            # No exec channel: some servers refuse sessions entirely.
-            return default_socket(username)
-
-        # `run` decodes as UTF-8 unless told otherwise.
-        assert not isinstance(result.stdout, bytes)
-        found = (result.stdout or "").splitlines()
-        if result.exit_status == 0 and found:
-            return found[0].strip()
-
-        # `find` found nothing, or the pymux over there predates it
-        # and answered with an error. The flat first server is the
-        # guess that is left; naming the path in the address is the
-        # answer that always works.
-        return default_socket(username)
 
     # ------------------------------------------------------------------
     # What a person runs.
