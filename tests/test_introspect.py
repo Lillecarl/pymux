@@ -140,7 +140,7 @@ async def test_dump_of_create_server_that_never_ran_says_so():
 async def test_command_writes_dump_and_says_where(create_server, tmp_path):
     pymux, state = create_server
 
-    # Put it back, the way `_run_command` does. This is a plain `def
+    # Put it back, the way `Requests.run` does. This is a plain `def
     # test`, so it runs in the context of the whole process rather
     # than in a task of its own: a list left here is a list every
     # later test writes its answers into, instead of to its client.

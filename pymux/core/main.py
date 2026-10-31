@@ -1057,7 +1057,7 @@ class Pymux:
         **The caller is not waiting.** A key press has to return at
         once, so a command that answers with work to finish is put in
         the server's task group and the key is done. The socket route
-        does the other thing: `ServerConnection._run_command` awaits,
+        does the other thing: `Requests.run` awaits,
         so `pymux wait-for done` holds the client that typed it.
         Lillecarl/pymux#87.
         """

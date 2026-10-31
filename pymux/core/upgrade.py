@@ -191,7 +191,7 @@ async def _answer_the_caller(pymux: Pymux) -> None:
     except ValueError:
         return
     if connection is not None:
-        await connection.answer(0)
+        await connection.requests.answer(0)
 
 
 def _refuse(pymux: Pymux) -> None:

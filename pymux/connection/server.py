@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import time
 from collections.abc import Coroutine
 from contextlib import suppress
@@ -11,28 +10,20 @@ from typing import (
 )
 
 import anyio
-from libpymux.agentic import caller_context
 from libpymux.protocol import Field, Message, Packet
 from libpymux.wire import encode_json
-from prompt_toolkit.application.current import create_app_session, set_app
+from prompt_toolkit.application.current import create_app_session
 from prompt_toolkit.data_structures import Size
 from pyte.keep import Keep
 
-from pymux.commands import CommandException
-from pymux.commands.common import find_pane, terminal_of
-
-from ..answer import Answer
 from ..audio import AudioLink
-from ..commands import handle_command
 from ..enums import Woke
 from ..graphics.graphics import CELL_SIZE_QUERY, ClientGraphics
-from ..ids import PaneId
-from ..keys.actions import Origin, started_by
 from ..log import logger
 from ..notify.osc import NO_PROGRESS, Progress
 from ..pipes.base import BrokenPipeError
 from ..style.colors import ColorDetection, DefaultColors
-from .attach import create_app, start_gui
+from .attach import start_gui
 from .client_io import ClientInput, FrameOutput
 from .clipboard_reads import ClipboardReader
 from .files import Files
@@ -40,13 +31,13 @@ from .pacing import FramePacing
 from .packet_table import PacketTable
 from .rate import Rate
 from .replies import TerminalReplies
+from .requests import Requests
 
 if TYPE_CHECKING:
     from pymux.connection.client_state import ClientState
     from pymux.connection.recording import Recording
     from pymux.core.main import Pymux
     from pymux.pipes.base import PipeConnection
-    from pymux.web.stream import PaneStream
 
 __all__ = ["ServerConnection"]
 
@@ -98,6 +89,7 @@ class ServerConnection:
         "pacing": Keep.REBUILT,
         "clipboard": Keep.REBUILT,
         "files": Keep.REBUILT,
+        "requests": Keep.REBUILT,
         "size": Keep.REBUILT,
         "hostname": Keep.REBUILT,
         "ttyname": Keep.REBUILT,
@@ -123,7 +115,6 @@ class ServerConnection:
         # the next server.
         "encode": Keep.DROPPED,
         "pipeinput": Keep.DROPPED,
-        "_stream": Keep.DROPPED,
         # The next server measures the client's round trip again.
         "audio": Keep.DROPPED,
         "_tasks": Keep.DROPPED,
@@ -175,11 +166,7 @@ class ServerConnection:
 
         self.client_state: ClientState | None = None
 
-        #: The pane this connection is streaming, when it asked for one.
-        #: A connection streams at most one pane: a caller that watches
-        #: two opens two, so one slow viewer never holds up another.
-        #: Lillecarl/pymux#461.
-        self._stream: PaneStream | None = None
+        self.requests = Requests(self)
 
         # Kitty graphics protocol state of the outer terminal. The same
         # query answers this one: the reply of the graphics query
@@ -514,13 +501,13 @@ class ServerConnection:
     def _on_run_command(self, packet: Message) -> None:
         # Handle this in a task. The command handler can produce output
         # that has to be sent back to the client.
-        self.spawn(self._run_command(packet))
+        self.spawn(self.requests.run(packet))
 
     @_PACKETS.handles(Packet.STREAM_PANE)
     def _on_stream_pane(self, packet: Message) -> None:
         # "Send me this pane as frames." A stream holds the connection
         # and writes many packets, so it is not a command that prints.
-        self.spawn(self._stream_pane(packet))
+        self.spawn(self.requests.stream_pane(packet))
 
     @_PACKETS.handles(Packet.SOUND, Packet.ECHO, Packet.MICROPHONE, Packet.BEHIND)
     def _on_sound(self, packet: Message) -> None:
@@ -532,10 +519,10 @@ class ServerConnection:
     def _on_stream_in(self, packet: Message) -> None:
         # One input message of a stream, which the stream itself reads:
         # a packet that arrives with no stream running has nowhere to go.
-        if self._stream is None:
+        if self.requests.stream is None:
             logger.warning("Input for a stream that is not running. Ignoring.")
         else:
-            self._stream.take(packet.get(Field.DATA, ""))
+            self.requests.stream.take(packet.get(Field.DATA, ""))
 
     @_PACKETS.handles(Packet.IN)
     def _on_input(self, packet: Message) -> None:
@@ -686,40 +673,6 @@ class ServerConnection:
             # waiting. Lillecarl/pymux#766.
             logger.warning("Client %s went before the restart notice reached it.", self.client_id or "?")
 
-    async def _stream_pane(self, packet: dict[str, Any]) -> None:
-        """
-        Send a pane to this client as frames, until it goes away.
-
-        **The frames are the protocol and this envelope is not.** A relay
-        passes `data` on without reading it, so the packet names here stay
-        ours to change. Lillecarl/pymux#461.
-        """
-        from pymux.web.stream import PaneStream
-
-        target = packet.get(Field.PANE)
-        pane = find_pane(self.pymux, target) if target else None
-        try:
-            if pane is None:
-                raise CommandException("can't find pane: %s" % (target,))
-            terminal = terminal_of(pane)
-        except CommandException as refused:
-            await self.write_packet({Field.CMD: Packet.ERR, Field.DATA: "%s\n" % (refused.message,)})
-            await self.write_packet({Field.CMD: Packet.EXIT, Field.CODE: 1})
-            self.close_connection()
-            return
-
-        async def send(frame: dict[str, Any]) -> None:
-            await self.write_packet({Field.CMD: Packet.STREAM_OUT, Field.DATA: json.dumps(frame)})
-
-        self._stream = PaneStream(self.pymux, pane, terminal, send, writable=bool(packet.get(Field.WRITABLE)))
-        try:
-            await self._stream.run()
-        except BrokenPipeError:
-            pass  # The viewer went away, which is how a stream usually ends.
-        finally:
-            self._stream = None
-            self.close_connection()
-
     async def carry_audio(self) -> None:
         """
         Carry this client's sound, until the connection goes. Only in
@@ -736,88 +689,6 @@ class ServerConnection:
         finally:
             self.audio = None
             self.pymux.audio.link_closed(link)
-
-    async def _run_command(self, packet: dict[str, Any]) -> None:
-        """
-        Execute a run command from the client.
-        """
-        temporary = self.client_state is None
-
-        if temporary:
-            # A command over the socket has no client of its own: it runs
-            # under a temporary client, on the window that holds the pane it
-            # was typed in, which goes again once the command answered.
-            pane_id = packet.get(Field.PANE_ID)
-            pane = self.pymux.panes_by_id.get(PaneId(int(pane_id))) if pane_id is not None else None
-
-            # The session of the pane the command was typed in. Without
-            # it the fake client lands on the session a person looked at
-            # last, so `pymux new-window` typed in a pane of one session
-            # would open the window in another. Lillecarl/pymux#323.
-            session = self.pymux.session_holding(pane) if pane is not None else None
-
-            create_app(self, start=False, session=session)
-            client_state = self.client_state
-            if client_state is not None and pane is not None and session is not None:
-                client_state.caller_pane_id = pane.pane_id
-                with set_app(client_state.app):
-                    session.arrangement.set_active_window_from_pane_id(pane.pane_id)
-
-            # A command can be the first touch of a server nobody
-            # attached to yet: the bindings and the first window it
-            # would have gotten then arrive now. Later ones noop.
-            # Under the temporary application, so the new pane focuses.
-            if client_state is not None:
-                with set_app(client_state.app):
-                    await self.pymux.startup()
-
-        pymux = self.pymux
-        # Who sent this, and from where: the client resolves both fresh
-        # on every invocation and says them in the packet, because the
-        # server's own environment names nothing about the caller.
-        # `libpymux/agentic.py` holds the names.
-        pymux.answer = reply = Answer(caller=caller_context(packet.get(Field.ENVIRONMENT), packet.get(Field.CWD)))
-
-        client_state = self.client_state
-        if client_state is None:
-            self.close_connection()
-            return
-
-        with set_app(client_state.app):
-            try:
-                # **The client waits and the server does not.** A
-                # command that has to wait answers with a coroutine,
-                # and this route is the one that awaits it: the person
-                # who typed `pymux wait-for done` waits for it, while
-                # every other client of this server keeps running.
-                # Lillecarl/pymux#87.
-                with started_by(Origin.SOCKET):
-                    answer = handle_command(pymux, packet[Field.DATA])
-                    if answer is not None:
-                        await answer
-            finally:
-                # Send the output of the command back to the client, and
-                # close the connection.
-                pymux.answer = None
-
-                try:
-                    if reply.output:
-                        await self.write_packet({Field.CMD: Packet.OUT, Field.DATA: "\n".join(reply.output) + "\n"})
-                    if reply.errors or reply.warnings:
-                        said = [*reply.warnings, *reply.errors]
-                        await self.write_packet({Field.CMD: Packet.ERR, Field.DATA: "\n".join(said) + "\n"})
-                    exit_code = reply.exit_code
-                    if exit_code is None:
-                        exit_code = 1 if reply.errors else 0
-                    await self.write_packet({Field.CMD: Packet.EXIT, Field.CODE: exit_code})
-                except BrokenPipeError:
-                    pass
-                self.close_connection()
-
-    async def answer(self, exit_code: int) -> None:
-        "Send the exit code of a command, for one that ends the server before it returns."
-        with suppress(BrokenPipeError):
-            await self.write_packet({Field.CMD: Packet.EXIT, Field.CODE: exit_code})
 
     async def _write_urgent(self, data_obj: object) -> None:
         "Write a packet ahead of every write that waits for the connection: sound."
