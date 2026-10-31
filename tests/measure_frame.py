@@ -8,7 +8,7 @@ notices until pymux feels wrong under a hand. Lillecarl/pymux#217
 rewrote the layout engine, which is exactly the kind of change that
 could do it.
 
-The unit is bytecode instructions and not seconds. `tests/instructions.py`
+The unit is bytecode instructions and not seconds. `pyterm_pytest.instructions`
 says why, and what moves a count that is not a change in the code.
 
 ## What it measures, and what it does not
@@ -80,7 +80,6 @@ sys.path.insert(0, str(Path(__file__).parent))
 # not the directory above it.
 sys.path.insert(1, str(Path(__file__).parent.parent))
 
-from instructions import count_instructions
 from prompt_toolkit.application import Application
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
@@ -90,6 +89,7 @@ from prompt_toolkit.layout.layout import Layout
 from prompt_toolkit.layout.mouse_handlers import MouseHandlers
 from prompt_toolkit.layout.screen import Screen, WritePosition
 from prompt_toolkit.output import DummyOutput
+from pyterm_pytest.instructions import count_instructions
 from recorded import how_to_record, moved, read_counts, write_list
 
 from pymux.core.pane import Pane

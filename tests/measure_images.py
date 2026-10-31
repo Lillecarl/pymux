@@ -8,7 +8,7 @@ re-encodes each image for each client's terminal on each frame.
 Lillecarl/pymux#574 and #575 moved that work into Rust and off the
 event loop, and nothing held the result.
 
-The unit is bytecode instructions. `tests/instructions.py` says why,
+The unit is bytecode instructions. `pyterm_pytest.instructions` says why,
 and what moves a count that is not a change in the code.
 
 ## Two runs of every measurement
@@ -59,10 +59,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(1, str(Path(__file__).parent.parent))
 
-from instructions import count_instructions
 from pyte.screen import Screen
 from pyte.sequences.strings import apc
 from pyte.streams import Stream
+from pyterm_pytest.instructions import count_instructions
 from recorded import how_to_record, moved, read_counts, write_list
 
 from pymux.graphics import kernels, sixel

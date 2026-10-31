@@ -88,20 +88,20 @@ import anyio
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(1, str(Path(__file__).parent.parent))
 
-from instructions import count_instructions
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.key_binding.key_processor import KeyPress
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
+from pyterm_pytest.instructions import count_instructions
 from recorded import how_to_record, moved, read_counts, write_list
 from session import Connection
 
 from pymux.core.main import Pymux
 
 #: The tool slot the walk below registers as. It is the one
-#: `instructions.py` uses, and the two never run at the same time.
+#: `pyterm_pytest.instructions` uses, and the two never run at the same time.
 _TOOL = sys.monitoring.PROFILER_ID
 
 HERE = Path(__file__).parent

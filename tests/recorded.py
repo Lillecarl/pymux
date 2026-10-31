@@ -13,10 +13,8 @@ in one, because "#3" is how a walk numbers the third screen of an
 item.
 
 A list of names with no verdicts at all is the same idea minus the
-last word: `read_names` reads it. `tests/instructions.py` in ptterm
-holds its own copy of the counting helper on purpose, because the
-repositories are separate and no test tree depends on the other's.
-Everything this module serves is inside this one repository.
+last word: `read_names` reads it. Everything this module serves is
+inside this one repository.
 """
 
 from __future__ import annotations
