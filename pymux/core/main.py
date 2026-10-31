@@ -60,6 +60,7 @@ from .overlays import Overlays
 from .pane import Pane
 from .panes import PaneMaker
 from .planes import Planes
+from .port_offers import PortOffers
 from .serving import Serving
 from .session import OwnOptions, Session
 from .waking import Waking
@@ -162,6 +163,7 @@ class Pymux:
         "planes": Keep.REBUILT,
         "overlays": Keep.REBUILT,
         "forward_requests": Keep.REBUILT,
+        "port_offers": Keep.REBUILT,
         "waking": Keep.REBUILT,
         "focus": Keep.REBUILT,
         # The running server.
@@ -269,6 +271,9 @@ class Pymux:
         self.planes = Planes(self)
         self.overlays = Overlays(self)
         self.forward_requests = ForwardRequests(self)
+        #: The ports a pane began to listen on, offered to a client
+        #: that can forward them. Lillecarl/pymux#438.
+        self.port_offers = PortOffers(self)
         self.waking = Waking(self)
         self.focus = Focus(self)
         self.serving = Serving(self)
@@ -632,6 +637,7 @@ class Pymux:
             tasks.start_soon(self.waking.auto_refresh)
             tasks.start_soon(watch_window_output, self)
             tasks.start_soon(sweep, self)
+            tasks.start_soon(self.port_offers.keep)
             tasks.start_soon(self.actions.keep, lambda: self.options.action_log_limit)
             tasks.start_soon(self.wayland.keep)
             tasks.start_soon(self.portal.keep)

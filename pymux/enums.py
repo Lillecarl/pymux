@@ -275,6 +275,7 @@ class Woke(StrEnum):
     COLUMN_MOVED = "a column of the strip moved along the row"
     PANE_CHANGED_COLUMN = "a pane joined another column of the strip, or left one"
     FORWARDS_CHANGED = "a client reported the ports it forwards"
+    PORT_OFFERED = "a pane began to listen on a port, and a client was asked to forward it"
     #: A pane's clipboard write or notification is held until the next
     #: frame, so that it lands with the screen that shows what it is
     #: about. A pane in a window nobody looks at draws no frame of its

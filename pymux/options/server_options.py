@@ -122,6 +122,14 @@ class ServerOptions(Options):
         ForwardMode.ON,
         doc="What happens to a request to forward a port. `ForwardMode` says.",
     )
+    forward_offers: bool = option(
+        False,
+        doc=(
+            "Offer to forward a port when a program in a pane starts listening on one, to a client that "
+            "reached this server over SSH. Each port is offered once a pane; a yes runs `forward-port`. "
+            "It reads every pane's sockets every two seconds while it is on. Lillecarl/pymux#438."
+        ),
+    )
     job_ttl: int = option(
         3600,
         doc=(
