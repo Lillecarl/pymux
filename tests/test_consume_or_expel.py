@@ -15,7 +15,9 @@ from __future__ import annotations
 
 from fake_panes import create_pane
 
-from pymux.core.window_tree import HSplit, Pane, VSplit, Window
+from pymux.core.pane import Pane
+from pymux.core.splits import HSplit, VSplit
+from pymux.core.window_tree import Window
 
 
 def create_strip(columns=1):

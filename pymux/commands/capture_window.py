@@ -18,7 +18,7 @@ from pymux.commands.pictures import (
     refuse_picture_flags,
     save_png,
 )
-from pymux.core.window_tree import Pane
+from pymux.core.pane import Pane
 from pymux.layout.geometry import plan_of
 from pymux.wayland.window_pane import WindowWidget
 

@@ -19,7 +19,9 @@ from pyte.keep import Keep
 
 from ..ids import PaneId, WindowIndex
 from ..options.session_options import SessionOptions
-from .window_tree import Pane, Window, node_key
+from .pane import Pane
+from .splits import node_key
+from .window_tree import Window
 
 if TYPE_CHECKING:
     from .session import OwnOptions

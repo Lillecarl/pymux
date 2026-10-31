@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pymux.core.main import Pymux
-    from pymux.core.window_tree import Pane
+    from pymux.core.pane import Pane
 
 
 import anyio

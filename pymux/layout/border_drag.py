@@ -27,6 +27,7 @@ from prompt_toolkit.layout.dimension import Dimension as D
 from prompt_toolkit.mouse_events import MouseButton, MouseEvent, MouseEventType
 
 from ..core import window_tree
+from ..core.splits import HSplit, VSplit
 from ..keys.actions import Kind, Origin, note, started_by
 
 if TYPE_CHECKING:
@@ -56,10 +57,10 @@ class BorderDrag:
     columns: int = 1
 
     @property
-    def split(self) -> window_tree.HSplit | window_tree.VSplit:
+    def split(self) -> HSplit | VSplit:
         # A plan knows nothing of the arrangement; pymux's layouts put
         # a split there.
-        return cast("window_tree.HSplit | window_tree.VSplit", self.seam.split)
+        return cast("HSplit | VSplit", self.seam.split)
 
     @property
     def in_strip(self) -> bool:

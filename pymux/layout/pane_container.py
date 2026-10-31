@@ -32,6 +32,7 @@ from prompt_toolkit.layout.mouse_handlers import MouseHandlers
 from prompt_toolkit.layout.screen import Char, Screen
 
 from pymux.core import window_tree
+from pymux.core.pane import Pane
 
 from ..enums import Woke
 from ..format import format_pymux_string
@@ -84,9 +85,9 @@ BELOW_MARK = "▾"
 _PANE_POSITIONS = "pymux_pane_write_positions"
 
 
-def pane_write_positions(screen: Screen) -> dict[window_tree.Pane, WritePosition]:
+def pane_write_positions(screen: Screen) -> dict[Pane, WritePosition]:
     "Where each pane was drawn on this screen."
-    positions: dict[window_tree.Pane, WritePosition] | None = getattr(screen, _PANE_POSITIONS, None)
+    positions: dict[Pane, WritePosition] | None = getattr(screen, _PANE_POSITIONS, None)
     if positions is None:
         positions = {}
         setattr(screen, _PANE_POSITIONS, positions)
@@ -97,16 +98,16 @@ def pane_write_positions(screen: Screen) -> dict[window_tree.Pane, WritePosition
 _PANE_CONTAINERS = "pymux_pane_containers"
 
 
-def pane_containers(screen: Screen) -> dict[window_tree.Pane, Container]:
+def pane_containers(screen: Screen) -> dict[Pane, Container]:
     "The container each pane was drawn from on this screen."
-    containers: dict[window_tree.Pane, Container] | None = getattr(screen, _PANE_CONTAINERS, None)
+    containers: dict[Pane, Container] | None = getattr(screen, _PANE_CONTAINERS, None)
     if containers is None:
         containers = {}
         setattr(screen, _PANE_CONTAINERS, containers)
     return containers
 
 
-def _short_name_of(pymux: Pymux, pane: window_tree.Pane) -> str:
+def _short_name_of(pymux: Pymux, pane: Pane) -> str:
     """
     A pane in a few cells, for the title bar of the pane beside it.
 
@@ -120,7 +121,7 @@ def _short_name_of(pymux: Pymux, pane: window_tree.Pane) -> str:
 def create_container_for_process(
     pymux: Pymux,
     window: window_tree.Window,
-    arrangement_pane: window_tree.Pane,
+    arrangement_pane: Pane,
 ):
     """
     Create a `Container` with a titlebar for a process.
@@ -449,7 +450,7 @@ class _PaneMark(_ContainerProxy):
         self,
         content: Container,
         window: window_tree.Window,
-        pane: window_tree.Pane,
+        pane: Pane,
         style: Callable[[], str],
         has_bar_below: Callable[[], bool],
         hidden: Callable[[], Hidden | None] = lambda: None,
@@ -565,7 +566,7 @@ class _PaneMark(_ContainerProxy):
 class TracePaneWritePosition(_ContainerProxy):  # XXX: replace with SizedBox
     "Trace the write position of this pane."
 
-    def __init__(self, pymux: Pymux, arrangement_pane: window_tree.Pane, content: AnyContainer) -> None:
+    def __init__(self, pymux: Pymux, arrangement_pane: Pane, content: AnyContainer) -> None:
         content = to_container(content)
         _ContainerProxy.__init__(self, content)
 

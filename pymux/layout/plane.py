@@ -84,7 +84,7 @@ __all__ = [
 #: What a slot holds, as an annotation: any object with an identity,
 #: because nothing here asks a pane for anything.
 #:
-#: **This is not `window_tree.Pane`**, and it is not exported, so that
+#: **This is not `core.pane.Pane`**, and it is not exported, so that
 #: nobody imports the word from here and gets `object`. It says what
 #: the annotations below mean and no more.
 Pane = object

@@ -20,7 +20,7 @@ from run_commands import complaints
 
 from pymux.core.arrangement import Arrangement
 from pymux.core.main import Pymux
-from pymux.core.window_tree import VSplit
+from pymux.core.splits import VSplit
 from pymux.options.options import ALL_OPTIONS, SetOptionError
 
 

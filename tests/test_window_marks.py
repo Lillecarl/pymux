@@ -12,7 +12,8 @@ from types import SimpleNamespace
 
 from pymux.core.arrangement import Arrangement
 from pymux.core.main import Pymux
-from pymux.core.window_tree import Pane, Window
+from pymux.core.pane import Pane
+from pymux.core.window_tree import Window
 from pymux.format import marks_of, window_marks
 
 SYMBOLS = SimpleNamespace(activity_symbol="#", bell_symbol="!", silence_symbol="~", notification_symbol="?")

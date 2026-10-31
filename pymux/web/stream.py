@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from pyte.screen import Screen
 
     from pymux.core.main import Pymux
-    from pymux.core.window_tree import Pane
+    from pymux.core.pane import Pane
 
 __all__ = ["PaneStream"]
 

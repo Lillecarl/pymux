@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable
 
     from pymux.core.main import Pymux
-    from pymux.core.window_tree import Pane
+    from pymux.core.pane import Pane
 
 
 from pymux.commands import CommandException, CommandParser, add_command

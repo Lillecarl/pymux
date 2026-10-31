@@ -73,8 +73,10 @@ from ...options.tables import (
 )
 from ...options.window_options import WindowOptions
 from ...pipes.posix import PosixSocketListener
+from ..pane import Pane
 from ..session import Session
-from ..window_tree import HSplit, Pane, VSplit, Window, _Split, node_key
+from ..splits import HSplit, Split, VSplit, node_key
+from ..window_tree import Window
 
 if TYPE_CHECKING:
     from ...connection.client_state import ClientState
@@ -85,7 +87,7 @@ from .schema import CLIENT_SETTINGS, SAVED, SNAPSHOT_VERSION, SnapshotError, pan
 __all__ = ["Snapshot", "fds_of", "rows_of", "save", "values_of"]
 
 
-_SPLIT_KINDS: dict[type[_Split], str] = {HSplit: "hsplit", VSplit: "vsplit"}
+_SPLIT_KINDS: dict[type[Split], str] = {HSplit: "hsplit", VSplit: "vsplit"}
 
 
 def _value(value: Any) -> Any:
@@ -393,7 +395,7 @@ def rows_of(pymux: Pymux) -> Iterator[Row]:
     for name, value in (
         ("pane", Pane._pane_counter),
         ("window", Window._window_counter),
-        ("split", _Split._split_counter),
+        ("split", Split._split_counter),
         ("session", pymux._session_counter),
         ("uses", pymux._uses),
         ("job", pymux.jobs.last_id),
@@ -476,7 +478,7 @@ def _window_rows(session: Session, window: Window, linked: bool, place: int) -> 
     yield from _split_rows(window, window.root, None, None)
 
 
-def _split_rows(window: Window, split: _Split, parent: _Split | None, place: int | None) -> Iterator[Row]:
+def _split_rows(window: Window, split: Split, parent: Split | None, place: int | None) -> Iterator[Row]:
     yield SplitRow(
         split_id=split.split_id,
         window_id=window.window_id,
@@ -493,7 +495,7 @@ def _split_rows(window: Window, split: _Split, parent: _Split | None, place: int
             yield from _split_rows(window, child, split, position)
 
 
-def _pane_rows(pane: Pane, window: Window | None, parent: _Split | None, place: int | None) -> Iterator[Row]:
+def _pane_rows(pane: Pane, window: Window | None, parent: Split | None, place: int | None) -> Iterator[Row]:
     yield PaneRow(
         pane_id=pane.pane_id,
         window_id=window.window_id if window is not None else None,

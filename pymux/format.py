@@ -33,8 +33,9 @@ if TYPE_CHECKING:
     from pymux.connection.rate import Rate
     from pymux.connection.server import ServerConnection
     from pymux.core.main import Pymux
+    from pymux.core.pane import Pane
     from pymux.core.session import OwnOptions, Session
-    from pymux.core.window_tree import Pane, Window
+    from pymux.core.window_tree import Window
     from pymux.graphics.graphics import ClientGraphics
     from pymux.pipes.base import PipeConnection
 

@@ -18,7 +18,7 @@ from .window_tree import Window
 
 if TYPE_CHECKING:
     from .main import Pymux
-    from .window_tree import Pane
+    from .pane import Pane
 
 __all__ = ["Overlays"]
 

@@ -23,7 +23,7 @@ from .window_tree import Window
 if TYPE_CHECKING:
     from ..connection.client_state import ClientState
     from .main import Pymux
-    from .window_tree import Pane
+    from .pane import Pane
 
 __all__ = ["Planes", "remember_the_size_made_at"]
 

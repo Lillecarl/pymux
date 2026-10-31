@@ -17,7 +17,7 @@ from ..ids import PaneId
 from ..keys.keys import FOCUS_IN, FOCUS_OUT
 from ..log import logger
 from ..wayland.window_pane import WindowProcess, WindowScreen
-from .window_tree import Pane
+from .pane import Pane
 
 if TYPE_CHECKING:
     from .main import Pymux

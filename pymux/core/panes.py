@@ -31,9 +31,10 @@ from ..keys.key_spelling import why_pane_cannot_read
 from ..log import logger
 from ..wayland.window_pane import WindowWidget, is_window_pane
 from .environment import pane_environment
+from .pane import Pane
 from .planes import remember_the_size_made_at
 from .session import Session
-from .window_tree import Pane, Window
+from .window_tree import Window
 
 if TYPE_CHECKING:
     from pyte.keys.events import KeyEvent
@@ -98,7 +99,7 @@ class PaneMaker:
         task_group: anyio.abc.TaskGroup | None = None,
     ):
         """
-        Create a new :class:`pymux.core.window_tree.Pane` instance. (Don't put it in
+        Create a new :class:`pymux.core.pane.Pane` instance. (Don't put it in
         a window yet.)
 
         :param window: If a window is given, take the CWD of the current

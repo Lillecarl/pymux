@@ -7,8 +7,9 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pymux.core.main import Pymux
+    from pymux.core.pane import Pane
     from pymux.core.session import Session
-    from pymux.core.window_tree import Pane, Window
+    from pymux.core.window_tree import Window
 
 
 from pymux.commands import CommandParser, add_command

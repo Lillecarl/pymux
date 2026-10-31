@@ -37,6 +37,7 @@ from prompt_toolkit.layout.screen import Screen
 from prompt_toolkit.widgets import Dialog, SearchToolbar, TextArea
 
 from pymux.core import window_tree
+from pymux.core.pane import Pane
 
 from ..chooser import ChooserView
 from ..enums import Chooser
@@ -76,7 +77,7 @@ CLOCK_FORMAT = "%H:%M"
 _PANE_COVERS = "pymux_pane_covers"
 
 
-def pane_covers(screen: Screen) -> dict[window_tree.Pane, tuple[Rect, ...]]:
+def pane_covers(screen: Screen) -> dict[Pane, tuple[Rect, ...]]:
     """
     What this screen drew over each pane, in cells of the screen: every
     window it drew that overlaps the pane and is not one of the pane's
@@ -92,7 +93,7 @@ def pane_covers(screen: Screen) -> dict[window_tree.Pane, tuple[Rect, ...]]:
 
     Worked out once per screen, on the first ask.
     """
-    covers: dict[window_tree.Pane, tuple[Rect, ...]] | None = getattr(screen, _PANE_COVERS, None)
+    covers: dict[Pane, tuple[Rect, ...]] | None = getattr(screen, _PANE_COVERS, None)
     if covers is not None:
         return covers
     drawn = [
@@ -159,7 +160,7 @@ class LayoutManager:
         self._popup_textarea: TextArea | None = None
 
         # The container of the overlay pane, and the pane it belongs to.
-        self._overlay_for_pane: tuple[window_tree.Pane, Container] | None = None
+        self._overlay_for_pane: tuple[Pane, Container] | None = None
 
         #: What a `DynamicContainer` gets when there is nothing to draw.
         #:
@@ -207,7 +208,7 @@ class LayoutManager:
         self.status.frame_changed()
 
     @property
-    def pane_write_positions(self) -> dict[window_tree.Pane, WritePosition]:
+    def pane_write_positions(self) -> dict[Pane, WritePosition]:
         """
         Where each pane was drawn, in the last render of this client.
 
@@ -221,7 +222,7 @@ class LayoutManager:
         return pane_write_positions(screen)
 
     @property
-    def pane_covers(self) -> dict[window_tree.Pane, tuple[Rect, ...]]:
+    def pane_covers(self) -> dict[Pane, tuple[Rect, ...]]:
         "What the last render of this client drew over each pane: `pane_covers`."
         screen = self.client_state.app.renderer.last_rendered_screen
         if screen is None:
@@ -982,7 +983,7 @@ def _create_panes(pymux: Pymux, window: window_tree.Window, view: View) -> PlanC
     """
     containers = {pane: create_container_for_process(pymux, window, pane) for pane in window.panes}
 
-    def tell_its_size(pane: window_tree.Pane, rect: Rect) -> None:
+    def tell_its_size(pane: Pane, rect: Rect) -> None:
         if isinstance(pane.terminal, WindowWidget) and holds_window_panes(pymux, window):
             return
         tell_pane_its_size(pane, rect)

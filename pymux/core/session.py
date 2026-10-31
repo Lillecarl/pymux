@@ -17,7 +17,7 @@ from pyte.keep import Keep
 from ..ids import SessionId
 from ..options.session_options import SessionOptions
 from .arrangement import Arrangement
-from .window_tree import Pane
+from .pane import Pane
 
 if TYPE_CHECKING:
     from ..tags import Tags

@@ -45,7 +45,7 @@ from .forwarding import loopback_port
 if TYPE_CHECKING:
     from ..connection.client_state import ClientState
     from .main import Pymux
-    from .window_tree import Pane
+    from .pane import Pane
 
 __all__ = ["MAX_USER_VARS", "Outward"]
 

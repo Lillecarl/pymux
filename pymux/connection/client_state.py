@@ -33,8 +33,9 @@ from ptterm import Terminal
 from pyte.keep import Keep
 
 from ..commands.completer import create_command_completer
+from ..core.pane import Pane
 from ..core.session import Session
-from ..core.window_tree import Pane, Window
+from ..core.window_tree import Window
 from ..enums import CHOOSE, COMMAND, PROMPT, Chooser, EditingKeys, Woke
 from ..graphics.graphics import PaneView
 from ..ids import PaneId

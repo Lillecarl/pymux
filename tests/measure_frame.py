@@ -92,7 +92,7 @@ from prompt_toolkit.layout.screen import Screen, WritePosition
 from prompt_toolkit.output import DummyOutput
 from recorded import how_to_record, moved, read_counts, write_list
 
-from pymux.core.window_tree import Pane
+from pymux.core.pane import Pane
 from pymux.core.window_tree import Window as ArrangementWindow
 from pymux.layout.divided import Divided
 from pymux.layout.geometry import layout_of, pane_beside, room_for_panes

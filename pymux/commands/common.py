@@ -9,8 +9,9 @@ if TYPE_CHECKING:
     from pymux.answer import Answer
     from pymux.connection.client_state import ClientState
     from pymux.core.main import Pymux
+    from pymux.core.pane import Pane
     from pymux.core.session import Session
-    from pymux.core.window_tree import Pane, Window
+    from pymux.core.window_tree import Window
     from pymux.options.options import Holder
 
 

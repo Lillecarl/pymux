@@ -55,7 +55,7 @@ if TYPE_CHECKING:
     from pysmithay import Compositor, Vp9Encoder
 
     from pymux.core.main import Pymux
-    from pymux.core.window_tree import Pane
+    from pymux.core.pane import Pane
 
 try:
     import pysmithay

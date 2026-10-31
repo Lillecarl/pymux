@@ -39,7 +39,7 @@ if TYPE_CHECKING:
     from prompt_toolkit.layout.screen import Screen
     from pyte.images import GraphicsImage, GraphicsPlacement
 
-    from pymux.core.window_tree import Pane
+    from pymux.core.pane import Pane
     from pymux.wayland.wayland import WaylandServer
 
 #: What a client that cannot draw kitty images sees in the pane.

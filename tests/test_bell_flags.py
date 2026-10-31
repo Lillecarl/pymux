@@ -14,7 +14,8 @@ from prompt_toolkit.application.current import set_app
 from test_a_session_on_a_pyte_screen import attached, pymux, shows  # noqa: F401 -- a fixture
 
 from pymux.core.arrangement import Arrangement
-from pymux.core.window_tree import Pane, Window
+from pymux.core.pane import Pane
+from pymux.core.window_tree import Window
 from pymux.format import format_pymux_string
 
 

@@ -72,8 +72,10 @@ from ...options.tables import (
     select,
 )
 from ...options.window_options import WindowOptions
+from ..pane import Pane
 from ..session import Session
-from ..window_tree import HSplit, LayoutTypes, Pane, VSplit, Window, _Split
+from ..splits import HSplit, Split, VSplit
+from ..window_tree import LayoutTypes, Window
 
 if TYPE_CHECKING:
     from ..main import Pymux
@@ -386,7 +388,7 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
         pymux.panes_by_id[pane.pane_id] = pane
         return pane
 
-    def split_of(row: SplitRow) -> _Split:
+    def split_of(row: SplitRow) -> Split:
         split = (HSplit if row.kind == "hsplit" else VSplit)()
         split.split_id = row.split_id
         split.weights = {
@@ -502,7 +504,7 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
 
     Pane._pane_counter = counters["pane"]
     Window._window_counter = counters["window"]
-    _Split._split_counter = counters["split"]
+    Split._split_counter = counters["split"]
     pymux._session_counter = counters["session"]
     pymux._uses = counters["uses"]
     pymux.jobs.last_id = counters["job"]

@@ -27,7 +27,8 @@ from __future__ import annotations
 from fake_panes import create_pane
 from prompt_toolkit.data_structures import Size
 
-from pymux.core.window_tree import HSplit, VSplit, Window
+from pymux.core.splits import HSplit, VSplit
+from pymux.core.window_tree import Window
 from pymux.layout.divided import Divided
 from pymux.layout.plane import Side
 from pymux.layout.strip import Strip

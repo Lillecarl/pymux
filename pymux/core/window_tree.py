@@ -2,47 +2,30 @@
 One window: a tree of splits whose leaves are panes, the layouts that
 reshape it, and the strip of columns a window can scroll through.
 `arrangement.py` holds a session's windows; this holds what is inside
-one.
+one. `pane.py` holds the leaves and `splits.py` the tree.
 """
 
 from __future__ import annotations
 
 import math
-import os
 import time
-from collections.abc import Iterable
 from enum import Enum
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, ClassVar
 from weakref import ref
 
-from prompt_toolkit.application import Application, get_app
 from prompt_toolkit.data_structures import Size
-from ptterm import Terminal
 from pyte.keep import Keep
 
-from ..downloads import DownloadReader
-from ..ids import PaneId, PaneIndex, WindowId, WindowIndex
-from ..notify.osc import NO_PROGRESS
+from ..ids import PaneIndex, WindowId, WindowIndex
 from ..options.window_options import WindowOptions
 
 if TYPE_CHECKING:
-    from ..connection.recording import Recording
     from ..tags import Tags
-    from ..wayland.window_pane import WindowWidget
 
-__all__ = [
-    "DEFAULT_COLUMN_WIDTH",
-    "PRESET_COLUMN_WIDTHS",
-    "HSplit",
-    "LayoutTypes",
-    "Node",
-    "NodeKey",
-    "Pane",
-    "VSplit",
-    "Window",
-    "node_key",
-    "panes_of",
-]
+from .pane import Pane
+from .splits import HSplit, Node, NodeKey, Split, VSplit, node_key, panes_of, place_of, shape_of
+
+__all__ = ["DEFAULT_COLUMN_WIDTH", "PRESET_COLUMN_WIDTHS", "LayoutTypes", "Window"]
 
 
 #: How wide a column of a strip can be, as a fraction of the window.
@@ -72,302 +55,6 @@ class LayoutTypes(Enum):
     MAIN_HORIZONTAL = "main-horizontal"
     MAIN_VERTICAL = "main-vertical"
     TILED = "tiled"
-
-
-class Pane:
-    """
-    One pane, containing one process and a search buffer for going into copy
-    mode or displaying the help.
-    """
-
-    _pane_counter = 1000  # Start at 1000, to be sure to not confuse this with pane indexes.
-
-    #: What a hot upgrade does with each attribute; `pyte.keep` says.
-    #: The counters of panes, windows and splits are class attributes,
-    #: so no instance walk sees them: a snapshot saves them too, or a
-    #: new id collides with one that survived. Lillecarl/pymux#399.
-    KEEP: ClassVar[dict[str, Keep]] = {
-        "pane_id": Keep.SAVED,
-        "terminal": Keep.SAVED,
-        "chosen_name": Keep.SAVED,
-        "clock_mode": Keep.SAVED,
-        "user_vars": Keep.SAVED,
-        "tags": Keep.SAVED,
-        "current_directory": Keep.SAVED,
-        "current_host": Keep.SAVED,
-        "current_user": Keep.SAVED,
-        "shell": Keep.SAVED,
-        "shell_integration_version": Keep.SAVED,
-        # A program says its progress again as it moves.
-        "progress": Keep.DROPPED,
-        "command_zone": Keep.SAVED,
-        "last_exit_status": Keep.SAVED,
-        "bell": Keep.SAVED,
-        # `#{pane_revision}` only grows: an agent waiting on a change
-        # holds a number from before the upgrade.
-        "revision": Keep.SAVED,
-        # An upgrade writes it out first: `upgrade.upgrade`.
-        "recording": Keep.DROPPED,
-        # A file half sent is lost; its sender sends it again.
-        "downloads": Keep.DROPPED,
-    }
-
-    def __init__(self, terminal: Terminal | WindowWidget) -> None:
-        self.terminal = terminal
-        self.chosen_name: str | None = None
-
-        # Displayed the clock instead of this pane content.
-        self.clock_mode = False
-
-        # Give unique ID.
-        Pane._pane_counter += 1
-        self.pane_id: PaneId = PaneId(Pane._pane_counter)
-
-        #: How many times anything this pane shows may have changed. It
-        #: only goes up, and `#{pane_revision}` is it.
-        #:
-        #: **`PaneMaker.create_pane` is what makes it move**, because it is
-        #: what builds the terminal that says so. A pane built around
-        #: anything else -- a dozen tests build one around a stub -- has
-        #: the field and never counts, which is what lets those tests go
-        #: on knowing nothing about a widget.
-        #:
-        #: **Compare it, never order it.** Two revisions that differ say
-        #: something may have changed; a difference of one says nothing
-        #: about how much. The count moves on output that draws nothing
-        #: at all, because `ptyhost` calls `invalidate` after every read
-        #: whatever the bytes were, and that is the safe direction: a
-        #: reader that redraws for nothing loses a frame, and one that
-        #: misses a change shows the wrong screen until the next one.
-        #:
-        #: **It is not `screen.writes`.** That counts writes to rows, so
-        #: it stands still through a DECSCNM, an "OSC 4" and the death of
-        #: the program -- each of which changes what a reader draws. A
-        #: reader inside the server compares those itself, the way
-        #: `ptterm` compares reverse video; a reader that has only this
-        #: number cannot. Lillecarl/pymux#387.
-        self.revision = 0
-
-        #: Where the program says it is, from "OSC 7" or "OSC 1337 ;
-        #: CurrentDir". A shell reports it on every prompt, and nothing
-        #: else sets it. `None` is a pane nobody asked about yet.
-        self.current_directory: str | None = None
-
-        #: The machine the directory sits on, from the host of the
-        #: "OSC 7" file URL. `None` is the machine here or a report
-        #: that named no host. "OSC 1337 ; RemoteHost" sets it too.
-        self.current_host: str | None = None
-
-        #: The user the shell runs as there, from "OSC 1337 ; RemoteHost".
-        self.current_user: str | None = None
-
-        #: The shell and the version of its iTerm2 integration, from
-        #: "OSC 1337 ; ShellIntegrationVersion". Lillecarl/pymux#784.
-        self.shell: str | None = None
-        self.shell_integration_version: str | None = None
-
-        #: What the program says of its progress, from "OSC 9 ; 4".
-        #: Lillecarl/pymux#788.
-        self.progress = NO_PROGRESS
-
-        #: What the shell published about itself, from "OSC 1337 ;
-        #: SetUserVar". iTerm2 reads these for badges and triggers and
-        #: WezTerm for titles; here they wait for a reader, the way the
-        #: notification hub waited for its chooser.
-        self.user_vars: dict[str, str] = {}
-
-        #: What a caller said about this pane, with `set-tag`.
-        self.tags: Tags = {}
-
-        #: The shell integration zone the program stands in, from
-        #: "OSC 133": "A" a prompt, "B" a command, "C" its output.
-        #: `None` is outside every zone or after the command ended.
-        self.command_zone: str | None = None
-
-        #: The exit status the last command finished with, from
-        #: "OSC 133 ; D ; status". `None` is no finished command yet,
-        #: or one that was aborted.
-        self.last_exit_status: int | None = None
-
-        #: The program rang the bell where nobody saw it: in a pane that
-        #: was not the active one of a window a client looks at. Making
-        #: the pane active clears it. `#{pane_bell_flag}` is it.
-        #: Lillecarl/pymux#501.
-        self.bell = False
-
-        #: What `record-pane` is recording of this pane, or None.
-        self.recording: Recording | None = None
-
-        #: The files this pane sends to the person, as their parts
-        #: arrive. Lillecarl/pymux#743.
-        self.downloads = DownloadReader()
-
-    def content_changed(self) -> None:
-        "Say that what this pane shows may have changed."
-        self.revision += 1
-
-    @property
-    def is_copying(self) -> bool:
-        """
-        Is the client that runs now reading the history of this pane
-        rather than the program in it?
-
-        **The widget knows, and a pane asks it.** A flag of the pane's
-        own went out of step with the widget once, and five readers of
-        it all answered "no". Lillecarl/pymux#133.
-
-        **Copy mode is a client's, not the pane's.** Each client that
-        shows the pane is an application of its own, and the program
-        runs on under all of them. Lillecarl/pymux#470.
-        """
-        return self.terminal.is_copying
-
-    def is_copying_for(self, app: Application[Any] | None) -> bool:
-        "Is the client of `app` reading the history of this pane?"
-        return self.terminal.copy_views.of(app) is not None
-
-    @property
-    def process(self):
-        return self.terminal.process
-
-    @property
-    def screen(self):
-        "What the program in this pane has drawn."
-        return self.terminal.screen
-
-    @property
-    def name(self) -> str:
-        """
-        The name for the window as displayed in the title bar and status bar.
-        """
-        # Name, explicitely set for the pane.
-        if self.chosen_name:
-            return self.chosen_name
-        # Name from the process running inside the pane.
-        name = self.process.get_name()
-        if name:
-            return os.path.basename(name)
-
-        return ""
-
-    def current_path(self) -> str:
-        """
-        Where the pane says it is, else where its process is.
-
-        The same order a new pane starts in (`_directory_to_start_in`), so
-        `split-window -c "#{pane_current_path}"` and a bare `split-window`
-        agree. Over ssh the process table sees only the local ssh.
-        """
-        if self.current_directory:
-            return self.current_directory
-        try:
-            return self.process.get_cwd() or ""
-        except Exception:
-            return ""
-
-    def enter_copy_mode(self) -> None:
-        "Open copy mode on this pane, for the client that runs now."
-        self.terminal.enter_copy_mode()
-
-    def focus(self) -> None:
-        """
-        Focus this pane.
-        """
-        get_app().layout.focus(self.terminal)
-
-
-#: What names one node of a window's layout tree: its kind and its id.
-#: A pane and a split count their ids apart, so the kind keeps them
-#: apart. Keys are values, not objects, so a snapshot can write them
-#: and a new process can read them back. Lillecarl/pymux#399.
-NodeKey = tuple[str, int]
-
-
-def node_key(item: Node) -> NodeKey:
-    "The key of a pane or a split."
-    if isinstance(item, Pane):
-        return ("pane", item.pane_id)
-    return ("split", item.split_id)
-
-
-class _Split(list["Node"]):
-    """
-    Base class for horizontal and vertical splits. (This is a higher level
-    split than prompt_toolkit.layout.HSplit.)
-    """
-
-    _split_counter = 0
-
-    KEEP: ClassVar[dict[str, Keep]] = {
-        "split_id": Keep.SAVED,
-        "weights": Keep.SAVED,
-    }
-
-    def __init__(self, children: Iterable[Node] = ()) -> None:
-        list.__init__(self, children)
-
-        _Split._split_counter += 1
-        self.split_id = _Split._split_counter
-
-        #: Each child's share of this split, by `node_key`. A child with
-        #: no entry weighs 1. An entry outlives a child that leaves, so
-        #: a pane that comes back finds the weight it had.
-        self.weights: dict[NodeKey, int] = {}
-
-    def weight_of(self, child: Node) -> int:
-        "This child's share of the split."
-        return self.weights.get(node_key(child), 1)
-
-    def set_weight(self, child: Node, weight: int) -> None:
-        self.weights[node_key(child)] = weight
-
-    def __repr__(self) -> str:
-        return "%s(%s)" % (self.__class__.__name__, list.__repr__(self))
-
-
-class HSplit(_Split):
-    """Panes stacked one above another."""
-
-
-class VSplit(_Split):
-    """Panes side by side, so this is the split that has a left and a right."""
-
-
-#: What a split holds: a pane, or a split of the other way.
-type Node = Pane | _Split
-
-
-def _shape_of(split: _Split) -> tuple[bool, tuple[object, ...]]:
-    "The kind of `split` and what it holds: pane ids, and the shape of each split inside."
-    return (
-        type(split) is HSplit,
-        tuple(_shape_of(item) if isinstance(item, _Split) else item.pane_id for item in split),
-    )
-
-
-def _place_of(split: _Split, item: object) -> int:
-    """
-    Where this child sits in the split, by identity.
-
-    `list.index` asks whether two children are equal, and a split *is*
-    a list: two stacks holding the same panes would compare equal and
-    the first of them would answer for both.
-    """
-    for place, child in enumerate(split):
-        if child is item:
-            return place
-    raise ValueError("%r is not in %r" % (item, split))
-
-
-def panes_of(item: Node) -> list[Pane]:
-    "Every pane under this item, in the order they are drawn."
-    if isinstance(item, Pane):
-        return [item]
-
-    result: list[Pane] = []
-    for child in item:
-        result.extend(panes_of(child))
-    return result
 
 
 class Window:
@@ -535,7 +222,7 @@ class Window:
         so the layout is rebuilt. Lillecarl/pymux#202.
         """
         column = self._column_of(pane)
-        where = _place_of(self.root, column)
+        where = place_of(self.root, column)
         there = where + step
 
         if not 0 <= there < len(self.root):
@@ -575,7 +262,7 @@ class Window:
 
     def _expel(self, pane: Pane, column: Node, step: int) -> bool:
         "Take a pane out of the column it shares, into one of its own."
-        where = _place_of(self.root, column)
+        where = place_of(self.root, column)
 
         self._take_out(pane)
 
@@ -587,7 +274,7 @@ class Window:
 
     def _consume(self, pane: Pane, column: Node, step: int) -> bool:
         "Put a pane that is alone in its column into the next column."
-        there = _place_of(self.root, column) + step
+        there = place_of(self.root, column) + step
 
         if not 0 <= there < len(self.root):
             return False
@@ -601,7 +288,7 @@ class Window:
             stack = HSplit([joined, pane])
             self.root.set_weight(stack, self.root.weight_of(joined))
             self.set_column_width(stack, self.column_width(joined))
-            self.root[_place_of(self.root, joined)] = stack
+            self.root[place_of(self.root, joined)] = stack
         else:
             joined.append(pane)
 
@@ -615,7 +302,7 @@ class Window:
         # same panes are laid out and nothing else, so without it the
         # layout would not be rebuilt and the mode would take hold at
         # the next unrelated change.
-        return (self.window_id, self.zoom, self.options.strip, _shape_of(self.root))
+        return (self.window_id, self.zoom, self.options.strip, shape_of(self.root))
 
     @property
     def active_pane(self) -> Pane | None:
@@ -798,7 +485,7 @@ class Window:
             if node_key(parent) in self.column_widths:
                 self.set_column_width(parent[0], self.column_width(parent))
 
-            above[_place_of(above, parent)] = parent[0]
+            above[place_of(above, parent)] = parent[0]
             parent = above
 
     @property
@@ -822,11 +509,11 @@ class Window:
         return panes_of(self.root)
 
     @property
-    def splits(self) -> list[_Split]:
+    def splits(self) -> list[Split]:
         "Return a list with all HSplit/VSplit instances."
-        result: list[_Split] = []
+        result: list[Split] = []
 
-        def collect(split: _Split) -> None:
+        def collect(split: Split) -> None:
             result.append(split)
 
             for item in split:
@@ -836,7 +523,7 @@ class Window:
         collect(self.root)
         return result
 
-    def _get_parent(self, item: Node) -> _Split | None:
+    def _get_parent(self, item: Node) -> Split | None:
         "The HSplit/VSplit that contains the active pane."
         for s in self.splits:
             if item in s:
@@ -1023,7 +710,7 @@ class Window:
         Positive values indicate an increase, negative values a decrease.
         """
 
-        def find_split_and_child(split_cls: type[_Split], is_before: bool) -> tuple[_Split | None, Node]:
+        def find_split_and_child(split_cls: type[Split], is_before: bool) -> tuple[Split | None, Node]:
             "Find the split for which we will have to update the weights."
             child = pane
             split = self._get_parent(child)
@@ -1044,7 +731,7 @@ class Window:
 
             return split, child  # split can be None!
 
-        def handle_side(split_cls: type[_Split], is_before: bool, amount: int, trying_other_side: bool = False) -> None:
+        def handle_side(split_cls: type[Split], is_before: bool, amount: int, trying_other_side: bool = False) -> None:
             "Increase weights on one side. (top/left/right/bottom)."
             if amount:
                 split, child = find_split_and_child(split_cls, is_before)

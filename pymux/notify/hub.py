@@ -15,8 +15,9 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pymux.core.main import Pymux
+    from pymux.core.pane import Pane
     from pymux.core.session import Session
-    from pymux.core.window_tree import Pane, Window
+    from pymux.core.window_tree import Window
     from pymux.notify.notifications import Notification
 
 __all__ = ["Heading", "Message", "age", "heading_text", "rows_of"]

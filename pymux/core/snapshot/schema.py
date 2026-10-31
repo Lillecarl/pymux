@@ -31,8 +31,10 @@ from ...options.tables import (
     literal,
 )
 from ...options.window_options import WindowOptions
+from ..pane import Pane
 from ..session import Session
-from ..window_tree import Pane, Window, _Split
+from ..splits import Split
+from ..window_tree import Window
 
 if TYPE_CHECKING:
     from ..main import Pymux
@@ -152,8 +154,8 @@ WRITES: dict[str, frozenset[str]] = {
         "%s.%s" % (scope.__module__, scope.__qualname__): frozenset(each.attribute for each in saved)
         for scope, saved in SAVED.items()
     },
-    "pymux.core.window_tree._Split": frozenset(_Split.KEEP),
-    "pymux.core.window_tree.Pane": frozenset(name for name, fate in Pane.KEEP.items() if fate == Keep.SAVED),
+    "pymux.core.splits.Split": frozenset(Split.KEEP),
+    "pymux.core.pane.Pane": frozenset(name for name, fate in Pane.KEEP.items() if fate == Keep.SAVED),
     "pymux.connection.client_state.ClientState": frozenset(
         {"session", "previous_session", "options", *CLIENT_SETTINGS, *CLIENT_MODES}
     ),

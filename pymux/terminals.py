@@ -28,8 +28,8 @@ if TYPE_CHECKING:
     from .connection.client_state import ClientState
     from .connection.server import ServerConnection
     from .core.main import Pymux
+    from .core.pane import Pane
     from .core.session import Session
-    from .core.window_tree import Pane
     from .ids import SessionId
 
 __all__ = ["Terminals", "pointer_shape_of"]

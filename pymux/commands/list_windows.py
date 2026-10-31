@@ -5,8 +5,8 @@ from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from pymux.core.main import Pymux
+    from pymux.core.pane import Pane
     from pymux.core.session import Session
-    from pymux.core.window_tree import Pane
 
 
 from pymux.commands import CommandException, CommandParser, add_command

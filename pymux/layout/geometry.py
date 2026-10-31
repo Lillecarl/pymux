@@ -14,6 +14,8 @@ from prompt_toolkit.application import get_app
 from prompt_toolkit.data_structures import Size
 
 from pymux.core import window_tree
+from pymux.core.pane import Pane
+from pymux.core.splits import VSplit, panes_of
 
 from .cut_shade import Hidden, hex_of, hidden_of
 from .divided import Divided
@@ -43,7 +45,7 @@ __all__ = [
 ]
 
 
-def tell_pane_its_size(pane: window_tree.Pane, rect: Rect) -> None:
+def tell_pane_its_size(pane: Pane, rect: Rect) -> None:
     """
     Give a pane the size of its rectangle.
 
@@ -227,10 +229,10 @@ def size_the_panes_of(pymux: Pymux, window: window_tree.Window) -> None:
     plan = plan_of(pymux, window)
     for slot, rect in plan.rects.items():
         for pane in slot.panes:
-            tell_pane_its_size(cast(window_tree.Pane, pane), rect)
+            tell_pane_its_size(cast(Pane, pane), rect)
 
 
-def hidden_of_pane(pymux: Pymux, pane: window_tree.Pane) -> Hidden | None:
+def hidden_of_pane(pymux: Pymux, pane: Pane) -> Hidden | None:
     """
     How much of this pane the view this client has hides, on each side.
 
@@ -341,10 +343,10 @@ def write_sizes_into_weights(pymux: Pymux, window: window_tree.Window) -> None:
     plan = plan_of(pymux, window)
 
     for split in window.splits:
-        sideways = isinstance(split, window_tree.VSplit)
+        sideways = isinstance(split, VSplit)
 
         for child in split:
-            held = [plan.rect_of(pane) for pane in window_tree.panes_of(child)]
+            held = [plan.rect_of(pane) for pane in panes_of(child)]
             if not held:
                 continue
 
@@ -355,7 +357,7 @@ def write_sizes_into_weights(pymux: Pymux, window: window_tree.Window) -> None:
 def change_pane_size(
     pymux: Pymux,
     window: window_tree.Window,
-    pane: window_tree.Pane,
+    pane: Pane,
     up: int = 0,
     right: int = 0,
     down: int = 0,
@@ -373,9 +375,7 @@ def change_pane_size(
     window.change_size_for_pane(pane, up=up, right=right, down=down, left=left)
 
 
-def pane_beside(
-    pymux: Pymux, window: window_tree.Window, pane: window_tree.Pane, side: Side
-) -> window_tree.Pane | None:
+def pane_beside(pymux: Pymux, window: window_tree.Window, pane: Pane, side: Side) -> Pane | None:
     """
     The pane on one side of this one. **One answer, for one window.**
 
@@ -410,4 +410,4 @@ def pane_beside(
     if beside is None:
         return None
 
-    return cast(window_tree.Pane, beside.shown)
+    return cast(Pane, beside.shown)

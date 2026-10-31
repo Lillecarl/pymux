@@ -58,12 +58,13 @@ from .forward_requests import ForwardRequests
 from .hooks import Hooks
 from .outward import Outward
 from .overlays import Overlays
+from .pane import Pane
 from .panes import PaneMaker
 from .planes import Planes
 from .serving import Serving
 from .session import OwnOptions, Session
 from .waking import Waking
-from .window_tree import Pane, Window
+from .window_tree import Window
 
 if TYPE_CHECKING:
     from prompt_toolkit.input import Input
