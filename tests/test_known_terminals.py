@@ -6,9 +6,12 @@ The XTVERSION answers are the ones real terminals gave pymux.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from pyte.osc import Osc
 
+from pymux.connection import known_terminals
 from pymux.connection.known_terminals import identify, wcwidth_name
 
 
@@ -120,3 +123,69 @@ def test_the_key_profile_is_named_by_the_answer_and_then_by_term(version, term, 
 )
 def test_the_wcwidth_table_is_named_by_the_answer_and_then_by_term(version, term, name):
     assert wcwidth_name(version, term) == name
+
+
+# ----------------------------------------------------------------------
+# A person's own terminals, from `$XDG_CONFIG_HOME/pymux/terminals.py`.
+# Lillecarl/pymux#828.
+
+
+@pytest.fixture
+def own_terminals(tmp_path, monkeypatch):
+    "Write a person's terminals file, and read the tables again around the test."
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    path = tmp_path / "pymux" / "terminals.py"
+    path.parent.mkdir()
+
+    def write(text: str) -> None:
+        path.write_text(text)
+        known_terminals._tables.cache_clear()
+        identify.cache_clear()
+
+    yield write
+    known_terminals._tables.cache_clear()
+    identify.cache_clear()
+
+
+def test_a_person_teaches_pymux_a_terminal(own_terminals):
+    own_terminals(
+        "from pymux.connection.known_terminals import KnownTerminal\n"
+        "TERMINALS = (KnownTerminal('myterm', terms=frozenset({'xterm-myterm'}), placeholders=(1, 2)),)\n"
+    )
+    assert identify("MyTerm 1.3", "").draws_placeholders()
+    assert not identify("MyTerm 1.1", "").draws_placeholders()
+    assert identify("", "xterm-myterm").known.name == "myterm"
+    assert identify("kitty(0.39.1)", "").known.name == "kitty"
+
+
+def test_a_persons_entry_wins_over_the_built_in_one(own_terminals):
+    own_terminals(
+        "from pymux.connection.known_terminals import KnownTerminal\n"
+        "TERMINALS = (KnownTerminal('kitty', terms=frozenset({'xterm-kitty'})),)\n"
+    )
+    assert identify("kitty(0.39.1)", "").key_profile is None
+    assert identify("", "xterm-kitty").known.key_profile is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "raise RuntimeError('a typo')\n",
+        "TERMINALS = ('myterm',)\n",
+        "NOTHING = ()\n",
+    ],
+)
+def test_a_broken_file_costs_its_own_entries_and_nothing_more(own_terminals, text):
+    own_terminals(text)
+    assert identify("MyTerm 1.3", "").known is None
+    assert identify("kitty(0.39.1)", "").key_profile == "kitty"
+
+
+def test_no_file_holds_no_terminals(tmp_path):
+    assert known_terminals._own_terminals(str(tmp_path / "terminals.py")) == ()
+
+
+def test_the_example_the_readme_names_loads():
+    example = Path(__file__).parent.parent / "examples" / "terminals.py"
+    (myterm,) = known_terminals._own_terminals(str(example))
+    assert myterm.name == "myterm"

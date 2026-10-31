@@ -82,6 +82,17 @@ function that takes the server and the parsed arguments, and a
 `register(subparsers)` that calls `add_command` for it. A plugin that
 fails to load is logged and left out.
 
+`$XDG_CONFIG_HOME/pymux/terminals.py` tells pymux about a terminal it
+does not know: what to send it that no query can find out, such as
+kitty's Unicode placeholders, a progress bar or a notification. It
+defines `TERMINALS`, a tuple of `KnownTerminal`, the class that
+`pymux/connection/known_terminals.py` builds its own table with.
+`examples/terminals.py` is one. pymux finds a terminal by the first
+word of its XTVERSION answer, or by its TERM when it gives none. An
+entry with the name of a built-in one wins over it. The file is read
+once, when the server starts. A file that fails to load is logged, and
+pymux goes on with its own table.
+
 ## When it crashes
 
 pymux writes the stack trace to a file named like `/tmp/pymux.crash-*`.

@@ -55,6 +55,11 @@ def plugin_dir(environ: Mapping[str, str] | None = None) -> str:
     return os.path.join(_config_home(environ), "pymux", "plugins")
 
 
+def terminals_file(environ: Mapping[str, str] | None = None) -> str:
+    "Where a person's own terminals are: `$XDG_CONFIG_HOME/pymux/terminals.py`."
+    return os.path.join(_config_home(environ), "pymux", "terminals.py")
+
+
 def _config_home(environ: Mapping[str, str] | None = None) -> str:
     if environ is None:
         environ = os.environ

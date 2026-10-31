@@ -6,18 +6,26 @@ name and version (XTVERSION) and looks the answer up in `TERMINALS`. A
 terminal that does not answer is looked up by its TERM, and then its
 version is unknown: an ability that starts at a version does not count.
 
-To teach pymux about a terminal, add a `KnownTerminal` to `TERMINALS`.
+A person teaches pymux about a terminal in `config.terminals_file`, a
+Python file that defines `TERMINALS` the way this one does. An entry
+there wins over one here with the same name. Lillecarl/pymux#828.
 """
 
 from __future__ import annotations
 
+import importlib.util
+import os
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import cache, lru_cache
 from typing import Final, NamedTuple
 
 from pyte.osc import Osc
 from wcwidth import list_term_programs
+
+from ..config import terminals_file
+from ..log import logger
 
 __all__ = ["TERMINALS", "Identity", "KnownTerminal", "identify", "name_of", "wcwidth_name"]
 
@@ -86,8 +94,49 @@ TERMINALS: Final = (
     KnownTerminal("xterm", key_profile="xterm"),
 )
 
-_BY_NAME: Final = {known.name: known for known in TERMINALS}
-_BY_TERM: Final = {term: known for known in TERMINALS for term in known.terms}
+
+class _Tables(NamedTuple):
+    by_name: Mapping[str, KnownTerminal]
+    by_term: Mapping[str, KnownTerminal]
+
+
+@cache
+def _tables() -> _Tables:
+    """
+    The terminals by name and by TERM, a person's over the built-in ones.
+
+    Read once a process: a change to the file reaches the next server.
+    The TERM table is built from the names that won, so a person's entry
+    for "kitty" takes "xterm-kitty" too, unless it names other TERMs.
+    """
+    by_name = {known.name: known for known in (*TERMINALS, *_own_terminals(terminals_file()))}
+    return _Tables(by_name, {term: known for known in by_name.values() for term in known.terms})
+
+
+def _own_terminals(path: str) -> tuple[KnownTerminal, ...]:
+    """
+    A person's terminals. A missing file holds none. A file that fails,
+    or whose `TERMINALS` holds anything but `KnownTerminal`, is logged
+    and holds none: a broken file costs the person's entries, never the
+    built-in ones.
+    """
+    if not os.path.isfile(path):
+        return ()
+    try:
+        spec = importlib.util.spec_from_file_location("pymux_own_terminals", path)
+        if spec is None or spec.loader is None:
+            raise ImportError("no loader for %s" % path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        terminals = tuple(module.TERMINALS)
+        strangers = [known for known in terminals if not isinstance(known, KnownTerminal)]
+        if strangers:
+            raise TypeError("TERMINALS holds what is not a KnownTerminal: %r" % (strangers,))
+    except Exception:
+        logger.exception("pymux: %s failed to load, so its terminals are left out", path)
+        return ()
+    return terminals
+
 
 #: Every name and alias wcwidth has measurements for, lowercase.
 _WCWIDTH_NAMES: Final = frozenset(list_term_programs())
@@ -144,10 +193,10 @@ def identify(version: str, term: str) -> Identity:
     if name:
         numbers = _VERSION_RE.search(version, len(name))
         return Identity(
-            _BY_NAME.get(name),
+            _tables().by_name.get(name),
             tuple(int(part) for part in numbers.group().split(".")) if numbers is not None else None,
         )
-    return Identity(_BY_TERM.get(term), None)
+    return Identity(_tables().by_term.get(term), None)
 
 
 @lru_cache(maxsize=64)

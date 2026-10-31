@@ -196,6 +196,8 @@ let
       # Not `./libpymux`: it is a project of its own now, so the suites
       # import it out of `testEnv` like any other dependency.
       ./tests
+      # The README points a person at it, and a test loads it.
+      ./examples/terminals.py
       # pytest reads its settings from the root it finds, and a root with
       # no config file is a root with no settings. `anyio_mode` is in here,
       # so without this a coroutine test fails in the sandbox while passing

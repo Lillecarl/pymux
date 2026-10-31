@@ -534,7 +534,7 @@ let
   # Nothing of a run reaches the machine: the sockets, the temporary
   # directories and the processes all live and die inside the build sandbox.
   prepare = ''
-    cp -r ${testSources}/pymux ${testSources}/tests .
+    cp -r ${testSources}/pymux ${testSources}/tests ${testSources}/examples .
     # pytest reads its settings from the root it runs in. `anyio_mode` is
     # in this file, and without it a coroutine test fails here while
     # passing in a checkout. Lillecarl/pymux#87.
