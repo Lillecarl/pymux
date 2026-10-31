@@ -33,6 +33,7 @@ from pyte import escape
 from pyte.keys.events import KeyboardFlag
 from pyte.modes import PrivateMode
 from pyte.sequences.csi import ask_mode, csi
+from pyte.sequences.kitty_graphics import GRAPHICS_START, Action, Delete, GraphicsCommand, GraphicsKey, Quiet
 from pyte.sequences.kitty_keyboard import ask_flags, pop_flags, push_flags, set_flags
 
 from pymux.config import client_options_in, find_config
@@ -82,10 +83,14 @@ EVERY_KEYBOARD_FLAG = KeyboardFlag(sum(KeyboardFlag))
 SIZE_INTERVAL = 0.5
 
 #: What starts a kitty graphics command in a server's output.
-KITTY_GRAPHICS = "\x1b_G"
+KITTY_GRAPHICS = GRAPHICS_START
 
 #: Take every image placement off the screen, quietly.
-DELETE_EVERY_IMAGE = b"\x1b_Ga=d,d=A,q=2\x1b\\"
+DELETE_EVERY_IMAGE = str(
+    GraphicsCommand(
+        {GraphicsKey.ACTION: Action.DELETE, GraphicsKey.DELETE: Delete.ALL_AND_FREE, GraphicsKey.QUIET: Quiet.NOTHING}
+    )
+).encode()
 
 #: What a client shows while the next server starts, when the server
 #: said no reason.

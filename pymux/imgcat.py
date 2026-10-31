@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, BinaryIO, Final
 
 import magic
 import resvg_py
+from pyte.sequences.kitty_graphics import Action, GraphicsCommand, GraphicsKey, Quiet, Value
 
 from pymux.graphics.graphics import DEFAULT_CELL_HEIGHT, DEFAULT_CELL_WIDTH
 from pymux.graphics.inline_images import as_png
@@ -86,9 +87,19 @@ def sequences_of(png: bytes, columns: int, rows: int) -> list[bytes]:
     for index, chunk in enumerate(chunks):
         more = int(index < len(chunks) - 1)
         # Only the first chunk says what the image is and where it goes.
-        first = b"a=T,f=%d,q=2,c=%d,r=%d," % (_PNG_FORMAT, columns, rows) if index == 0 else b""
-        head = first + b"m=%d" % (more,)
-        sequences.append(b"\x1b_G" + head + b";" + chunk + b"\x1b\\")
+        keys: dict[GraphicsKey, Value] = (
+            {
+                GraphicsKey.ACTION: Action.TRANSMIT_AND_PUT,
+                GraphicsKey.FORMAT: _PNG_FORMAT,
+                GraphicsKey.QUIET: Quiet.NOTHING,
+                GraphicsKey.COLUMNS: columns,
+                GraphicsKey.ROWS: rows,
+            }
+            if index == 0
+            else {}
+        )
+        keys[GraphicsKey.MORE] = more
+        sequences.append(str(GraphicsCommand(keys, chunk.decode("ascii"))).encode("ascii"))
     return sequences
 
 

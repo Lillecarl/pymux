@@ -43,7 +43,17 @@ from pyte import escape
 from pyte.images import GraphicsImage, GraphicsPlacement, GraphicsState, PixelFormat
 from pyte.sequences.csi import Csi, Marker, csi
 from pyte.sequences.escapes import esc
-from pyte.sequences.kitty_graphics import GraphicsReply
+from pyte.sequences.kitty_graphics import (
+    Action,
+    Compression,
+    Delete,
+    GraphicsCommand,
+    GraphicsKey,
+    GraphicsReply,
+    Medium,
+    Quiet,
+    Value,
+)
 from pyte.sequences.replies import Reply
 from pyte.sequences.reports import AttributesKind, CellSizeReport, DeviceAttributes
 from pyte.sequences.strings import VersionReport
@@ -80,9 +90,18 @@ QUERY_IMAGE_ID = 31
 # terminal that speaks the protocol answers "ESC _ G i=31;OK ESC \".
 # One that does not answers nothing. (The sequence kitty documents.)
 # Three bytes of payload, because the format is three bytes a pixel.
-QUERY_SEQUENCE = "\x1b_Gi=%i,s=1,v=1,a=q,t=d,f=%i;AAAA\x1b\\" % (
-    QUERY_IMAGE_ID,
-    PixelFormat.RGB,
+QUERY_SEQUENCE = str(
+    GraphicsCommand(
+        {
+            GraphicsKey.IMAGE_ID: QUERY_IMAGE_ID,
+            GraphicsKey.WIDTH: 1,
+            GraphicsKey.HEIGHT: 1,
+            GraphicsKey.ACTION: Action.QUERY,
+            GraphicsKey.MEDIUM: Medium.DIRECT,
+            GraphicsKey.FORMAT: PixelFormat.RGB,
+        },
+        "AAAA",
+    )
 )
 
 # Ask the outer terminal for the size of one cell in pixels. "CSI 16 t"
@@ -453,7 +472,19 @@ class ClientGraphics:
         # deleted first: that would make the image flicker.)
         for key, placement in self._placements.items():
             if key not in desired:
-                commands.append("\x1b_Ga=d,d=i,i=%i,p=%i,q=2\x1b\\" % (placement.image_id, placement.slot))
+                commands.append(
+                    str(
+                        GraphicsCommand(
+                            {
+                                GraphicsKey.ACTION: Action.DELETE,
+                                GraphicsKey.DELETE: Delete.BY_ID,
+                                GraphicsKey.IMAGE_ID: placement.image_id,
+                                GraphicsKey.PLACEMENT_ID: placement.slot,
+                                GraphicsKey.QUIET: Quiet.NOTHING,
+                            }
+                        )
+                    )
+                )
 
         # New and changed placements, and the ones a scroll moved.
         scrolls = self._scrolled_placements
@@ -599,7 +630,19 @@ class ClientGraphics:
             desired[(outer_id, -slot)] = _Placement(
                 outer_id,
                 slot,
-                "\x1b_Ga=p,U=1,i=%i,p=%i,c=%i,r=%i,q=2\x1b\\" % (outer_id, slot, placement.columns, placement.rows),
+                str(
+                    GraphicsCommand(
+                        {
+                            GraphicsKey.ACTION: Action.PUT,
+                            GraphicsKey.VIRTUAL: 1,
+                            GraphicsKey.IMAGE_ID: outer_id,
+                            GraphicsKey.PLACEMENT_ID: slot,
+                            GraphicsKey.COLUMNS: placement.columns,
+                            GraphicsKey.ROWS: placement.rows,
+                            GraphicsKey.QUIET: Quiet.NOTHING,
+                        }
+                    )
+                ),
             )
 
     def placements_of(self, view: PaneView) -> Iterator[Placed]:
@@ -698,7 +741,18 @@ class ClientGraphics:
                 del self._image_pending[key]
 
     def delete_image(self, outer_id: int) -> None:
-        self._write_raw("\x1b_Ga=d,d=I,i=%i,q=2\x1b\\" % outer_id)
+        self._write_raw(
+            str(
+                GraphicsCommand(
+                    {
+                        GraphicsKey.ACTION: Action.DELETE,
+                        GraphicsKey.DELETE: Delete.BY_ID_AND_FREE,
+                        GraphicsKey.IMAGE_ID: outer_id,
+                        GraphicsKey.QUIET: Quiet.NOTHING,
+                    }
+                )
+            )
+        )
 
     # ------------------------------------------------------------------
     # Sixel.
@@ -727,18 +781,28 @@ class ClientGraphics:
 def _transmission(outer_id: int, image: GraphicsImage) -> list[str]:
     "The commands that send one image to the outer terminal. It runs in a worker thread."
     if image.format == PixelFormat.PNG:
-        keys = "f=%i" % PixelFormat.PNG
+        keys: dict[GraphicsKey, Value] = {GraphicsKey.FORMAT: PixelFormat.PNG}
         payload = base64.b64encode(image.data).decode("ascii")
     elif image.format == PixelFormat.SIXEL:
         # Kitty takes no sixel: it gets the pixels.
         pixels = sixel.to_rgba(image.format, image.width, image.height, image.data)
         if pixels is None:
             raise ValueError("the sixel image does not decode")
-        keys = "f=%i,s=%i,v=%i,o=z" % (PixelFormat.RGBA, image.width, image.height)
+        keys = {
+            GraphicsKey.FORMAT: PixelFormat.RGBA,
+            GraphicsKey.WIDTH: image.width,
+            GraphicsKey.HEIGHT: image.height,
+            GraphicsKey.COMPRESSION: Compression.ZLIB,
+        }
         payload = base64.b64encode(zlib.compress(pixels, 1)).decode("ascii")
     else:
         # Compress: the data travels through the client socket.
-        keys = "f=%i,s=%i,v=%i,o=z" % (image.format, image.width, image.height)
+        keys = {
+            GraphicsKey.FORMAT: image.format,
+            GraphicsKey.WIDTH: image.width,
+            GraphicsKey.HEIGHT: image.height,
+            GraphicsKey.COMPRESSION: Compression.ZLIB,
+        }
         payload = base64.b64encode(zlib.compress(image.data, 1)).decode("ascii")
 
     chunks = [payload[i : i + CHUNK_SIZE] for i in range(0, len(payload), CHUNK_SIZE)] or [""]
@@ -746,6 +810,17 @@ def _transmission(outer_id: int, image: GraphicsImage) -> list[str]:
     for index, chunk in enumerate(chunks):
         more = 1 if index < len(chunks) - 1 else 0
         # The keys of the first chunk govern the transmission.
-        control = "a=t,i=%i,t=d,q=2,%s,m=%i" % (outer_id, keys, more) if index == 0 else "m=%i" % more
-        commands.append("\x1b_G%s;%s\x1b\\" % (control, chunk))
+        control: dict[GraphicsKey, Value] = (
+            {
+                GraphicsKey.ACTION: Action.TRANSMIT,
+                GraphicsKey.IMAGE_ID: outer_id,
+                GraphicsKey.MEDIUM: Medium.DIRECT,
+                GraphicsKey.QUIET: Quiet.NOTHING,
+                **keys,
+                GraphicsKey.MORE: more,
+            }
+            if index == 0
+            else {GraphicsKey.MORE: more}
+        )
+        commands.append(str(GraphicsCommand(control, chunk)))
     return commands

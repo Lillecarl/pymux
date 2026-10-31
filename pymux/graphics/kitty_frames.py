@@ -35,6 +35,7 @@ from multiprocessing import shared_memory
 from typing import Any
 
 from libpymux.protocol import Codec
+from pyte.sequences.kitty_graphics import Action, Compression, GraphicsCommand, GraphicsKey, Medium, Quiet, Value
 
 __all__ = ["SHM_PROBE_ID", "Base64Carrier", "Pictures", "ShmCarrier", "decoders", "frame_commands", "shm_probe"]
 
@@ -67,16 +68,17 @@ def rgba(rgb: bytes) -> bytearray:
 class Base64Carrier:
     "Pixels inside the command: zlib, then base64, in chunks kitty takes."
 
-    def command(self, keys: str, pixels: bytes | bytearray) -> str:
+    def command(self, keys: dict[GraphicsKey, Value], pixels: bytes | bytearray) -> str:
         payload = base64.b64encode(zlib.compress(pixels, 1)).decode("ascii")
         chunks = [payload[start : start + CHUNK] for start in range(0, len(payload), CHUNK)] or [""]
         out = []
         for index, chunk in enumerate(chunks):
             more = int(index + 1 < len(chunks))
             if index == 0:
-                out.append("\x1b_G%s,f=%d,o=z,m=%d;%s\x1b\\" % (keys, FORMAT, more, chunk))
+                first = {**keys, GraphicsKey.FORMAT: FORMAT, GraphicsKey.COMPRESSION: Compression.ZLIB}
+                out.append(str(GraphicsCommand({**first, GraphicsKey.MORE: more}, chunk)))
             else:
-                out.append("\x1b_Gm=%d;%s\x1b\\" % (more, chunk))
+                out.append(str(GraphicsCommand({GraphicsKey.MORE: more}, chunk)))
         return "".join(out)
 
 
@@ -118,11 +120,21 @@ class ShmCarrier:
             del self._made[:128]
         return "/" + name
 
-    def command(self, keys: str, pixels: bytes | bytearray) -> str:
+    def command(self, keys: dict[GraphicsKey, Value], pixels: bytes | bytearray) -> str:
         # `S=` always: kitty maps the size of the object when none is
         # given, and macOS rounds an object up to a page.
         name = base64.b64encode(self.write(pixels).encode()).decode("ascii")
-        return "\x1b_G%s,f=%d,t=s,S=%d;%s\x1b\\" % (keys, FORMAT, len(pixels), name)
+        return str(
+            GraphicsCommand(
+                {
+                    **keys,
+                    GraphicsKey.FORMAT: FORMAT,
+                    GraphicsKey.MEDIUM: Medium.SHARED_MEMORY,
+                    GraphicsKey.SIZE: len(pixels),
+                },
+                name,
+            )
+        )
 
     def close(self) -> None:
         for name in self._made:
@@ -151,11 +163,28 @@ def frame_commands(
     rects = list(rects)
     out = []
     for index, (x, y, w, h, pixels) in enumerate(rects):
-        quiet = "" if answer and index == len(rects) - 1 else ",q=2"
+        keys: dict[GraphicsKey, Value]
         if whole:
-            keys = "a=t,i=%d,s=%d,v=%d%s" % (image_id, width, height, quiet)
+            keys = {
+                GraphicsKey.ACTION: Action.TRANSMIT,
+                GraphicsKey.IMAGE_ID: image_id,
+                GraphicsKey.WIDTH: width,
+                GraphicsKey.HEIGHT: height,
+            }
         else:
-            keys = "a=f,i=%d,r=1,x=%d,y=%d,s=%d,v=%d,X=1,C=1%s" % (image_id, x, y, w, h, quiet)
+            keys = {
+                GraphicsKey.ACTION: Action.FRAME,
+                GraphicsKey.IMAGE_ID: image_id,
+                GraphicsKey.EDIT_FRAME: 1,
+                GraphicsKey.SOURCE_X: x,
+                GraphicsKey.SOURCE_Y: y,
+                GraphicsKey.WIDTH: w,
+                GraphicsKey.HEIGHT: h,
+                GraphicsKey.COMPOSITION: 1,
+                GraphicsKey.CURSOR: 1,
+            }
+        if not (answer and index == len(rects) - 1):
+            keys[GraphicsKey.QUIET] = Quiet.NOTHING
         out.append(carrier.command(keys, rgba(pixels)))
     return "".join(out)
 
@@ -225,4 +254,12 @@ def shm_probe(carrier: ShmCarrier) -> str:
     when it cannot open the object; a terminal without the protocol says
     nothing.
     """
-    return carrier.command("a=q,i=%d,s=1,v=1" % SHM_PROBE_ID, bytes(BYTES_PER_PIXEL))
+    return carrier.command(
+        {
+            GraphicsKey.ACTION: Action.QUERY,
+            GraphicsKey.IMAGE_ID: SHM_PROBE_ID,
+            GraphicsKey.WIDTH: 1,
+            GraphicsKey.HEIGHT: 1,
+        },
+        bytes(BYTES_PER_PIXEL),
+    )

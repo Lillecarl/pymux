@@ -10,7 +10,10 @@ from __future__ import annotations
 from collections.abc import Iterator, Sequence
 from typing import TYPE_CHECKING
 
+from pyte import escape
 from pyte.images import GraphicsImage, GraphicsPlacement
+from pyte.sequences.csi import csi
+from pyte.sequences.kitty_graphics import Action, GraphicsCommand, GraphicsKey, Quiet, Value
 
 from ..layout.rects import Rect
 
@@ -329,21 +332,23 @@ def put_command(
     `draws_at_its_own_size` is where that is decided, and it also
     refuses a box the program asked for. Lillecarl/pymux#369.
     """
-    parts = [
-        "a=p",
-        "i=%i" % outer_id,
-        "p=%i" % slot,
-    ]
+    keys: dict[GraphicsKey, Value] = {
+        GraphicsKey.ACTION: Action.PUT,
+        GraphicsKey.IMAGE_ID: outer_id,
+        GraphicsKey.PLACEMENT_ID: slot,
+    }
     if not natural:
-        parts.append("c=%i" % columns)
-        parts.append("r=%i" % rows)
-    parts += [
-        "C=1",
-        "q=2",
-    ]
+        keys[GraphicsKey.COLUMNS] = columns
+        keys[GraphicsKey.ROWS] = rows
+    keys[GraphicsKey.CURSOR] = 1
+    keys[GraphicsKey.QUIET] = Quiet.NOTHING
     if z:
-        parts.append("z=%i" % z)
+        keys[GraphicsKey.Z_INDEX] = z
     if source is not None:
-        parts.append("x=%i,y=%i,w=%i,h=%i" % source)
+        source_x, source_y, source_width, source_height = source
+        keys[GraphicsKey.SOURCE_X] = source_x
+        keys[GraphicsKey.SOURCE_Y] = source_y
+        keys[GraphicsKey.SOURCE_WIDTH] = source_width
+        keys[GraphicsKey.SOURCE_HEIGHT] = source_height
 
-    return "\x1b[%i;%iH\x1b_G%s\x1b\\" % (y + 1, x + 1, ",".join(parts))
+    return csi(escape.CUP, y + 1, x + 1) + str(GraphicsCommand(keys))
