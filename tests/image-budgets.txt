@@ -4,56 +4,56 @@
 # This is what the run saw. To make it what the check expects:
 #     nix build --file . checks.pymux-images.run
 #     cp result/image-budgets.txt pymux/tests/image-budgets.txt
-icon kitty frame (pure) 934
-icon kitty frame (rust) 934
-icon kitty frame again (pure) 634
-icon kitty frame again (rust) 634
-icon kitty frame scrolled (pure) 711
-icon kitty frame scrolled (rust) 711
-icon kitty transmission (pure) 1887
-icon kitty transmission (rust) 1869
-icon sixel frame (pure) 24885208
-icon sixel frame (rust) 1203
-icon sixel frame again (pure) 541
-icon sixel frame again (rust) 541
-icon sixel frame scrolled (pure) 23615027
-icon sixel frame scrolled (rust) 2154
+icon kitty frame (pure) 1323
+icon kitty frame (rust) 1323
+icon kitty frame again (pure) 825
+icon kitty frame again (rust) 825
+icon kitty frame scrolled (pure) 946
+icon kitty frame scrolled (rust) 946
+icon kitty transmission (pure) 2022
+icon kitty transmission (rust) 2004
+icon sixel frame (pure) 24885287
+icon sixel frame (rust) 1282
+icon sixel frame again (pure) 610
+icon sixel frame again (rust) 610
+icon sixel frame scrolled (pure) 23615106
+icon sixel frame scrolled (rust) 2233
 icon sixel transmission (pure) 1424171
 icon sixel transmission (rust) 776
 icon text over it (pure) 101614
 icon text over it (rust) 14425
-panorama kitty frame (pure) 16062
-panorama kitty frame (rust) 16062
-panorama kitty frame again (pure) 634
-panorama kitty frame again (rust) 634
-panorama kitty frame scrolled (pure) 711
-panorama kitty frame scrolled (rust) 711
-panorama kitty transmission (pure) 105976
-panorama kitty transmission (rust) 103762
-panorama sixel frame (pure) 166206421
-panorama sixel frame (rust) 2786
-panorama sixel frame again (pure) 541
-panorama sixel frame again (rust) 541
-panorama sixel frame scrolled (pure) 134470496
-panorama sixel frame scrolled (rust) 5941
+panorama kitty frame (pure) 33775
+panorama kitty frame (rust) 33775
+panorama kitty frame again (pure) 825
+panorama kitty frame again (rust) 825
+panorama kitty frame scrolled (pure) 946
+panorama kitty frame scrolled (rust) 946
+panorama kitty transmission (pure) 106843
+panorama kitty transmission (rust) 104629
+panorama sixel frame (pure) 166206500
+panorama sixel frame (rust) 2865
+panorama sixel frame again (pure) 610
+panorama sixel frame again (rust) 610
+panorama sixel frame scrolled (pure) 134470575
+panorama sixel frame scrolled (rust) 6020
 panorama sixel transmission (pure) 3610200
 panorama sixel transmission (rust) 677
 panorama text over it (pure) 101515
 panorama text over it (rust) 14326
-square kitty frame (pure) 3414
-square kitty frame (rust) 3414
-square kitty frame again (pure) 634
-square kitty frame again (rust) 634
-square kitty frame scrolled (pure) 711
-square kitty frame scrolled (rust) 711
-square kitty transmission (pure) 18967
-square kitty transmission (rust) 18589
-square sixel frame (pure) 193140374
-square sixel frame (rust) 1419
-square sixel frame again (pure) 541
-square sixel frame again (rust) 541
-square sixel frame scrolled (pure) 189836565
-square sixel frame scrolled (rust) 5980
+square kitty frame (pure) 6643
+square kitty frame (rust) 6643
+square kitty frame again (pure) 825
+square kitty frame again (rust) 825
+square kitty frame scrolled (pure) 946
+square kitty frame scrolled (rust) 946
+square kitty transmission (pure) 19222
+square kitty transmission (rust) 18844
+square sixel frame (pure) 193140453
+square sixel frame (rust) 1498
+square sixel frame again (pure) 610
+square sixel frame again (rust) 610
+square sixel frame scrolled (pure) 189836644
+square sixel frame scrolled (rust) 6059
 square sixel transmission (pure) 9222861
 square sixel transmission (rust) 776
 square text over it (pure) 101614
