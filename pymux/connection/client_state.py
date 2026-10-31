@@ -657,7 +657,7 @@ class ClientState:
                 self._waiting_for_drain = False
             self.app.invalidate()
 
-        connection._spawn(wait())
+        connection.spawn(wait())
 
     async def drawn_again(self, timeout: float) -> None:
         """

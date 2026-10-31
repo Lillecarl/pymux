@@ -213,7 +213,7 @@ class ServerConnection:
             # below has not run yet, and the half blocks only ask once
             # a frame carries an image.
             color_depth=lambda: self.colors.depth,
-            spawn=self._spawn,
+            spawn=self.spawn,
             image_ids=pymux.outer_image_ids,
             reads_placeholders=lambda: self.replies.identity.draws_placeholders(),
         )
@@ -320,7 +320,7 @@ class ServerConnection:
 
         self.pymux.serving.serve_connection(self)
 
-    def _spawn(self, coro: Coroutine[Any, Any, object]) -> None:
+    def spawn(self, coro: Coroutine[Any, Any, object]) -> None:
         """
         Run a coroutine in the background of this connection.
 
@@ -534,13 +534,13 @@ class ServerConnection:
     def _on_run_command(self, packet: Message) -> None:
         # Handle this in a task. The command handler can produce output
         # that has to be sent back to the client.
-        self._spawn(self._run_command(packet))
+        self.spawn(self._run_command(packet))
 
     @_PACKETS.handles(Packet.STREAM_PANE)
     def _on_stream_pane(self, packet: Message) -> None:
         # "Send me this pane as frames." A stream holds the connection
         # and writes many packets, so it is not a command that prints.
-        self._spawn(self._stream_pane(packet))
+        self.spawn(self._stream_pane(packet))
 
     @_PACKETS.handles(Packet.SOUND, Packet.ECHO, Packet.MICROPHONE, Packet.BEHIND)
     def _on_sound(self, packet: Message) -> None:
@@ -592,7 +592,7 @@ class ServerConnection:
     @_PACKETS.handles(Packet.START_GUI)
     def _on_start_gui(self, packet: Message) -> None:
         if not self.may_attach:
-            self._spawn(self._refuse_the_attach())
+            self.spawn(self._refuse_the_attach())
             return
 
         # The client reads msgpack, perhaps inside zstd: say which
@@ -686,10 +686,10 @@ class ServerConnection:
         # Sound, on this connection, for a client that plays it.
         # Lillecarl/pymux#657.
         if packet.get(Field.AUDIO) and self._encode is encode_msgpack and self._audio is None:
-            self._spawn(self._carry_audio())
+            self.spawn(self._carry_audio())
 
         if self.answers_ping:
-            self._spawn(self._watch_the_client())
+            self.spawn(self._watch_the_client())
 
     @_PACKETS.handles(Packet.BROWSER_STARTED)
     def _on_browser_started(self, packet: Message) -> None:
@@ -841,7 +841,7 @@ class ServerConnection:
             self.recording.hear("out", data[Field.DATA])
         # Serialised now: the write runs later, and the packet is what
         # was true when it was sent, in the format of the moment.
-        self._spawn(self._write(self._encode(data), compress_after))
+        self.spawn(self._write(self._encode(data), compress_after))
 
     async def say_restarting(self, wait: float, why: str) -> None:
         """
@@ -850,7 +850,7 @@ class ServerConnection:
         draws meanwhile. Awaited, so the packet is written before the
         server stops. Lillecarl/pymux#409.
         """
-        await self._write_packet({Field.CMD: Packet.RESTARTING, Field.WAIT: wait, Field.MESSAGE: why})
+        await self.write_packet({Field.CMD: Packet.RESTARTING, Field.WAIT: wait, Field.MESSAGE: why})
         if self.closed:
             # `_write` lets a client go on a broken pipe or a full
             # buffer, and that client leaves for good instead of
@@ -867,11 +867,11 @@ class ServerConnection:
         closing cancels that scope: the reason the client came would
         reach it only if the cancel lost the race.
         """
-        await self._write_packet({Field.CMD: Packet.OUT, Field.DATA: CANNOT_ATTACH})
+        await self.write_packet({Field.CMD: Packet.OUT, Field.DATA: CANNOT_ATTACH})
         # And a code to leave with. A client that attached reads this
         # too now, so a script hears the refusal rather than reading a
         # zero and calling it attached. Lillecarl/pymux#332.
-        await self._write_packet({Field.CMD: Packet.EXIT, Field.CODE: 1})
+        await self.write_packet({Field.CMD: Packet.EXIT, Field.CODE: 1})
 
         logger.info("A client asked to attach to a server that serves one terminal.")
         self.detach_and_close()
@@ -893,13 +893,13 @@ class ServerConnection:
                 raise CommandException("can't find pane: %s" % (target,))
             terminal = terminal_of(pane)
         except CommandException as refused:
-            await self._write_packet({Field.CMD: Packet.ERR, Field.DATA: "%s\n" % (refused.message,)})
-            await self._write_packet({Field.CMD: Packet.EXIT, Field.CODE: 1})
-            self._close_connection()
+            await self.write_packet({Field.CMD: Packet.ERR, Field.DATA: "%s\n" % (refused.message,)})
+            await self.write_packet({Field.CMD: Packet.EXIT, Field.CODE: 1})
+            self.close_connection()
             return
 
         async def send(frame: dict[str, Any]) -> None:
-            await self._write_packet({Field.CMD: Packet.STREAM_OUT, Field.DATA: json.dumps(frame)})
+            await self.write_packet({Field.CMD: Packet.STREAM_OUT, Field.DATA: json.dumps(frame)})
 
         self._stream = PaneStream(self.pymux, pane, terminal, send, writable=bool(packet.get(Field.WRITABLE)))
         try:
@@ -908,7 +908,7 @@ class ServerConnection:
             pass  # The viewer went away, which is how a stream usually ends.
         finally:
             self._stream = None
-            self._close_connection()
+            self.close_connection()
 
     async def _carry_audio(self) -> None:
         """
@@ -970,7 +970,7 @@ class ServerConnection:
 
         client_state = self.client_state
         if client_state is None:
-            self._close_connection()
+            self.close_connection()
             return
 
         with set_app(client_state.app):
@@ -992,22 +992,22 @@ class ServerConnection:
 
                 try:
                     if reply.output:
-                        await self._write_packet({Field.CMD: Packet.OUT, Field.DATA: "\n".join(reply.output) + "\n"})
+                        await self.write_packet({Field.CMD: Packet.OUT, Field.DATA: "\n".join(reply.output) + "\n"})
                     if reply.errors or reply.warnings:
                         said = [*reply.warnings, *reply.errors]
-                        await self._write_packet({Field.CMD: Packet.ERR, Field.DATA: "\n".join(said) + "\n"})
+                        await self.write_packet({Field.CMD: Packet.ERR, Field.DATA: "\n".join(said) + "\n"})
                     exit_code = reply.exit_code
                     if exit_code is None:
                         exit_code = 1 if reply.errors else 0
-                    await self._write_packet({Field.CMD: Packet.EXIT, Field.CODE: exit_code})
+                    await self.write_packet({Field.CMD: Packet.EXIT, Field.CODE: exit_code})
                 except BrokenPipeError:
                     pass
-                self._close_connection()
+                self.close_connection()
 
     async def answer(self, exit_code: int) -> None:
         "Send the exit code of a command, for one that ends the server before it returns."
         with suppress(BrokenPipeError):
-            await self._write_packet({Field.CMD: Packet.EXIT, Field.CODE: exit_code})
+            await self.write_packet({Field.CMD: Packet.EXIT, Field.CODE: exit_code})
 
     async def _write_urgent(self, data_obj: object) -> None:
         "Write a packet ahead of every write that waits for the connection: sound."
@@ -1018,7 +1018,7 @@ class ServerConnection:
         except BrokenPipeError:
             self.detach_and_close()
 
-    async def _write_packet(self, data_obj: object) -> None:
+    async def write_packet(self, data_obj: object) -> None:
         """
         Write a packet to the client. (This waits for the write to complete.)
         """
@@ -1168,11 +1168,11 @@ class ServerConnection:
                 except Exception:
                     logger.exception("Application crashed.")
                 finally:
-                    self._close_connection()
+                    self.close_connection()
 
-            self._spawn(run())
+            self.spawn(run())
 
-    def _close_connection(self) -> None:
+    def close_connection(self) -> None:
         # Without this the server goes on drawing frames for a client
         # that is no longer connected.
         if self.closed:
@@ -1275,7 +1275,7 @@ class ServerConnection:
                 return
 
             self._unanswered += 1
-            await self._write_packet({Field.CMD: Packet.PING})
+            await self.write_packet({Field.CMD: Packet.PING})
 
     def detach_and_close(self, hang_up: bool = False) -> None:
         """
@@ -1299,11 +1299,11 @@ class ServerConnection:
         # anything, and a hangup that waited for one would never close
         # it. Leaving is the part that still works.
         if not hang_up or self._tasks is None:
-            self._close_connection()
+            self.close_connection()
             return
 
         async def hang_up_and_close() -> None:
-            await self._write_packet({Field.CMD: Packet.EXIT, Field.CODE: 0, Field.HANG_UP: True})
-            self._close_connection()
+            await self.write_packet({Field.CMD: Packet.EXIT, Field.CODE: 0, Field.HANG_UP: True})
+            self.close_connection()
 
-        self._spawn(hang_up_and_close())
+        self.spawn(hang_up_and_close())

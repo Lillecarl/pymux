@@ -394,7 +394,7 @@ def test_theme_report_asks_for_colours_again(report):
         connection.replies.arrived(report)
 
         assert output.written == [COLOR_QUERIES]
-        connection._close_connection()
+        connection.close_connection()
 
     anyio.run(check)
 
@@ -428,7 +428,7 @@ def test_in_band_size_report_sets_size_and_cell():
         assert (connection.graphics.cell_width, connection.graphics.cell_height) == (8, 20)
         connection._on_size({Field.CMD: Packet.SIZE, Field.DATA: [31, 100]})
         assert output.written == []
-        connection._close_connection()
+        connection.close_connection()
 
     anyio.run(check)
 
@@ -449,8 +449,8 @@ def test_reply_lands_on_connection_that_carried_it():
         assert one.default_colors.background == Color(0x1E, 0x1E, 0x2E)
         assert other.default_colors.background == Color(0xFF, 0xFF, 0xFF)
 
-        one._close_connection()
-        other._close_connection()
+        one.close_connection()
+        other.close_connection()
 
     anyio.run(check)
 
@@ -465,7 +465,7 @@ def test_colour_arriving_after_detection_is_still_read():
         connection.replies.arrived(osc("11", "rgb:0000/0000/0000"))
 
         assert connection.default_colors.background == Color(0, 0, 0)
-        connection._close_connection()
+        connection.close_connection()
 
     anyio.run(check)
 
@@ -485,7 +485,7 @@ def test_learned_colour_tells_panes_again():
         connection.replies.arrived(osc("11", "rgb:0000/0000/0000"))
 
         assert pymux.terminals.color_base_syncs == 2
-        connection._close_connection()
+        connection.close_connection()
 
     anyio.run(check)
 
@@ -503,6 +503,6 @@ def test_reply_that_learns_nothing_tells_panes_nothing():
         connection.replies.arrived(osc("12", "rgb:ffff/0000/0000"))
 
         assert pymux.terminals.color_base_syncs == 0
-        connection._close_connection()
+        connection.close_connection()
 
     anyio.run(check)

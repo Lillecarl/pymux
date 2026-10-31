@@ -619,7 +619,7 @@ class Pymux:
         It holds the task group that every background task of the
         server lives in, so a task cannot outlive the server that
         started it, and it cannot be collected while it runs.
-        `_spawn` on a connection puts work here.
+        `spawn` on a connection puts work here.
 
         Both routes enter it, and so does the test harness. A
         route that built its own would be a route the harness could

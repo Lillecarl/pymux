@@ -697,7 +697,7 @@ async def test_a_server_that_restarts_is_reached_again(monkeypatch):
 
         for connection in list(it.pymux.connections):
             await connection.say_restarting(5.0, "pymux is being upgraded.")
-            connection._close_connection()
+            connection.close_connection()
 
         await it.until(lambda: "pymux is being upgraded." in it.terminal.said, "the restarting screen")
         it.terminal.type("\r")
@@ -740,7 +740,7 @@ async def test_a_restarting_server_s_refusals_are_waited_out(monkeypatch):
         for connection in list(it.pymux.connections):
             await connection.say_restarting(5.0, "pymux is being upgraded.")
             dropped.append(connection.closed)
-            connection._close_connection()
+            connection.close_connection()
 
         # What the client left with says which way the notice was lost:
         # an EXIT from the server, or nothing. Lillecarl/pymux#766.
@@ -809,7 +809,7 @@ async def test_a_client_told_to_hang_up_does_not_come_back(monkeypatch):
         written: list[tuple[object, bool]] = []
         closed_by: list[str] = []
         for connection in list(it.pymux.connections):
-            write_packet, close = connection._write_packet, connection._close_connection
+            write_packet, close = connection.write_packet, connection.close_connection
 
             async def recording_write_packet(data_obj, connection=connection, write_packet=write_packet):
                 written.append((data_obj.get(Field.CMD), connection.closed))
@@ -820,8 +820,8 @@ async def test_a_client_told_to_hang_up_does_not_come_back(monkeypatch):
                     closed_by.append("".join(traceback.format_stack(limit=12)))
                 close()
 
-            connection._write_packet = recording_write_packet
-            connection._close_connection = recording_close
+            connection.write_packet = recording_write_packet
+            connection.close_connection = recording_close
             connection.detach_and_close(hang_up=True)
 
         await it.wait_for_attach(10)

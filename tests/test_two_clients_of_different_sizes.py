@@ -226,7 +226,7 @@ async def test_focus_in_uses_client():
 
         connection.replies.arrived(FOCUS_IN)
         assert plane(pymux).columns == BIG.columns
-        connection._close_connection()
+        connection.close_connection()
 
 
 async def test_pane_that_asks_hears_its_terminal_focus():

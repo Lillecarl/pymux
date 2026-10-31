@@ -652,7 +652,7 @@ async def over_connection(pymux=None, read_packet=None):
             "the connection never closed after its client went",
         )
 
-        # **And then wait for the work it started.** `_close_connection`
+        # **And then wait for the work it started.** `close_connection`
         # asks the application to exit and cancels the tasks of the
         # connection, and both of those are requests: the application
         # stops on a later turn of the loop, not on this one. Until it

@@ -133,7 +133,7 @@ async def test_the_work_of_a_connection_is_in_a_scope():
         assert connection._tasks is not None, "the connection never served"
         assert connection._tasks is not tasks, "it shares the server's scope"
 
-        connection._close_connection()
+        connection.close_connection()
 
 
 async def test_closing_a_connection_ends_its_work():
@@ -148,10 +148,10 @@ async def test_closing_a_connection_ends_its_work():
 
     async with anyio.create_task_group() as tasks:
         connection = await _connection(tasks)
-        connection._spawn(forever())
+        connection.spawn(forever())
         await _until(lambda: True)
 
-        connection._close_connection()
+        connection.close_connection()
         await _until(lambda: ended == [True])
 
 
@@ -171,10 +171,10 @@ async def test_a_failed_task_says_what_it_raised(caplog):
         connection = await _connection(tasks)
 
         with caplog.at_level(logging.ERROR):
-            connection._spawn(fails())
+            connection.spawn(fails())
             await _until(lambda: "the reading task fell over" in caplog.text)
 
-        connection._close_connection()
+        connection.close_connection()
 
 
 async def test_a_failed_task_leaves_the_connection_reading():
@@ -186,13 +186,13 @@ async def test_a_failed_task_leaves_the_connection_reading():
     async with anyio.create_task_group() as tasks:
         connection = await _connection(tasks)
 
-        connection._spawn(fails())
+        connection.spawn(fails())
         await anyio.sleep(0.01)
 
         assert connection._tasks is not None, "the connection went with it"
         assert not connection.pipe_connection.closed
 
-        connection._close_connection()
+        connection.close_connection()
 
 
 async def test_a_task_spawned_on_a_closed_connection_says_so(caplog):
@@ -203,11 +203,11 @@ async def test_a_task_spawned_on_a_closed_connection_says_so(caplog):
 
     async with anyio.create_task_group() as tasks:
         connection = await _connection(tasks)
-        connection._close_connection()
+        connection.close_connection()
         await _until(lambda: connection._tasks is None)
 
         with caplog.at_level(logging.WARNING):
-            connection._spawn(nothing())
+            connection.spawn(nothing())
 
         assert "does not serve" in caplog.text, caplog.text
 
@@ -257,7 +257,7 @@ async def test_one_bad_packet_leaves_the_connection_alone():
         await _until(lambda: len(read) > 1)
         assert connection._tasks is not None, "one bad packet closed the client"
 
-        connection._close_connection()
+        connection.close_connection()
 
 
 def test_application_does_not_take_over_exception_handler():
