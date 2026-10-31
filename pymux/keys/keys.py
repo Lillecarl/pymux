@@ -43,6 +43,7 @@ from typing import TYPE_CHECKING, cast, override
 from prompt_toolkit.input.vt100_parser import Vt100Parser
 from prompt_toolkit.key_binding.key_processor import _Flush
 from prompt_toolkit.keys import Keys
+from pyte.control import CSI
 
 if TYPE_CHECKING:
     from prompt_toolkit.key_binding.key_processor import KeyPress
@@ -68,7 +69,7 @@ from .names import (
 )
 from .replies import TERMINAL_REPLY, pixels_to_cells, reply_of
 
-__all__ = ["CSI", "MAX_KEYS_TO_REMEMBER", "MAX_STRING_LENGTH", "KittyVt100Parser", "logger", "parse_kitty_key"]
+__all__ = ["MAX_KEYS_TO_REMEMBER", "MAX_STRING_LENGTH", "KittyVt100Parser", "logger", "parse_kitty_key"]
 
 
 logger = logging.getLogger(__name__)
@@ -77,7 +78,6 @@ logger = logging.getLogger(__name__)
 #: The bytes that introduce a control sequence. A key that arrives in
 #: one is a key the outer terminal spelled out, and not a byte that
 #: something else could still continue.
-CSI = "\x1b["
 
 
 #: The shape of a complete key sequence, and nothing about what is in

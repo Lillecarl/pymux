@@ -24,6 +24,7 @@ from __future__ import annotations
 from prompt_toolkit.input.vt100_parser import ANSI_SEQUENCES
 from prompt_toolkit.keys import KeyName, Keys
 from pyte.keys.events import Modifier
+from pyte.sequences.escapes import Escape, esc
 
 from .names import KEY_BY_ITS_NAME, MODIFIERS_WITH_NO_MEMBER, name_of
 
@@ -193,10 +194,10 @@ def prompt_toolkit_key_to_vt100_key(key: str, application_mode: bool = False) ->
     that never asked for it must not be given it.
     """
     application_mode_keys: dict[str, str] = {
-        Keys.Up: "\x1bOA",
-        Keys.Left: "\x1bOD",
-        Keys.Right: "\x1bOC",
-        Keys.Down: "\x1bOB",
+        Keys.Up: esc(Escape.SS3) + "A",
+        Keys.Left: esc(Escape.SS3) + "D",
+        Keys.Right: esc(Escape.SS3) + "C",
+        Keys.Down: esc(Escape.SS3) + "B",
     }
 
     if application_mode:

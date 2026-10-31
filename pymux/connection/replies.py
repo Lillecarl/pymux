@@ -414,7 +414,7 @@ class TerminalReplies:
             return
 
         try:
-            pane.terminal.process.write_input("\x1b]99;%s\x1b\\" % param)
+            pane.terminal.process.write_input(osc(Osc.NOTIFICATION, param))
         except Exception:
             logger.exception("Giving a notification answer to a pane failed.")
 

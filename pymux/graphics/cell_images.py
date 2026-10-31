@@ -21,6 +21,7 @@ from prompt_toolkit.output import ColorDepth
 from pyte import escape
 from pyte.images import GraphicsImage, PixelFormat
 from pyte.sequences.csi import csi
+from pyte.sequences.strings import dcs
 from pyte.sixel import stored_payload
 
 from ..log import logger
@@ -257,7 +258,7 @@ class CellImages:
         if known is not None and known[0] is image:
             return known[1]
         payload = stored_payload(image.data)
-        sent = "\x1bP%s\x1b\\" % payload if _SIXEL_TEXT_RE.fullmatch(payload) else None
+        sent = dcs(payload) if _SIXEL_TEXT_RE.fullmatch(payload) else None
         self._cache[key] = (image, sent)
         return sent
 

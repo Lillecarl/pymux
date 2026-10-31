@@ -26,6 +26,7 @@ from typing import Final
 
 from libpymux.protocol import Field, Message, Packet
 from prompt_toolkit.utils import get_cwidth
+from pyte.control import ESC
 
 from ..downloads import MAX_DOWNLOAD_BYTES, FinishedDownload, file_packets
 
@@ -63,7 +64,7 @@ MAX_LISTED: Final = 1000
 PATH_SEPARATOR: Final = ":"
 
 ELLIPSIS: Final = "…"
-ESCAPE: Final = "\x1b"
+ESCAPE: Final = ESC
 INTERRUPT: Final = "\x03"
 
 #: The units `size_text` counts in, each 1000 of the one before.

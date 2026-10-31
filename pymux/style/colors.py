@@ -47,8 +47,9 @@ from pyte.colors import DEFAULT_COLORS, PALETTE, Color, parse_color
 from pyte.control import CSI
 from pyte.osc import DYNAMIC_COLOR_CODES, QUERY, ColorBase, Osc
 from pyte.sequences.csi import CsiSequence, Parameter
+from pyte.sequences.rendition import ColorSpace, Sgr, sgr
 from pyte.sequences.replies import Reply
-from pyte.sequences.strings import SettingReport, osc
+from pyte.sequences.strings import SettingReport, decrqss, osc
 
 __all__ = [
     "COLOR_QUERIES",
@@ -64,10 +65,8 @@ PROBE_RED, PROBE_GREEN, PROBE_BLUE = 1, 2, 3
 
 # Set the probe colour, ask what the graphic rendition is now, and put
 # the attributes back. The reply is a DCS string sequence.
-TRUECOLOR_PROBE = "\x1b[38;2;%i;%i;%im\x1bP$qm\x1b\\\x1b[0m" % (
-    PROBE_RED,
-    PROBE_GREEN,
-    PROBE_BLUE,
+TRUECOLOR_PROBE = (
+    sgr(Sgr.FOREGROUND, ColorSpace.DIRECT, PROBE_RED, PROBE_GREEN, PROBE_BLUE) + decrqss(escape.SGR) + sgr(Sgr.RESET)
 )
 
 #: The names this module reads a dynamic colour reply for. The others

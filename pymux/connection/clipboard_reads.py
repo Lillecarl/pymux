@@ -11,9 +11,10 @@ from contextlib import suppress
 from typing import TYPE_CHECKING, ClassVar
 
 import anyio
+from pyte.control import OSC
 from pyte.keep import Keep
 from pyte.osc import QUERY, Osc
-from pyte.sequences.strings import osc
+from pyte.sequences.strings import Terminator, osc
 
 from ..enums import Woke
 
@@ -23,7 +24,7 @@ if TYPE_CHECKING:
 __all__ = ["ClipboardReader"]
 
 #: The start of a terminal's answer to a clipboard query.
-_CLIPBOARD_REPLY = "\x1b]52;"
+_CLIPBOARD_REPLY = OSC + Osc.CLIPBOARD + ";"
 
 #: How long a terminal has to answer a clipboard query, in seconds. A
 #: paste waits this long once; a terminal that lets it pass is not asked
@@ -112,7 +113,7 @@ class ClipboardReader:
         if start < 0:
             return data
         body = start + len(_CLIPBOARD_REPLY)
-        ends = [(at, len(end)) for end in ("\x07", "\x1b\\") if (at := data.find(end, body)) >= 0]
+        ends = [(at, len(end)) for end in (Terminator.BEL, Terminator.ST) if (at := data.find(end, body)) >= 0]
         if not ends:
             if len(data) - start <= CLIPBOARD_REPLY_LIMIT:
                 self._partial = data[start:]

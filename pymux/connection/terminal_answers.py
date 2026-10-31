@@ -18,6 +18,7 @@ import time
 from dataclasses import dataclass
 
 from pyte import escape
+from pyte.control import ESC
 from pyte.modes import PrivateMode
 from pyte.parameters import WindowOp
 from pyte.sequences.csi import Csi, Marker, ask_mode, csi
@@ -96,7 +97,7 @@ def readable(text: str) -> str:
     "A reply with its control characters written out: ESC as \\e, the rest as \\xNN."
     out = []
     for char in text:
-        if char == "\x1b":
+        if char == ESC:
             out.append("\\e")
         elif char == "\x07":
             out.append("\\a")
