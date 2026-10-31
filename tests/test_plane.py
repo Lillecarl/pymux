@@ -31,7 +31,8 @@ from hypothesis import find, given, settings
 from hypothesis import strategies as st
 from prompt_toolkit.data_structures import Point
 
-from pymux.layout.plane import GROUND, Plan, Rect, Side, Slot, _covered, _without, bounding_box, overlap_of
+from pymux.layout.plane import GROUND, Plan, Slot
+from pymux.layout.rects import Rect, Side, _without, bounding_box, covered, overlap_of
 
 rects = st.builds(Rect, st.integers(-5, 5), st.integers(-5, 5), st.integers(0, 6), st.integers(0, 6))
 
@@ -797,7 +798,7 @@ def test_a_layer_still_answers_within_its_own_plane():
 
 def covered_a_cell_at_a_time(rect: Rect, over) -> bool:
     """
-    The oracle: the version `_covered` was, asking every cell.
+    The oracle: the version `covered` was, asking every cell.
 
     It is obviously right and too slow to run on a frame, which is why
     it was replaced by subtracting rectangles. It stays here as the
@@ -821,7 +822,7 @@ SMALL = st.builds(
 @given(SMALL, st.lists(SMALL, max_size=4))
 def test_subtracting_rectangles_answers_what_counting_cells_answers(rect, over):
     "The replacement and the oracle agree, whatever the shapes are."
-    assert _covered(rect, over) == covered_a_cell_at_a_time(rect, over)
+    assert covered(rect, over) == covered_a_cell_at_a_time(rect, over)
 
 
 @given(SMALL, st.lists(SMALL, max_size=4))

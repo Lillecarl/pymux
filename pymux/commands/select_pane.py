@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import find_pane, the_window
 from pymux.layout.layout import move_focus
-from pymux.layout.plane import Side
+from pymux.layout.rects import Side
 
 
 def select_pane(pymux: Pymux, args: argparse.Namespace) -> None:

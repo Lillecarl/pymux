@@ -31,7 +31,8 @@ from dataclasses import dataclass, field
 from prompt_toolkit.data_structures import Point, Size
 
 from ..core import window_tree
-from .plane import GROUND, Line, Pane, Plan, Rect, Slot, View
+from .plane import GROUND, Line, Pane, Plan, Slot, View
+from .rects import Rect
 from .tiling import Gaps, lay_out
 
 __all__ = ["Divided"]

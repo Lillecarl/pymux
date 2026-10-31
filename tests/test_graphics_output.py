@@ -17,7 +17,7 @@ from pyte.sequences import apc
 from pyte.sixel import store_payload
 
 from pymux.graphics.graphics import ClientGraphics, PaneView
-from pymux.layout.plane import Rect
+from pymux.layout.rects import Rect
 
 # 2x2 pixels, RGB.
 IMAGE_DATA = bytes(range(12))

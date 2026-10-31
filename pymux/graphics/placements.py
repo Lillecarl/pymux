@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 from pyte.images import GraphicsImage, GraphicsPlacement
 
-from ..layout.plane import Rect
+from ..layout.rects import Rect
 
 # Through the modules, so the kernels `pymux.graphics.kernels.install()` puts there
 # are the ones that run.

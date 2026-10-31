@@ -19,7 +19,8 @@ from pymux.core.splits import VSplit, panes_of
 
 from .cut_shade import Hidden, hex_of, hidden_of
 from .divided import Divided
-from .plane import Plan, Rect, Side, bounding_box
+from .plane import Plan
+from .rects import Rect, Side, bounding_box
 from .strip import Strip
 from .tiling import BORDER_WIDTH, Gaps
 from .zoomed import Zoomed

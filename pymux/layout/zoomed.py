@@ -25,7 +25,8 @@ from typing import TYPE_CHECKING
 
 from prompt_toolkit.data_structures import Point, Size
 
-from .plane import GROUND, Pane, Plan, Rect, Slot, View
+from .plane import GROUND, Pane, Plan, Slot, View
+from .rects import Rect
 
 if TYPE_CHECKING:
     from .divided import Divided

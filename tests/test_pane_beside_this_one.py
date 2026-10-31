@@ -30,7 +30,7 @@ from prompt_toolkit.data_structures import Size
 from pymux.core.splits import HSplit, VSplit
 from pymux.core.window_tree import Window
 from pymux.layout.divided import Divided
-from pymux.layout.plane import Side
+from pymux.layout.rects import Side
 from pymux.layout.strip import Strip
 
 #: A window big enough that every pane of these shapes has cells.

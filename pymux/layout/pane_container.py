@@ -39,7 +39,7 @@ from ..format import format_pymux_string
 from ..keys.actions import Kind, Origin, note, started_by
 from .cut_shade import Hidden, lifts, shade
 from .geometry import cut_backdrop, cut_shade_of, hidden_of_pane, pane_beside
-from .plane import Side
+from .rects import Side
 from .titlebar import PaneTitleBar
 from .widgets import BigClock, PaneNumber
 from .z_index import Z_INDEX

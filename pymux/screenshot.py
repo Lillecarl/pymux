@@ -64,7 +64,8 @@ if TYPE_CHECKING:
     from pyte.screen import Screen
 
     from .connection.client_state import ClientState
-    from .layout.plane import Line, Rect
+    from .layout.plane import Line
+    from .layout.rects import Rect
 
 __all__ = [
     "Faces",

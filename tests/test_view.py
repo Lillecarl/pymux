@@ -25,7 +25,8 @@ from hypothesis import given
 from hypothesis import strategies as st
 from prompt_toolkit.data_structures import Point, Size
 
-from pymux.layout.plane import Rect, View
+from pymux.layout.plane import View
+from pymux.layout.rects import Rect
 
 #: A plane big enough that a view of twenty by five can move on it.
 PLANE = Rect(x=0, y=0, width=60, height=15)

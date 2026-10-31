@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
     from pymux.core.main import Pymux
     from pymux.core.window_tree import Window
-    from pymux.layout.plane import Rect
+    from pymux.layout.rects import Rect
 
 
 async def _drawn_again(pymux: Pymux, window: Window) -> None:

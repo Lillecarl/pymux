@@ -45,7 +45,7 @@ from pyte.images import GraphicsImage, GraphicsPlacement, GraphicsState, PixelFo
 from pyte.sequences import Csi, csi, esc
 from pyte.terminfo import DeviceExtension
 
-from ..layout.plane import Rect
+from ..layout.rects import Rect
 from ..log import logger
 
 # Through the modules, so the kernels `pymux.graphics.kernels.install()` puts there

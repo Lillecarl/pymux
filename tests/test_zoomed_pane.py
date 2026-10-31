@@ -20,7 +20,7 @@ from test_strip_draws import CHROME, create_client, dump
 
 from pymux.layout.divided import Divided
 from pymux.layout.geometry import layout_of, pane_beside, plan_of
-from pymux.layout.plane import Side
+from pymux.layout.rects import Side
 from pymux.layout.strip import Strip
 from pymux.layout.zoomed import Zoomed
 

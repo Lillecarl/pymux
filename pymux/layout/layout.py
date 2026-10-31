@@ -52,8 +52,9 @@ from .geometry import bar_below_is_drawn, layout_of, pane_beside, room_for_panes
 from .menu import Menu
 from .pane_container import TracePaneWritePosition, create_container_for_process, pane_containers, pane_write_positions
 from .plan_container import PlanContainer
-from .plane import Plan, Rect, Side, View
+from .plane import Plan, View
 from .popups import Popups
+from .rects import Rect, Side
 from .status_line import StatusLine
 from .which_key import WhichKey
 from .widgets import Background, ConfirmationToolbar, MessageToolbar, UrlLabels

@@ -21,7 +21,8 @@ from prompt_toolkit.data_structures import Point, Size
 from test_plane import every_promise_holds, everything_is_reachable
 
 from pymux.core.window_tree import Window
-from pymux.layout.plane import Side, View
+from pymux.layout.plane import View
+from pymux.layout.rects import Side
 from pymux.layout.strip import Strip
 from pymux.layout.tiling import BORDER_HORIZONTAL, BORDER_VERTICAL, BORDER_WIDTH, Gaps
 

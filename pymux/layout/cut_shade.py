@@ -34,7 +34,7 @@ from prompt_toolkit.output.vt100_colors import ANSI_COLORS_TO_RGB
 from prompt_toolkit.styles import Attrs
 
 from ..style.style import tinted
-from .plane import Rect
+from .rects import Rect
 
 __all__ = ["Hidden", "hex_of", "hidden_of", "lifts", "shade"]
 

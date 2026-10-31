@@ -56,7 +56,8 @@ if TYPE_CHECKING:
     from .strip import Strip
     from .zoomed import Zoomed
 
-from .plane import Line, Pane, Plan, Rect, View
+from .plane import Line, Pane, Plan, View
+from .rects import Rect
 
 __all__ = ["PlanContainer"]
 

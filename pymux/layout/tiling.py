@@ -22,7 +22,8 @@ from __future__ import annotations
 from typing import NamedTuple
 
 from ..core.splits import HSplit, Node, VSplit
-from .plane import Line, Rect, Seam, Slot, bounding_box
+from .plane import Line, Seam, Slot
+from .rects import Rect, bounding_box
 
 __all__ = ["BORDER_WIDTH", "Gaps", "lay_out", "shares"]
 

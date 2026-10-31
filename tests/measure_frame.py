@@ -97,7 +97,7 @@ from pymux.core.window_tree import Window as ArrangementWindow
 from pymux.layout.divided import Divided
 from pymux.layout.geometry import layout_of, pane_beside, room_for_panes
 from pymux.layout.plan_container import PlanContainer
-from pymux.layout.plane import Side
+from pymux.layout.rects import Side
 from pymux.layout.strip import Strip
 from pymux.layout.zoomed import Zoomed
 

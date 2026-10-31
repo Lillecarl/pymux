@@ -30,7 +30,8 @@ from prompt_toolkit.layout.screen import Screen, WritePosition
 from prompt_toolkit.output import DummyOutput
 
 from pymux.layout.plan_container import PlanContainer
-from pymux.layout.plane import GROUND, Line, Plan, Rect, Slot
+from pymux.layout.plane import GROUND, Line, Plan, Slot
+from pymux.layout.rects import Rect
 
 HEIGHT = 2
 
