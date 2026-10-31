@@ -15,7 +15,9 @@ about 80 bytes a tick, measured by `checks.pymux-wire.run`.
 
 from __future__ import annotations
 
+import time
 from collections import deque
+from collections.abc import Callable
 
 __all__ = ["RATE_WINDOW", "Rate", "frames_per_second", "per_second"]
 
@@ -36,6 +38,14 @@ class Rate:
 
     def __init__(self) -> None:
         self._samples: deque[tuple[float, int]] = deque()
+        #: What `read_now` takes the time from. A test sets its own, so
+        #: a rate it checks does not depend on how fast the machine is.
+        #: Lillecarl/pymux#844.
+        self.clock: Callable[[], float] = time.monotonic
+
+    def read_now(self, total: int) -> float:
+        "The rate, now by `clock`, of a count that stands at `total`."
+        return self.read(total, self.clock())
 
     def read(self, total: int, now: float) -> float:
         "The rate, at `now`, of a count that stands at `total`."

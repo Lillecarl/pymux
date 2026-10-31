@@ -19,7 +19,6 @@ from __future__ import annotations
 import os
 import re
 import socket
-import time
 from collections.abc import Callable, Iterable
 from enum import Enum
 from typing import TYPE_CHECKING, NamedTuple
@@ -814,7 +813,7 @@ def _client_rate(
         connection = _connection_of(context)
         if connection is None:
             return ""
-        return per_second(rate(connection).read(count(connection.pipe_connection), time.monotonic()))
+        return per_second(rate(connection).read_now(count(connection.pipe_connection)))
 
     return rate_of
 
@@ -827,7 +826,7 @@ def _client_fps(context: FormatContext) -> str:
     connection = _connection_of(context)
     if connection is None:
         return ""
-    return frames_per_second(connection.pacing.rate_frames.read(connection.pacing.frames_sent, time.monotonic()))
+    return frames_per_second(connection.pacing.rate_frames.read_now(connection.pacing.frames_sent))
 
 
 def _client_window_fps(context: FormatContext) -> str:
@@ -840,7 +839,7 @@ def _client_window_fps(context: FormatContext) -> str:
     connection = _connection_of(context)
     if connection is None:
         return ""
-    rate = connection.pacing.rate_window_frames.read(connection.pacing.window_frames_sent, time.monotonic())
+    rate = connection.pacing.rate_window_frames.read_now(connection.pacing.window_frames_sent)
     return frames_per_second(rate) if rate else ""
 
 
