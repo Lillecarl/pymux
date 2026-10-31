@@ -17,7 +17,7 @@ import re
 from pyte import escape
 from pyte.placeholders import DIACRITICS, PLACEHOLDER
 from pyte.screen import Screen
-from pyte.sequences import csi
+from pyte.sequences.csi import csi
 from pyte.streams import Stream
 
 from pymux.graphics.graphics import ClientGraphics, PaneView

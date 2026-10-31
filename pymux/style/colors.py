@@ -46,7 +46,7 @@ from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.utils import is_dumb_terminal
 from pyte.colors import DEFAULT_COLORS, PALETTE, Color, parse_color
 from pyte.osc import DYNAMIC_COLOR_CODES, QUERY, ColorBase, Osc
-from pyte.sequences import osc
+from pyte.sequences.strings import osc
 
 __all__ = [
     "COLOR_QUERIES",

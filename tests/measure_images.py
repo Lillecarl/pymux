@@ -61,7 +61,7 @@ sys.path.insert(1, str(Path(__file__).parent.parent))
 
 from instructions import count_instructions
 from pyte.screen import Screen
-from pyte.sequences import apc
+from pyte.sequences.strings import apc
 from pyte.streams import Stream
 from recorded import how_to_record, moved, read_counts, write_list
 

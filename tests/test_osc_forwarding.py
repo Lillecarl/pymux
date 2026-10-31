@@ -14,7 +14,8 @@ from types import SimpleNamespace
 import pytest
 from pyte import escape
 from pyte.osc import Osc, PointerShapes
-from pyte.sequences import Terminator, csi, osc
+from pyte.sequences.csi import csi
+from pyte.sequences.strings import Terminator, osc
 
 from pymux.core.main import Pymux
 from pymux.enums import Clipboard, NotificationPopups

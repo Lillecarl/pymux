@@ -13,7 +13,7 @@ import re
 import zlib
 
 from pyte.images import GraphicsImage, GraphicsPlacement, GraphicsState, PixelFormat
-from pyte.sequences import apc
+from pyte.sequences.strings import apc
 from pyte.sixel import store_payload
 
 from pymux.graphics.graphics import ClientGraphics, PaneView

@@ -19,7 +19,7 @@ from prompt_toolkit.application.current import set_app
 from prompt_toolkit.enums import EditingMode
 from prompt_toolkit.key_binding.key_processor import KeyPress, _Flush
 from prompt_toolkit.keys import Keys
-from pyte.sequences import Csi, csi
+from pyte.sequences.csi import Csi, csi
 from session import create_session
 
 from pymux.options.options import ALL_OPTIONS

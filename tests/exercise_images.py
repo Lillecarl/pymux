@@ -94,7 +94,7 @@ from pathlib import Path
 
 from pyte import escape
 from pyte.images import PixelFormat
-from pyte.sequences import csi
+from pyte.sequences.csi import csi
 from pyterm_pytest.seats import (
     TheSeatIsGone,
     _settle,

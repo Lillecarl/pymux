@@ -18,7 +18,8 @@ from pyte import escape
 from pyte.colors import DEFAULT_COLORS, PALETTE, Color
 from pyte.osc import COLOR_BASE
 from pyte.screen import Screen
-from pyte.sequences import Csi, apc, csi, dcs, osc
+from pyte.sequences.csi import Csi, csi
+from pyte.sequences.strings import apc, dcs, osc
 from test_server_tasks import FakePipe, FakePymux
 from test_theme import create_client as a_client
 

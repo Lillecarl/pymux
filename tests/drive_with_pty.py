@@ -65,11 +65,8 @@ from pyte.environment import terminal_name
 from pyte.modes import PrivateMode
 from pyte.osc import Osc
 from pyte.screen import Screen
-from pyte.sequences import (
-    dcs,
-    osc,
-    set_mode,
-)
+from pyte.sequences.csi import set_mode
+from pyte.sequences.strings import dcs, osc
 from pyte.sixel import decode_sixel
 from pyte.streams import Stream
 from pyterm_pytest.deadline import Deadline, pids_naming

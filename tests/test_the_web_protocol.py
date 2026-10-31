@@ -18,7 +18,7 @@ import base64
 import pytest
 from pyte.png import decode_png
 from pyte.screen import Screen
-from pyte.sequences import apc
+from pyte.sequences.strings import apc
 from pyte.streams import Stream
 
 from pymux.web.protocol import FRAME, PLAIN_STYLE, WELCOME, PaneView, base64_png, encode_unsent, typed_of

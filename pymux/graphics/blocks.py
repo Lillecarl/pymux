@@ -45,7 +45,7 @@ from prompt_toolkit.output.vt100_colors import (
     _get_closest_ansi_color,
 )
 from pyte import escape
-from pyte.sequences import csi
+from pyte.sequences.csi import csi
 
 __all__ = ["LOWER_HALF", "UPPER_HALF", "blocks_for", "rows_for_cells"]
 

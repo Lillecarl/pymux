@@ -132,7 +132,7 @@ from PIL import Image
 from pyte import escape
 from pyte.images import PixelFormat
 from pyte.modes import PrivateMode
-from pyte.sequences import csi, reset_mode
+from pyte.sequences.csi import csi, reset_mode
 from pyterm_pytest.seats import (
     APPEAR_TIMEOUT,
     BLINK_FRAMES,

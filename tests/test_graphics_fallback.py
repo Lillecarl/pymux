@@ -10,7 +10,8 @@ import re
 import pytest
 from pyte import escape
 from pyte.images import PixelFormat
-from pyte.sequences import Csi, apc, csi
+from pyte.sequences.csi import Csi, csi
+from pyte.sequences.strings import apc
 from pyte.sixel import decode_sixel
 from test_graphics_output import IMAGE_DATA, make_state, placement, view
 

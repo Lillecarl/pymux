@@ -14,7 +14,7 @@ from __future__ import annotations
 import pytest
 from pyte import escape
 from pyte.modes import PrivateMode
-from pyte.sequences import Csi, csi, set_mode
+from pyte.sequences.csi import Csi, csi, set_mode
 
 from pymux.commands import call_command_handler
 

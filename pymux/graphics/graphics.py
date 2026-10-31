@@ -42,7 +42,8 @@ import anyio
 from prompt_toolkit.output import ColorDepth
 from pyte import escape
 from pyte.images import GraphicsImage, GraphicsPlacement, GraphicsState, PixelFormat
-from pyte.sequences import Csi, csi, esc
+from pyte.sequences.csi import Csi, csi
+from pyte.sequences.escapes import esc
 from pyte.terminfo import DeviceExtension
 
 from ..layout.rects import Rect
