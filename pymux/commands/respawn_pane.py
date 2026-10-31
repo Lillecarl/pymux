@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from pymux.core.pane import Pane
 
 
-from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands import CommandException, CommandParser, Target, add_command
 from pymux.commands.common import the_pane
 from pymux.enums import Woke
 
@@ -56,7 +56,7 @@ async def replace_pane_program(pymux: Pymux, pane: Pane, args: argparse.Namespac
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    parser = add_command(subparsers, respawn_pane)
+    parser = add_command(subparsers, respawn_pane, acts_on={"target_pane": Target.PANE})
     parser.add_argument("-k", dest="k", action="store_true", help="Kill a program that still runs.")
     parser.add_argument("-t", dest="target_pane", metavar="<target-pane>", help="The pane to respawn.")
     parser.add_argument(

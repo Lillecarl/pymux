@@ -24,7 +24,7 @@ def swap_pane(pymux: Pymux, args: argparse.Namespace) -> None:
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    parser = add_command(subparsers, swap_pane)
+    parser = add_command(subparsers, swap_pane, acts_on={})
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("-D", dest="D", action="store_true", help="Swap with the pane above.")
     group.add_argument("-U", dest="U", action="store_true", help="Swap with the pane below.")

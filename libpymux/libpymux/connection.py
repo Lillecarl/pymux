@@ -16,7 +16,8 @@ Neither does I/O, so a test reaches them with no socket, and
 
 import json
 import shlex
-from typing import Dict, List, Mapping, NamedTuple, Optional, Sequence, Union
+from collections.abc import Mapping, Sequence
+from typing import NamedTuple
 
 import anyio
 import anyio.abc
@@ -47,7 +48,7 @@ class CommandError(RuntimeError):
     output of a failed command can still read it.
     """
 
-    def __init__(self, command: str, result: "CommandResult") -> None:
+    def __init__(self, command: str, result: CommandResult) -> None:
         self.command = command
         self.result = result
         message = result.stderr.strip() or "exit code %d" % (result.exit_code,)
@@ -60,13 +61,15 @@ class CommandResult(NamedTuple):
     stdout: str
     stderr: str
     exit_code: int
+    #: The pane the command left its caller on, when the server said.
+    pane_id: int | None = None
 
     @property
     def ok(self) -> bool:
         "True when the command succeeded."
         return self.exit_code == 0
 
-    def lines(self) -> List[str]:
+    def lines(self) -> list[str]:
         "The output, one entry for each line, without the empty last one."
         return self.stdout.splitlines()
 
@@ -83,21 +86,30 @@ def quote(argument: str) -> str:
     return shlex.quote(argument)
 
 
-def as_command(command: Union[str, Sequence[str]]) -> str:
+def as_command(command: str | Sequence[str]) -> str:
     "One command string, from a string or from a list of arguments."
     if isinstance(command, str):
         return command
     return " ".join(quote(argument) for argument in command)
 
 
-def command_packet(text: str, pane_id: Optional[str] = None, caller: Optional[Dict[str, object]] = None) -> bytes:
+def command_packet(
+    text: str,
+    pane_id: str | None = None,
+    caller: dict[str, object] | None = None,
+    targets: dict[str, str] | None = None,
+) -> bytes:
     """
     The bytes that ask the server to run one command.
 
     `caller` is the fields `agentic.caller_fields` makes: who sent the
-    command, and from which directory.
+    command, and from which directory. `targets` stand in for the
+    targets the words name, by argparse dest: a server that forwards a
+    command resolved them already, in this server's ids.
     """
     packet = {Field.CMD: Packet.RUN_COMMAND, Field.DATA: text, Field.PANE_ID: pane_id, **(caller or {})}
+    if targets:
+        packet[Field.TARGETS] = targets
     return json.dumps(packet).encode("utf-8") + END
 
 
@@ -112,9 +124,10 @@ class Reply:
 
     def __init__(self) -> None:
         self._framer = Framer()
-        self._out: List[str] = []
-        self._err: List[str] = []
+        self._out: list[str] = []
+        self._err: list[str] = []
         self._exit_code = 0
+        self._pane_id: int | None = None
 
     def feed(self, data: bytes) -> None:
         for raw in self._framer.feed(data):
@@ -128,9 +141,11 @@ class Reply:
                 self._err.append(packet[Field.DATA])
             elif kind == Packet.EXIT:
                 self._exit_code = packet[Field.CODE]
+                pane_id = packet.get(Field.PANE_ID)
+                self._pane_id = pane_id if isinstance(pane_id, int) else None
 
     def result(self) -> CommandResult:
-        return CommandResult("".join(self._out), "".join(self._err), self._exit_code)
+        return CommandResult("".join(self._out), "".join(self._err), self._exit_code, self._pane_id)
 
 
 def checked(text: str, result: CommandResult, check: bool) -> CommandResult:
@@ -165,11 +180,11 @@ class Connection:
 
     async def run(
         self,
-        command: Union[str, Sequence[str]],
-        pane_id: Optional[str] = None,
+        command: str | Sequence[str],
+        pane_id: str | None = None,
         check: bool = True,
-        environment: Optional[Mapping[str, str]] = None,
-        cwd: Optional[str] = None,
+        environment: Mapping[str, str] | None = None,
+        cwd: str | None = None,
     ) -> CommandResult:
         """
         Run one command on the server and read what it says.

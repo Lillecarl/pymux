@@ -53,7 +53,7 @@ def consume_or_expel(pymux: Pymux, args: argparse.Namespace) -> None:
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    parser = add_command(subparsers, consume_or_expel)
+    parser = add_command(subparsers, consume_or_expel, acts_on={})
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("-L", dest="L", action="store_true", help="Move the pane into the column to the left.")
     group.add_argument("-R", dest="R", action="store_true", help="Move the pane into the column to the right.")

@@ -13,14 +13,16 @@ from contextlib import suppress
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import anyio
+from libpymux.connection import CommandResult, Reply, command_packet
 from libpymux.protocol import Field, Message, Packet
 from libpymux.wire import MSGPACK, MSGPACK_ZSTD, PacketReader, encode_json
 from pyte.freeze import freeze_value
 from pyte.keep import Keep
 
 from ..client.defaults import is_ssh_url
+from ..commands import CommandException
 from ..log import logger
-from .dial import dial
+from .dial import dial, dial_beside
 from .program import RemoteProgram
 from .tree import MirrorTree
 
@@ -111,6 +113,7 @@ class Peer:
         "_receive": Keep.DROPPED,
         "_terminal_told": Keep.DROPPED,
         "_sizes_told": Keep.DROPPED,
+        "_stream": Keep.DROPPED,
         "tree": Keep.DROPPED,
     }
 
@@ -127,6 +130,7 @@ class Peer:
         self._send, self._receive = anyio.create_memory_object_stream[bytes](math.inf)
         self._terminal_told: PeerTerminal | None = None
         self._sizes_told: dict[int, Size] = {}
+        self._stream: anyio.abc.ByteStream | None = None
         # Zstd only across a network, as a client offers it.
         offer = [MSGPACK_ZSTD, MSGPACK] if is_ssh_url(address) else [MSGPACK]
         self.send({Field.CMD: Packet.PEER, Field.WIRE: offer})
@@ -187,6 +191,26 @@ class Peer:
             }
         )
 
+    async def run_command(self, text: str, pane_id: int | None, targets: dict[str, str]) -> CommandResult:
+        """
+        Run one command on the owner, as a command typed in its pane
+        `pane_id` runs there, and read what it says. It goes on a
+        stream of its own, because the owner answers a command and
+        closes the connection it came on.
+        """
+        if self._stream is None:
+            raise CommandException("the link to %s is down" % (self.address,))
+        reply = Reply()
+        async with await dial_beside(self.address, self._stream) as stream:
+            await stream.send(command_packet(text, None if pane_id is None else str(pane_id), None, targets))
+            while True:
+                try:
+                    data = await stream.receive()
+                except anyio.EndOfStream, anyio.BrokenResourceError, anyio.ClosedResourceError:
+                    break
+                reply.feed(data)
+        return reply.result()
+
     # -- the link ------------------------------------------------------
 
     async def run(self) -> None:
@@ -201,6 +225,7 @@ class Peer:
             logger.warning("Could not reach the server at %s: %s", self.address, self.error)
             return
         self.connected = True
+        self._stream = stream
         # This runs in the server's own scope: what it raises would end
         # every client, so the link's trouble stays the link's.
         try:
@@ -221,6 +246,7 @@ class Peer:
             logger.exception("The link to %s failed.", self.address)
         finally:
             self.connected = False
+            self._stream = None
             logger.info("The link to %s went: %s", self.address, self.error)
 
     async def _write(self, stream: anyio.abc.ByteStream) -> None:

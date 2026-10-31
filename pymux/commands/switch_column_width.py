@@ -41,5 +41,5 @@ def switch_column_width(pymux: Pymux, args: argparse.Namespace) -> None:
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    parser = add_command(subparsers, switch_column_width)
+    parser = add_command(subparsers, switch_column_width, acts_on={})
     parser.add_argument("-p", dest="p", action="store_true", help="The previous width instead.")

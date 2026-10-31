@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from pymux.core.main import Pymux
 
 
-from pymux.commands import CommandParser, add_command
+from pymux.commands import CommandParser, Target, add_command
 from pymux.commands.move_pane import add_arguments, move_pane
 
 
@@ -23,4 +23,4 @@ def join_pane(pymux: Pymux, args: argparse.Namespace) -> None:
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    add_arguments(add_command(subparsers, join_pane))
+    add_arguments(add_command(subparsers, join_pane, acts_on={"s": Target.PANE, "t": Target.WINDOW}))

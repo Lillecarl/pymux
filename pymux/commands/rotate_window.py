@@ -21,7 +21,7 @@ def rotate_window(pymux: Pymux, args: argparse.Namespace) -> None:
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    parser = add_command(subparsers, rotate_window)
+    parser = add_command(subparsers, rotate_window, acts_on={})
     group = parser.add_mutually_exclusive_group()
     group.add_argument("-D", dest="D", action="store_true", help="Rotate the other way.")
     group.add_argument("-U", dest="U", action="store_true")

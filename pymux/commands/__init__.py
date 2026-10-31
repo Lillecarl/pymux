@@ -13,7 +13,8 @@ from __future__ import annotations
 import argparse
 import inspect
 import shlex
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
+from enum import StrEnum
 from importlib import import_module
 from typing import TYPE_CHECKING, Any, NoReturn, overload, override
 
@@ -28,6 +29,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "CommandException",
+    "Target",
     "add_command",
     "add_commands_to",
     "build_parser_tree",
@@ -243,6 +245,16 @@ class CommandParser(argparse.ArgumentParser):
         raise BadLine(message)
 
 
+class Target(StrEnum):
+    "What the target of a command names."
+
+    PANE = "pane"
+    WINDOW = "window"
+    SESSION = "session"
+    #: A place in a session, `[session:]index`, which may hold no window.
+    SLOT = "slot"
+
+
 def add_command(
     subparsers: argparse._SubParsersAction[CommandParser],
     handler: Callable[..., Any],
@@ -250,6 +262,7 @@ def add_command(
     name: str | None = None,
     aliases: tuple[str, ...] | list[str] = (),
     read_only: bool = False,
+    acts_on: Mapping[str, Target] | None = None,
 ):
     """
     The parser of one command: named after its handler, described by
@@ -261,6 +274,15 @@ def add_command(
     runs it from a client of their own, and a command wrongly allowed
     types into somebody else's session. tmux marks five and no more.
     Lillecarl/pymux#467.
+
+    `acts_on` marks a command that changes or reads a session's
+    windows and panes, with the argparse dest of each target it takes.
+    Such a command runs on the server that owns the session: on a
+    session another server owns (`connect`), that server runs it.
+    Empty is a command that takes no target and acts where its caller
+    is. **None, the default, runs here whatever the session**: a
+    command about this server, or about what one client looks at.
+    Lillecarl/pymux#759.
     """
     if name is None:
         name = handler.__name__.replace("_", "-")
@@ -278,7 +300,7 @@ def add_command(
         # the shell come from this tree, not from a `-h`.
         add_help=False,
     )
-    parser.set_defaults(_handler=handler, _read_only=read_only)
+    parser.set_defaults(_handler=handler, _read_only=read_only, _acts_on=acts_on)
     return parser
 
 
@@ -340,12 +362,16 @@ def parser_tree():
     return _parser_tree
 
 
-def handle_command(pymux: Pymux, input_string: str):
+def handle_command(pymux: Pymux, input_string: str, targets: Mapping[str, str] | None = None):
     """
     Handle command.
 
     Like tmux, several commands can be given at once, separated by an
     unquoted semicolon. E.g. `send-keys -t %5 -R ; clear-history -t %5`.
+
+    `targets` stand in for the targets the words name, by argparse
+    dest: a peer that forwards a command resolved them in this
+    server's ids (`mirror.forward`).
 
     **The answer is `None`, or the rest of the work.** A handler that
     only reads the server is a plain function and everything it does
@@ -384,12 +410,12 @@ def handle_command(pymux: Pymux, input_string: str):
                 else:
                     commands[-1].append(part)
 
-            return _run_in_order(pymux, commands)
+            return _run_in_order(pymux, commands, targets)
 
     return None
 
 
-def _run_in_order(pymux: Pymux, commands: list[list[str]]):
+def _run_in_order(pymux: Pymux, commands: list[list[str]], targets: Mapping[str, str] | None = None):
     """
     Run the commands of one line, left to right.
 
@@ -401,29 +427,32 @@ def _run_in_order(pymux: Pymux, commands: list[list[str]]):
         if not args:
             continue
 
-        answer = call_command_handler(args[0], pymux, args[1:])
+        answer = call_command_handler(args[0], pymux, args[1:], targets)
         if answer is None:
             continue
 
         rest = commands[index + 1 :]
         if not any(rest):
             return answer  # Nothing follows it, so nothing wraps it.
-        return _then_the_rest(pymux, answer, rest)
+        return _then_the_rest(pymux, answer, rest, targets)
 
     return None
 
 
-async def _then_the_rest(pymux: Pymux, answer: Awaitable[Any], rest: list[list[str]]) -> None:
+async def _then_the_rest(
+    pymux: Pymux, answer: Awaitable[Any], rest: list[list[str]], targets: Mapping[str, str] | None
+) -> None:
     await answer
 
-    more = _run_in_order(pymux, rest)
+    more = _run_in_order(pymux, rest, targets)
     if more is not None:
         await more
 
 
-def call_command_handler(command: str, pymux: Pymux, arguments: list[str]):
+def call_command_handler(command: str, pymux: Pymux, arguments: list[str], targets: Mapping[str, str] | None = None):
     """
-    Execute one command, given its words.
+    Execute one command, given its words, and the `targets` that stand
+    in for what they name (`handle_command`).
 
     Answers with `None`, or with what the handler left to await.
     """
@@ -470,7 +499,18 @@ def call_command_handler(command: str, pymux: Pymux, arguments: list[str]):
         return None
 
     try:
-        answer = namespace._handler(pymux, namespace)
+        if targets:
+            _take_targets(command, namespace, targets)
+            answer = namespace._handler(pymux, namespace)
+        elif namespace._acts_on is not None and pymux.peers.by_address:
+            # A command on a session another server owns runs there.
+            from pymux.mirror.forward import forwarded
+
+            answer = forwarded(pymux, command, arguments, namespace)
+            if answer is None:
+                answer = namespace._handler(pymux, namespace)
+        else:
+            answer = namespace._handler(pymux, namespace)
     except CommandException as e:
         _failed(pymux, command, namespace, e)
         return None
@@ -482,6 +522,15 @@ def call_command_handler(command: str, pymux: Pymux, arguments: list[str]):
 
     _ran(pymux, command, namespace)
     return None
+
+
+def _take_targets(command: str, namespace: argparse.Namespace, targets: Mapping[str, str]) -> None:
+    "Put the targets a peer resolved in place of what the words named."
+    acts_on = namespace._acts_on or {}
+    for dest, target in targets.items():
+        if dest not in acts_on:
+            raise CommandException("%s takes no target %s" % (command, dest))
+        setattr(namespace, dest, target)
 
 
 async def _finish(pymux: Pymux, command: str, namespace: argparse.Namespace, answer: Awaitable[Any]) -> None:

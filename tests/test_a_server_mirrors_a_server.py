@@ -17,13 +17,16 @@ import sys
 
 import anyio
 import pytest
+from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 from pyte.osc import ColorBase
 from session import Connection
+from test_ssh_client import create_ssh_server
 
+from pymux.commands import handle_command
 from pymux.core.main import Pymux
 from pymux.layout.geometry import plan_of
 from pymux.mirror.program import RemoteProgram
@@ -57,7 +60,9 @@ async def two_servers(tmp_path):
     peer = Pymux()
     peer.options.test_mode = True
     async with owner.running(), peer.running():
-        await owner.panes.create_window(STAYS)
+        # Started, so the first command from the peer opens no window.
+        owner.startup_command = STAYS
+        await owner.startup()
         await peer.panes.create_window(STAYS)
         output = Vt100_Output(stdout=io.StringIO(), get_size=lambda: Size(rows=24, columns=80))
         with create_pipe_input() as pipe:
@@ -79,14 +84,18 @@ async def two_servers(tmp_path):
                 owner.stop()
 
 
-async def shown_here(owner, peer, client):
+async def shown_here(owner, peer, client, link=None):
     """
     Connect the peer to the owner and put the client on the mirrored
     session. Answers the owner's active pane and its mirror here.
+    `link` is a link made already, which `connect` would not make.
     """
     there = owner.arrangement.get_active_window().active_pane
-    peer.handle_command("connect %s" % (owner.socket_name,))
-    (link,) = peer.peers.by_address.values()
+    if link is None:
+        peer.handle_command("connect %s" % (owner.socket_name,))
+        (link,) = peer.peers.by_address.values()
+    else:
+        link.watch()
     await until(lambda: there.pane_id in link.tree.panes, "the owner's sessions arrive")
     (session,) = [session for session in peer.sessions if session.remote is not None]
     peer.attach_client_to(client, session)
@@ -167,6 +176,88 @@ async def test_the_owner_lays_out_at_the_size_of_the_peer(two_servers):
 def here_session(peer):
     (session,) = [session for session in peer.sessions if session.remote is not None]
     return session
+
+
+def run_as(peer, client, line: str):
+    "Run a line as the client at the peer does, and answer what is left to await."
+    with set_app(client.app):
+        return handle_command(peer, line)
+
+
+async def test_a_split_here_splits_the_window_there(two_servers):
+    owner, peer, client = two_servers
+    there, here = await shown_here(owner, peer, client)
+    owner_window = owner.arrangement.get_active_window()
+    (link,) = peer.peers.by_address.values()
+
+    answer = run_as(peer, client, "split-window")
+    assert answer is not None, "the command goes to the owner"
+    await answer
+    assert len(owner_window.panes) == 2, "the owner split the window the person is in"
+    new = owner_window.active_pane
+    await until(lambda: new.pane_id in link.tree.panes, "the tree brings the new pane")
+    (mirror_window,) = link.tree.windows.values()
+    await until(lambda: mirror_window.active_pane is link.tree.panes[new.pane_id], "the focus follows the owner")
+
+
+async def test_a_command_goes_over_ssh_beside_the_link(two_servers, tmp_path):
+    "Over SSH a forwarded command is a second channel on the connection the link holds."
+    owner, peer, client = two_servers
+    server, port, client_key = await create_ssh_server(tmp_path, owner.socket_name)
+    try:
+        link = peer.peers.of(
+            "ssh://127.0.0.1:%d%s" % (port, owner.socket_name),
+            known_hosts=None,
+            client_keys=[client_key],
+            username="anybody",
+        )
+        there, here = await shown_here(owner, peer, client, link)
+        owner_window = owner.arrangement.get_active_window()
+
+        await run_as(peer, client, "split-window")
+        assert len(owner_window.panes) == 2
+        await run_as(peer, client, "split-window")
+        assert len(owner_window.panes) == 3, "the link still holds after a channel beside it closed"
+    finally:
+        server.close()
+
+
+async def test_a_new_window_there_takes_the_client_along(two_servers):
+    owner, peer, client = two_servers
+    there, here = await shown_here(owner, peer, client)
+    session = here_session(peer)
+    (link,) = peer.peers.by_address.values()
+
+    await run_as(peer, client, "new-window")
+    assert len(owner.sessions[0].arrangement.windows) == 2
+    shown = session.arrangement.get_active_window_for(client.app)
+    assert shown is not None and shown.active_pane is not here, "the client moved to the new window"
+    assert shown is link.tree.windows[link.tree.id_of_window(shown)]
+
+
+async def test_a_target_here_names_the_pane_there(two_servers):
+    owner, peer, client = two_servers
+    await owner.panes.create_window(STAYS)
+    gone = owner.arrangement.get_active_window().active_pane
+    there, here = await shown_here(owner, peer, client)
+    assert there is gone
+    (link,) = peer.peers.by_address.values()
+
+    # The id the pane has here, which the owner knows by another.
+    await run_as(peer, client, "kill-pane -t %%%d" % (here.pane_id,))
+    assert owner.session_holding(gone) is None
+    await until(lambda: gone.pane_id not in link.tree.panes, "the tree loses the pane")
+
+
+async def test_a_pane_cannot_move_between_servers(two_servers):
+    owner, peer, client = two_servers
+    there, here = await shown_here(owner, peer, client)
+    own = next(session for session in peer.sessions if session.remote is None)
+    own_window = own.arrangement.windows[0]
+
+    assert run_as(peer, client, "move-pane -s %%%d -t @%d" % (here.pane_id, own_window.window_id)) is None
+    assert any("different servers" in line for line in peer.message_log)
+    assert len(owner.arrangement.get_active_window().panes) == 1
 
 
 async def test_a_pane_that_ends_there_ends_here(two_servers):

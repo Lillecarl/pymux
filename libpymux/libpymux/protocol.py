@@ -418,6 +418,10 @@ class Field(StrEnum):
     SERVER = "server"
     #: In `peer-sizes`.
     SIZES = "sizes"
+    #: In `run-command` from a peer: `{dest: target}`, the targets the
+    #: peer resolved, which stand in for what its words name. In its
+    #: `exit`, `pane_id` is the pane the command left its caller on.
+    TARGETS = "targets"
 
 
 class Codec(StrEnum):

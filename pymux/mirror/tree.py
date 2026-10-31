@@ -19,6 +19,7 @@ from __future__ import annotations
 from dataclasses import MISSING, fields
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, cast
 
+import anyio
 from prompt_toolkit.data_structures import Size
 from pyte.keep import Keep
 
@@ -123,6 +124,7 @@ class MirrorTree:
         "windows": Keep.DROPPED,
         "panes": Keep.DROPPED,
         "_shapes": Keep.DROPPED,
+        "_updated": Keep.DROPPED,
     }
 
     def __init__(self, pymux: Pymux, peer: Peer) -> None:
@@ -134,6 +136,7 @@ class MirrorTree:
         # Each window's splits and the places of its panes, as last
         # built: a window that kept its shape keeps its splits.
         self._shapes: dict[int, tuple[object, ...]] = {}
+        self._updated = anyio.Event()
 
     def update(self, server: str, tree: Tree) -> None:
         "Make the sessions here what the owner's tree says."
@@ -141,7 +144,20 @@ class MirrorTree:
         self._update_panes(rows)
         self._update_windows(rows)
         self._update_sessions(server, rows)
+        self._updated.set()
+        self._updated = anyio.Event()
         self.pymux.invalidate(Woke.TREE_MIRRORED)
+
+    async def pane_once_here(self, pane_id: int, within: float) -> Pane | None:
+        "The pane of that id here, once a tree brought it, or None after `within` seconds."
+        with anyio.move_on_after(within):
+            while pane_id not in self.panes:
+                await self._updated.wait()
+        return self.panes.get(pane_id)
+
+    def id_of_window(self, window: Window) -> int | None:
+        "The owner's id of a window here."
+        return next((remote_id for remote_id, each in self.windows.items() if each is window), None)
 
     # -- panes -----------------------------------------------------------
 

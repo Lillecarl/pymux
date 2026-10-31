@@ -35,7 +35,7 @@ def resize_pane(pymux: Pymux, args: argparse.Namespace) -> None:
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    parser = add_command(subparsers, resize_pane)
+    parser = add_command(subparsers, resize_pane, acts_on={})
     parser.add_argument("-L", dest="left", metavar="<left>", help="That many columns narrower.")
     parser.add_argument("-U", dest="up", metavar="<up>", help="That many rows shorter.")
     parser.add_argument("-D", dest="down", metavar="<down>", help="That many rows taller.")

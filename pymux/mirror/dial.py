@@ -17,7 +17,7 @@ from ..client.ssh import open_socket, ssh_target
 if TYPE_CHECKING:
     from asyncssh import SSHClientConnection, SSHReader, SSHWriter
 
-__all__ = ["dial"]
+__all__ = ["dial", "dial_beside"]
 
 
 async def dial(address: str, **connect_with: Any) -> anyio.abc.ByteStream:
@@ -29,17 +29,45 @@ async def dial(address: str, **connect_with: Any) -> anyio.abc.ByteStream:
     """
     if not is_ssh_url(address):
         return await anyio.connect_unix(address)
-    connection, reader, writer, _path = await open_socket(ssh_target(address), connect_with)
-    return _SshStream(connection, reader, writer)
+    connection, reader, writer, path = await open_socket(ssh_target(address), connect_with)
+    return _SshStream(connection, reader, writer, path, owns_connection=True)
+
+
+async def dial_beside(address: str, stream: anyio.abc.ByteStream) -> anyio.abc.ByteStream:
+    """
+    One more stream to the socket `stream` reached. Over SSH it is a
+    new channel on the same connection, so a command a peer forwards
+    costs no new handshake.
+    """
+    if isinstance(stream, _SshStream):
+        return await stream.beside()
+    return await anyio.connect_unix(address)
 
 
 class _SshStream(anyio.abc.ByteStream):
     "One SSH channel to a unix socket, and the connection it lives on."
 
-    def __init__(self, connection: SSHClientConnection, reader: SSHReader[bytes], writer: SSHWriter[bytes]) -> None:
+    def __init__(
+        self,
+        connection: SSHClientConnection,
+        reader: SSHReader[bytes],
+        writer: SSHWriter[bytes],
+        path: str,
+        owns_connection: bool,
+    ) -> None:
         self._connection = connection
         self._reader = reader
         self._writer = writer
+        self._path = path
+        self._owns_connection = owns_connection
+
+    async def beside(self) -> _SshStream:
+        "Another channel to the same socket, which leaves the connection open when it closes."
+        try:
+            reader, writer = await self._connection.open_unix_connection(self._path)
+        except OSError as error:
+            raise anyio.BrokenResourceError from error
+        return _SshStream(self._connection, reader, writer, self._path, owns_connection=False)
 
     async def receive(self, max_bytes: int = READ_SIZE) -> bytes:
         try:
@@ -62,6 +90,9 @@ class _SshStream(anyio.abc.ByteStream):
             self._writer.write_eof()
 
     async def aclose(self) -> None:
+        if not self._owns_connection:
+            self._writer.close()
+            return
         self._connection.close()
         with contextlib.suppress(Exception):
             await self._connection.wait_closed()

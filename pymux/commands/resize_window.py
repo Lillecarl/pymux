@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 
 from prompt_toolkit.data_structures import Size
 
-from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands import CommandException, CommandParser, Target, add_command
 from pymux.commands.common import the_window
 from pymux.enums import WindowSize
 from pymux.layout.geometry import size_the_panes_of
@@ -102,7 +102,7 @@ def resize_window(pymux: Pymux, args: argparse.Namespace) -> None:
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    parser = add_command(subparsers, resize_window)
+    parser = add_command(subparsers, resize_window, acts_on={"target_window": Target.WINDOW})
     parser.add_argument(
         "-t",
         dest="target_window",

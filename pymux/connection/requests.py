@@ -25,6 +25,7 @@ from ..pipes.base import BrokenPipeError
 from .attach import create_app
 
 if TYPE_CHECKING:
+    from pymux.connection.client_state import ClientState
     from pymux.web.stream import PaneStream
 
     from .server import ServerConnection
@@ -140,7 +141,7 @@ class Requests:
                 # every other client of this server keeps running.
                 # Lillecarl/pymux#87.
                 with started_by(Origin.SOCKET):
-                    answer = handle_command(pymux, packet[Field.DATA])
+                    answer = handle_command(pymux, packet[Field.DATA], packet.get(Field.TARGETS))
                     if answer is not None:
                         await answer
             finally:
@@ -165,7 +166,9 @@ class Requests:
                     exit_code = reply.exit_code
                     if exit_code is None:
                         exit_code = 1 if reply.errors else 0
-                    await self.connection.write_packet({Field.CMD: Packet.EXIT, Field.CODE: exit_code})
+                    await self.connection.write_packet(
+                        {Field.CMD: Packet.EXIT, Field.CODE: exit_code, Field.PANE_ID: _left_on(client_state)}
+                    )
                 except BrokenPipeError:
                     pass
                 self.connection.close_connection()
@@ -174,3 +177,13 @@ class Requests:
         "Send the exit code of a command, for one that ends the server before it returns."
         with suppress(BrokenPipeError):
             await self.connection.write_packet({Field.CMD: Packet.EXIT, Field.CODE: exit_code})
+
+
+def _left_on(client_state: ClientState) -> int | None:
+    """
+    The pane a command left its caller on: a peer that forwarded
+    `new-window` moves its own client there.
+    """
+    window = client_state.session.arrangement.get_active_window_for(client_state.app)
+    pane = window.active_pane if window is not None else None
+    return None if pane is None else int(pane.pane_id)

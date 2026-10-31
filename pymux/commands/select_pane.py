@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from pymux.core.main import Pymux
 
 
-from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands import CommandException, CommandParser, Target, add_command
 from pymux.commands.common import find_pane, the_window
 from pymux.layout.layout import move_focus
 from pymux.layout.rects import Side
@@ -50,7 +50,7 @@ def select_pane(pymux: Pymux, args: argparse.Namespace) -> None:
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    parser = add_command(subparsers, select_pane)
+    parser = add_command(subparsers, select_pane, acts_on={"pane_id": Target.PANE})
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("-L", dest="L", action="store_true", help="Focus the pane to the left.")
     group.add_argument("-R", dest="R", action="store_true", help="Focus the pane to the right.")

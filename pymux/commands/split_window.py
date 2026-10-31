@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from pymux.tags import Tags
 
 
-from pymux.commands import CommandParser, add_command
+from pymux.commands import CommandParser, Target, add_command
 from pymux.commands.common import (
     add_format_arguments,
     add_tag_arguments,
@@ -74,6 +74,6 @@ def add_arguments(parser: argparse.ArgumentParser):
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    parser = add_command(subparsers, split_window)
+    parser = add_command(subparsers, split_window, acts_on={"target_window": Target.WINDOW})
     add_arguments(parser)
     add_tag_arguments(parser, "pane")

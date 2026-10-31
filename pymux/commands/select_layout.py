@@ -27,5 +27,5 @@ def select_layout(pymux: Pymux, args: argparse.Namespace) -> None:
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    parser = add_command(subparsers, select_layout)
+    parser = add_command(subparsers, select_layout, acts_on={})
     parser.add_argument("layout_type", metavar="<layout-type>", help="The layout to arrange the panes in.")

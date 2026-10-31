@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from pymux.core.main import Pymux
 
 
-from pymux.commands import CommandParser, add_command
+from pymux.commands import CommandParser, Target, add_command
 from pymux.commands.common import the_pane
 
 
@@ -20,5 +20,5 @@ def kill_pane(pymux: Pymux, args: argparse.Namespace) -> None:
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    parser = add_command(subparsers, kill_pane)
+    parser = add_command(subparsers, kill_pane, acts_on={"target_pane": Target.PANE})
     parser.add_argument("-t", dest="target_pane", metavar="<target-pane>", help="The pane to kill.")
