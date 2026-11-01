@@ -319,6 +319,21 @@ async def test_a_window_the_peer_stops_watching_keeps_its_size_there(two_servers
     assert screen.columns == watched.columns
 
 
+async def test_a_window_the_peer_shows_is_seen_there(two_servers):
+    "A mark the owner raised goes when a person at the peer looks, and none goes up while they do."
+    owner, peer, client = two_servers
+    owner_window = owner.arrangement.get_active_window()
+    owner_window.bell = True
+    there, here = await shown_here(owner, peer, client)
+    (link,) = peer.peers.by_address.values()
+    (mirror_window,) = link.tree.windows.values()
+    await until(lambda: not owner_window.bell, "the owner's mark goes", seen=lambda: owner_window.bell)
+    await until(lambda: not mirror_window.bell, "the mark here goes with it")
+
+    assert not owner.arrangement.notify(owner_window, owner.apps)
+    assert not owner_window.notified
+
+
 async def test_the_focus_here_follows_a_pane_selected_there(two_servers):
     "select-pane runs on the owner; the tree that answers it moves the client's focus, with no key after."
     owner, peer, client = two_servers

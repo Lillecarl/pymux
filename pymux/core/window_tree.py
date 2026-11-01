@@ -75,6 +75,8 @@ class Window:
         "column_widths": Keep.SAVED,
         "manual_size": Keep.SAVED,
         "unwatched_size": Keep.SAVED,
+        # The peer links again after an upgrade and says once more.
+        "peer_watched": Keep.DROPPED,
         "zoom": Keep.SAVED,
         "frame_rate_set": Keep.SAVED,
         "bell": Keep.SAVED,
@@ -123,6 +125,10 @@ class Window:
         #: watched it, and before that what the clients gave it when it
         #: was made. Lillecarl/pymux#817.
         self.unwatched_size: Size | None = None
+
+        #: A server that mirrors this window shows it to a client there
+        #: (`PeerLink._sized`), so a mark raised here is a mark seen.
+        self.peer_watched = False
 
         #: When true, the current pane is zoomed in.
         self.zoom = False

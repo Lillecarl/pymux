@@ -196,7 +196,7 @@ class Arrangement:
         """
         if not window.options.monitor_bell:
             return False
-        watched = any(self._active_window_for_cli.get(app) is window for app in apps)
+        watched = self.watched(window, apps)
         raised = False
         if not watched and not window.bell:
             window.bell = raised = True
@@ -205,7 +205,8 @@ class Arrangement:
         return raised
 
     def watched(self, window: Window, apps: Iterable[Application[Any]]) -> bool:
-        return any(self._active_window_for_cli.get(app) is window for app in apps)
+        "One of `apps` has `window` as its window, or a server that mirrors it shows it (`Window.peer_watched`)."
+        return window.peer_watched or any(self._active_window_for_cli.get(app) is window for app in apps)
 
     def notify(self, window: Window, apps: Iterable[Application[Any]]) -> bool:
         "Mark a window a notification came from, unless a client looks at it. True when the mark went up."

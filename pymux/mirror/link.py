@@ -377,6 +377,14 @@ class PeerLink:
             rooms[self] = sizes
         else:
             rooms.pop(self, None)
+        watched = {window_id for room in rooms.values() for window_id in room}
+        for session in pymux.sessions:
+            for window in session.arrangement.windows:
+                if window.window_id in changed:
+                    window.peer_watched = window.window_id in watched
+                    if window.peer_watched:
+                        # A person there looks at it now, so its marks are seen.
+                        window.seen()
         self._size_the_panes(changed)
         pymux.invalidate(Woke.PEER_RESIZED)
 
