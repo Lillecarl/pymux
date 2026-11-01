@@ -267,6 +267,11 @@ class Packet(StrEnum):
     # `frame` (`pyte.grid`). One is in flight per pane at a time, so a
     # peer that falls behind gets the newest page and not each one.
     MIRROR_FRAME = "mirror-frame"
+    # An OSC sequence a pane wrote for the terminal of a person, under
+    # `code` and `data`: the clipboard, a notification, the directory.
+    # It goes for every pane of a session the peer watches, seen or
+    # not, and the peer serves it as one of its own panes said it.
+    MIRROR_OSC = "mirror-osc"
     # "That pane is not mirrored": there is none, under `error`.
     MIRROR_REFUSED = "mirror-refused"
 

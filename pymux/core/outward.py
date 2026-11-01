@@ -210,8 +210,17 @@ class Outward:
 
         Never raises: this runs on the read path of a pane, and one
         sequence may not stop it.
+
+        **A peer that watches this server hears it too**, as it came,
+        and serves it under its own options for its own clients: a
+        mirror holds no screen that could hear it for itself.
+        Lillecarl/pymux#759.
         """
         try:
+            for connection in self.pymux.connections:
+                if connection.peer is not None:
+                    connection.peer.pane_said(pane, code, param)
+
             # A notification the hub recorded goes to a terminal that
             # reports clicks as OSC 99 instead (`Notifier.notified`).
             recorded = False

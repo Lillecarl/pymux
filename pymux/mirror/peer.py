@@ -312,6 +312,13 @@ class Peer:
                 logger.exception("The sessions of %s could not be mirrored.", self.address)
             return
         pane_id = packet.get(Field.PANE_ID)
+        if packet.get(Field.CMD) == Packet.MIRROR_OSC:
+            pane = self.tree.panes.get(pane_id) if isinstance(pane_id, int) else None
+            if pane is not None:
+                self.tree.pymux.outward.forward_osc(
+                    pane, str(packet.get(Field.CODE, "")), str(packet.get(Field.DATA, ""))
+                )
+            return
         sink = self.sinks.get(pane_id) if isinstance(pane_id, int) else None
         if sink is None:
             return

@@ -25,6 +25,7 @@ from pyte.freeze import thaw_value
 from pyte.keep import Keep
 from pyte.keys.events import DEFAULT_KEY_PROFILE, KeyProfile
 from pyte.mouse import MouseAction
+from pyte.osc import Osc
 
 from ..connection.packet_table import PacketTable
 from ..enums import Woke
@@ -39,6 +40,7 @@ from .tree import Tree, tree_of
 
 if TYPE_CHECKING:
     from pymux.connection.server import ServerConnection
+    from pymux.core.pane import Pane
 
 __all__ = ["PeerLink"]
 
@@ -160,6 +162,18 @@ class PeerLink:
             logger.exception("Sending pane %s to a peer failed.", source.pane.pane_id)
             self.lost(source)
             return None
+
+    def pane_said(self, pane: Pane, code: str, param: str) -> None:
+        "Pass an OSC sequence of a pane on to the peer (`Outward.forward_osc`)."
+        if not self.watching and pane.pane_id not in self.sources:
+            return
+        # A frame carries the pointer, and the marks of a shell name
+        # rows of the history, which stays here.
+        if code in (Osc.POINTER_SHAPE, Osc.SHELL_INTEGRATION):
+            return
+        self.queue(
+            {Field.CMD: Packet.MIRROR_OSC, Field.PANE_ID: int(pane.pane_id), Field.CODE: code, Field.DATA: param}
+        )
 
     def tree_changed(self) -> None:
         "Something the tree holds may have changed (`Pymux.invalidate`)."

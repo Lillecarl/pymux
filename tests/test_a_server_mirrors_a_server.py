@@ -38,6 +38,7 @@ from pymux.core.forwarding import with_port
 from pymux.core.main import Pymux
 from pymux.core.snapshot.read import load, start
 from pymux.core.snapshot.write import save
+from pymux.enums import Clipboard
 from pymux.layout.geometry import plan_of
 from pymux.mirror.program import RemoteProgram
 from pymux.query import ask
@@ -136,6 +137,25 @@ async def test_a_session_there_shows_here(two_servers):
 
     control.process.write_input("ls\r")
     await until(lambda: typed == ["ls\r"], "a key typed here reaches the program there")
+
+
+async def test_a_copy_in_a_pane_there_reaches_the_clipboard_here(two_servers):
+    "The owner passes the OSC on; the peer serves it under its own set-clipboard, though nobody looks at the pane."
+    owner, peer, client = two_servers
+    owner.options.set_clipboard = Clipboard.OFF
+    peer.options.set_clipboard = Clipboard.ON
+    there, here = await shown_here(owner, peer, client)
+    own = next(session for session in peer.sessions if session.remote is None)
+    peer.attach_client_to(client, own)
+    peer.invalidate()
+
+    payload = base64.b64encode(b"copied there").decode("ascii")
+    there.terminal.terminal_control.feed_output("\x1b]52;c;%s\x07" % payload)
+    await until(
+        lambda: peer.clipboard.get_data().text == "copied there",
+        "the copy reaches the paste buffer here",
+        lambda: peer.clipboard.get_data().text,
+    )
 
 
 async def test_a_pane_streams_only_while_seen(two_servers):
