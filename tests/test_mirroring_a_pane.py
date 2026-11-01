@@ -256,6 +256,27 @@ async def test_a_peer_drives_the_pane_in_the_modes_the_program_set(pymux):
         pymux.stop()
 
 
+async def test_a_reply_from_the_peer_reaches_the_program_as_it_is(pymux):
+    "Under the kitty keyboard protocol a key would be encoded again; a reply is not a key."
+    pane, owner = the_control(pymux)
+    typed: list[str] = []
+    owner.process.write_input = typed.append
+    owner.feed_output("\x1b[>31u")
+    reply = "\x1b]99;i=1;\x1b\\"
+
+    async with pymux.running():
+        connection, client_end = open_link(pymux, pane)
+        sink = a_peer()
+        await converge(client_end, sink, owner)
+        ask(client_end, Packet.MIRROR_WRITE, pane, data=reply)
+        with anyio.fail_after(5):
+            while not typed:
+                await anyio.sleep(0.01)
+        assert typed == [reply]
+
+        pymux.stop()
+
+
 def shows(sink: MirrorSink, text: str) -> bool:
     return any(text in row for row in picture(sink.control)[0])
 

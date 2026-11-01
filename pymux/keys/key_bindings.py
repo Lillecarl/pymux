@@ -594,8 +594,8 @@ class PymuxKeyBindings:
                 if not get_app().layout.has_focus(terminal):
                     # The keyboard is on the command line or a prompt.
                     return NotImplemented
-                profile = terminal.terminal_control.key_profile()
-                terminal.process.write_input(terminal.screen.encode_key(event.data, profile=profile))
+                control = terminal.terminal_control
+                control.type_key(event.data, control.key_profile(), quiet=True)
             except Exception:
                 logger.exception("Forwarding a key release failed.")
             return NotImplemented

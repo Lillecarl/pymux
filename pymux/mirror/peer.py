@@ -228,6 +228,9 @@ class Peer:
             }
         )
 
+    def write(self, pane_id: int, data: str) -> None:
+        self.send({Field.CMD: Packet.MIRROR_WRITE, Field.PANE_ID: pane_id, Field.DATA: data})
+
     def paste(self, pane_id: int, text: str) -> None:
         self.send({Field.CMD: Packet.MIRROR_PASTE, Field.PANE_ID: pane_id, Field.DATA: text})
 

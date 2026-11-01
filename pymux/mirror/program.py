@@ -8,7 +8,6 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, ClassVar
 
 from pyte.keep import Keep
-from pyte.keys.events import DEFAULT_KEY_PROFILE
 
 from .sink import MirrorSink
 
@@ -116,8 +115,13 @@ class RemoteProgram:
         self.sy = height
 
     def write_input(self, data: str) -> None:
-        "Input from this side that no person typed, such as `send-keys`: it is encoded there as keys."
-        self.key(data, DEFAULT_KEY_PROFILE)
+        """
+        Bytes for the program, such as a terminal's reply: the owner
+        writes them as they are. A person's keys go through `key`, which
+        the owner encodes.
+        """
+        if not self._stopped:
+            self.peer.write(self.pane_id, data)
 
     def key(self, data: str, profile: KeyProfile) -> None:
         if not self._stopped:

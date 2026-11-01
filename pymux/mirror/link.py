@@ -58,6 +58,7 @@ PEER_PACKETS = (
     Packet.MIRROR_MOUSE,
     Packet.MIRROR_FOCUS,
     Packet.MIRROR_COPY,
+    Packet.MIRROR_WRITE,
     Packet.PEER_TERMINAL,
     Packet.WATCH,
     Packet.PEER_SIZES,
@@ -305,6 +306,13 @@ class PeerLink:
             source.copying.paste(text)
         else:
             source.control.paste(text)
+
+    @_PACKETS.handles(Packet.MIRROR_WRITE)
+    def _on_write(self, packet: Message) -> None:
+        source = self._source_of(packet)
+        if source is not None:
+            # A pane this server mirrors too sends them on as they came.
+            source.control.process.write_input(str(packet.get(Field.DATA, "")))
 
     @_PACKETS.handles(Packet.MIRROR_MOUSE)
     def _on_mouse(self, packet: Message) -> None:

@@ -274,6 +274,10 @@ class Packet(StrEnum):
     # send meanwhile, which go to copy mode and not to the program.
     # Optional `copying` puts the caret and selection back.
     MIRROR_COPY = "mirror-copy"
+    # Bytes for the program under `data`, such as a terminal's reply,
+    # which the owner writes as they are: unlike `mirror-key`, nothing
+    # encodes them. An owner too old to know it drops it.
+    MIRROR_WRITE = "mirror-write"
     # The terminal of the person at the peer, as the peer worked it out
     # from its own clients: `cell-size`, `color-base` and `keyboard`.
     # The owner weighs it with its own clients' terminals and answers a

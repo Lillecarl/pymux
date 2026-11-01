@@ -23,7 +23,7 @@ def paste_buffer(pymux: Pymux, args: argparse.Namespace) -> None:
     if pane is None:
         raise CommandException("no current pane")
     terminal = terminal_of(pane)
-    terminal.process.write_input(terminal.screen.wrap_paste(pymux.clipboard.get_data().text))
+    terminal.terminal_control.paste(pymux.clipboard.get_data().text)
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
