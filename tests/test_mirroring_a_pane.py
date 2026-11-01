@@ -193,6 +193,35 @@ async def test_an_image_the_owner_shows_reaches_the_peer(pymux):
         pymux.stop()
 
 
+async def test_an_image_does_not_cross_again_after_copy_mode(pymux):
+    pane, owner = the_control(pymux)
+    pymux.handle_command("set-option -g mode-keys emacs")
+    owner.feed_output("\x1b_Ga=T,f=24,s=1,v=1,i=7,c=2,r=1;/wAA\x1b\\")
+
+    async with pymux.running():
+        connection, client_end = open_link(pymux, pane)
+        sink = a_peer()
+        graphics = sink.control.screen.graphics
+        await until(client_end, sink, lambda: bool(graphics.placements))
+        frames: list[Message] = []
+        sink_take = sink.take
+
+        def take(packet: Message) -> None:
+            frames.append(packet)
+            sink_take(packet)
+
+        sink.take = take  # type: ignore[method-assign]
+        ask(client_end, Packet.MIRROR_COPY, pane)
+        await until(client_end, sink, lambda: sink.copying is not None)
+        assert not graphics.placements
+        assert 7 in graphics.images_by_id
+        ask(client_end, Packet.MIRROR_KEY, pane, data="q")
+        await until(client_end, sink, lambda: sink.copying is None and bool(graphics.placements))
+        assert not [frame for frame in frames if "images" in frame[Field.FRAME]]
+
+        pymux.stop()
+
+
 async def test_a_paused_mirror_gets_what_changed_on_resume(pymux):
     pane, owner = the_control(pymux)
 

@@ -73,13 +73,14 @@ class MirrorSource:
         if self.copying is not None:
             return
         self.copying = MirrorCopy(self, self.control.terminal, at)
-        self.writer = GridWriter()
+        # The peer keeps the pane's images under copy mode, for when it ends.
+        self.writer = GridWriter(held=self.writer.images, kept=self.writer.images)
         self.link.connection.spawn(self.copying.run(scroll))
 
     def copy_ended(self, copy: MirrorCopy) -> None:
         if self.copying is copy:
             self.copying = None
-            self.writer = GridWriter()
+            self.writer = GridWriter(held=self.writer.images)
             self.queue()
 
     def changed(self) -> None:
