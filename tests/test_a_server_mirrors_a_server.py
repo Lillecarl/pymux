@@ -42,6 +42,7 @@ from pymux.core.snapshot.read import load, start
 from pymux.core.snapshot.write import save
 from pymux.enums import Clipboard
 from pymux.layout.geometry import plan_of
+from pymux.mirror import program as mirror_program
 from pymux.mirror.program import RemoteProgram
 from pymux.query import ask
 from pymux.style.colors import theme_color_base
@@ -392,6 +393,25 @@ async def test_a_new_window_there_takes_the_client_along(two_servers, line):
         "the client focuses the new pane",
         seen=lambda: client.app.layout.current_control,
     )
+
+
+async def test_a_window_shown_again_draws_once_its_mirror_caught_up(two_servers, monkeypatch):
+    "Nothing changed there either: the owner answers the resume, and the client draws then, not at the hold's end."
+    monkeypatch.setattr(mirror_program, "HOLD_FOR_FRESH", 30.0)
+    owner, peer, client = two_servers
+    there, here = await shown_here(owner, peer, client)
+    session = here_session(peer)
+    first = session.arrangement.get_active_window_for(client.app)
+    await run_as(peer, client, "new-window")
+    await until(lambda: not client._mirror_catching_up(), "the new window's first frame comes")
+    await until(lambda: not here.process._streaming, "the window left behind pauses")
+
+    with set_app(client.app):
+        session.arrangement.set_active_window(first)
+    peer.invalidate()
+    assert here.process.stale
+    assert client.should_skip_render(), "the old page is not drawn"
+    await until(lambda: not client._mirror_catching_up(), "the owner answers the resume")
 
 
 async def test_a_target_here_names_the_pane_there(two_servers):

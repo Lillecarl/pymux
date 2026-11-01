@@ -42,6 +42,7 @@ from ..keys.actions import Origin, started_by
 from ..layout.layout import LayoutManager
 from ..layout.plane import RESIZE_SHAPES
 from ..log import logger
+from ..mirror.program import RemoteProgram
 from ..notify.notifications import Notification
 from ..options.client_options import ClientOptions
 from ..style.colors import DefaultColors
@@ -518,6 +519,10 @@ class ClientState:
         if self.input_tick != self.schedule_tick:
             self.app.invalidate()
             return True
+        if self._mirror_catching_up():
+            # The frame that catches the mirror up asks again, and so
+            # does the end of the hold.
+            return True
         if self.connection.pacing.waits_for_terminal:
             self.connection.pacing.frame_held = True
             return True
@@ -532,6 +537,20 @@ class ClientState:
             self._paced_while_behind = False
             self.pace()
         return False
+
+    def _mirror_catching_up(self) -> bool:
+        """
+        A mirrored pane of the window this client shows waits for its
+        first frame since it was shown again. The client draws the
+        window when the frame comes, or when the hold ends, rather than
+        draw the old page and then jump. Lillecarl/pymux#759.
+        """
+        if self.session.remote is None:
+            return False
+        window = self.session.arrangement.get_active_window_for(self.app)
+        return window is not None and any(
+            isinstance(pane.process, RemoteProgram) and pane.process.stale for pane in window.panes
+        )
 
     def pace(self) -> None:
         """

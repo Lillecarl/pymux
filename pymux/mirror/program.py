@@ -4,11 +4,14 @@ What runs behind a pane that mirrors a pane of another server.
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING, ClassVar
 
+import anyio
 from pyte.keep import Keep
 
+from ..enums import Woke
 from .sink import MirrorSink
 
 if TYPE_CHECKING:
@@ -20,7 +23,12 @@ if TYPE_CHECKING:
     from .copying import Place
     from .peer import Peer
 
-__all__ = ["RemoteProgram"]
+__all__ = ["HOLD_FOR_FRESH", "RemoteProgram"]
+
+#: How long a client holds the window it switched to for the first frame
+#: of a mirror it shows again. Without it the pane shows its last page
+#: for a round trip, and then jumps to the new one.
+HOLD_FOR_FRESH = 0.2
 
 
 class _NoMachinery:
@@ -56,6 +64,7 @@ class RemoteProgram:
         "_stopped": Keep.DROPPED,
         "_asked": Keep.DROPPED,
         "_streaming": Keep.DROPPED,
+        "_stale_until": Keep.DROPPED,
     }
 
     @classmethod
@@ -66,7 +75,7 @@ class RemoteProgram:
     def __init__(self, control: TerminalControl, peer: Peer, pane_id: int) -> None:
         self.peer = peer
         self.pane_id = pane_id
-        self.sink = MirrorSink(control, peer.tree.pymux.terminals.sync_pointer_shape)
+        self.sink = MirrorSink(control, peer.tree.pymux.terminals.sync_pointer_shape, self._fresh)
         control.mirror = self
         self.sx = 0
         self.sy = 0
@@ -80,6 +89,8 @@ class RemoteProgram:
         # The owner was asked for the screen once, and streams it now.
         self._asked = False
         self._streaming = False
+        # Asked for the page again, and no frame came yet: a clock time.
+        self._stale_until: float | None = None
 
     async def start(self, task_group: anyio.abc.TaskGroup) -> None:
         "Nothing starts here: the owner runs the program."
@@ -98,6 +109,8 @@ class RemoteProgram:
         if wanted == self._streaming:
             return
         self._streaming = wanted
+        if wanted:
+            self._wait_for_fresh()
         if wanted and not self._asked:
             self._asked = True
             self.peer.mirror(self.pane_id, self.sink)
@@ -105,6 +118,29 @@ class RemoteProgram:
             self.peer.resume(self.pane_id)
         else:
             self.peer.pause(self.pane_id)
+
+    @property
+    def stale(self) -> bool:
+        "The page here is older than the owner's, and the frame that catches it up is on its way."
+        return self._stale_until is not None and time.monotonic() < self._stale_until
+
+    def _wait_for_fresh(self) -> None:
+        if not self.peer.connected:
+            return
+        self._stale_until = time.monotonic() + HOLD_FOR_FRESH
+        pymux = self.peer.tree.pymux
+        if pymux.tasks is not None:
+            pymux.tasks.start_soon(self._held_too_long)
+
+    async def _held_too_long(self) -> None:
+        "The client draws what it has once the hold ends, though no frame came."
+        await anyio.sleep(HOLD_FOR_FRESH)
+        if self._stale_until is not None:
+            self._stale_until = None
+            self.peer.tree.pymux.invalidate(Woke.TREE_MIRRORED)
+
+    def _fresh(self) -> None:
+        self._stale_until = None
 
     def get_cwd(self) -> None:
         return None

@@ -14,7 +14,7 @@ instead, which runs here (`MirrorCopy`).
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from libpymux.protocol import IMAGES_BY_HASH, Field, Message, Packet
 from pyte.grid import GridWriter
@@ -48,6 +48,9 @@ class MirrorSource:
         self.focused = False
         #: The copy mode the person at the peer is in, which the frames show.
         self.copying: MirrorCopy | None = None
+        #: The peer resumed and holds its window until a frame comes,
+        #: so the next frame goes out though nothing changed.
+        self.answer_owed = False
 
     def start(self) -> None:
         self.control.followers.append(self)
@@ -66,6 +69,7 @@ class MirrorSource:
     def resume(self) -> None:
         if self.paused:
             self.paused = False
+            self.answer_owed = True
             self.queue()
 
     def copy(self, scroll: bool = False, at: Place | None = None) -> None:
@@ -115,9 +119,12 @@ class MirrorSource:
             self.copying.screen.titles.window = screen.titles.window
             screen = self.copying.screen
             place = self.copying.place
-        frame = self.writer.frame(screen)
+        frame: dict[str, Any] | None = self.writer.frame(screen)
+        owed, self.answer_owed = self.answer_owed, False
         if frame is None:
-            return None
+            if not owed:
+                return None
+            frame = {}
         return {
             Field.CMD: Packet.MIRROR_FRAME,
             Field.PANE_ID: int(self.pane.pane_id),

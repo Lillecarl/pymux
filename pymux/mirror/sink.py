@@ -26,10 +26,14 @@ _PACKETS: PacketTable[MirrorSink] = PacketTable()
 class MirrorSink:
     "Applies the mirror packets of one pane to a control that mirrors it."
 
-    def __init__(self, control: TerminalControl, pointer_changed: Callable[[], None]) -> None:
+    def __init__(
+        self, control: TerminalControl, pointer_changed: Callable[[], None], framed: Callable[[], None]
+    ) -> None:
         self.control = control
         #: Told when a frame changes the shape the pointer takes over the pane.
         self.pointer_changed = pointer_changed
+        #: Told of each frame, before it draws.
+        self.framed = framed
         #: Why the owner will not send this pane, once it said so.
         self.refused: str | None = None
         #: Where copy mode on the owner stands, while the frames show it.
@@ -49,6 +53,7 @@ class MirrorSink:
             self.copying = place_of(packet[Field.COPYING])
         shapes = self.control.screen.pointer_shapes
         before = shapes.shape
+        self.framed()
         self.control.put_frame(frame, self.store)
         if shapes.shape != before:
             self.pointer_changed()
