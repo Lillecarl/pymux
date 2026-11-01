@@ -16,6 +16,7 @@ import anyio
 from libpymux.connection import CommandResult, Reply, command_packet
 from libpymux.protocol import OLDEST_PEER_VERSION, PEER_VERSION, Field, Message, Packet, peer_upgrade
 from libpymux.wire import MSGPACK, MSGPACK_ZSTD, PacketReader, encode_json
+from prompt_toolkit.application.current import set_app
 from prompt_toolkit.clipboard import ClipboardData
 from pyte.keep import Keep
 from pyte.osc import color_base_data
@@ -40,6 +41,7 @@ if TYPE_CHECKING:
     from ..connection.client_state import ClientState
     from ..core.main import Pymux
     from ..core.pane import Pane
+    from ..core.session import Session
     from ..core.window_tree import Window
     from ..terminals import PeerTerminal
     from .copying import Place
@@ -59,6 +61,7 @@ class Peers:
         "by_address": Keep.DROPPED,
         "returning": Keep.DROPPED,
         "returning_copies": Keep.DROPPED,
+        "returning_places": Keep.DROPPED,
         "tunnels": Keep.DROPPED,
     }
 
@@ -70,6 +73,9 @@ class Peers:
         #: `[address, pane id, *place]` of each mirror a loaded snapshot
         #: was in copy mode on (`copying`).
         self.returning_copies: list[list[Any]] = []
+        #: `[client id, address, session id, window id]` of each client a
+        #: loaded snapshot had on a mirrored session (`places`).
+        self.returning_places: list[list[Any]] = []
         #: The ports here for loopback URLs of mirrored panes.
         self.tunnels = Tunnels(pymux)
 
@@ -88,6 +94,33 @@ class Peers:
             if peer is not None and type(row[1]) is int and place is not None:
                 peer.copies[row[1]] = place
         self.returning_copies = []
+        until = anyio.current_time() + PLACE_KEPT
+        for row in self.returning_places:
+            peer = self.by_address.get(row[1]) if len(row) == 4 else None
+            if peer is not None and all(type(one) is int for one in row[2:]):
+                peer.places[str(row[0])] = ReturningPlace(row[2], row[3], until)
+        self.returning_places = []
+
+    def places(self) -> list[list[Any]]:
+        "Each client on a mirrored session, by its id, with the link and the owner's session and window."
+        found = []
+        for client_state in self.pymux._client_states.values():
+            client_id = client_state.connection.client_id
+            if client_state.temporary or not client_id:
+                continue
+            remote = client_state.session.remote
+            if remote is None or remote.peer.address not in self.by_address:
+                continue
+            window = client_state.session.arrangement.get_active_window_for(client_state.app)
+            window_id = remote.peer.tree.id_of_window(window) if window is not None else None
+            if window_id is not None:
+                found.append([client_id, remote.peer.address, remote.session_id, window_id])
+        return found
+
+    def return_clients(self) -> None:
+        "Put each returning client back on its mirrored session, once both are here."
+        for peer in self.by_address.values():
+            peer.return_clients()
 
     def copying(self) -> list[tuple[str, int, Place]]:
         "Each mirror here in copy mode, by address and the owner's pane id, with where it stands."
@@ -149,6 +182,23 @@ class Peers:
             )
 
 
+#: How long a client's place on a mirrored session waits, after this
+#: server loaded a snapshot, for the client and the owner's tree.
+PLACE_KEPT = 30.0
+
+
+class ReturningPlace:
+    "Where a client was on a mirrored session before this server upgraded: the owner's ids."
+
+    def __init__(self, session_id: int, window_id: int, until: float) -> None:
+        self.session_id = session_id
+        self.window_id = window_id
+        self.until = until
+        #: The session the client came back on, as first seen. A client
+        #: a person moved since stays where they put it.
+        self.landed: Session | None = None
+
+
 #: How long a peer waits to dial again after a link goes, at first and at most.
 #: An owner's hot upgrade takes a second or two.
 FIRST_REDIAL = 0.25
@@ -186,6 +236,7 @@ class Peer:
         "tree": Keep.DROPPED,
         "server": Keep.DROPPED,
         "restart": Keep.DROPPED,
+        "places": Keep.DROPPED,
     }
 
     def __init__(self, pymux: Pymux, address: str, **connect_with: Any) -> None:
@@ -216,6 +267,45 @@ class Peer:
         self.server: str | None = None
         #: The owner said it restarts: why, and until when on the loop's clock.
         self.restart: tuple[str, float] | None = None
+        #: Where each client was on this link's sessions before this
+        #: server upgraded, by client id, until it is back there.
+        self.places: dict[str, ReturningPlace] = {}
+
+    def return_clients(self) -> None:
+        """
+        Put each client back where it was on this link's sessions before
+        this server upgraded, once the client attached again and the tree
+        brought the session. A snapshot holds no mirrored session, so the
+        client came back on one of this server's. Lillecarl/pymux#870.
+        """
+        if not self.places:
+            return
+        pymux = self.tree.pymux
+        now = anyio.current_time()
+        by_id = {
+            client_state.connection.client_id: client_state
+            for client_state in pymux._client_states.values()
+            if client_state.connection.client_id and not client_state.temporary
+        }
+        for client_id, place in list(self.places.items()):
+            client_state = by_id.get(client_id)
+            if now > place.until or (client_state is not None and place.landed not in (None, client_state.session)):
+                del self.places[client_id]
+                continue
+            if client_state is None:
+                continue
+            if place.landed is None:
+                place.landed = client_state.session
+            session = self.tree.sessions.get(place.session_id)
+            if session is None:
+                continue
+            del self.places[client_id]
+            pymux.attach_client_to(client_state, session)
+            window = self.tree.windows.get(place.window_id)
+            if window is not None and window in session.arrangement.windows:
+                with set_app(client_state.app):
+                    session.arrangement.set_active_window(window)
+            pymux.invalidate(Woke.SESSION_CHANGED)
 
     def send(self, packet: Message) -> None:
         if self.connected:

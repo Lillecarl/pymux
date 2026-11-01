@@ -156,6 +156,7 @@ class MirrorTree:
         self._update_panes(rows)
         self._update_windows(rows)
         self._update_sessions(server, server_id, rows)
+        self.peer.return_clients()
         self._updated.set()
         self._updated = anyio.Event()
         self.pymux.invalidate(Woke.TREE_MIRRORED)

@@ -405,4 +405,6 @@ def welcome_back(pymux: Pymux, client_state: ClientState, client_id: str) -> Non
             client_state.take_modes(record["modes"])
         except Exception:
             logger.exception("Could not open again what a returning client was in the middle of.")
+    # A client that was on a mirrored session goes back once its link's tree brings it.
+    pymux.peers.return_clients()
     pymux.invalidate(Woke.SESSION_CHANGED)

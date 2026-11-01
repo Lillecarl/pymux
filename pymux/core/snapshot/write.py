@@ -374,6 +374,8 @@ def rows_of(pymux: Pymux, *, mirrored: bool) -> Iterator[Row]:
         yield ServerListRow("peers", position, address)
     for position, (address, pane_id, place) in enumerate(pymux.peers.copying()):
         yield ServerListRow("peer_copying", position, json.dumps([address, pane_id, *place]))
+    for position, place in enumerate(pymux.peers.places()):
+        yield ServerListRow("peer_places", position, json.dumps(place))
     for hook, commands in sorted(pymux.hooks.commands.items()):
         for position, command in enumerate(commands):
             yield HookRow(hook, position, command)

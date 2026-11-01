@@ -40,6 +40,7 @@ from pymux.core.forwarding import with_port
 from pymux.core.main import Pymux
 from pymux.core.snapshot.read import load, start
 from pymux.core.snapshot.write import save
+from pymux.core.upgrade import welcome_back
 from pymux.enums import Clipboard
 from pymux.layout.geometry import plan_of
 from pymux.mirror import peer as mirror_peer
@@ -668,6 +669,47 @@ async def test_an_upgrade_of_the_peer_opens_copy_mode_where_it_was(two_servers, 
                 seen=lambda: source.copying and source.copying.place,
             )
             source.copying.end()
+        finally:
+            fresh.stop()
+
+
+async def test_a_client_on_a_mirrored_window_is_back_there_after_an_upgrade(two_servers, tmp_path):
+    "A snapshot holds no mirrored session: the client goes back once the link's tree brings it. Lillecarl/pymux#870."
+    owner, peer, client = two_servers
+    await shown_here(owner, peer, client)
+    await run_as(peer, client, "new-window")
+    session = here_session(peer)
+    (link,) = peer.peers.by_address.values()
+    left_on = link.tree.id_of_window(session.arrangement.get_active_window_for(client.app))
+    assert left_on is not None and left_on != link.tree.id_of_window(session.arrangement.windows[0])
+    client.connection.client_id = "macbook"
+    path = tmp_path / "peer.sqlite"
+    save(peer, path)
+
+    fresh = Pymux()
+    fresh.options.test_mode = True
+    async with fresh.running():
+        try:
+            load(fresh, path, _Copied())
+            await start(fresh)
+            output = Vt100_Output(stdout=io.StringIO(), get_size=lambda: Size(rows=24, columns=80))
+            with create_pipe_input() as pipe:
+                back = fresh.add_client(
+                    output=output,
+                    input=pipe,
+                    color_depth=ColorDepth.DEPTH_8_BIT,
+                    connection=Connection("here", None, fresh),
+                )
+                back.connection.client_id = "macbook"
+                welcome_back(fresh, back, "macbook")
+                (relinked,) = fresh.peers.by_address.values()
+
+                def where():
+                    if back.session.remote is None:
+                        return None
+                    return relinked.tree.id_of_window(back.session.arrangement.get_active_window_for(back.app))
+
+                await until(lambda: where() == left_on, "the client is back on the window it left", seen=where)
         finally:
             fresh.stop()
 
