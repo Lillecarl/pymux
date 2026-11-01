@@ -34,8 +34,11 @@ if TYPE_CHECKING:
     from pyte.mouse import MouseAction
 
     from ..core.main import Pymux
+    from ..core.pane import Pane
     from ..core.window_tree import Window
     from ..terminals import PeerTerminal
+    from .copying import Place
+    from .link import PeerLink
     from .sink import MirrorSink
 
 __all__ = ["Peer", "Peers"]
@@ -194,7 +197,7 @@ class Peer:
             if pane_id in self.paused:
                 self.pause(pane_id)
             if sink.copying is not None:
-                self.send({Field.CMD: Packet.MIRROR_COPY, Field.PANE_ID: pane_id, Field.COPYING: list(sink.copying)})
+                self.copy_mode(pane_id, sink.copying)
 
     # -- what a mirror asks --------------------------------------------
 
@@ -237,8 +240,11 @@ class Peer:
             }
         )
 
-    def copy_mode(self, pane_id: int) -> None:
-        self.send({Field.CMD: Packet.MIRROR_COPY, Field.PANE_ID: pane_id})
+    def copy_mode(self, pane_id: int, at: Place | None = None) -> None:
+        packet: Message = {Field.CMD: Packet.MIRROR_COPY, Field.PANE_ID: pane_id}
+        if at is not None:
+            packet[Field.COPYING] = list(at)
+        self.send(packet)
 
     def tell_sizes(self, sizes: dict[int, Size]) -> None:
         "Tell the owner the room each of its windows has here, when that changed."
@@ -436,6 +442,13 @@ class Peer:
             # the terminal of the client a person here used last.
             pymux = self.tree.pymux
             text = str(packet.get(Field.DATA, ""))
+            pane = self.tree.panes.get(pane_id) if isinstance(pane_id, int) else None
+            lender = None if pane is None else self._lender_used_last(pane)
+            if pane is not None and lender is not None:
+                # A person at a server further on reads copy mode through
+                # this one, and the copy is theirs.
+                lender.queue({Field.CMD: Packet.MIRROR_COPIED, Field.PANE_ID: int(pane.pane_id), Field.DATA: text})
+                return
             if text:
                 pymux.clipboard.set_data(ClipboardData(text))
             pymux.outward.write_user_clipboard(text, client=pymux.the_client_to_tell())
@@ -449,3 +462,17 @@ class Peer:
             # One mirror that cannot take what it was sent must not end
             # the link for the others.
             logger.exception("Mirror of pane %s on %s failed a packet.", pane_id, self.address)
+
+    def _lender_used_last(self, pane: Pane) -> PeerLink | None:
+        "The server that mirrors `pane` from here, when a person there used it after every client here."
+        pymux = self.tree.pymux
+        lenders = [
+            connection.peer
+            for connection in pymux.connections
+            if connection.peer is not None and any(source.pane is pane for source in connection.peer.sources.values())
+        ]
+        lender = max(lenders, key=lambda link: link.last_used, default=None)
+        latest = pymux.latest_client()
+        if lender is None or (latest is not None and latest.last_used >= lender.last_used):
+            return None
+        return lender

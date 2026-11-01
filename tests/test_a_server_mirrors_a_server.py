@@ -28,6 +28,7 @@ from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 from pyte.keys.events import DEFAULT_KEY_PROFILE
+from pyte.mouse import MouseAction
 from pyte.osc import ColorBase
 from session import Connection
 from test_snapshot import _Copied
@@ -394,6 +395,47 @@ async def test_a_link_that_goes_is_dialled_again_with_copy_mode_where_it_was(two
     source.copying.end()
     owner_control.feed_output("after the link came back")
     await until(lambda: rows_of(control) == rows_of(owner_control), "the mirror follows the new link")
+
+
+async def test_a_chain_of_three_encodes_input_once_on_the_owner(two_servers):
+    "C mirrors B's mirror of A's pane: B's screen holds none of the program's modes, so B passes all on."
+    owner, peer, client = two_servers
+    owner_control = owner.arrangement.get_active_window().active_pane.terminal.terminal_control
+    owner_control.feed_output("\x1b[?2004h\x1b[?1000;1006h")
+    typed: list[str] = []
+    owner_control.process.write_input = typed.append
+    there, middle = await shown_here(owner, peer, client)
+
+    third = Pymux()
+    third.options.test_mode = True
+    async with third.running():
+        try:
+            third.handle_command("connect %s" % (peer.socket_name,))
+            (link,) = third.peers.by_address.values()
+            await until(lambda: middle.pane_id in link.tree.panes, "B's mirror of A's pane reaches C")
+            last = link.tree.panes[middle.pane_id].process
+            last.seen(True)
+            await until(lambda: links_of(peer) and links_of(peer)[0].peer.sources, "C mirrors B's pane")
+
+            last.paste("pasted")
+            last.mouse(MouseAction.PRESS, 3, 1)
+            await until(lambda: len(typed) >= 2, "C's input reaches A", seen=lambda: typed)
+            assert typed == ["\x1b[200~pasted\x1b[201~", "\x1b[<0;4;2M"]
+
+            last.copy_mode()
+            (a_to_b,) = links_of(owner)
+            (source,) = a_to_b.peer.sources.values()
+            await until(lambda: source.copying is not None and source.copying.place is not None, "copy mode opens on A")
+            await until(lambda: last.copying is not None, "C learns where copy mode on A stands")
+            assert a_to_b.peer.copied(source.copying.app, "copied at C")
+            await until(
+                lambda: third.clipboard.get_data().text == "copied at C",
+                "A's copy reaches C, whose person made it",
+                seen=lambda: (third.clipboard.get_data().text, peer.clipboard.get_data().text),
+            )
+            source.copying.end()
+        finally:
+            third.stop()
 
 
 async def test_an_upgrade_saves_no_mirror_and_links_again(two_servers, tmp_path):

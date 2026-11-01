@@ -108,7 +108,7 @@ class MirrorSource:
         if self.paused:
             return None
         screen = self.control.screen
-        place = None
+        place = None if self.control.mirror is None else self.control.mirror.copying
         if self.copying is not None:
             # The pane's title stays over its copy mode.
             self.copying.screen.titles.window = screen.titles.window

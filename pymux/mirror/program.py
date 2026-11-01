@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from pyte.keys.events import KeyProfile
     from pyte.mouse import MouseAction
 
+    from .copying import Place
     from .peer import Peer
 
 __all__ = ["RemoteProgram"]
@@ -130,10 +131,14 @@ class RemoteProgram:
         if not self._stopped:
             self.peer.mouse(self.pane_id, action, column, row)
 
-    def copy_mode(self) -> None:
+    def copy_mode(self, at: Place | None = None) -> None:
         "Copy mode runs on the owner, which holds the history (`Mirror.copy_mode`)."
         if not self._stopped:
-            self.peer.copy_mode(self.pane_id)
+            self.peer.copy_mode(self.pane_id, at)
+
+    @property
+    def copying(self) -> Place | None:
+        return self.sink.copying
 
     def focus(self, focused: bool) -> None:
         "A terminal window with the focus shows this pane, or stopped (`Focus.sync_panes`)."

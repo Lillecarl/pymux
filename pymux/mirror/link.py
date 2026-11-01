@@ -327,8 +327,14 @@ class PeerLink:
     @_PACKETS.handles(Packet.MIRROR_COPY)
     def _on_copy(self, packet: Message) -> None:
         source = self._driven(packet)
-        if source is not None:
-            source.copy(at=place_of(packet.get(Field.COPYING)))
+        if source is None:
+            return
+        at = place_of(packet.get(Field.COPYING))
+        if source.control.mirror is not None:
+            # A pane this server mirrors too: the history is further on.
+            source.control.mirror.copy_mode(at)
+        else:
+            source.copy(at=at)
 
     def copied(self, app: object, text: str) -> bool:
         "Send what a person copied to the peer, when `app` is the copy mode of one of its mirrors (`Outward.copied_in_copy_mode`)."
