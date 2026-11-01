@@ -31,6 +31,7 @@ from pyte.keys.events import DEFAULT_KEY_PROFILE
 from pyte.mouse import MouseAction
 from pyte.osc import ColorBase
 from session import Connection
+from test_drag_a_border import DRAG, PRESS, _drawn, _mouse
 from test_snapshot import _Copied
 from test_ssh_client import create_ssh_server
 
@@ -336,6 +337,37 @@ async def test_a_window_the_peer_shows_is_seen_there(two_servers):
 
     assert not owner.arrangement.notify(owner_window, owner.apps)
     assert not owner_window.notified
+
+
+async def test_a_drag_here_resizes_the_panes_there(two_servers):
+    "The owner lays the window out, so the drag goes there as a resize. Lillecarl/pymux#871."
+    owner, peer, client = two_servers
+    await shown_here(owner, peer, client)
+    (link,) = peer.peers.by_address.values()
+    await run_as(peer, client, "split-window -h")
+    await until(lambda: len(link.tree.panes) == 2, "the tree brings the new pane")
+    owner_window = owner.arrangement.get_active_window()
+    (mirror_window,) = link.tree.windows.values()
+    left, right = mirror_window.panes
+    await until(
+        lambda: owner.planes.size(owner_window) == peer.planes.size(mirror_window),
+        "the owner lays the window out at the peer's size",
+    )
+    drawn = _drawn(client)
+    x, y = drawn[left].xpos + drawn[left].width, drawn[left].ypos + 1
+    owner_left = owner.panes_by_id[left.process.pane_id]
+    before = pane_sizes(owner, owner_window)[owner_left.pane_id][1][0]
+
+    _mouse(client, PRESS, x, y)
+    _mouse(client, DRAG, x - 5, y)
+    _mouse(client, PRESS, x - 5, y, "m")
+
+    await until(
+        lambda: pane_sizes(owner, owner_window)[owner_left.pane_id][1][0] == before - 5,
+        "the owner's left pane is five columns narrower",
+        seen=lambda: pane_sizes(owner, owner_window),
+    )
+    await until(lambda: _drawn(client)[left].width == before - 5, "the tree that answers keeps the drag here")
 
 
 async def test_the_focus_here_follows_a_pane_selected_there(two_servers):

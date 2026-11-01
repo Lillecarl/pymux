@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from functools import partial
 from typing import TYPE_CHECKING, cast, override
 
-from prompt_toolkit.application.current import get_app
+from prompt_toolkit.application.current import get_app, set_app
 from prompt_toolkit.layout.containers import Container
 from prompt_toolkit.layout.dimension import Dimension as D
 from prompt_toolkit.mouse_events import MouseButton, MouseEvent, MouseEventType
@@ -55,6 +55,8 @@ class BorderDrag:
     cells: tuple[int, int] = (0, 0)
     width: float = 0.0
     columns: int = 1
+    #: How far the line went from the press, in cells, as last moved.
+    moved: int = 0
 
     @property
     def split(self) -> HSplit | VSplit:
@@ -76,7 +78,7 @@ class BorderDrag:
             self.window.set_column_width(column, max(self.width + moved / self.columns, 2 / self.columns))
             return
         before, after = self.cells
-        moved = max(1 - before, min(after - 1, moved))
+        moved = self.moved = max(1 - before, min(after - 1, moved))
         split.set_weight(split[index], before + moved)
         split.set_weight(split[index + 1], after - moved)
 
@@ -124,7 +126,30 @@ def _follow(pymux: Pymux, client_state: ClientState, event: MouseEvent) -> NotIm
         pymux.terminals.sync_pointer_shape()
         with started_by(Origin.MOUSE):
             note(pymux, Kind.CLICK, "drag-border")
+            _tell_the_owner(pymux, client_state, drag)
     return None
+
+
+def _tell_the_owner(pymux: Pymux, client_state: ClientState, drag: BorderDrag) -> None:
+    """
+    A mirrored window is laid out by the server that owns it, and its
+    next tree would put the line back. So the drag goes there as the
+    resize it is: the child before the line grows by the cells the line
+    moved, which `resize-pane -R` or `-D` on a pane inside it does. The
+    weights set here show the drag until that tree comes with the same
+    ones. Lillecarl/pymux#871.
+    """
+    session = pymux.session_of_window(drag.window)
+    if session is None or session.remote is None or drag.in_strip or not drag.moved:
+        return
+    # Imported here: layout imports this module.
+    from .geometry import panes_of
+
+    pane = panes_of(drag.split[drag.seam.index])[0]
+    with set_app(client_state.app):
+        pymux.handle_command(
+            "resize-pane -t %%%d -%s %d" % (pane.pane_id, "R" if drag.seam.sideways else "D", drag.moved)
+        )
 
 
 def holds_window_panes(pymux: Pymux, window: window_tree.Window) -> bool:
