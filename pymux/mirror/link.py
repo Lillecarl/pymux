@@ -21,11 +21,10 @@ from libpymux.protocol import Field, Message, Packet
 from libpymux.wire import MSGPACK_ZSTD, choose, encode_json, encode_msgpack
 from prompt_toolkit.data_structures import Size
 from ptterm import Terminal
-from pyte.freeze import thaw_value
 from pyte.keep import Keep
 from pyte.keys.events import DEFAULT_KEY_PROFILE, KeyProfile
 from pyte.mouse import MouseAction
-from pyte.osc import Osc
+from pyte.osc import Osc, color_base_of
 
 from ..connection.packet_table import PacketTable
 from ..enums import Woke
@@ -352,7 +351,7 @@ class PeerLink:
         color_base = packet.get(Field.COLOR_BASE)
         self.terminal = PeerTerminal(
             None if cell_size is None else (int(cell_size[0]), int(cell_size[1])),
-            None if color_base is None else thaw_value(color_base),
+            None if color_base is None else color_base_of(color_base),
             int(packet.get(Field.KEYBOARD, 0)),
             str(packet.get(Field.THEME) or DEFAULT_THEME),
         )

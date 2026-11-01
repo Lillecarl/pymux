@@ -16,8 +16,8 @@ import anyio
 from libpymux.connection import CommandResult, Reply, command_packet
 from libpymux.protocol import Field, Message, Packet
 from libpymux.wire import MSGPACK, MSGPACK_ZSTD, PacketReader, encode_json
-from pyte.freeze import freeze_value
 from pyte.keep import Keep
+from pyte.osc import color_base_data
 
 from ..client.defaults import is_ssh_url
 from ..commands import CommandException
@@ -226,7 +226,7 @@ class Peer:
             {
                 Field.CMD: Packet.PEER_TERMINAL,
                 Field.CELL_SIZE: None if terminal.cell_size is None else list(terminal.cell_size),
-                Field.COLOR_BASE: None if terminal.color_base is None else freeze_value(terminal.color_base),
+                Field.COLOR_BASE: None if terminal.color_base is None else color_base_data(terminal.color_base),
                 Field.KEYBOARD: terminal.keyboard_source_flags,
                 Field.THEME: terminal.theme,
             }

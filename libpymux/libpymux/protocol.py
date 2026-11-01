@@ -410,7 +410,7 @@ class Field(StrEnum):
     KEY_PROFILE = "key-profile"
     MOUSE = "mouse"
     #: In `peer-terminal`: the cell in pixels as `[width, height]` or
-    #: null when no terminal said, the colours (`pyte.freeze`) or null,
+    #: null when no terminal said, the colours (`pyte.osc.color_base_data`) or null,
     #: the keyboard protocol flags every client there can report, and
     #: the theme of the client used last there.
     CELL_SIZE = "cell-size"
