@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from libpymux.protocol import Field, Message, Packet
+from libpymux.protocol import IMAGES_BY_HASH, Field, Message, Packet
 from pyte.grid import GridWriter
 
 from ..log import logger
@@ -39,7 +39,7 @@ class MirrorSource:
         self.link = link
         self.pane = pane
         self.control = control
-        self.writer = GridWriter()
+        self.writer = GridWriter(by_hash=link.version >= IMAGES_BY_HASH)
         #: The peer said nobody there watches this pane.
         self.paused = False
         #: A frame waits in the link's queue.
@@ -74,13 +74,13 @@ class MirrorSource:
             return
         self.copying = MirrorCopy(self, self.control.terminal, at)
         # The peer keeps the pane's images under copy mode, for when it ends.
-        self.writer = GridWriter(held=self.writer.images, kept=self.writer.images)
+        self.writer = self.writer.after(keep=True)
         self.link.connection.spawn(self.copying.run(scroll))
 
     def copy_ended(self, copy: MirrorCopy) -> None:
         if self.copying is copy:
             self.copying = None
-            self.writer = GridWriter(held=self.writer.images)
+            self.writer = self.writer.after()
             self.queue()
 
     def changed(self) -> None:

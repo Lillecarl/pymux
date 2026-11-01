@@ -15,7 +15,15 @@ from argparse import Namespace
 
 import anyio
 import pytest
-from libpymux.protocol import OLDEST_PEER_VERSION, PEER_VERSION, Field, Message, Packet, peer_upgrade
+from libpymux.protocol import (
+    IMAGES_BY_HASH,
+    OLDEST_PEER_VERSION,
+    PEER_VERSION,
+    Field,
+    Message,
+    Packet,
+    peer_upgrade,
+)
 from libpymux.wire import MSGPACK, encode_json
 from ptterm.control import TerminalControl
 from pyte.mouse import MouseAction
@@ -111,13 +119,13 @@ async def converge(client_end, sink: MirrorSink, owner: TerminalControl) -> None
             sink.take(packet)
 
 
-def open_link(mux, pane):
-    "The owner's end of a new peer link that mirrors `pane`, and the peer's end."
+def open_link(mux, pane, version: int = PEER_VERSION):
+    "The owner's end of a new peer link that mirrors `pane`, and the peer's end, for a peer of `version`."
     server_end, client_end = connect_in_memory()
     connection = ServerConnection(mux, server_end)
     # As `Serving` lists each connection it accepts.
     mux.connections.append(connection)
-    client_end.write_nowait(encode_json({**HELLO, Field.WIRE: [MSGPACK]}))
+    client_end.write_nowait(encode_json({**HELLO, Field.VERSION: version, Field.WIRE: [MSGPACK]}))
     client_end.write_nowait(encode_json({Field.CMD: Packet.MIRROR, Field.PANE_ID: int(pane.pane_id)}))
     return connection, client_end
 
@@ -218,6 +226,36 @@ async def test_an_image_does_not_cross_again_after_copy_mode(pymux):
         ask(client_end, Packet.MIRROR_KEY, pane, data="q")
         await until(client_end, sink, lambda: sink.copying is None and bool(graphics.placements))
         assert not [frame for frame in frames if "images" in frame[Field.FRAME]]
+
+        pymux.stop()
+
+
+@pytest.mark.parametrize("version", [PEER_VERSION, OLDEST_PEER_VERSION])
+async def test_an_image_back_from_the_alternate_page_crosses_by_hash(pymux, version):
+    "A peer of the version that reads hashes stores the image; an older one is sent it again."
+    pane, owner = the_control(pymux)
+    owner.feed_output("\x1b_Ga=T,f=24,s=1,v=1,i=7,c=2,r=1;/wAA\x1b\\")
+
+    async with pymux.running():
+        connection, client_end = open_link(pymux, pane, version)
+        sink = a_peer()
+        graphics = sink.control.screen.graphics
+        await until(client_end, sink, lambda: bool(graphics.placements))
+        owner.feed_output("\x1b[?1049hhelp")
+        await until(client_end, sink, lambda: not graphics.placements and shows(sink, "help"))
+        frames: list[Message] = []
+        sink_take = sink.take
+
+        def take(packet: Message) -> None:
+            frames.append(packet)
+            sink_take(packet)
+
+        sink.take = take  # type: ignore[method-assign]
+        owner.feed_output("\x1b[?1049l")
+        await until(client_end, sink, lambda: bool(graphics.placements))
+        (image,) = [image for frame in frames for image in frame[Field.FRAME].get("images", ())]
+        assert ("data" in image) == (version < IMAGES_BY_HASH)
+        assert graphics.images_by_id[7].data == b"\xff\x00\x00"
 
         pymux.stop()
 

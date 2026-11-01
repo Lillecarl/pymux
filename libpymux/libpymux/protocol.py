@@ -33,6 +33,7 @@ from typing import Any
 
 __all__ = [
     "END",
+    "IMAGES_BY_HASH",
     "OLDEST_PEER_VERSION",
     "PEER_VERSION",
     "READ_SIZE",
@@ -42,6 +43,7 @@ __all__ = [
     "Mode",
     "Packet",
     "peer_upgrade",
+    "peer_version",
 ]
 
 #: One packet as it crosses the wire: each `Field` to its value.
@@ -61,8 +63,12 @@ READ_SIZE = 1 << 20
 #: one misreads it raises `PEER_VERSION`; one that stops speaking the
 #: older form raises `OLDEST_PEER_VERSION` too. Every field is named
 #: and has a default, so most changes need neither. Lillecarl/pymux#759.
-PEER_VERSION = 1
+PEER_VERSION = 2
 OLDEST_PEER_VERSION = 1
+
+#: From this version a frame may name an image the peer stored by its
+#: hash instead of sending it again (`pyte.grid`).
+IMAGES_BY_HASH = 2
 
 
 def peer_upgrade(version: object, oldest: object) -> str | None:
@@ -78,6 +84,11 @@ def peer_upgrade(version: object, oldest: object) -> str | None:
     if PEER_VERSION < their_oldest:
         return "here"
     return None
+
+
+def peer_version(version: object) -> int:
+    "The version a link speaks with a side that names `version`, once `peer_upgrade` let it through."
+    return min(PEER_VERSION, version if isinstance(version, int) else 0)
 
 
 class Framer:

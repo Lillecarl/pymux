@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from ptterm.control import TerminalControl
+    from pyte.images import GraphicsImage
 
 __all__ = ["MirrorSink"]
 
@@ -33,6 +34,8 @@ class MirrorSink:
         self.refused: str | None = None
         #: Where copy mode on the owner stands, while the frames show it.
         self.copying: Place | None = None
+        #: The images the owner had this side store, by hash (`pyte.grid`).
+        self.store: dict[str, GraphicsImage] = {}
 
     def take(self, packet: Message) -> None:
         _PACKETS.handle(self, packet)
@@ -46,7 +49,7 @@ class MirrorSink:
             self.copying = place_of(packet[Field.COPYING])
         shapes = self.control.screen.pointer_shapes
         before = shapes.shape
-        self.control.put_frame(frame)
+        self.control.put_frame(frame, self.store)
         if shapes.shape != before:
             self.pointer_changed()
 

@@ -11,7 +11,7 @@ from typing import (
 )
 
 import anyio
-from libpymux.protocol import OLDEST_PEER_VERSION, PEER_VERSION, Field, Message, Packet, peer_upgrade
+from libpymux.protocol import OLDEST_PEER_VERSION, PEER_VERSION, Field, Message, Packet, peer_upgrade, peer_version
 from libpymux.wire import encode_json
 from prompt_toolkit.application.current import create_app_session
 from prompt_toolkit.data_structures import Size
@@ -546,7 +546,7 @@ class ServerConnection:
 
             self.spawn(refuse())
             return
-        self.peer = PeerLink(self, packet.get(Field.WIRE))
+        self.peer = PeerLink(self, packet.get(Field.WIRE), peer_version(packet.get(Field.VERSION)))
         self.spawn(self.peer.run())
 
     @_PACKETS.handles(Packet.TUNNEL)

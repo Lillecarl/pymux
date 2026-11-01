@@ -93,13 +93,16 @@ class PeerLink:
         "_ready": Keep.DROPPED,
         "terminal": Keep.DROPPED,
         "last_used": Keep.DROPPED,
+        "version": Keep.DROPPED,
         "watching": Keep.DROPPED,
         "_tree_changed": Keep.DROPPED,
         "_tree_sent": Keep.DROPPED,
     }
 
-    def __init__(self, connection: ServerConnection, offered: object) -> None:
+    def __init__(self, connection: ServerConnection, offered: object, version: int) -> None:
         self.connection = connection
+        #: The version of the link both sides speak (`peer_version`).
+        self.version = version
         self.sources: dict[PaneId, MirrorSource] = {}
         #: What the terminals at the peer say, once it said.
         self.terminal: PeerTerminal | None = None
