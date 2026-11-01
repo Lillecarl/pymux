@@ -172,6 +172,24 @@ async def test_a_peer_takes_the_title_and_the_pointer(pymux):
         pymux.stop()
 
 
+async def test_an_image_the_owner_shows_reaches_the_peer(pymux):
+    pane, owner = the_control(pymux)
+
+    async with pymux.running():
+        connection, client_end = open_link(pymux, pane)
+        sink = a_peer()
+        await converge(client_end, sink, owner)
+        owner.feed_output("\x1b_Ga=T,f=24,s=1,v=1,i=7,c=2,r=1;/wAA\x1b\\")
+        graphics = sink.control.screen.graphics
+        with anyio.fail_after(5):
+            while not graphics.placements:
+                sink.take(await client_end.read())
+        assert graphics.images_by_id[7].data == b"\xff\x00\x00"
+        assert [(p.image_id, p.columns, p.rows) for p in graphics.placements] == [(7, 2, 1)]
+
+        pymux.stop()
+
+
 async def test_a_paused_mirror_gets_what_changed_on_resume(pymux):
     pane, owner = the_control(pymux)
 
