@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from libpymux.protocol import Field, Message, Packet
 
 from ..connection.packet_table import PacketTable
+from .copying import Place, place_of
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -30,6 +31,8 @@ class MirrorSink:
         self.pointer_changed = pointer_changed
         #: Why the owner will not send this pane, once it said so.
         self.refused: str | None = None
+        #: Where copy mode on the owner stands, while the frames show it.
+        self.copying: Place | None = None
 
     def take(self, packet: Message) -> None:
         _PACKETS.handle(self, packet)
@@ -39,6 +42,8 @@ class MirrorSink:
         frame = packet.get(Field.FRAME)
         if not isinstance(frame, dict):
             return
+        if Field.COPYING in packet:
+            self.copying = place_of(packet[Field.COPYING])
         shapes = self.control.screen.pointer_shapes
         before = shapes.shape
         self.control.put_frame(frame)

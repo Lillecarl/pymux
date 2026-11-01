@@ -23,6 +23,7 @@ from prompt_toolkit.input import Input
 from prompt_toolkit.layout.layout import Layout
 from prompt_toolkit.output.color_depth import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
+from prompt_toolkit.selection import SelectionType
 from prompt_toolkit.styles import DynamicStyle
 from ptterm.copy_mode import copy_mode_key_bindings
 from pyte.mouse import MouseAction
@@ -39,7 +40,27 @@ if TYPE_CHECKING:
 
     from .source import MirrorSource
 
-__all__ = ["MirrorCopy"]
+__all__ = ["MirrorCopy", "Place", "place_of"]
+
+#: A caret, where the selection starts and its kind (`CopyView.place`).
+type Place = tuple[int, int | None, str | None]
+
+_KINDS = frozenset(kind.value for kind in SelectionType)
+
+
+def place_of(value: object) -> Place | None:
+    "The `Place` a packet carries under `copying`, or None for anything else."
+    if not isinstance(value, (list, tuple)) or len(value) != 3:
+        return None
+    caret, start, kind = value
+    if type(caret) is not int or caret < 0:
+        return None
+    if start is None or kind is None:
+        return caret, None, None
+    if type(start) is not int or start < 0 or kind not in _KINDS:
+        return caret, None, None
+    return caret, start, kind
+
 
 #: The button of an SGR mouse report for each action a peer sends.
 _SGR_BUTTONS = {
@@ -74,9 +95,11 @@ class _Drawn:
 class MirrorCopy:
     "One peer's copy mode over one pane of this server."
 
-    def __init__(self, source: MirrorSource, terminal: Terminal) -> None:
+    def __init__(self, source: MirrorSource, terminal: Terminal, at: Place | None = None) -> None:
         self.source = source
         self.terminal = terminal
+        #: Where the peer was in copy mode before it linked again (`CopyView.place`).
+        self.at = at
         page = source.control.screen
         self.screen = Screen(page.lines, page.columns, write_process_input=lambda data: None)
         self._stream = Stream(self.screen)
@@ -124,7 +147,11 @@ class MirrorCopy:
         def opened() -> None:
             self._sync_editing_mode()
             view = self.terminal.enter_copy_mode()
-            if scroll and view is not None:
+            if view is None:
+                return
+            if self.at is not None:
+                view.go_to(*self.at)
+            elif scroll:
                 view.scroll(-view.wheel_lines())
 
         try:
@@ -137,6 +164,12 @@ class MirrorCopy:
             self.end()
             self._input.close()
             self.source.copy_ended(self)
+
+    @property
+    def place(self) -> Place | None:
+        "The caret and the selection, once copy mode is open."
+        view = self.terminal.copy_views.of(self.app)
+        return None if view is None else view.place
 
     def end(self) -> None:
         "Leave copy mode, from this side."

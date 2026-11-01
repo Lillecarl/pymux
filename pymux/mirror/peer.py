@@ -114,13 +114,21 @@ class Peers:
             )
 
 
+#: How long a peer waits to dial again after a link goes, at first and at most.
+#: An owner's hot upgrade takes a second or two.
+FIRST_REDIAL = 0.25
+LAST_REDIAL = 5.0
+
+
 class Peer:
     """
     A link to the server at `address`, and the mirrors on it.
 
-    What this side sends goes into one queue that a writer drains, so
-    a packet sent before the link is up waits and goes first: the hello,
-    then each mirror asked for meanwhile.
+    **A link that goes is dialled again**, unless the owner refused it,
+    so a mirror outlives the owner's upgrade. Each link starts from what
+    this side holds: the hello, then the watch, the terminal, the sizes
+    and each mirror with its pause and its copy mode. A packet sent
+    while no link is up is dropped, since the next link says it all.
     """
 
     KEEP: ClassVar[dict[str, Keep]] = {
@@ -129,6 +137,8 @@ class Peer:
         "address": Keep.REBUILT,
         "connect_with": Keep.REBUILT,
         "sinks": Keep.DROPPED,
+        "paused": Keep.DROPPED,
+        "watching": Keep.DROPPED,
         "connected": Keep.DROPPED,
         "error": Keep.DROPPED,
         "_send": Keep.DROPPED,
@@ -144,6 +154,10 @@ class Peer:
         self.address = address
         self.connect_with = connect_with
         self.sinks: dict[int, MirrorSink] = {}
+        #: The mirrors nobody here watches now.
+        self.paused: set[int] = set()
+        #: This side asked for the owner's sessions.
+        self.watching = False
         #: The owner's sessions as built here, once this side watches.
         self.tree = MirrorTree(pymux, self)
         #: Whether the link is up.
@@ -157,14 +171,30 @@ class Peer:
         self.stream: anyio.abc.ByteStream | None = None
         #: The owner said which versions of the link it speaks, and they meet ours.
         self.accepted = False
+
+    def send(self, packet: Message) -> None:
+        if self.connected:
+            self._send.send_nowait(encode_json(packet))
+
+    def _hello(self) -> None:
+        "Start a new link from what this side holds."
         # Zstd only across a network, as a client offers it.
-        offer = [MSGPACK_ZSTD, MSGPACK] if is_ssh_url(address) else [MSGPACK]
+        offer = [MSGPACK_ZSTD, MSGPACK] if is_ssh_url(self.address) else [MSGPACK]
         self.send(
             {Field.CMD: Packet.PEER, Field.WIRE: offer, Field.VERSION: PEER_VERSION, Field.OLDEST: OLDEST_PEER_VERSION}
         )
-
-    def send(self, packet: Message) -> None:
-        self._send.send_nowait(encode_json(packet))
+        if self.watching:
+            self.send({Field.CMD: Packet.WATCH})
+        if self._terminal_told is not None:
+            self._send_terminal(self._terminal_told)
+        if self._sizes_told:
+            self._send_sizes(self._sizes_told)
+        for pane_id, sink in self.sinks.items():
+            self.send({Field.CMD: Packet.MIRROR, Field.PANE_ID: pane_id})
+            if pane_id in self.paused:
+                self.pause(pane_id)
+            if sink.copying is not None:
+                self.send({Field.CMD: Packet.MIRROR_COPY, Field.PANE_ID: pane_id, Field.COPYING: list(sink.copying)})
 
     # -- what a mirror asks --------------------------------------------
 
@@ -173,13 +203,16 @@ class Peer:
         self.send({Field.CMD: Packet.MIRROR, Field.PANE_ID: pane_id})
 
     def stop(self, pane_id: int) -> None:
+        self.paused.discard(pane_id)
         if self.sinks.pop(pane_id, None) is not None:
             self.send({Field.CMD: Packet.MIRROR_STOP, Field.PANE_ID: pane_id})
 
     def pause(self, pane_id: int) -> None:
+        self.paused.add(pane_id)
         self.send({Field.CMD: Packet.MIRROR_PAUSE, Field.PANE_ID: pane_id})
 
     def resume(self, pane_id: int) -> None:
+        self.paused.discard(pane_id)
         self.send({Field.CMD: Packet.MIRROR_RESUME, Field.PANE_ID: pane_id})
 
     def key(self, pane_id: int, data: str, profile: KeyProfile) -> None:
@@ -212,6 +245,9 @@ class Peer:
         if sizes == self._sizes_told:
             return
         self._sizes_told = sizes
+        self._send_sizes(sizes)
+
+    def _send_sizes(self, sizes: dict[int, Size]) -> None:
         self.send(
             {
                 Field.CMD: Packet.PEER_SIZES,
@@ -221,6 +257,7 @@ class Peer:
 
     def watch(self) -> None:
         "Ask the owner for its sessions, now and on every change."
+        self.watching = True
         self.send({Field.CMD: Packet.WATCH})
 
     def focus(self, pane_id: int, focused: bool) -> None:
@@ -231,6 +268,9 @@ class Peer:
         if terminal == self._terminal_told:
             return
         self._terminal_told = terminal
+        self._send_terminal(terminal)
+
+    def _send_terminal(self, terminal: PeerTerminal) -> None:
         self.send(
             {
                 Field.CMD: Packet.PEER_TERMINAL,
@@ -267,29 +307,49 @@ class Peer:
 
     async def run(self) -> None:
         """
-        Hold the link until it goes. A mirror keeps the last screen it
-        was sent when the link goes.
+        Hold the link, and dial again each time it goes. A server that
+        was never reached, or one that refused the link, ends it. A
+        mirror keeps the last screen it was sent while no link is up.
         """
-        try:
-            stream = await dial(self.address, **self.connect_with)
-        except Exception as error:
-            self.error = str(error) or type(error).__name__
-            logger.warning("Could not reach the server at %s: %s", self.address, self.error)
-            return
+        linked = False
+        wait = FIRST_REDIAL
+        while True:
+            try:
+                stream = await dial(self.address, **self.connect_with)
+            except Exception as error:
+                self.error = str(error) or type(error).__name__
+                if not linked:
+                    logger.warning("Could not reach the server at %s: %s", self.address, self.error)
+                    return
+                await anyio.sleep(wait)
+                wait = min(wait * 2, LAST_REDIAL)
+                continue
+            linked = True
+            wait = FIRST_REDIAL
+            if await self._hold(stream):
+                return
+            await anyio.sleep(wait)
+
+    async def _hold(self, stream: anyio.abc.ByteStream) -> bool:
+        "Hold one link until it goes. True when the owner refused it, so dialling again is no use."
+        self._send, self._receive = anyio.create_memory_object_stream[bytes](math.inf)
+        self.accepted = False
+        self.error = None
         self.connected = True
         self.stream = stream
+        self._hello()
+        refused: str | None = None
         # This runs in the server's own scope: what it raises would end
         # every client, so the link's trouble stays the link's.
         try:
             async with stream, anyio.create_task_group() as tasks:
                 tasks.start_soon(self._write, stream)
                 reader = PacketReader()
-                refused: str | None = None
                 while refused is None:
                     try:
                         data = await stream.receive()
                     except (anyio.EndOfStream, anyio.BrokenResourceError, anyio.ClosedResourceError) as error:
-                        self.error = self.error or str(error) or "the server closed the link"
+                        self.error = str(error) or "the server closed the link"
                         break
                     for packet in reader.feed(data):
                         if self.accepted:
@@ -309,7 +369,9 @@ class Peer:
         finally:
             self.connected = False
             self.stream = None
+            self._send.close()
             logger.info("The link to %s went: %s", self.address, self.error)
+        return refused is not None
 
     async def _write(self, stream: anyio.abc.ByteStream) -> None:
         # A send that fails ends the link the read loop is holding.

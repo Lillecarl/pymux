@@ -27,6 +27,7 @@ from prompt_toolkit.data_structures import Size
 from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
+from pyte.keys.events import DEFAULT_KEY_PROFILE
 from pyte.osc import ColorBase
 from session import Connection
 from test_snapshot import _Copied
@@ -350,6 +351,49 @@ async def test_a_link_back_brings_no_session_home(two_servers):
     assert [session.remote.server_ids for session in peer.sessions if session.remote is not None] == [
         (owner.server_id,)
     ]
+
+
+def links_of(owner) -> list:
+    "The owner's connections that are peer links."
+    return [connection for connection in owner.connections if connection.peer is not None]
+
+
+async def test_a_link_that_goes_is_dialled_again_with_copy_mode_where_it_was(two_servers):
+    "As when the owner upgrades: the peer links again, and copy mode opens where the person left it."
+    owner, peer, client = two_servers
+    owner.handle_command("set-option -g mode-keys emacs")
+    owner_control = owner.arrangement.get_active_window().active_pane.terminal.terminal_control
+    owner_control.feed_output("".join("line %d\r\n" % number for number in range(10)))
+    there, here = await shown_here(owner, peer, client)
+    control = here.terminal.terminal_control
+    await until(lambda: rows_of(control) == rows_of(owner_control), "the mirror shows the owner's screen")
+
+    sink = here.process.sink
+    here.terminal.enter_copy_mode()
+    await until(lambda: sink.copying is not None, "copy mode opens on the owner")
+    opened_at = sink.copying[0]
+    for _ in range(3):
+        here.process.key("\x1b[A", DEFAULT_KEY_PROFILE)
+    await until(lambda: sink.copying is not None and sink.copying[0] < opened_at, "the caret moves up")
+    left_at = sink.copying
+
+    (link,) = links_of(owner)
+    link.detach_and_close()
+
+    def mirrors_again():
+        return [source for one in links_of(owner) if one is not link for source in one.peer.sources.values()]
+
+    await until(mirrors_again, "the peer dials again and asks for the pane")
+    (source,) = mirrors_again()
+    await until(
+        lambda: source.copying is not None and source.copying.place == left_at,
+        "copy mode opens where it was",
+        seen=lambda: source.copying and source.copying.place,
+    )
+
+    source.copying.end()
+    owner_control.feed_output("after the link came back")
+    await until(lambda: rows_of(control) == rows_of(owner_control), "the mirror follows the new link")
 
 
 async def test_an_upgrade_saves_no_mirror_and_links_again(two_servers, tmp_path):

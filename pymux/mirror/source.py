@@ -20,7 +20,7 @@ from libpymux.protocol import Field, Message, Packet
 from pyte.grid import GridWriter
 
 from ..log import logger
-from .copying import MirrorCopy
+from .copying import MirrorCopy, Place
 
 if TYPE_CHECKING:
     from ptterm.control import TerminalControl
@@ -68,11 +68,11 @@ class MirrorSource:
             self.paused = False
             self.queue()
 
-    def copy(self, scroll: bool = False) -> None:
-        "Open copy mode for the peer, one wheel step up with `scroll`, unless it is open."
+    def copy(self, scroll: bool = False, at: Place | None = None) -> None:
+        "Open copy mode for the peer, one wheel step up with `scroll` or at `at`, unless it is open."
         if self.copying is not None:
             return
-        self.copying = MirrorCopy(self, self.control.terminal)
+        self.copying = MirrorCopy(self, self.control.terminal, at)
         self.writer = GridWriter()
         self.link.connection.spawn(self.copying.run(scroll))
 
@@ -108,11 +108,18 @@ class MirrorSource:
         if self.paused:
             return None
         screen = self.control.screen
+        place = None
         if self.copying is not None:
             # The pane's title stays over its copy mode.
             self.copying.screen.titles.window = screen.titles.window
             screen = self.copying.screen
+            place = self.copying.place
         frame = self.writer.frame(screen)
         if frame is None:
             return None
-        return {Field.CMD: Packet.MIRROR_FRAME, Field.PANE_ID: int(self.pane.pane_id), Field.FRAME: frame}
+        return {
+            Field.CMD: Packet.MIRROR_FRAME,
+            Field.PANE_ID: int(self.pane.pane_id),
+            Field.FRAME: frame,
+            Field.COPYING: None if place is None else list(place),
+        }

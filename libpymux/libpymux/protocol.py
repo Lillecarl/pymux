@@ -272,6 +272,7 @@ class Packet(StrEnum):
     # "Open copy mode on this pane for me." The owner runs it and its
     # frames show it, until the person leaves it with the keys they
     # send meanwhile, which go to copy mode and not to the program.
+    # Optional `copying` puts the caret and selection back.
     MIRROR_COPY = "mirror-copy"
     # The terminal of the person at the peer, as the peer worked it out
     # from its own clients: `cell-size`, `color-base` and `keyboard`.
@@ -463,6 +464,11 @@ class Field(StrEnum):
     THEME = "theme"
     #: In `mirror-focus`: true while the mirror has the focus.
     FOCUSED = "focused"
+    #: In `mirror-frame`: `[caret, start, kind]` of the copy mode the
+    #: frame shows, or null outside it; start and kind are null with no
+    #: selection. In `mirror-copy`: where to open it, so a peer that
+    #: links again comes back to the same place.
+    COPYING = "copying"
     #: In `tree`: `{table: [row, ...]}`, and the owner's name and id.
     ROWS = "rows"
     SERVER = "server"

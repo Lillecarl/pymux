@@ -34,6 +34,7 @@ from ..log import logger
 from ..pipes.base import BrokenPipeError
 from ..style.style import DEFAULT_THEME
 from ..terminals import PeerTerminal
+from .copying import place_of
 from .source import MirrorSource
 from .tree import Tree, tree_of
 
@@ -327,7 +328,7 @@ class PeerLink:
     def _on_copy(self, packet: Message) -> None:
         source = self._driven(packet)
         if source is not None:
-            source.copy()
+            source.copy(at=place_of(packet.get(Field.COPYING)))
 
     def copied(self, app: object, text: str) -> bool:
         "Send what a person copied to the peer, when `app` is the copy mode of one of its mirrors (`Outward.copied_in_copy_mode`)."
