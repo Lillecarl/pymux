@@ -295,6 +295,24 @@ async def test_a_new_window_here_is_laid_out_there_at_the_peers_size(two_servers
     )
 
 
+async def test_the_focus_here_follows_a_pane_selected_there(two_servers):
+    "select-pane runs on the owner; the tree that answers it moves the client's focus, with no key after."
+    owner, peer, client = two_servers
+    there, here = await shown_here(owner, peer, client)
+    (link,) = peer.peers.by_address.values()
+    await run_as(peer, client, "split-window")
+    await until(lambda: len(link.tree.panes) == 2, "the tree brings the new pane")
+    new = link.tree.panes[owner.arrangement.get_active_window().active_pane.pane_id]
+    await until(lambda: client.app.layout.has_focus(new.terminal), "the client focuses the new pane")
+
+    await run_as(peer, client, "select-pane -t %%%d" % (here.pane_id,))
+    await until(
+        lambda: client.app.layout.has_focus(here.terminal),
+        "the client focuses the pane selected there",
+        seen=lambda: client.app.layout.current_control,
+    )
+
+
 async def test_a_command_goes_over_ssh_beside_the_link(two_servers, tmp_path):
     "Over SSH a forwarded command is a second channel on the connection the link holds."
     owner, peer, client = two_servers
