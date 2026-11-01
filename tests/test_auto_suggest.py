@@ -96,6 +96,22 @@ async def test_nothing_here_can_take_right_arrow_of_pane():
             assert _binding_would_fire(state)
 
 
+async def test_a_key_keeps_the_suggestion_in_the_same_step():
+    "The frame a key asks for is drawn with the grey text: no frame without it, and none to bring it back."
+    async with create_session() as (pymux, state):
+        pymux.prompt_history.append_string("display-message hello")
+        with set_app(state.app):
+            state.app.layout.focus(state.command_buffer)
+            for key in "disp":
+                state.command_buffer.insert_text(key)
+                assert state.command_buffer.suggestion is not None, key
+            assert state.command_buffer.suggestion.text == "lay-message hello"
+
+            state.command_buffer.delete_before_cursor()
+            assert state.command_buffer.suggestion is not None
+            assert state.command_buffer.suggestion.text == "play-message hello"
+
+
 def _binding_would_fire(state) -> bool:
     "Whether the right arrow reaches the suggestion binding now."
     for binding in state.app.key_bindings.get_bindings_for_keys((Keys.Right,)):

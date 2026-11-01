@@ -129,6 +129,19 @@ class PaneCursor(CursorShapeConfig):
 BEHIND_INTERVAL = 0.1
 
 
+def _suggest_at_once(buffer: Buffer) -> None:
+    """
+    Find the suggestion as the text changes, not a turn of the loop
+    later. prompt_toolkit clears it on every change and finds the next
+    one in a task, and the frame the key asked for draws before that
+    task runs: the grey rest of the line went and came back on every
+    key. The task then finds a suggestion here and does nothing. The
+    history suggester waits on nothing, so this costs what it would.
+    """
+    if buffer.auto_suggest is not None:
+        buffer.suggestion = buffer.auto_suggest.get_suggestion(buffer, buffer.document)
+
+
 class ClientState:
     """
     State information that is independent for each client.
@@ -420,6 +433,7 @@ class ClientState:
             multiline=False,
             complete_while_typing=False,
             completer=create_command_completer(pymux),
+            on_text_changed=_suggest_at_once,
         )
 
         self.prompt_buffer = Buffer(
@@ -434,6 +448,7 @@ class ClientState:
             # nothing.
             complete_while_typing=True,
             completer=DynamicCompleter(lambda: self.prompt_completer),
+            on_text_changed=_suggest_at_once,
         )
 
         # Layout.
