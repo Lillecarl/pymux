@@ -4,10 +4,10 @@ which mirrors any number of this server's panes.
 
 **One link per peer, not one connection per pane.** Everything a peer
 hears of this server travels on it: the mirrors, and what is not a
-pane's screen at all. One writer drains one queue, so the packets of a
-pane go in the order its screen took them. A peer that cannot keep up
-holds up the link, and each mirror then stops sending reads on its own
-(`source.LAG_BYTES`) until its share has drained.
+pane's screen at all. One writer drains one queue. A mirror's frame
+waits in it as a mark and is built when the writer reaches it
+(`MirrorSource.frame`), so a peer that cannot keep up holds up the link
+and is then sent the newest page.
 """
 
 from __future__ import annotations
@@ -23,11 +23,14 @@ from prompt_toolkit.data_structures import Size
 from ptterm import Terminal
 from pyte.freeze import thaw_value
 from pyte.keep import Keep
+from pyte.keys.events import DEFAULT_KEY_PROFILE, KeyProfile
+from pyte.mouse import MouseAction
 
 from ..connection.packet_table import PacketTable
 from ..enums import Woke
 from ..ids import PaneId, WindowId
 from ..layout.geometry import size_the_panes_of
+from ..log import logger
 from ..pipes.base import BrokenPipeError
 from ..style.style import DEFAULT_THEME
 from ..terminals import PeerTerminal
@@ -48,7 +51,9 @@ PEER_PACKETS = (
     Packet.MIRROR_PAUSE,
     Packet.MIRROR_RESUME,
     Packet.MIRROR_STOP,
-    Packet.MIRROR_INPUT,
+    Packet.MIRROR_KEY,
+    Packet.MIRROR_PASTE,
+    Packet.MIRROR_MOUSE,
     Packet.MIRROR_FOCUS,
     Packet.PEER_TERMINAL,
     Packet.WATCH,
@@ -63,6 +68,14 @@ TREE_SETTLE = 0.05
 #: moves without asking for a frame, such as a pane's running command.
 #: It goes only when it differs from the last one sent.
 TREE_EVERY = 2.0
+
+
+def _key_profile(named: object) -> KeyProfile:
+    "The profile a peer sent by field names; a field it did not name keeps the default's answer."
+    fields = named if isinstance(named, dict) else {}
+    return KeyProfile(
+        **{name: bool(fields.get(name, getattr(DEFAULT_KEY_PROFILE, name))) for name in KeyProfile._fields}
+    )
 
 
 class PeerLink:
@@ -93,24 +106,27 @@ class PeerLink:
         self.watching = False
         self._tree_changed = anyio.Event()
         self._tree_sent: Tree | None = None
-        # Each packet with the mirror it is for, and whether the stream
-        # turns to zstd after it.
-        self._queue: deque[tuple[MirrorSource | None, bytes, bool]] = deque()
+        # Each packet, or the mirror whose frame is built when its turn
+        # comes, and whether the stream turns to zstd after it.
+        self._queue: deque[tuple[MirrorSource | bytes, bool]] = deque()
         self._ready = anyio.Event()
 
         # The `wire` packet goes first in this queue, so nothing encoded
         # after the turn can be written before it.
         wire = choose(offered, connection.pipe_connection.can_compress)
         if wire is not None and connection.encode is encode_json:
-            self._queue.append((None, encode_json({Field.CMD: Packet.WIRE, Field.WIRE: wire}), wire == MSGPACK_ZSTD))
+            self._queue.append((encode_json({Field.CMD: Packet.WIRE, Field.WIRE: wire}), wire == MSGPACK_ZSTD))
             connection.encode = encode_msgpack
 
-    def queue(self, source: MirrorSource | None, packet: Message) -> int:
-        "Encode a packet now, queue it behind the others, and say its size."
-        encoded = self.connection.encode(packet)
-        self._queue.append((source, encoded, False))
+    def queue(self, packet: Message) -> None:
+        "Encode a packet now and queue it behind the others."
+        self._queue.append((self.connection.encode(packet), False))
         self._ready.set()
-        return len(encoded)
+
+    def queue_frame(self, source: MirrorSource) -> None:
+        "Queue a frame of `source`, built when the writer reaches it."
+        self._queue.append((source, False))
+        self._ready.set()
 
     async def run(self) -> None:
         "Write what is queued until the connection goes, then let every pane go."
@@ -120,14 +136,30 @@ class PeerLink:
                     await self._ready.wait()
                     self._ready = anyio.Event()
                     continue
-                source, encoded, compress_after = self._queue.popleft()
+                entry, compress_after = self._queue.popleft()
+                if isinstance(entry, MirrorSource):
+                    encoded = self._frame_of(entry)
+                    if encoded is None:
+                        continue
+                else:
+                    encoded = entry
                 await self.connection.write_encoded(encoded, compress_after)
-                if source is not None:
-                    source.sent(len(encoded))
         except BrokenPipeError:
             pass
         finally:
             self.close()
+
+    def _frame_of(self, source: MirrorSource) -> bytes | None:
+        if self.sources.get(source.pane.pane_id) is not source:
+            return None
+        try:
+            packet = source.frame()
+            return None if packet is None else self.connection.encode(packet)
+        except Exception:
+            # One pane whose page cannot be sent ends its own mirror, not the link.
+            logger.exception("Sending pane %s to a peer failed.", source.pane.pane_id)
+            self.lost(source)
+            return None
 
     def tree_changed(self) -> None:
         "Something the tree holds may have changed (`Pymux.invalidate`)."
@@ -142,8 +174,7 @@ class PeerLink:
             if tree != self._tree_sent:
                 self._tree_sent = tree
                 self.queue(
-                    None,
-                    {Field.CMD: Packet.TREE, Field.SERVER: server, Field.SERVER_ID: pymux.server_id, Field.ROWS: tree},
+                    {Field.CMD: Packet.TREE, Field.SERVER: server, Field.SERVER_ID: pymux.server_id, Field.ROWS: tree}
                 )
             with anyio.move_on_after(TREE_EVERY):
                 await self._tree_changed.wait()
@@ -228,12 +259,37 @@ class PeerLink:
         if source is not None:
             self._drop(source)
 
-    @_PACKETS.handles(Packet.MIRROR_INPUT)
-    def _on_input(self, packet: Message) -> None:
+    def _driven(self, packet: Message) -> MirrorSource | None:
+        "The mirror a person at the peer drives, who is the person who used this server last now."
         source = self._source_of(packet)
         if source is not None:
             self.connection.pymux.peer_was_used(self)
-            source.control.process.write_input(packet.get(Field.DATA, ""))
+        return source
+
+    @_PACKETS.handles(Packet.MIRROR_KEY)
+    def _on_key(self, packet: Message) -> None:
+        source = self._driven(packet)
+        if source is not None:
+            source.control.type_key(str(packet.get(Field.DATA, "")), _key_profile(packet.get(Field.KEY_PROFILE)))
+
+    @_PACKETS.handles(Packet.MIRROR_PASTE)
+    def _on_paste(self, packet: Message) -> None:
+        source = self._driven(packet)
+        if source is not None:
+            source.control.paste(str(packet.get(Field.DATA, "")))
+
+    @_PACKETS.handles(Packet.MIRROR_MOUSE)
+    def _on_mouse(self, packet: Message) -> None:
+        source = self._driven(packet)
+        mouse = packet.get(Field.MOUSE) or {}
+        try:
+            action = MouseAction(int(mouse.get("action", 0)))
+        except ValueError:
+            return
+        if source is not None:
+            # The wheel a program does not want reads the history, in
+            # copy mode here, which a peer does not reach yet.
+            source.control.use_mouse(action, int(mouse.get("column", 0)), int(mouse.get("row", 0)))
 
     @_PACKETS.handles(Packet.PEER_SIZES)
     def _on_sizes(self, packet: Message) -> None:

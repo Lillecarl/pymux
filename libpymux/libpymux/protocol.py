@@ -217,16 +217,22 @@ class Packet(StrEnum):
     # The peer asks. `peer` opens the link, with the `wire` formats the
     # peer reads; the connection is a peer link from then on.
     PEER = "peer"
-    # "Mirror this pane": its screen frozen, then every read it takes.
+    # "Mirror this pane": its page as `mirror-frame`s, the first whole.
     MIRROR = "mirror"
-    # "Nobody here watches it": no more reads until `mirror-resume`.
+    # "Nobody here watches it": no more frames until `mirror-resume`.
     MIRROR_PAUSE = "mirror-pause"
-    # "Watched again": the rows written since the pause, then reads.
+    # "Watched again": a frame of what changed since the last one.
     MIRROR_RESUME = "mirror-resume"
     MIRROR_STOP = "mirror-stop"
-    # A person at the peer typed: bytes for the program, under `data`,
-    # already encoded for the pane's keyboard mode.
-    MIRROR_INPUT = "mirror-input"
+    # A person at the peer pressed a key: the input under `data` as
+    # their terminal sent it, and `key-profile`. The owner encodes it
+    # for the pane's keyboard mode, which only the owner holds.
+    MIRROR_KEY = "mirror-key"
+    # A person at the peer pasted the text under `data`.
+    MIRROR_PASTE = "mirror-paste"
+    # The mouse of a person at the peer, under `mouse`: `action`
+    # (`pyte.mouse.MouseAction`), `column` and `row` on the page.
+    MIRROR_MOUSE = "mirror-mouse"
     # Whether a terminal window with the focus shows the mirror, under
     # `focused`. The owner sends the program one focus report for all
     # its viewers (DEC 1004), so a peer never types one.
@@ -257,17 +263,10 @@ class Packet(StrEnum):
     # versions of pymux still read each other; `server` names the
     # owner for the peer's session names.
     TREE = "tree"
-    # The pane's screen, its parser and its surroundings, frozen: the first whole, a later one only what
-    # changed since the pause or the lag that stopped the reads.
-    MIRROR_SCREEN = "mirror-screen"
-    # One read, under `data`, with `expired` when the ground timer
-    # dropped an open sequence first.
-    MIRROR_READ = "mirror-read"
-    MIRROR_RESIZED = "mirror-resized"
-    MIRROR_SURROUNDED = "mirror-surrounded"
-    # The pane's history limit changed, under `history-limit`. The
-    # mirror trims its history at the same reads the pane does.
-    MIRROR_HISTORY_LIMIT = "mirror-history-limit"
+    # The rows of the pane's page that changed and its cursor, under
+    # `frame` (`pyte.grid`). One is in flight per pane at a time, so a
+    # peer that falls behind gets the newest page and not each one.
+    MIRROR_FRAME = "mirror-frame"
     # "That pane is not mirrored": there is none, under `error`.
     MIRROR_REFUSED = "mirror-refused"
 
@@ -400,16 +399,11 @@ class Field(StrEnum):
     #: share. Lillecarl/pymux#743.
     NAME = "name"
     TRANSFER = "transfer"
-    #: In the mirror packets: a frozen screen, its parser and its
-    #: surroundings (`pyte.freeze`), and the pane's history limit, size
-    #: and ground timer decision. Lillecarl/pymux#759.
-    SCREEN = "screen"
-    STREAM = "stream"
-    SURROUNDINGS = "surroundings"
-    HISTORY_LIMIT = "history-limit"
-    LINES = "lines"
-    COLUMNS = "columns"
-    EXPIRED = "expired"
+    #: In `mirror-key`: what the person's terminal does where terminals
+    #: split (`pyte.keys.events.KeyProfile`), by field name. In
+    #: `mirror-mouse`: what the mouse did. Lillecarl/pymux#759.
+    KEY_PROFILE = "key-profile"
+    MOUSE = "mouse"
     #: In `peer-terminal`: the cell in pixels as `[width, height]` or
     #: null when no terminal said, the colours (`pyte.freeze`) or null,
     #: the keyboard protocol flags every client there can report, and

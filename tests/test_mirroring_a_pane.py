@@ -3,10 +3,9 @@ A pane, lent to a peer over a peer link. Lillecarl/pymux#759.
 
 The peer here is a bare mirrored control fed by `MirrorSink`, which is
 what a peer server puts behind its pane. It has to end up with the
-owner's screen through output, a resize, new surroundings, a pause and
-a resume, and a link too slow for the reads. The link turns to msgpack
-the way a real one does, so the frozen screens cross the wire a peer
-reads.
+owner's page through output, a resize, a pause and a resume, and a
+link too slow for every frame. The link turns to msgpack the way a
+real one does, so the frames cross the wire a peer reads.
 """
 
 from __future__ import annotations
@@ -21,7 +20,6 @@ from ptterm.control import TerminalControl
 
 from pymux.connection.server import ServerConnection
 from pymux.core.main import Pymux
-from pymux.mirror import source as source_module
 from pymux.mirror.sink import MirrorSink
 from pymux.pipes.memory import connect_in_memory
 
@@ -87,10 +85,12 @@ def a_peer():
 
 def picture(control: TerminalControl):
     screen = control.screen
-    rows = ["".join(screen.page.data_buffer[y][x].char for x in range(screen.columns)) for y in range(screen.lines)]
-    history = len(screen.page.data_buffer)
+    top = screen.line_offset
+    rows = [
+        "".join(screen.page.data_buffer[top + y][x].char for x in range(screen.columns)) for y in range(screen.lines)
+    ]
     cursor = screen.pt_cursor_position
-    return rows, history, (cursor.x, cursor.y), screen.surroundings
+    return rows, (cursor.x, cursor.y - top)
 
 
 async def converge(client_end, sink: MirrorSink, owner: TerminalControl) -> None:
@@ -122,7 +122,7 @@ def ask(client_end, kind: Packet, pane, **fields) -> None:
     client_end.write_nowait(encode_json({Field.CMD: kind, Field.PANE_ID: int(pane.pane_id), **fields}))
 
 
-async def test_a_peer_follows_output_sizes_and_surroundings(pymux):
+async def test_a_peer_follows_output_and_a_resize(pymux):
     pane, owner = the_control(pymux)
     owner.feed_output("before the mirror\r\n")
 
@@ -132,14 +132,13 @@ async def test_a_peer_follows_output_sizes_and_surroundings(pymux):
         await converge(client_end, sink, owner)
         assert sink.control.screen.lines == 6
 
-        owner.feed_output("\x1b[31mred\x1b[0m and \x1b[1;")
-        owner._ground_timer.since -= 10
-        owner.feed_output("plain\r\n")
+        owner.feed_output("\x1b[31mred\x1b[0m and plain\r\n")
         owner.resize_screen(4, 20)
-        owner.screen.set_cell_size(7, 15)
         owner.feed_output("after")
         await converge(client_end, sink, owner)
         assert sink.control.screen.lines == 4
+        row = sink.control.screen.page.data_buffer
+        assert any(cell.appearance.rendition.color for line in row.values() for cell in line.values())
 
         pymux.stop()
 
@@ -160,15 +159,14 @@ async def test_a_paused_mirror_gets_what_changed_on_resume(pymux):
         owner.feed_output("\x1b[2J\x1b[Hwhile nobody watched")
         owner.resize_screen(5, 25)
 
-        # Only the freeze on resume can bring the peer to this screen.
+        # Only the frame on resume can bring the peer to this page.
         ask(client_end, Packet.MIRROR_RESUME, pane)
         await converge(client_end, sink, owner)
 
         pymux.stop()
 
 
-async def test_a_slow_link_stops_the_reads_and_sends_what_changed(pymux, monkeypatch):
-    monkeypatch.setattr(source_module, "LAG_BYTES", 200)
+async def test_a_slow_link_holds_one_frame_and_sends_the_newest_page(pymux):
     pane, owner = the_control(pymux)
 
     async with pymux.running():
@@ -176,33 +174,37 @@ async def test_a_slow_link_stops_the_reads_and_sends_what_changed(pymux, monkeyp
         sink = a_peer()
         await converge(client_end, sink, owner)
 
-        # Nothing reads the link while these go in, so the queue grows.
+        # Nothing reads the link while these go in.
         for number in range(50):
             owner.feed_output("line %d of a program that writes fast\r\n" % number)
-        assert source_of(connection).lagging
+        source = source_of(connection)
+        assert sum(1 for entry, _compress in connection.peer._queue if entry is source) <= 1
 
         await converge(client_end, sink, owner)
         owner.feed_output("live again")
         await converge(client_end, sink, owner)
-        assert not source_of(connection).lagging
 
         pymux.stop()
 
 
-async def test_a_peer_types_into_the_pane(pymux):
+async def test_a_peer_drives_the_pane_in_the_modes_the_program_set(pymux):
+    "The owner encodes: application cursor keys, a bracketed paste and an SGR mouse report."
     pane, owner = the_control(pymux)
     typed: list[str] = []
     owner.process.write_input = typed.append
+    owner.feed_output("\x1b[?1h\x1b[?2004h\x1b[?1000;1006h")
 
     async with pymux.running():
         connection, client_end = open_link(pymux, pane)
         sink = a_peer()
         await converge(client_end, sink, owner)
-        ask(client_end, Packet.MIRROR_INPUT, pane, data="ls\r")
+        ask(client_end, Packet.MIRROR_KEY, pane, data="\x1b[A", **{Field.KEY_PROFILE: {"menu": True}})
+        ask(client_end, Packet.MIRROR_PASTE, pane, data="pasted")
+        ask(client_end, Packet.MIRROR_MOUSE, pane, mouse={"action": 1, "column": 3, "row": 1})
         with anyio.fail_after(5):
-            while not typed:
+            while len(typed) < 3:
                 await anyio.sleep(0.01)
-        assert typed == ["ls\r"]
+        assert typed == ["\x1bOA", "\x1b[200~pasted\x1b[201~", "\x1b[<0;4;2M"]
 
         pymux.stop()
 

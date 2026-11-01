@@ -476,7 +476,8 @@ async def test_the_owner_reports_the_focus_of_a_mirror(two_servers):
     owner_control.process.write_input = typed.append
 
     there, here = await shown_here(owner, peer, client)
-    await until(lambda: here.terminal.terminal_control.screen.reports_focus, "the mirror shows the mode")
+    (link,) = [connection.peer for connection in owner.connections if connection.peer is not None]
+    await until(lambda: there.pane_id in link.sources, "the seen pane streams")
     here.process.focus(True)
     await until(lambda: typed == ["\x1b[I"], "the program hears the focus come", lambda: typed)
     here.process.focus(False)
@@ -492,8 +493,8 @@ async def test_the_owner_answers_for_the_terminal_at_the_peer(two_servers):
     """
     Nobody is attached to the owner, so the terminal at the peer is the
     only one looking: the owner's pane takes its cell, colours and
-    keyboard, and the mirror takes them back from the owner. The peer's
-    own idea of its panes never reaches the mirror.
+    keyboard. The owner answers the program, so the mirror needs none
+    of them.
     """
     owner, peer, client = two_servers
     there = owner.arrangement.get_active_window().active_pane
@@ -505,7 +506,6 @@ async def test_the_owner_answers_for_the_terminal_at_the_peer(two_servers):
     peer.terminals.peer_terminal = lambda: theirs
 
     there, here = await shown_here(owner, peer, client)
-    mirror_screen = here.terminal.terminal_control.screen
 
     def surroundings(screen) -> tuple[int, int, bool, int]:
         return (
@@ -521,22 +521,11 @@ async def test_the_owner_answers_for_the_terminal_at_the_peer(two_servers):
     await until(
         lambda: told(owner_screen), "the owner's pane takes the peer's terminal", lambda: surroundings(owner_screen)
     )
-    await until(
-        lambda: told(mirror_screen), "the mirror takes what the owner settled on", lambda: surroundings(mirror_screen)
-    )
-
-    peer.terminals._cell_size_sent = None
-    peer.terminals._keyboard_state_sent = None
-    peer.terminals.sync_cell_size()
-    peer.terminals.sync_keyboard_source_flags()
-    peer.terminals.sync_color_bases()
-    assert told(mirror_screen), "only the owner tells a mirrored pane about its surroundings"
 
     # A painted screen answers with the theme the person at the peer sees.
     owner.options_of_pane(there).paint_screen = True
     owner.terminals.sync_color_bases()
     assert owner_screen.color_base == theme_color_base("pygments:dracula")
-    await until(lambda: mirror_screen.color_base == owner_screen.color_base, "the mirror takes the theme")
 
     here.process.kill()
     (link,) = [connection.peer for connection in owner.connections if connection.peer is not None]

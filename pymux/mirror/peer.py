@@ -29,6 +29,8 @@ from .tunnel import Tunnels
 
 if TYPE_CHECKING:
     from prompt_toolkit.data_structures import Size
+    from pyte.keys.events import KeyProfile
+    from pyte.mouse import MouseAction
 
     from ..core.main import Pymux
     from ..core.window_tree import Window
@@ -122,7 +124,7 @@ class Peer:
 
     KEEP: ClassVar[dict[str, Keep]] = {
         # A mirror is rebuilt by its program after an upgrade, and asks
-        # the next link for a fresh freeze.
+        # the next link for the whole page.
         "address": Keep.REBUILT,
         "connect_with": Keep.REBUILT,
         "sinks": Keep.DROPPED,
@@ -174,8 +176,27 @@ class Peer:
     def resume(self, pane_id: int) -> None:
         self.send({Field.CMD: Packet.MIRROR_RESUME, Field.PANE_ID: pane_id})
 
-    def type(self, pane_id: int, data: str) -> None:
-        self.send({Field.CMD: Packet.MIRROR_INPUT, Field.PANE_ID: pane_id, Field.DATA: data})
+    def key(self, pane_id: int, data: str, profile: KeyProfile) -> None:
+        self.send(
+            {
+                Field.CMD: Packet.MIRROR_KEY,
+                Field.PANE_ID: pane_id,
+                Field.DATA: data,
+                Field.KEY_PROFILE: profile._asdict(),
+            }
+        )
+
+    def paste(self, pane_id: int, text: str) -> None:
+        self.send({Field.CMD: Packet.MIRROR_PASTE, Field.PANE_ID: pane_id, Field.DATA: text})
+
+    def mouse(self, pane_id: int, action: MouseAction, column: int, row: int) -> None:
+        self.send(
+            {
+                Field.CMD: Packet.MIRROR_MOUSE,
+                Field.PANE_ID: pane_id,
+                Field.MOUSE: {"action": int(action), "column": column, "row": row},
+            }
+        )
 
     def tell_sizes(self, sizes: dict[int, Size]) -> None:
         "Tell the owner the room each of its windows has here, when that changed."

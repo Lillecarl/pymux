@@ -8,12 +8,15 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, ClassVar
 
 from pyte.keep import Keep
+from pyte.keys.events import DEFAULT_KEY_PROFILE
 
 from .sink import MirrorSink
 
 if TYPE_CHECKING:
     import anyio.abc
     from ptterm.control import TerminalControl
+    from pyte.keys.events import KeyProfile
+    from pyte.mouse import MouseAction
 
     from .peer import Peer
 
@@ -31,15 +34,13 @@ class RemoteProgram:
     A pane of another server, where a pane expects a program: the owner
     runs it and this side shows its screen.
 
-    Keys go to the owner as the bytes this pane encoded them to, for
-    the keyboard mode the program asked the owner's screen for, which a
-    mirror holds as well.
+    It is the control's `Mirror`: keys, a paste and the mouse go to the
+    owner as a person made them, and the owner encodes them for the
+    modes the program set, which only its screen holds.
 
-    **The screen streams only while somebody here can see it.** The
-    first sight asks the owner for the screen, and losing sight pauses
-    the mirror; the owner sends what changed when it is seen again.
-    Copy mode suspends it the same way, so the history holds still
-    under the reader.
+    **The page streams only while somebody here can see it.** The
+    first sight asks the owner for it, and losing sight pauses the
+    mirror; the owner sends what changed when it is seen again.
     """
 
     KEEP: ClassVar[dict[str, Keep]] = {
@@ -66,6 +67,7 @@ class RemoteProgram:
         self.peer = peer
         self.pane_id = pane_id
         self.sink = MirrorSink(control)
+        control.mirror = self
         self.sx = 0
         self.sy = 0
         self.backend = _NoMachinery()
@@ -91,7 +93,7 @@ class RemoteProgram:
         self._stream()
 
     def _stream(self) -> None:
-        "Ask the owner for the reads while the pane is seen, and stop them while it is not."
+        "Ask the owner for frames while the pane is seen, and stop them while it is not."
         wanted = self.visible and not self.suspended and not self._stopped
         if wanted == self._streaming:
             return
@@ -108,13 +110,25 @@ class RemoteProgram:
         return None
 
     def set_size(self, width: int, height: int) -> None:
-        # The owner sizes the pane, and its resize arrives with the reads.
+        # The owner sizes the pane, and its size arrives with the frames.
         self.sx = width
         self.sy = height
 
     def write_input(self, data: str) -> None:
+        "Input from this side that no person typed, such as `send-keys`: it is encoded there as keys."
+        self.key(data, DEFAULT_KEY_PROFILE)
+
+    def key(self, data: str, profile: KeyProfile) -> None:
         if not self._stopped:
-            self.peer.type(self.pane_id, data)
+            self.peer.key(self.pane_id, data, profile)
+
+    def paste(self, text: str) -> None:
+        if not self._stopped:
+            self.peer.paste(self.pane_id, text)
+
+    def mouse(self, action: MouseAction, column: int, row: int) -> None:
+        if not self._stopped:
+            self.peer.mouse(self.pane_id, action, column, row)
 
     def focus(self, focused: bool) -> None:
         "A terminal window with the focus shows this pane, or stopped (`Focus.sync_panes`)."
