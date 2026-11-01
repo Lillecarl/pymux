@@ -370,6 +370,24 @@ async def test_a_drag_here_resizes_the_panes_there(two_servers):
     await until(lambda: _drawn(client)[left].width == before - 5, "the tree that answers keeps the drag here")
 
 
+async def test_a_click_here_selects_the_pane_there(two_servers):
+    "Not only here: the owner's next tree would choose the old pane again. Lillecarl/pymux#872."
+    owner, peer, client = two_servers
+    there, here = await shown_here(owner, peer, client)
+    (link,) = peer.peers.by_address.values()
+    await run_as(peer, client, "split-window")
+    await until(lambda: len(link.tree.panes) == 2, "the tree brings the new pane")
+    owner_window = owner.arrangement.get_active_window()
+    assert owner_window.active_pane is not there, "the split's new pane is active there"
+
+    with set_app(client.app):
+        here.terminal.terminal_control.on_mouse_focus()
+    await until(lambda: owner_window.active_pane is there, "the owner selects the clicked pane")
+    owner.handle_command("rename-window -t @%d after" % (owner_window.window_id,))
+    await until(lambda: link.tree.windows[owner_window.window_id].chosen_name == "after", "another tree comes")
+    assert link.tree.windows[owner_window.window_id].active_pane is here, "the tree keeps the click"
+
+
 async def test_the_focus_here_follows_a_pane_selected_there(two_servers):
     "select-pane runs on the owner; the tree that answers it moves the client's focus, with no key after."
     owner, peer, client = two_servers

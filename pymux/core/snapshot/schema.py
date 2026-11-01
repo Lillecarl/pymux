@@ -149,7 +149,16 @@ WRITES: dict[str, frozenset[str]] = {
         }
     ),
     "pymux.core.window_tree.Window": frozenset(Window.KEEP)
-    - {"_revisions_seen", "_writers", "_pane_revisions", "_quiet_since", "_silence_armed", "seen_at", "peer_watched"},
+    - {
+        "_revisions_seen",
+        "_writers",
+        "_pane_revisions",
+        "_quiet_since",
+        "_silence_armed",
+        "seen_at",
+        "peer_watched",
+        "selects_elsewhere",
+    },
     **{
         "%s.%s" % (scope.__module__, scope.__qualname__): frozenset(each.attribute for each in saved)
         for scope, saved in SAVED.items()

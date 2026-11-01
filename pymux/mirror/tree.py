@@ -130,6 +130,7 @@ class MirrorTree:
         "panes": Keep.DROPPED,
         "_shapes": Keep.DROPPED,
         "_updated": Keep.DROPPED,
+        "_updating": Keep.DROPPED,
     }
 
     def __init__(self, pymux: Pymux, peer: Peer) -> None:
@@ -142,6 +143,8 @@ class MirrorTree:
         # built: a window that kept its shape keeps its splits.
         self._shapes: dict[int, tuple[object, ...]] = {}
         self._updated = anyio.Event()
+        # A tree is being applied: what it changes is the owner's already.
+        self._updating = False
 
     def update(self, server: str, server_id: str, tree: Tree) -> None:
         """
@@ -153,9 +156,13 @@ class MirrorTree:
         rows = read_tree(tree)
         looped = {row.session_id for row in rows[SessionRow] if server_id == own or own in row.server_ids.split("/")}
         rows = _without_sessions(rows, looped)
-        self._update_panes(rows)
-        self._update_windows(rows)
-        self._update_sessions(server, server_id, rows)
+        self._updating = True
+        try:
+            self._update_panes(rows)
+            self._update_windows(rows)
+            self._update_sessions(server, server_id, rows)
+        finally:
+            self._updating = False
         self.peer.return_clients()
         self._updated.set()
         self._updated = anyio.Event()
@@ -230,6 +237,7 @@ class MirrorTree:
             if not row.linked:
                 continue
             window = self.windows.get(row.window_id) or Window(WindowIndex(row.window_index))
+            window.selects_elsewhere = self._select_there
             window.index = WindowIndex(row.window_index)
             window.chosen_name = row.window_name
             window.zoom = bool(row.zoom)
@@ -267,6 +275,16 @@ class MirrorTree:
             if remote_id not in kept:
                 del self._shapes[remote_id]
         self.windows = kept
+
+    def _select_there(self, pane: Pane) -> None:
+        """
+        A pane chosen here, by a click or anything else that sets the
+        active pane: the owner chooses it, or its next tree would choose
+        the old one again. A forwarded `select-pane` runs there and not
+        here, so it does not come back. Lillecarl/pymux#872.
+        """
+        if not self._updating and isinstance(pane.process, RemoteProgram):
+            self.pymux.handle_command("select-pane -t %%%d" % (pane.pane_id,))
 
     def _build_splits(
         self,

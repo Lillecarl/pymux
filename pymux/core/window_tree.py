@@ -22,6 +22,8 @@ from ..ids import PaneId, PaneIndex, WindowId, WindowIndex
 from ..options.window_options import WindowOptions
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from ..tags import Tags
 
 from .pane import Pane
@@ -79,6 +81,7 @@ class Window:
         "unwatched_size": Keep.SAVED,
         # The peer links again after an upgrade and says once more.
         "peer_watched": Keep.DROPPED,
+        "selects_elsewhere": Keep.DROPPED,
         "zoom": Keep.SAVED,
         "frame_rate_set": Keep.SAVED,
         "bell": Keep.SAVED,
@@ -133,6 +136,10 @@ class Window:
         #: A server that mirrors this window shows it to a client there
         #: (`PeerLink._sized`), so a mark raised here is a mark seen.
         self.peer_watched = False
+
+        #: Told of each pane chosen here, when another server lays this
+        #: window out and chooses its active pane (`MirrorTree`).
+        self.selects_elsewhere: Callable[[Pane], None] | None = None
 
         #: When true, the current pane is zoomed in.
         self.zoom = False
@@ -339,6 +346,8 @@ class Window:
         self._active_pane = value
         if value is not None:
             value.bell = False
+            if value is not old and self.selects_elsewhere is not None:
+                self.selects_elsewhere(value)
 
     def seen(self) -> None:
         "A client looks at this window now, so its marks and its active pane's bell are heard."
