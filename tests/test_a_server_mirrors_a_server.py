@@ -416,6 +416,23 @@ async def test_select_pane_moves_from_the_pane_the_person_is_in(two_servers):
     assert owner_window.active_pane is owner_left
 
 
+async def test_a_command_that_changes_nothing_there_still_ends_a_disagreement(two_servers):
+    "The owner answers each command a peer sends with a tree, and the tree undoes what the peer only previewed. Lillecarl/pymux#873."
+    owner, peer, client = two_servers
+    there, here = await shown_here(owner, peer, client)
+    (link,) = peer.peers.by_address.values()
+    await run_as(peer, client, "split-window -h")
+    await until(lambda: len(link.tree.panes) == 2, "the tree brings the new pane")
+    owner_window = owner.arrangement.get_active_window()
+    mirror_window = link.tree.windows[owner_window.window_id]
+    owner_left, owner_right = owner_window.panes
+    await until(lambda: mirror_window.active_pane is link.tree.panes[owner_right.pane_id], "both say the right pane")
+
+    mirror_window._active_pane = link.tree.panes[owner_left.pane_id]
+    await run_as(peer, client, "rename-window -t @%d %s" % (mirror_window.window_id, owner_window.name))
+    await until(lambda: mirror_window.active_pane is link.tree.panes[owner_right.pane_id], "the owner's answer ends it")
+
+
 async def test_the_focus_here_follows_a_pane_selected_there(two_servers):
     "select-pane runs on the owner; the tree that answers it moves the client's focus, with no key after."
     owner, peer, client = two_servers

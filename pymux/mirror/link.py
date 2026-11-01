@@ -97,6 +97,7 @@ class PeerLink:
         "watching": Keep.DROPPED,
         "_tree_changed": Keep.DROPPED,
         "_tree_sent": Keep.DROPPED,
+        "_answer_owed": Keep.DROPPED,
     }
 
     def __init__(self, connection: ServerConnection, offered: object, version: int) -> None:
@@ -113,6 +114,7 @@ class PeerLink:
         self.watching = False
         self._tree_changed = anyio.Event()
         self._tree_sent: Tree | None = None
+        self._answer_owed = False
         # Each packet, or the mirror whose frame is built when its turn
         # comes, and whether the stream turns to zstd after it.
         self._queue: deque[tuple[MirrorSource | bytes, bool]] = deque()
@@ -187,13 +189,24 @@ class PeerLink:
         "Something the tree holds may have changed (`Pymux.invalidate`)."
         self._tree_changed.set()
 
+    def answer(self) -> None:
+        """
+        Send the tree next though nothing in it changed: the peer did
+        something here and holds what it did as a preview until the tree
+        says what came of it. A command that changed nothing here still
+        has to undo a preview there. Lillecarl/pymux#873.
+        """
+        self._answer_owed = True
+        self._tree_changed.set()
+
     async def _send_trees(self) -> None:
         "Send the tree, and again after each change to it, until the connection goes."
         pymux = self.connection.pymux
         server = socket.gethostname().partition(".")[0]
         while not self.connection.closed:
             tree = tree_of(pymux)
-            if tree != self._tree_sent:
+            owed, self._answer_owed = self._answer_owed, False
+            if owed or tree != self._tree_sent:
                 self._size_the_panes()
                 self._tree_sent = tree
                 self.queue(
@@ -371,6 +384,7 @@ class PeerLink:
         rooms = pymux.planes.peer_rooms
         before = rooms.get(self, {})
         changed = {window_id for window_id in set(sizes) | set(before) if sizes.get(window_id) != before.get(window_id)}
+        self.answer()
         if not changed:
             return
         if sizes:

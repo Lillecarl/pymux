@@ -148,6 +148,13 @@ class Requests:
                     if answer is not None:
                         await answer
             finally:
+                if reply.forwarded:
+                    # A peer ran this and previews what it did: the tree
+                    # it gets next says what came of it, changed or not.
+                    # Lillecarl/pymux#873.
+                    for connection in pymux.connections:
+                        if connection.peer is not None and connection.peer.watching:
+                            connection.peer.answer()
                 # The command ran under a client of its own, and a client
                 # that watches syncs its focus only after its own keys:
                 # a wheel over the pane a split just made would be over
