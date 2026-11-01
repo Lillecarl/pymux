@@ -73,6 +73,7 @@ if TYPE_CHECKING:
     from prompt_toolkit.output import ColorDepth, Output
 
     from ..commands.wait_for import WaitChannel
+    from ..mirror.copying import MirrorCopy
     from ..mirror.link import PeerLink
     from ..pipes.posix import PosixSocketListener
 
@@ -826,6 +827,17 @@ class Pymux:
         if not was_latest:
             # Another viewer was used since, so the colours change hands.
             self.terminals.sync_color_bases()
+
+    def peer_copy_of(self, pane: Pane) -> MirrorCopy | None:
+        "The copy mode a peer runs here over `pane`; the one of the peer used last, when several do."
+        copies = [
+            (connection.peer.last_used, source.copying)
+            for connection in self.connections
+            if connection.peer is not None
+            for source in connection.peer.sources.values()
+            if source.pane is pane and source.copying is not None
+        ]
+        return max(copies, key=lambda copy: copy[0], default=(0, None))[1]
 
     def clients_watching(self, window: Window | None = None) -> list[ClientState]:
         """

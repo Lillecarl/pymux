@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 from prompt_toolkit.application.current import set_app
 from pyte.page import RowMark
 
+from pymux.answer import current_answer
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import refuse_without_a_waiter, send_key, terminal_of, the_pane
 from pymux.commands.wait_pane import add_condition_arguments, armed, asks_for_a_wait
@@ -39,14 +40,25 @@ def _copy_mode_command(pymux: Pymux, args: argparse.Namespace) -> None:
     if flags not in ([], ["-o"]):
         raise CommandException("%s takes -o and nothing else" % name)
 
-    client = pymux.the_client_to_tell()
-    if client is None:
-        raise CommandException("no client in copy mode")
-    with set_app(client.app):
-        view = terminal_of(the_pane(pymux, args.target_pane)).copy_view
+    pane = the_pane(pymux, args.target_pane)
+    answer = current_answer.get()
+    if answer is not None and answer.forwarded:
+        # The person sits at a peer, whose copy mode runs here.
+        copy = pymux.peer_copy_of(pane)
+        if copy is None:
+            raise CommandException("not in a mode")
+        app = copy.app
+    else:
+        client = pymux.the_client_to_tell()
+        if client is None:
+            raise CommandException("no client in copy mode")
+        app = client.app
+    with set_app(app):
+        view = terminal_of(pane).copy_view
         if view is None:
             raise CommandException("not in a mode")
         view.jump_to_mark(RowMark.OUTPUT if flags else RowMark.PROMPT, down)
+    app.invalidate()
 
 
 def send_keys(pymux: Pymux, args: argparse.Namespace) -> Coroutine[Any, Any, None] | None:

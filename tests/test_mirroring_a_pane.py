@@ -11,6 +11,7 @@ real one does, so the frames cross the wire a peer reads.
 from __future__ import annotations
 
 import sys
+from argparse import Namespace
 
 import anyio
 import pytest
@@ -19,6 +20,8 @@ from libpymux.wire import MSGPACK, encode_json
 from ptterm.control import TerminalControl
 from pyte.mouse import MouseAction
 
+from pymux.answer import Answer, current_answer
+from pymux.commands.send_keys import send_keys
 from pymux.connection.server import ServerConnection
 from pymux.core.main import Pymux
 from pymux.mirror.peer import Peer
@@ -325,6 +328,30 @@ async def test_copy_mode_of_a_mirror_runs_on_the_owner_and_reads_its_history(pym
             while source_of(connection).copying is not None:
                 await anyio.sleep(0.01)
         await converge(client_end, sink, owner)
+
+        pymux.stop()
+
+
+async def test_a_forwarded_copy_mode_command_acts_in_the_peers_copy_mode(pymux):
+    "`send-keys -X` typed at the peer runs here (`mirror.forward`), in the copy mode that peer reads."
+    pane, owner = the_control(pymux)
+    owner.feed_output("\x1b]133;A\x07$ one\r\nout\r\n\x1b]133;A\x07$ two\r\nout\r\n")
+
+    async with pymux.running():
+        connection, client_end = open_link(pymux, pane)
+        sink = a_peer()
+        await converge(client_end, sink, owner)
+        ask(client_end, Packet.MIRROR_COPY, pane)
+        source = source_of(connection)
+        await until(client_end, sink, lambda: source.copying is not None and source.copying.place is not None)
+        opened_at = source.copying.place
+
+        token = current_answer.set(Answer(forwarded=True))
+        try:
+            send_keys(pymux, Namespace(X=True, keys=["previous-prompt"], target_pane="%%%d" % pane.pane_id))
+        finally:
+            current_answer.reset(token)
+        assert source.copying.place != opened_at
 
         pymux.stop()
 
