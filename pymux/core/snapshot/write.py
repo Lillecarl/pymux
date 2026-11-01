@@ -467,7 +467,7 @@ def _window_rows(session: Session, window: Window, linked: bool, place: int) -> 
     # The newest of the history: a restored window can go back one step.
     previous = window.previous_active_pane
     manual = window.manual_size
-    made = window.size_when_made
+    made = window.unwatched_size
     yield WindowRow(
         window_id=window.window_id,
         session_id=session.session_id,

@@ -158,9 +158,10 @@ class Session:
 
         #: How big a window of this session is while nobody is watching
         #: it, when `new-session -x -y` named a size. `None` when nothing
-        #: did: each window then keeps the size the clients' `window-size`
-        #: gave it when it was made (`Window.size_when_made`), and with
-        #: no client, `DEFAULT_SIZE`. Lillecarl/pymux#817.
+        #: did: each window then keeps the size it had when somebody last
+        #: watched it, or the clients gave it when it was made
+        #: (`Window.unwatched_size`), and with no client, `DEFAULT_SIZE`.
+        #: Lillecarl/pymux#817.
         #:
         #: **Not `window.manual_size`.** A manual size says a person
         #: means that size to stay, so a client that attaches keeps it

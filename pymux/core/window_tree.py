@@ -74,7 +74,7 @@ class Window:
         "options": Keep.SAVED,
         "column_widths": Keep.SAVED,
         "manual_size": Keep.SAVED,
-        "size_when_made": Keep.SAVED,
+        "unwatched_size": Keep.SAVED,
         "zoom": Keep.SAVED,
         "frame_rate_set": Keep.SAVED,
         "bell": Keep.SAVED,
@@ -119,9 +119,10 @@ class Window:
         self.manual_size: Size | None = None
 
         #: How big this window is while nobody watches it, when its
-        #: session named no size: what the clients gave it when it was
-        #: made. Lillecarl/pymux#817.
-        self.size_when_made: Size | None = None
+        #: session named no size: the size it had when somebody last
+        #: watched it, and before that what the clients gave it when it
+        #: was made. Lillecarl/pymux#817.
+        self.unwatched_size: Size | None = None
 
         #: When true, the current pane is zoomed in.
         self.zoom = False

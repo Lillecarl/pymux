@@ -55,7 +55,7 @@ def remember_the_size_made_at(window: Window, pane: Pane) -> None:
     """
     terminal = pane.terminal
     assert isinstance(terminal, Terminal), "`_create_pane` builds a terminal pane"
-    window.size_when_made = Size(rows=terminal.screen.lines, columns=terminal.screen.columns)
+    window.unwatched_size = Size(rows=terminal.screen.lines, columns=terminal.screen.columns)
 
 
 def _plane_of_clients(clients: Sequence[ClientState], rule: WindowSize) -> Size:
@@ -171,7 +171,8 @@ class Planes:
         by the same `window-size` rule, once: when the window is made.
         An agent's window is then the size the person's would be, and a
         program in it is never resized behind its back.
-        Lillecarl/pymux#817.
+        Lillecarl/pymux#817. **A window somebody watched keeps the size
+        it had then**, so looking away resizes nothing either.
         """
         if window is None:
             window = self.pymux.arrangement.get_active_window()
@@ -187,6 +188,14 @@ class Planes:
         if not watchers and not peers:
             return self.size_with_no_client(self.pymux.session_of_window(window), window)
 
+        size = self._watched_size(window, watchers, peers)
+        # Kept for when nobody watches: a program is not resized because
+        # a person looked away.
+        window.unwatched_size = size
+        return size
+
+    def _watched_size(self, window: Window, watchers: Sequence[ClientState], peers: list[tuple[Size, int]]) -> Size:
+        "The plane the clients and the peers watching `window` give it, by its `window-size`."
         rule = window.options.window_size
         if not peers:
             return _plane_of_clients(watchers, rule)
@@ -231,8 +240,8 @@ class Planes:
         """
         if session is not None and session.default_size is not None:
             return session.default_size
-        if window is not None and window.size_when_made is not None:
-            return window.size_when_made
+        if window is not None and window.unwatched_size is not None:
+            return window.unwatched_size
         return self.size_for_a_new_window(session)
 
     def size_for_a_new_window(self, session: Session | None) -> Size:

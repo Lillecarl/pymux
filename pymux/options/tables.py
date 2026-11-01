@@ -282,6 +282,8 @@ class WindowRow:
     previous_layout: str | None
     manual_height: int | None
     manual_width: int | None
+    #: `Window.unwatched_size`. A peer reads these columns in the tree,
+    #: so a rename breaks a peer of another build.
     made_height: int | None
     made_width: int | None
     zoom: int

@@ -295,6 +295,30 @@ async def test_a_new_window_here_is_laid_out_there_at_the_peers_size(two_servers
     )
 
 
+async def test_a_window_the_peer_stops_watching_keeps_its_size_there(two_servers):
+    "Looking away resizes nothing: the program keeps the size it had while somebody watched."
+    owner, peer, client = two_servers
+    client.app.output.get_size = lambda: Size(rows=50, columns=200)
+    peer.invalidate()
+    there, here = await shown_here(owner, peer, client)
+    owner_window = owner.arrangement.get_active_window()
+    (link,) = peer.peers.by_address.values()
+    (mirror_window,) = link.tree.windows.values()
+    await until(
+        lambda: owner.planes.size(owner_window) == peer.planes.size(mirror_window),
+        "the owner's window takes the room the peer has",
+    )
+    watched = owner.planes.size(owner_window)
+
+    own = next(session for session in peer.sessions if session.remote is None)
+    peer.attach_client_to(client, own)
+    peer.invalidate()
+    await until(lambda: not owner.planes.peer_rooms, "the peer stops watching")
+    assert owner.planes.size(owner_window) == watched
+    screen = there.terminal.terminal_control.screen
+    assert screen.columns == watched.columns
+
+
 async def test_the_focus_here_follows_a_pane_selected_there(two_servers):
     "select-pane runs on the owner; the tree that answers it moves the client's focus, with no key after."
     owner, peer, client = two_servers

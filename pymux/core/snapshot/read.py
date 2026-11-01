@@ -468,7 +468,7 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
             if window_row.manual_height is not None and window_row.manual_width is not None:
                 window.manual_size = Size(rows=window_row.manual_height, columns=window_row.manual_width)
             if window_row.made_height is not None and window_row.made_width is not None:
-                window.size_when_made = Size(rows=window_row.made_height, columns=window_row.made_width)
+                window.unwatched_size = Size(rows=window_row.made_height, columns=window_row.made_width)
             window.zoom = bool(window_row.zoom)
             window.frame_rate_set = bool(window_row.frame_rate_set)
             window.bell = bool(window_row.bell)

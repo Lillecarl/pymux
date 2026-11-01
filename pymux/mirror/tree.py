@@ -248,7 +248,7 @@ class MirrorTree:
             window.silence = bool(row.silence)
             window.notified = bool(row.notified)
             window.manual_size = _size(row.manual_height, row.manual_width)
-            window.size_when_made = _size(row.made_height, row.made_width)
+            window.unwatched_size = _size(row.made_height, row.made_width)
             layout = row.previous_layout
             window.previous_selected_layout = LayoutTypes(layout) if layout is not None else None
             window.tags = {tag.key: tag.value for tag in tags.get(row.window_id, ())}
