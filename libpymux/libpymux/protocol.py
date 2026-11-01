@@ -271,8 +271,8 @@ class Packet(StrEnum):
     MIRROR_FOCUS = "mirror-focus"
     # The terminal of the person at the peer, as the peer worked it out
     # from its own clients: `cell-size`, `color-base` and `keyboard`.
-    # The owner weighs it with its own clients' terminals, and the
-    # screens it settles on reach every mirror as `mirror-surrounded`.
+    # The owner weighs it with its own clients' terminals and answers a
+    # program's questions about the terminal with what it settles on.
     PEER_TERMINAL = "peer-terminal"
     # "Show me your sessions": the owner sends `tree` now and on every
     # change after.
