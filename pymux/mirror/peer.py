@@ -23,6 +23,7 @@ from pyte.osc import color_base_data
 from ..client.defaults import is_ssh_url
 from ..commands import CommandException
 from ..log import logger
+from .copying import place_of
 from .dial import dial, dial_beside
 from .program import RemoteProgram
 from .tree import MirrorTree
@@ -53,6 +54,7 @@ class Peers:
         # in `peers`, and a load reconnects (`reconnect`).
         "by_address": Keep.DROPPED,
         "returning": Keep.DROPPED,
+        "returning_copies": Keep.DROPPED,
         "tunnels": Keep.DROPPED,
     }
 
@@ -61,6 +63,9 @@ class Peers:
         self.by_address: dict[str, Peer] = {}
         #: The addresses a loaded snapshot was linked to.
         self.returning: list[str] = []
+        #: `[address, pane id, *place]` of each mirror a loaded snapshot
+        #: was in copy mode on (`copying`).
+        self.returning_copies: list[list[Any]] = []
         #: The ports here for loopback URLs of mirrored panes.
         self.tunnels = Tunnels(pymux)
 
@@ -73,6 +78,21 @@ class Peers:
         self.returning = []
         for address in returning:
             self.of(address).watch()
+        for row in self.returning_copies:
+            peer = self.by_address.get(row[0]) if len(row) == 5 else None
+            place = place_of(row[2:])
+            if peer is not None and type(row[1]) is int and place is not None:
+                peer.copies[row[1]] = place
+        self.returning_copies = []
+
+    def copying(self) -> list[tuple[str, int, Place]]:
+        "Each mirror here in copy mode, by address and the owner's pane id, with where it stands."
+        return [
+            (address, pane_id, sink.copying)
+            for address, peer in self.by_address.items()
+            for pane_id, sink in sorted(peer.sinks.items())
+            if sink.copying is not None
+        ]
 
     def of(self, address: str, **connect_with: Any) -> Peer:
         "The link to `address`, opened in the server's scope if there is none yet."
@@ -142,6 +162,7 @@ class Peer:
         "sinks": Keep.DROPPED,
         "paused": Keep.DROPPED,
         "watching": Keep.DROPPED,
+        "copies": Keep.DROPPED,
         "connected": Keep.DROPPED,
         "error": Keep.DROPPED,
         "_send": Keep.DROPPED,
@@ -161,6 +182,9 @@ class Peer:
         self.paused: set[int] = set()
         #: This side asked for the owner's sessions.
         self.watching = False
+        #: Where copy mode stood on each pane before this server upgraded,
+        #: for the first time the pane is mirrored again.
+        self.copies: dict[int, Place] = {}
         #: The owner's sessions as built here, once this side watches.
         self.tree = MirrorTree(pymux, self)
         #: Whether the link is up.
@@ -204,6 +228,10 @@ class Peer:
     def mirror(self, pane_id: int, sink: MirrorSink) -> None:
         self.sinks[pane_id] = sink
         self.send({Field.CMD: Packet.MIRROR, Field.PANE_ID: pane_id})
+        place = self.copies.pop(pane_id, None)
+        if place is not None:
+            sink.copying = place
+            self.copy_mode(pane_id, place)
 
     def stop(self, pane_id: int) -> None:
         self.paused.discard(pane_id)

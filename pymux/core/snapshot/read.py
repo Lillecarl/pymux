@@ -352,6 +352,9 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
         row.text for row in select(db, ServerListRow, "WHERE list = 'message_log' ORDER BY position")
     )
     pymux.peers.returning = [row.text for row in select(db, ServerListRow, "WHERE list = 'peers' ORDER BY position")]
+    pymux.peers.returning_copies = [
+        json.loads(row.text) for row in select(db, ServerListRow, "WHERE list = 'peer_copying' ORDER BY position")
+    ]
     _read_bindings(pymux, db)
     pymux.startup_command = server["startup_command"]
     pymux.wait_channels = {}

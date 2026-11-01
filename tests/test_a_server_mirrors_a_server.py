@@ -464,6 +464,48 @@ async def test_an_upgrade_saves_no_mirror_and_links_again(two_servers, tmp_path)
             fresh.stop()
 
 
+async def test_an_upgrade_of_the_peer_opens_copy_mode_where_it_was(two_servers, tmp_path):
+    owner, peer, client = two_servers
+    owner.handle_command("set-option -g mode-keys emacs")
+    owner_control = owner.arrangement.get_active_window().active_pane.terminal.terminal_control
+    owner_control.feed_output("".join("line %d\r\n" % number for number in range(10)))
+    there, here = await shown_here(owner, peer, client)
+    sink = here.process.sink
+    here.terminal.enter_copy_mode()
+    await until(lambda: sink.copying is not None, "copy mode opens on the owner")
+    here.process.key("\x1b[A", DEFAULT_KEY_PROFILE)
+    opened_at = sink.copying
+    await until(lambda: sink.copying != opened_at, "the caret moves up")
+    left_at = sink.copying
+    path = tmp_path / "peer.sqlite"
+    save(peer, path)
+    (old_link,) = links_of(owner)
+
+    fresh = Pymux()
+    fresh.options.test_mode = True
+    async with fresh.running():
+        try:
+            load(fresh, path, _Copied())
+            await start(fresh)
+            (link,) = fresh.peers.by_address.values()
+            await until(lambda: there.pane_id in link.tree.panes, "the owner's sessions come back")
+            link.tree.panes[there.pane_id].process.seen(True)
+
+            def sources_again():
+                return [s for one in links_of(owner) if one is not old_link for s in one.peer.sources.values()]
+
+            await until(sources_again, "the fresh peer mirrors the pane")
+            (source,) = sources_again()
+            await until(
+                lambda: source.copying is not None and source.copying.place == left_at,
+                "copy mode opens where it was",
+                seen=lambda: source.copying and source.copying.place,
+            )
+            source.copying.end()
+        finally:
+            fresh.stop()
+
+
 async def test_a_loopback_url_there_opens_through_a_port_here(two_servers, monkeypatch):
     "The program's port is taken here, by the program itself: the URL moves, and its bytes still reach it."
     owner, peer, client = two_servers
