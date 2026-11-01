@@ -66,7 +66,7 @@ class RemoteProgram:
     def __init__(self, control: TerminalControl, peer: Peer, pane_id: int) -> None:
         self.peer = peer
         self.pane_id = pane_id
-        self.sink = MirrorSink(control)
+        self.sink = MirrorSink(control, peer.tree.pymux.terminals.sync_pointer_shape)
         control.mirror = self
         self.sx = 0
         self.sy = 0

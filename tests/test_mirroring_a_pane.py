@@ -80,7 +80,10 @@ def the_control(mux):
 
 
 def a_peer():
-    return MirrorSink(TerminalControl(backend=Quiet()))
+    told: list[None] = []
+    sink = MirrorSink(TerminalControl(backend=Quiet()), lambda: told.append(None))
+    sink.told = told  # type: ignore[attr-defined]
+    return sink
 
 
 def picture(control: TerminalControl):
@@ -139,6 +142,24 @@ async def test_a_peer_follows_output_and_a_resize(pymux):
         assert sink.control.screen.lines == 4
         row = sink.control.screen.page.data_buffer
         assert any(cell.appearance.rendition.color for line in row.values() for cell in line.values())
+
+        pymux.stop()
+
+
+async def test_a_peer_takes_the_title_and_the_pointer(pymux):
+    pane, owner = the_control(pymux)
+
+    async with pymux.running():
+        connection, client_end = open_link(pymux, pane)
+        sink = a_peer()
+        await converge(client_end, sink, owner)
+        owner.feed_output("\x1b]2;the title\x1b\\\x1b]22;>wait\x1b\\")
+        screen = sink.control.screen
+        with anyio.fail_after(5):
+            while screen.pointer_shapes.shape != "wait":
+                sink.take(await client_end.read())
+        assert screen.titles.window == "the title"
+        assert sink.told, "the pointer over the pane is drawn again"
 
         pymux.stop()
 
