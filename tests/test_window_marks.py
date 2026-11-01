@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+from ptterm import Terminal
+
 from pymux.core.arrangement import Arrangement
 from pymux.core.main import Pymux
 from pymux.core.pane import Pane
@@ -76,6 +78,53 @@ def test_monitor_activity_off_marks_nothing():
 
     pane.content_changed()
     assert not arrangement.check_output([], 1.0)
+
+
+class _Quiet:
+    "A backend that starts nothing and takes whatever it is given."
+
+    closed = False
+    ready_f = None
+
+    def write_text(self, text: str) -> None:
+        pass
+
+    def add_input_ready_callback(self, callback) -> None:
+        pass
+
+    def set_size(self, width: int, height: int) -> None:
+        pass
+
+    async def start(self, task_group) -> None:
+        pass
+
+    def close(self) -> None:
+        pass
+
+
+def test_output_that_changes_no_text_is_no_activity():
+    "An idle Claude Code still writes: a title spinner, a cursor hidden and shown, the same frame again."
+    terminal = Terminal(backend=_Quiet())
+    control = terminal.terminal_control
+    control.create_content(20, 5)
+    control.feed_output("> waiting")
+    arrangement = Arrangement()
+    window = Window()
+    pane = Pane(terminal)
+    window.root.append(pane)
+    window.active_pane = pane
+    arrangement.windows.append(window)
+    arrangement.check_output([], 0.0)
+
+    control.feed_output("\x1b]2;✳ title\x07\x1b[?25l\x1b[1;1H> waiting\x1b[?25h")
+    pane.content_changed()
+    assert not arrangement.check_output([], 1.0)
+    assert not window.activity
+
+    control.feed_output("\r\nan answer")
+    pane.content_changed()
+    assert arrangement.check_output([], 2.0)
+    assert window.activity
 
 
 def test_a_quiet_spell_after_output_marks_silence_once():

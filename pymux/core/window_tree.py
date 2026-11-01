@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, ClassVar
 from weakref import ref
 
 from prompt_toolkit.data_structures import Size
+from ptterm import Terminal
 from pyte.keep import Keep
 
 from ..ids import PaneIndex, WindowId, WindowIndex
@@ -84,6 +85,7 @@ class Window:
         "silence": Keep.SAVED,
         "notified": Keep.SAVED,
         "_revisions_seen": Keep.DROPPED,  # the next image's panes count from zero
+        "_shown_seen": Keep.DROPPED,
         "_quiet_since": Keep.DROPPED,
         "_silence_armed": Keep.DROPPED,
         "seen_at": Keep.DROPPED,  # the marks it qualifies are saved
@@ -154,6 +156,9 @@ class Window:
         #: before the first: that check takes the count as it is, so a
         #: load that replays every screen marks nothing.
         self._revisions_seen: int | None = None
+        #: What the panes showed at the last check that found output
+        #: (`_shown`), so output that draws nothing new is no activity.
+        self._shown_seen: int | None = None
         self._quiet_since = 0.0
         #: Output came after the last silence mark, so the next quiet
         #: spell is news.
@@ -341,16 +346,26 @@ class Window:
 
     def check_output(self, watched: bool, now: float) -> bool:
         """
-        Raise the activity or silence mark from what the panes wrote
+        Raise the activity or silence mark from what the panes show
         since the last check. True when a mark went up.
 
         Polled, and not raised from the read of each pane: a read is
         the hottest path pymux has, and a revision count costs nothing
         there. Lillecarl/pymux#767.
+
+        **Output is not activity; a change to the text shown is.** A
+        revision moves on any read, and an idle program still writes:
+        Claude Code's title spinner, a cursor hidden and shown, a frame
+        drawn again the same. So a moved count only says to look, and
+        the text of the pages says whether anything changed.
         """
         total = sum(pane.revision for pane in self.panes)
         first = self._revisions_seen is None
-        wrote = not first and total != self._revisions_seen
+        wrote = False
+        if total != self._revisions_seen:
+            shown = self._shown()
+            wrote = not first and shown != self._shown_seen
+            self._shown_seen = shown
         self._revisions_seen = total
         if first or wrote:
             self._quiet_since = now
@@ -367,6 +382,19 @@ class Window:
                 self.silence = True
                 return True
         return False
+
+    def _shown(self) -> int:
+        "A digest of the text each pane shows; a pane with no screen, such as a window pane, by its revision."
+        parts: list[object] = []
+        for pane in self.panes:
+            terminal = pane.terminal
+            screen = terminal.screen if isinstance(terminal, Terminal) else None
+            if screen is not None and screen.page is not None:
+                top = screen.line_offset
+                parts.append(screen.page.text(top, top + screen.lines - 1))
+            else:
+                parts.append(pane.revision)
+        return hash(tuple(parts))
 
     @property
     def previous_active_pane(self) -> Pane | None:
