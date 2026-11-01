@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import socket
 import time
 from collections.abc import Coroutine
 from contextlib import suppress
@@ -10,7 +11,7 @@ from typing import (
 )
 
 import anyio
-from libpymux.protocol import Field, Message, Packet
+from libpymux.protocol import OLDEST_PEER_VERSION, PEER_VERSION, Field, Message, Packet, peer_upgrade
 from libpymux.wire import encode_json
 from prompt_toolkit.application.current import create_app_session
 from prompt_toolkit.data_structures import Size
@@ -525,10 +526,28 @@ class ServerConnection:
 
     @_PACKETS.handles(Packet.PEER)
     def _on_peer(self, packet: Message) -> None:
-        "Another server mirrors panes of this one over this connection."
-        if self.peer is None:
-            self.peer = PeerLink(self, packet.get(Field.WIRE))
-            self.spawn(self.peer.run())
+        "Another server mirrors panes of this one over this connection, if the two speak a version in common."
+        if self.peer is not None:
+            return
+        upgrade = peer_upgrade(packet.get(Field.VERSION), packet.get(Field.OLDEST))
+        if upgrade is not None:
+            here = socket.gethostname().partition(".")[0]
+            side = "the server that connects" if upgrade == "there" else "the server on %s" % (here,)
+            refusal = {
+                Field.CMD: Packet.PEER_REFUSED,
+                Field.ERROR: "upgrade pymux on %s: a peer link of version %s cannot reach one of %s to %s"
+                % (side, packet.get(Field.VERSION, 0), OLDEST_PEER_VERSION, PEER_VERSION),
+            }
+
+            # Written before the close, as `detach_and_close` says why.
+            async def refuse() -> None:
+                await self.write_packet(refusal)
+                self.close_connection()
+
+            self.spawn(refuse())
+            return
+        self.peer = PeerLink(self, packet.get(Field.WIRE))
+        self.spawn(self.peer.run())
 
     @_PACKETS.handles(Packet.TUNNEL)
     def _on_tunnel(self, packet: Message) -> None:

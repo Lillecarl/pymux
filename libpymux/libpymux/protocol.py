@@ -33,12 +33,15 @@ from typing import Any
 
 __all__ = [
     "END",
+    "OLDEST_PEER_VERSION",
+    "PEER_VERSION",
     "READ_SIZE",
     "Field",
     "Framer",
     "Message",
     "Mode",
     "Packet",
+    "peer_upgrade",
 ]
 
 #: One packet as it crosses the wire: each `Field` to its value.
@@ -52,6 +55,29 @@ END = b"\0"
 #: a 1 MB frame takes 977 reads at 1 KiB and 18 at this size, and only
 #: past 4 MiB does the allocation slow a small read. Lillecarl/pymux#633.
 READ_SIZE = 1 << 20
+
+#: The version of what a peer link carries, and the oldest one this
+#: build still speaks. A build that changes the link so that an older
+#: one misreads it raises `PEER_VERSION`; one that stops speaking the
+#: older form raises `OLDEST_PEER_VERSION` too. Every field is named
+#: and has a default, so most changes need neither. Lillecarl/pymux#759.
+PEER_VERSION = 1
+OLDEST_PEER_VERSION = 1
+
+
+def peer_upgrade(version: object, oldest: object) -> str | None:
+    """
+    Which side to upgrade before a link to a side of `version` and
+    `oldest` works: "there", "here", or `None` when the two speak a
+    version in common. A side that names no version is older than any.
+    """
+    theirs = version if isinstance(version, int) else 0
+    their_oldest = oldest if isinstance(oldest, int) else theirs
+    if theirs < OLDEST_PEER_VERSION:
+        return "there"
+    if PEER_VERSION < their_oldest:
+        return "here"
+    return None
 
 
 class Framer:
@@ -215,8 +241,14 @@ class Packet(StrEnum):
     # by `pane_id`. Lillecarl/pymux#759.
     #
     # The peer asks. `peer` opens the link, with the `wire` formats the
-    # peer reads; the connection is a peer link from then on.
+    # peer reads, and the `version` and `oldest` of the link it speaks;
+    # the connection is a peer link from then on.
     PEER = "peer"
+    # The owner answers `peer`: its own `version` and `oldest`, first on
+    # the link, or `peer-refused` with an `error` that names the side to
+    # upgrade, and the connection closes.
+    PEER_ACCEPTED = "peer-accepted"
+    PEER_REFUSED = "peer-refused"
     # "Mirror this pane": its page as `mirror-frame`s, the first whole.
     MIRROR = "mirror"
     # "Nobody here watches it": no more frames until `mirror-resume`.
@@ -404,6 +436,10 @@ class Field(StrEnum):
     #: share. Lillecarl/pymux#743.
     NAME = "name"
     TRANSFER = "transfer"
+    #: In `peer` and `peer-accepted`: the newest version of a peer link
+    #: a side speaks, and the oldest (`PEER_VERSION`).
+    VERSION = "version"
+    OLDEST = "oldest"
     #: In `mirror-key`: what the person's terminal does where terminals
     #: split (`pyte.keys.events.KeyProfile`), by field name. In
     #: `mirror-mouse`: what the mouse did. Lillecarl/pymux#759.

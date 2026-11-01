@@ -14,12 +14,13 @@ import sys
 
 import anyio
 import pytest
-from libpymux.protocol import Field, Packet
+from libpymux.protocol import OLDEST_PEER_VERSION, PEER_VERSION, Field, Packet, peer_upgrade
 from libpymux.wire import MSGPACK, encode_json
 from ptterm.control import TerminalControl
 
 from pymux.connection.server import ServerConnection
 from pymux.core.main import Pymux
+from pymux.mirror.peer import Peer
 from pymux.mirror.sink import MirrorSink
 from pymux.pipes.memory import connect_in_memory
 
@@ -110,9 +111,13 @@ def open_link(mux, pane):
     "The owner's end of a new peer link that mirrors `pane`, and the peer's end."
     server_end, client_end = connect_in_memory()
     connection = ServerConnection(mux, server_end)
-    client_end.write_nowait(encode_json({Field.CMD: Packet.PEER, Field.WIRE: [MSGPACK]}))
+    client_end.write_nowait(encode_json({**HELLO, Field.WIRE: [MSGPACK]}))
     client_end.write_nowait(encode_json({Field.CMD: Packet.MIRROR, Field.PANE_ID: int(pane.pane_id)}))
     return connection, client_end
+
+
+#: The peer's first packet, from a build of this version.
+HELLO = {Field.CMD: Packet.PEER, Field.VERSION: PEER_VERSION, Field.OLDEST: OLDEST_PEER_VERSION}
 
 
 def source_of(connection):
@@ -234,11 +239,62 @@ async def test_a_pane_nobody_has_is_refused(pymux):
     async with pymux.running():
         server_end, client_end = connect_in_memory()
         ServerConnection(pymux, server_end)
-        client_end.write_nowait(encode_json({Field.CMD: Packet.PEER}))
+        client_end.write_nowait(encode_json(HELLO))
         client_end.write_nowait(encode_json({Field.CMD: Packet.MIRROR, Field.PANE_ID: 99999}))
         with anyio.fail_after(5):
             packet = await client_end.read()
+            while packet[Field.CMD] == Packet.PEER_ACCEPTED:
+                packet = await client_end.read()
         assert packet[Field.CMD] == Packet.MIRROR_REFUSED
         assert packet[Field.PANE_ID] == 99999
 
         pymux.stop()
+
+
+@pytest.mark.parametrize(
+    ("hello", "side"),
+    [
+        ({Field.CMD: Packet.PEER}, "the server that connects"),
+        ({**HELLO, Field.VERSION: PEER_VERSION + 5, Field.OLDEST: PEER_VERSION + 1}, "the server on"),
+    ],
+    ids=["a peer older than any version", "a peer that left this version behind"],
+)
+async def test_a_peer_of_no_common_version_is_told_which_side_to_upgrade(pymux, hello, side):
+    async with pymux.running():
+        server_end, client_end = connect_in_memory()
+        ServerConnection(pymux, server_end)
+        client_end.write_nowait(encode_json(hello))
+        with anyio.fail_after(5):
+            packet = await client_end.read()
+        assert packet[Field.CMD] == Packet.PEER_REFUSED
+        assert packet[Field.ERROR].startswith("upgrade pymux on " + side)
+
+        pymux.stop()
+
+
+async def test_a_peer_names_the_side_to_upgrade_from_the_owners_answer(pymux):
+    link = Peer(pymux, "owner")
+    assert link._refusal({Field.CMD: Packet.TREE}).startswith("upgrade pymux on owner"), "an owner too old to say"
+    assert link._refusal({Field.CMD: Packet.PEER_REFUSED, Field.ERROR: "upgrade pymux on here"}) == (
+        "upgrade pymux on here"
+    )
+    left_behind = {Field.CMD: Packet.PEER_ACCEPTED, Field.VERSION: PEER_VERSION + 2, Field.OLDEST: PEER_VERSION + 1}
+    assert link._refusal(left_behind).startswith("upgrade pymux on this server")
+    assert not link.accepted
+    assert link._refusal({Field.CMD: Packet.WIRE}) is None
+    assert link._refusal({Field.CMD: Packet.PEER_ACCEPTED, Field.VERSION: PEER_VERSION}) is None
+    assert link.accepted
+
+
+@pytest.mark.parametrize(
+    ("version", "oldest", "upgrade"),
+    [
+        (PEER_VERSION, OLDEST_PEER_VERSION, None),
+        (None, None, "there"),
+        (OLDEST_PEER_VERSION - 1, OLDEST_PEER_VERSION - 1, "there"),
+        (PEER_VERSION + 3, PEER_VERSION + 1, "here"),
+        (PEER_VERSION + 3, OLDEST_PEER_VERSION, None),
+    ],
+)
+def test_two_versions_meet_or_name_the_side_to_upgrade(version, oldest, upgrade):
+    assert peer_upgrade(version, oldest) == upgrade

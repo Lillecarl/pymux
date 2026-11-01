@@ -17,7 +17,7 @@ from collections import deque
 from typing import TYPE_CHECKING, ClassVar
 
 import anyio
-from libpymux.protocol import Field, Message, Packet
+from libpymux.protocol import OLDEST_PEER_VERSION, PEER_VERSION, Field, Message, Packet
 from libpymux.wire import MSGPACK_ZSTD, choose, encode_json, encode_msgpack
 from prompt_toolkit.data_structures import Size
 from ptterm import Terminal
@@ -118,6 +118,9 @@ class PeerLink:
         if wire is not None and connection.encode is encode_json:
             self._queue.append((encode_json({Field.CMD: Packet.WIRE, Field.WIRE: wire}), wire == MSGPACK_ZSTD))
             connection.encode = encode_msgpack
+        # The peer checks this side's version against its own before it
+        # reads anything else.
+        self.queue({Field.CMD: Packet.PEER_ACCEPTED, Field.VERSION: PEER_VERSION, Field.OLDEST: OLDEST_PEER_VERSION})
 
     def queue(self, packet: Message) -> None:
         "Encode a packet now and queue it behind the others."

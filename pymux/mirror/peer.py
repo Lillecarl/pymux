@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import anyio
 from libpymux.connection import CommandResult, Reply, command_packet
-from libpymux.protocol import Field, Message, Packet
+from libpymux.protocol import OLDEST_PEER_VERSION, PEER_VERSION, Field, Message, Packet, peer_upgrade
 from libpymux.wire import MSGPACK, MSGPACK_ZSTD, PacketReader, encode_json
 from pyte.keep import Keep
 from pyte.osc import color_base_data
@@ -133,6 +133,7 @@ class Peer:
         "_send": Keep.DROPPED,
         "_receive": Keep.DROPPED,
         "_terminal_told": Keep.DROPPED,
+        "accepted": Keep.DROPPED,
         "_sizes_told": Keep.DROPPED,
         "stream": Keep.DROPPED,
         "tree": Keep.DROPPED,
@@ -153,9 +154,13 @@ class Peer:
         self._sizes_told: dict[int, Size] = {}
         #: The link's stream while it is up, which a stream beside it starts from.
         self.stream: anyio.abc.ByteStream | None = None
+        #: The owner said which versions of the link it speaks, and they meet ours.
+        self.accepted = False
         # Zstd only across a network, as a client offers it.
         offer = [MSGPACK_ZSTD, MSGPACK] if is_ssh_url(address) else [MSGPACK]
-        self.send({Field.CMD: Packet.PEER, Field.WIRE: offer})
+        self.send(
+            {Field.CMD: Packet.PEER, Field.WIRE: offer, Field.VERSION: PEER_VERSION, Field.OLDEST: OLDEST_PEER_VERSION}
+        )
 
     def send(self, packet: Message) -> None:
         self._send.send_nowait(encode_json(packet))
@@ -275,14 +280,24 @@ class Peer:
             async with stream, anyio.create_task_group() as tasks:
                 tasks.start_soon(self._write, stream)
                 reader = PacketReader()
-                while True:
+                refused: str | None = None
+                while refused is None:
                     try:
                         data = await stream.receive()
                     except (anyio.EndOfStream, anyio.BrokenResourceError, anyio.ClosedResourceError) as error:
-                        self.error = str(error) or "the server closed the link"
+                        self.error = self.error or str(error) or "the server closed the link"
                         break
                     for packet in reader.feed(data):
-                        self._take(packet)
+                        if self.accepted:
+                            self._take(packet)
+                            continue
+                        refused = self._refusal(packet)
+                        if refused is not None:
+                            break
+                if refused is not None:
+                    self.error = refused
+                    logger.warning("The link to %s cannot work: %s", self.address, refused)
+                    self.tree.pymux.show_message("%s: %s" % (self.address, refused))
                 tasks.cancel_scope.cancel()
         except Exception as error:
             self.error = str(error) or type(error).__name__
@@ -298,6 +313,36 @@ class Peer:
             async for encoded in self._receive:
                 await stream.send(encoded)
         await stream.aclose()
+
+    def _refusal(self, packet: Message) -> str | None:
+        """
+        Read the owner's first packet: why the link cannot work, or
+        `None` once the two speak a version in common. An owner too old
+        to say a version sends something else first.
+        """
+        kind = packet.get(Field.CMD)
+        if kind == Packet.WIRE:
+            # The reader turned to the format this names; the answer is next.
+            return None
+        if kind == Packet.PEER_REFUSED:
+            return str(packet.get(Field.ERROR) or "the server refused the link")
+        if kind != Packet.PEER_ACCEPTED:
+            return "upgrade pymux on %s: it names no version of the peer link" % (self.address,)
+        upgrade = peer_upgrade(packet.get(Field.VERSION), packet.get(Field.OLDEST))
+        if upgrade == "there":
+            return "upgrade pymux on %s: it speaks the peer link up to version %s, and this server needs %s" % (
+                self.address,
+                packet.get(Field.VERSION),
+                OLDEST_PEER_VERSION,
+            )
+        if upgrade == "here":
+            return "upgrade pymux on this server: %s speaks the peer link from version %s, and this one up to %s" % (
+                self.address,
+                packet.get(Field.OLDEST),
+                PEER_VERSION,
+            )
+        self.accepted = True
+        return None
 
     def _take(self, packet: Message) -> None:
         if packet.get(Field.CMD) == Packet.TREE:
