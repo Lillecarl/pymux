@@ -5,10 +5,10 @@ A command on a session another server owns runs on that server.
 the targets the command names, finds the session they are in, and sends
 the words to the owner over a stream of its own: the targets in the
 owner's ids, and the pane the person here is in, which the owner reads
-as the caller's pane. So a command with no target acts where the person
-is, the same as it does on the owner. Only commands marked `acts_on`
-come here (`commands.add_command`); a command about what one client
-looks at stays here. Lillecarl/pymux#759.
+as the caller's pane, with a target named or not. So a command with no
+target acts where the person is, the same as it does on the owner. Only
+commands marked `acts_on` come here (`commands.add_command`); a command
+about what one client looks at stays here. Lillecarl/pymux#759.
 
 The person's client follows a command that moves the owner's caller to
 another window, the way `new-window` moves the client that runs it. The
@@ -70,13 +70,12 @@ def forwarded(
         named.append((dest, kind, *found))
 
     sessions = [session for *_, session in named]
-    caller = None
+    caller = find_pane(pymux, None)
+    caller_session = pymux.session_holding(caller) if caller is not None else None
     if not acts_on or len(named) < len(acts_on):
         # A target left out means the caller's: its pane, or the window
         # or session that holds the pane.
-        caller = find_pane(pymux, None)
-        session = pymux.session_holding(caller) if caller is not None else None
-        sessions.append(session or pymux.current_session)
+        sessions.append(caller_session or pymux.current_session)
 
     owners = {None if session.remote is None else session.remote.peer for session in sessions}
     if owners == {None}:
@@ -85,6 +84,9 @@ def forwarded(
         raise CommandException("%s: its targets are on different servers" % (command,))
     (peer,) = owners
     assert peer is not None
+    if caller_session is None or caller_session.remote is None or caller_session.remote.peer is not peer:
+        # The person is on another server: the owner has no pane of theirs.
+        caller = None
 
     targets = {dest: _there(peer, kind, found, session) for dest, kind, found, session in named}
     caller_id = cast(RemoteProgram, caller.process).pane_id if caller is not None else None
