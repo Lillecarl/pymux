@@ -374,17 +374,24 @@ async def test_a_command_goes_over_ssh_beside_the_link(two_servers, tmp_path):
         server.close()
 
 
-async def test_a_new_window_there_takes_the_client_along(two_servers):
+@pytest.mark.parametrize("line", ["new-window", "new-window -a -t {end}"])
+async def test_a_new_window_there_takes_the_client_along(two_servers, line):
+    "With a target named too: the owner runs it as from the person's pane, and the client follows and focuses."
     owner, peer, client = two_servers
     there, here = await shown_here(owner, peer, client)
     session = here_session(peer)
     (link,) = peer.peers.by_address.values()
 
-    await run_as(peer, client, "new-window")
+    await run_as(peer, client, line)
     assert len(owner.sessions[0].arrangement.windows) == 2
     shown = session.arrangement.get_active_window_for(client.app)
     assert shown is not None and shown.active_pane is not here, "the client moved to the new window"
     assert shown is link.tree.windows[link.tree.id_of_window(shown)]
+    await until(
+        lambda: client.app.layout.has_focus(shown.active_pane.terminal),
+        "the client focuses the new pane",
+        seen=lambda: client.app.layout.current_control,
+    )
 
 
 async def test_a_target_here_names_the_pane_there(two_servers):

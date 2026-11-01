@@ -51,6 +51,7 @@ from ..wayland.window_pane import WindowWidget
 
 if TYPE_CHECKING:
     from prompt_toolkit.input import Input
+    from prompt_toolkit.layout.containers import AnyContainer
     from prompt_toolkit.layout.screen import WritePosition
     from prompt_toolkit.output import ColorDepth, Output
 
@@ -866,8 +867,19 @@ class ClientState:
         Lillecarl/pymux#323.
         """
         with set_app(self.app):
-            self._sync_focus()
+            target = self._focus_target()
+            if target is not None:
+                self.app.layout.focus(target)
         self.pymux.focus.sync_panes()
+
+    def refocus(self) -> bool:
+        "Focus what this client's state asks for, when the focus is elsewhere. True when it moved."
+        with set_app(self.app):
+            target = self._focus_target()
+            if target is None or self.app.layout.has_focus(target):
+                return False
+            self.app.layout.focus(target)
+            return True
 
     def modes(self) -> dict[str, Any]:
         """
@@ -993,13 +1005,11 @@ class ClientState:
         "The colour scheme of the theme this client is on."
         return theme(self.theme_in_use)
 
-    def _sync_focus(self):
+    def _focus_target(self) -> AnyContainer | None:
+        "What the keyboard should reach, or None to leave the focus where it is."
         # Pop-up displayed?
         if self.display_popup:
-            dialog = self.layout_manager.popup_dialog
-            if dialog is not None:
-                self.app.layout.focus(dialog)
-            return
+            return self.layout_manager.popup_dialog
 
         # A question takes no focus: its keys are global bindings, and
         # they come after the pane's, so they win. The pane keeps the
@@ -1008,11 +1018,11 @@ class ClientState:
 
         # Custom prompt.
         if self.prompt_command:
-            return  # Focus prompt
+            return None  # Focus prompt
 
         # Command mode.
         if self.command_mode:
-            return  # Focus command
+            return None  # Focus command
 
         # A chooser owns the keyboard while it shows. It moves its own
         # focus -- the rows hold it, and `/` gives it to the search
@@ -1023,18 +1033,17 @@ class ClientState:
         # what has the focus, which is why only the search broke.
         # Lillecarl/pymux#161, Lillecarl/pymux#337.
         if self.chooser is not None:
-            return
+            return None
 
         # An overlay pane takes the keyboard while it is open.
         if self.session.overlay_pane is not None:
-            self.app.layout.focus(self.session.overlay_pane.terminal)
-            return
+            return self.session.overlay_pane.terminal
 
         # No windows left, return. We will quit soon.
         if not self.session.arrangement.windows:
-            return
+            return None
 
         pane = self.session.arrangement.get_active_pane_for(self.app)
         if pane is None:
-            return
-        self.app.layout.focus(pane.terminal)
+            return None
+        return pane.terminal

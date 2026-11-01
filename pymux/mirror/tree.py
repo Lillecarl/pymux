@@ -130,7 +130,6 @@ class MirrorTree:
         "panes": Keep.DROPPED,
         "_shapes": Keep.DROPPED,
         "_updated": Keep.DROPPED,
-        "_focus_moved": Keep.DROPPED,
     }
 
     def __init__(self, pymux: Pymux, peer: Peer) -> None:
@@ -143,7 +142,6 @@ class MirrorTree:
         # built: a window that kept its shape keeps its splits.
         self._shapes: dict[int, tuple[object, ...]] = {}
         self._updated = anyio.Event()
-        self._focus_moved = False
 
     def update(self, server: str, server_id: str, tree: Tree) -> None:
         """
@@ -155,18 +153,9 @@ class MirrorTree:
         rows = read_tree(tree)
         looped = {row.session_id for row in rows[SessionRow] if server_id == own or own in row.server_ids.split("/")}
         rows = _without_sessions(rows, looped)
-        self._focus_moved = False
         self._update_panes(rows)
         self._update_windows(rows)
         self._update_sessions(server, server_id, rows)
-        if self._focus_moved:
-            # A key here focused the pane that was active when it was
-            # pressed; `select-pane` ran on the owner, and its answer is
-            # this tree. Nothing else moves the clients' focus to it.
-            mirrored = {id(session) for session in self.sessions.values()}
-            for client_state in self.pymux.clients:
-                if id(client_state.session) in mirrored:
-                    client_state.sync_focus()
         self._updated.set()
         self._updated = anyio.Event()
         self.pymux.invalidate(Woke.TREE_MIRRORED)
@@ -271,10 +260,7 @@ class MirrorTree:
             if self._shapes.get(row.window_id) != shape:
                 self._shapes[row.window_id] = shape
                 self._build_splits(window, row.root_split_id, window_splits, window_panes, weights, window_widths)
-            active = self.panes.get(cast(int, row.active_pane_id))
-            if window._active_pane is not active:
-                window._active_pane = active
-                self._focus_moved = True
+            window._active_pane = self.panes.get(cast(int, row.active_pane_id))
             kept[row.window_id] = window
         for remote_id in list(self._shapes):
             if remote_id not in kept:

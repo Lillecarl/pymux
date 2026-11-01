@@ -93,7 +93,6 @@ class Overlays:
         if not pane.process.is_terminated:
             self.pymux.panes.hang_up(pane)
 
-        self.pymux.focus.sync_clients()
         self.pymux.invalidate(Woke.OVERLAY_CLOSED)
 
     async def display_job(
@@ -128,7 +127,6 @@ class Overlays:
         session.overlay_title = title
         session.overlay_width = width
         session.overlay_height = height
-        self.pymux.focus.sync_clients()
         self.pymux.invalidate(Woke.OVERLAY_OPENED)
 
     async def open_job_in_pane(self, job: Job, session: Session | None = None) -> Window:

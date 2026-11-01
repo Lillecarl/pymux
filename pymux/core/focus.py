@@ -93,6 +93,25 @@ class Focus:
                 # An application that never ran has no layout to focus.
                 logger.exception("Could not sync the focus of a client.")
 
+    def follow_state(self) -> None:
+        """
+        Give each client the focus its state asks for, where it moved.
+        A key press syncs the focus after itself, but much changes the
+        state with no key here: a tree from a mirror's owner, a
+        forwarded command that answers later, a hook or a job. Each of
+        them invalidates, and the invalidate calls this.
+        Lillecarl/pymux#759.
+        """
+        moved = False
+        for client_state in list(self.pymux._client_states.values()):
+            try:
+                moved = client_state.refocus() or moved
+            except Exception:
+                # An application that never ran has no layout to focus.
+                logger.exception("Could not sync the focus of a client.")
+        if moved:
+            self.sync_panes()
+
     def focused_pane(self):
         """
         The pane that the keyboard of the active client reaches.

@@ -464,6 +464,10 @@ async def test_small_client_scrolls_to_pane_it_is_on():
         small.draw()
 
         left, right = window(pymux).panes
+        assert small.view.shows(small.panes.plan.rect_of(right)), "the split's new pane is active for both clients"
+
+        await small.run("select-pane -L")
+        small.draw()
         assert small.view.offset.x == 0
 
         await small.run("select-pane -R")

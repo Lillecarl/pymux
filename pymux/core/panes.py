@@ -487,8 +487,6 @@ class PaneMaker:
         return pane
 
     def _window_pane_shown(self) -> None:
-        for client_state in self.pymux._client_states.values():
-            client_state.sync_focus()
         self.pymux.invalidate(Woke.WINDOW_PANE_OPENED)
 
     def window_pane_drew(self, pane: Pane) -> None:

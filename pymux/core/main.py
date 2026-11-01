@@ -471,7 +471,6 @@ class Pymux:
         for client_state in self._client_states.values():
             if client_state.session is session:
                 client_state.session = somewhere
-                client_state.sync_focus()
 
         self.invalidate(Woke.SESSION_CLOSED)
 
@@ -486,7 +485,6 @@ class Pymux:
         # reported when it attached. Lillecarl/pymux#271.
         take_environment_from(self, client_state)
         self.client_was_used(client_state)
-        client_state.sync_focus()
         self.invalidate(Woke.SESSION_CHANGED)
 
     @property
@@ -886,6 +884,7 @@ class Pymux:
         # The focused pane can have changed, or the process inside it
         # can have pushed/popped kitty keyboard protocol flags or asked
         # for a different pointer.
+        self.focus.follow_state()
         self.terminals.sync_kitty_flags()
         self.terminals.sync_pointer_shape()
         self.terminals.sync_progress()
