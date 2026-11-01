@@ -168,7 +168,16 @@ async def _follow(pymux: Pymux, client: ClientState, peer: Peer, caller: Pane, p
     if pane is None or pane is caller:
         return
     window = pymux._window_holding(pane)
-    if window is None or window is pymux._window_holding(caller):
+    if window is None:
+        return
+    if window is pymux._window_holding(caller):
+        # The owner's choice of pane, here too, though no tree comes:
+        # a command that changed nothing there sends none, and the two
+        # would go on disagreeing. Not sent back: it is the owner's.
+        # Lillecarl/pymux#872.
+        if window._active_pane is not pane:
+            window._active_pane = pane
+            pymux.invalidate(Woke.TREE_MIRRORED)
         return
     session = pymux.session_of_window(window)
     if session is None or session is not client.session:

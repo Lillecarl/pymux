@@ -1001,19 +1001,20 @@ def _create_panes(pymux: Pymux, window: window_tree.Window, view: View) -> PlanC
     )
 
 
-def move_focus(pymux: Pymux, side: Side) -> None:
+def move_focus(pymux: Pymux, side: Side, start: Pane | None = None) -> None:
     """
-    Move the focus one pane that way, and stay where it is at the edge.
+    Move the focus one pane that way from `start`, the active pane by
+    default, and stay where it is at the edge.
 
     **The plan says which pane that is**, in the same words as the
     title bar, so a key and a bar never name different panes, and the
     key works before the first frame. Lillecarl/pymux#217.
     """
-    window = pymux.arrangement.get_active_window()
+    window = pymux._window_holding(start) if start is not None else pymux.arrangement.get_active_window()
     if window is None:
         return
 
-    active = window.active_pane
+    active = start or window.active_pane
 
     if active is None:
         return
@@ -1021,3 +1022,6 @@ def move_focus(pymux: Pymux, side: Side) -> None:
     beside = pane_beside(pymux, window, active, side)
     if beside is not None:
         window.active_pane = beside
+    elif active is not window.active_pane:
+        # At the edge, the pane it came from: that is where the person is.
+        window.active_pane = active

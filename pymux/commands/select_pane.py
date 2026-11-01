@@ -46,7 +46,10 @@ def select_pane(pymux: Pymux, args: argparse.Namespace) -> None:
         else:
             side = Side.RIGHT
 
-        move_focus(pymux, side)
+        # From the pane the command came from: a forwarded command
+        # names the person's pane, which the owner may not hold active.
+        # Lillecarl/pymux#872.
+        move_focus(pymux, side, find_pane(pymux, None))
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):

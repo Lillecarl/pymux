@@ -388,6 +388,34 @@ async def test_a_click_here_selects_the_pane_there(two_servers):
     assert link.tree.windows[owner_window.window_id].active_pane is here, "the tree keeps the click"
 
 
+async def test_select_pane_moves_from_the_pane_the_person_is_in(two_servers):
+    "The two servers disagree on the active pane: a key moves from the person's, and both agree after. Lillecarl/pymux#872."
+    owner, peer, client = two_servers
+    there, here = await shown_here(owner, peer, client)
+    (link,) = peer.peers.by_address.values()
+    await run_as(peer, client, "split-window -h")
+    await until(lambda: len(link.tree.panes) == 2, "the tree brings the new pane")
+    owner_window = owner.arrangement.get_active_window()
+    mirror_window = link.tree.windows[owner_window.window_id]
+    owner_left, owner_right = owner_window.panes
+    left, right = (link.tree.panes[pane.pane_id] for pane in (owner_left, owner_right))
+
+    owner_window.active_pane = owner_left
+    await until(lambda: mirror_window.active_pane is left, "the tree says the left pane")
+    # As a selection here that never reached the owner left them.
+    mirror_window._active_pane = right
+
+    await run_as(peer, client, "select-pane -R")
+    assert owner_window.active_pane is owner_right, "the person is at the right edge, and stays there"
+    await until(lambda: mirror_window.active_pane is right, "both say the right pane")
+
+    mirror_window._active_pane = right
+    owner_window._active_pane = owner_right
+    await run_as(peer, client, "select-pane -L")
+    await until(lambda: mirror_window.active_pane is left, "both say the left pane")
+    assert owner_window.active_pane is owner_left
+
+
 async def test_the_focus_here_follows_a_pane_selected_there(two_servers):
     "select-pane runs on the owner; the tree that answers it moves the client's focus, with no key after."
     owner, peer, client = two_servers
