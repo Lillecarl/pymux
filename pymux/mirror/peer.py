@@ -25,7 +25,7 @@ from ..commands import CommandException
 from ..log import logger
 from .copying import place_of
 from .dial import dial, dial_beside
-from .program import RemoteProgram
+from .program import HOLD_FOR_FRESH, RemoteProgram
 from .tree import MirrorTree
 from .tunnel import Tunnels
 
@@ -34,6 +34,7 @@ if TYPE_CHECKING:
     from pyte.keys.events import KeyProfile
     from pyte.mouse import MouseAction
 
+    from ..connection.client_state import ClientState
     from ..core.main import Pymux
     from ..core.pane import Pane
     from ..core.window_tree import Window
@@ -115,7 +116,7 @@ class Peers:
         """
         if not self.by_address:
             return
-        seen: set[int] = set()
+        seen: dict[int, list[ClientState]] = {}
         windows: list[Window] = []
         for client_state in self.pymux._client_states.values():
             session = client_state.session
@@ -123,11 +124,19 @@ class Peers:
                 continue
             window = session.arrangement.get_active_window_for(client_state.app)
             if window is not None:
-                seen.update(id(pane) for pane in window.panes)
+                for pane in window.panes:
+                    seen.setdefault(id(pane), []).append(client_state)
                 windows.append(window)
         for peer in self.by_address.values():
             for pane in peer.tree.panes.values():
-                cast(RemoteProgram, pane.process).seen(id(pane) in seen)
+                program = cast(RemoteProgram, pane.process)
+                if program.seen(id(pane) in seen):
+                    # Its page is old: the clients that show it wait for
+                    # the frame that catches it up.
+                    for client_state in seen[id(pane)]:
+                        client_state.frame_holds.hold(
+                            ("mirror", pane.pane_id), lambda program=program: not program.stale, HOLD_FOR_FRESH
+                        )
             peer.tell_sizes(
                 {
                     remote_id: self.pymux.planes.size(window)

@@ -12,11 +12,21 @@ Lillecarl/pymux#163.
 
 from __future__ import annotations
 
+import anyio
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.auto_suggest import Suggestion
 from prompt_toolkit.key_binding.key_processor import KeyPress
 from prompt_toolkit.keys import Keys
 from session import create_session
+
+
+async def until(condition, what: str) -> None:
+    try:
+        with anyio.fail_after(5):
+            while not condition():
+                await anyio.sleep(0.005)
+    except TimeoutError:
+        raise AssertionError("never: %s" % (what,)) from None
 
 
 def press(state, key):
@@ -96,20 +106,18 @@ async def test_nothing_here_can_take_right_arrow_of_pane():
             assert _binding_would_fire(state)
 
 
-async def test_a_key_keeps_the_suggestion_in_the_same_step():
-    "The frame a key asks for is drawn with the grey text: no frame without it, and none to bring it back."
+async def test_a_key_holds_the_frame_until_its_suggestion_is_in():
+    "The frame a key asks for waits for the grey text: no frame without it, and none to bring it back."
     async with create_session() as (pymux, state):
         pymux.prompt_history.append_string("display-message hello")
         with set_app(state.app):
             state.app.layout.focus(state.command_buffer)
-            for key in "disp":
-                state.command_buffer.insert_text(key)
-                assert state.command_buffer.suggestion is not None, key
-            assert state.command_buffer.suggestion.text == "lay-message hello"
-
-            state.command_buffer.delete_before_cursor()
-            assert state.command_buffer.suggestion is not None
-            assert state.command_buffer.suggestion.text == "play-message hello"
+            state.command_buffer.insert_text("disp")
+            assert state.command_buffer.suggestion is None
+            assert state.frame_holds.waiting(), "the lookup the key started holds the frame"
+        await until(lambda: not state.frame_holds.waiting(), "the lookup ends")
+        assert state.command_buffer.suggestion is not None
+        assert state.command_buffer.suggestion.text == "lay-message hello"
 
 
 def _binding_would_fire(state) -> bool:

@@ -42,13 +42,14 @@ from ..keys.actions import Origin, started_by
 from ..layout.layout import LayoutManager
 from ..layout.plane import RESIZE_SHAPES
 from ..log import logger
-from ..mirror.program import RemoteProgram
 from ..notify.notifications import Notification
 from ..options.client_options import ClientOptions
 from ..style.colors import DefaultColors
 from ..style.nearest import NEAREST
 from ..style.style import DEFAULT_THEME, theme
 from ..wayland.window_pane import WindowWidget
+from .frame_holds import FrameHolds
+from .lookups import Lookups
 
 if TYPE_CHECKING:
     from prompt_toolkit.input import Input
@@ -129,19 +130,6 @@ class PaneCursor(CursorShapeConfig):
 BEHIND_INTERVAL = 0.1
 
 
-def _suggest_at_once(buffer: Buffer) -> None:
-    """
-    Find the suggestion as the text changes, not a turn of the loop
-    later. prompt_toolkit clears it on every change and finds the next
-    one in a task, and the frame the key asked for draws before that
-    task runs: the grey rest of the line went and came back on every
-    key. The task then finds a suggestion here and does nothing. The
-    history suggester waits on nothing, so this costs what it would.
-    """
-    if buffer.auto_suggest is not None:
-        buffer.suggestion = buffer.auto_suggest.get_suggestion(buffer, buffer.document)
-
-
 class ClientState:
     """
     State information that is independent for each client.
@@ -193,6 +181,9 @@ class ClientState:
         "output": Keep.REBUILT,
         "color_depth": Keep.REBUILT,
         "layout_manager": Keep.REBUILT,
+        # A wait for a result that is in flight; the next build starts with none.
+        "frame_holds": Keep.REBUILT,
+        "_lookups": Keep.REBUILT,
         "prompt_completer": Keep.REBUILT,
         "last_time_text": Keep.REBUILT,
         "input_tick": Keep.DROPPED,
@@ -433,7 +424,6 @@ class ClientState:
             multiline=False,
             complete_while_typing=False,
             completer=create_command_completer(pymux),
-            on_text_changed=_suggest_at_once,
         )
 
         self.prompt_buffer = Buffer(
@@ -448,13 +438,16 @@ class ClientState:
             # nothing.
             complete_while_typing=True,
             completer=DynamicCompleter(lambda: self.prompt_completer),
-            on_text_changed=_suggest_at_once,
         )
 
         # Layout.
         self.layout_manager = LayoutManager(self.pymux, self)
 
         self.app = self._create_app()
+
+        #: What this client's next frame waits for (`frame_holds`).
+        self.frame_holds = FrameHolds(self.app.invalidate, lambda: self.pymux.tasks)
+        self._lookups = (Lookups(self.command_buffer, self.frame_holds), Lookups(self.prompt_buffer, self.frame_holds))
 
         # Draw the images of the panes right after rendering. (The text
         # is on the screen by then; kitty draws images over it.)
@@ -534,9 +527,9 @@ class ClientState:
         if self.input_tick != self.schedule_tick:
             self.app.invalidate()
             return True
-        if self._mirror_catching_up():
-            # The frame that catches the mirror up asks again, and so
-            # does the end of the hold.
+        if self.frame_holds.waiting():
+            # The result that is in asks again, and so does the end of
+            # the hold.
             return True
         if self.connection.pacing.waits_for_terminal:
             self.connection.pacing.frame_held = True
@@ -552,20 +545,6 @@ class ClientState:
             self._paced_while_behind = False
             self.pace()
         return False
-
-    def _mirror_catching_up(self) -> bool:
-        """
-        A mirrored pane of the window this client shows waits for its
-        first frame since it was shown again. The client draws the
-        window when the frame comes, or when the hold ends, rather than
-        draw the old page and then jump. Lillecarl/pymux#759.
-        """
-        if self.session.remote is None:
-            return False
-        window = self.session.arrangement.get_active_window_for(self.app)
-        return window is not None and any(
-            isinstance(pane.process, RemoteProgram) and pane.process.stale for pane in window.panes
-        )
 
     def pace(self) -> None:
         """
