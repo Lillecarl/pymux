@@ -194,6 +194,7 @@ class PeerLink:
         while not self.connection.closed:
             tree = tree_of(pymux)
             if tree != self._tree_sent:
+                self._size_the_panes()
                 self._tree_sent = tree
                 self.queue(
                     {Field.CMD: Packet.TREE, Field.SERVER: server, Field.SERVER_ID: pymux.server_id, Field.ROWS: tree}
@@ -376,12 +377,22 @@ class PeerLink:
             rooms[self] = sizes
         else:
             rooms.pop(self, None)
-        # A window nobody here watches gets no frame to size its panes.
+        self._size_the_panes(changed)
+        pymux.invalidate(Woke.PEER_RESIZED)
+
+    def _size_the_panes(self, window_ids: set[WindowId] | None = None) -> None:
+        """
+        Give the panes of the windows the peer sizes (or of `window_ids`)
+        the boxes their plan gives them. A window nobody here watches
+        gets no frame to do it, so a split, a new pane or a size the peer
+        sent would keep the size a pane was born with.
+        """
+        pymux = self.connection.pymux
+        wanted = set(pymux.planes.peer_rooms.get(self, {})) if window_ids is None else window_ids
         for session in pymux.sessions:
             for window in session.arrangement.windows:
-                if window.window_id in changed:
+                if window.window_id in wanted:
                     size_the_panes_of(pymux, window)
-        pymux.invalidate(Woke.PEER_RESIZED)
 
     @_PACKETS.handles(Packet.WATCH)
     def _on_watch(self, packet: Message) -> None:

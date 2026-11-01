@@ -235,6 +235,66 @@ async def test_a_split_here_splits_the_window_there(two_servers):
     await until(lambda: mirror_window.active_pane is link.tree.panes[new.pane_id], "the focus follows the owner")
 
 
+def pane_sizes(mux, window) -> dict:
+    "Each pane's screen, and the box the window's plan gives it."
+    return {
+        pane.pane_id: (
+            (pane.terminal.terminal_control.screen.columns, pane.terminal.terminal_control.screen.lines),
+            (rect.width, rect.height),
+        )
+        for slot, rect in plan_of(mux, window).rects.items()
+        for pane in slot.panes
+    }
+
+
+async def test_a_split_here_lays_the_window_out_there_at_the_peers_size(two_servers):
+    "A client bigger than the default: the owner's new pane and the old one both fill the peer's room."
+    owner, peer, client = two_servers
+    client.app.output.get_size = lambda: Size(rows=50, columns=200)
+    peer.invalidate()
+    there, here = await shown_here(owner, peer, client)
+    owner_window = owner.arrangement.get_active_window()
+    (link,) = peer.peers.by_address.values()
+    (mirror_window,) = link.tree.windows.values()
+    await until(
+        lambda: owner.planes.size(owner_window) == peer.planes.size(mirror_window),
+        "the owner's window takes the room the peer has",
+        lambda: (owner.planes.size(owner_window), peer.planes.size(mirror_window)),
+    )
+    assert owner.planes.size(owner_window).columns == 200
+
+    await run_as(peer, client, "split-window -h")
+    await until(lambda: len(link.tree.panes) == 2, "the tree brings the new pane")
+    await until(
+        lambda: (
+            all(screen == box for screen, box in pane_sizes(owner, owner_window).values())
+            and owner.planes.size(owner_window).columns == 200
+        ),
+        "both panes there fill their boxes at the peer's size",
+        lambda: (owner.planes.size(owner_window), pane_sizes(owner, owner_window)),
+    )
+
+
+async def test_a_new_window_here_is_laid_out_there_at_the_peers_size(two_servers):
+    owner, peer, client = two_servers
+    client.app.output.get_size = lambda: Size(rows=50, columns=200)
+    peer.invalidate()
+    await shown_here(owner, peer, client)
+    (link,) = peer.peers.by_address.values()
+
+    await run_as(peer, client, "new-window")
+    await until(lambda: len(owner.arrangement.windows) == 2, "the owner opens the window")
+    window = owner.arrangement.windows[-1]
+    await until(
+        lambda: (
+            owner.planes.size(window).columns == 200
+            and all(screen == box for screen, box in pane_sizes(owner, window).values())
+        ),
+        "the new pane there fills the peer's room",
+        lambda: (owner.planes.size(window), pane_sizes(owner, window)),
+    )
+
+
 async def test_a_command_goes_over_ssh_beside_the_link(two_servers, tmp_path):
     "Over SSH a forwarded command is a second channel on the connection the link holds."
     owner, peer, client = two_servers
