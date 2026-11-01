@@ -14,6 +14,7 @@ import shlex
 from typing import TYPE_CHECKING, Any
 
 from libpymux.protocol import Field, Message, Packet
+from prompt_toolkit.application.current import get_app_or_none
 from prompt_toolkit.clipboard import ClipboardData
 from pyte.osc import CLEAR_SCROLLBACK, Osc
 from pyte.page import RowMark
@@ -601,7 +602,13 @@ class Outward:
         Copy mode is a client's, so what it copied goes to that client's
         terminal and to nobody else's. Another person on the session
         keeps their own clipboard. Lillecarl/pymux#470.
+
+        The copy mode a peer's person reads here sends it to that peer.
         """
+        app = get_app_or_none()
+        for connection in self.pymux.connections:
+            if connection.peer is not None and connection.peer.copied(app, text):
+                return
         try:
             client = self.pymux.get_client_state()
         except ValueError:

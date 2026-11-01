@@ -16,6 +16,7 @@ import anyio
 from libpymux.connection import CommandResult, Reply, command_packet
 from libpymux.protocol import OLDEST_PEER_VERSION, PEER_VERSION, Field, Message, Packet, peer_upgrade
 from libpymux.wire import MSGPACK, MSGPACK_ZSTD, PacketReader, encode_json
+from prompt_toolkit.clipboard import ClipboardData
 from pyte.keep import Keep
 from pyte.osc import color_base_data
 
@@ -203,6 +204,9 @@ class Peer:
             }
         )
 
+    def copy_mode(self, pane_id: int) -> None:
+        self.send({Field.CMD: Packet.MIRROR_COPY, Field.PANE_ID: pane_id})
+
     def tell_sizes(self, sizes: dict[int, Size]) -> None:
         "Tell the owner the room each of its windows has here, when that changed."
         if sizes == self._sizes_told:
@@ -363,6 +367,16 @@ class Peer:
                 self.tree.pymux.outward.forward_osc(
                     pane, str(packet.get(Field.CODE, "")), str(packet.get(Field.DATA, ""))
                 )
+            return
+        if packet.get(Field.CMD) == Packet.MIRROR_COPIED:
+            # A person's copy: the paste buffer of the sessions here, as a
+            # copy mode here fills it (without the selection type), and
+            # the terminal of the client a person here used last.
+            pymux = self.tree.pymux
+            text = str(packet.get(Field.DATA, ""))
+            if text:
+                pymux.clipboard.set_data(ClipboardData(text))
+            pymux.outward.write_user_clipboard(text, client=pymux.the_client_to_tell())
             return
         sink = self.sinks.get(pane_id) if isinstance(pane_id, int) else None
         if sink is None:

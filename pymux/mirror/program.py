@@ -130,6 +130,11 @@ class RemoteProgram:
         if not self._stopped:
             self.peer.mouse(self.pane_id, action, column, row)
 
+    def copy_mode(self) -> None:
+        "Copy mode runs on the owner, which holds the history (`Mirror.copy_mode`)."
+        if not self._stopped:
+            self.peer.copy_mode(self.pane_id)
+
     def focus(self, focused: bool) -> None:
         "A terminal window with the focus shows this pane, or stopped (`Focus.sync_panes`)."
         if not self._stopped:

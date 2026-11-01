@@ -56,6 +56,7 @@ PEER_PACKETS = (
     Packet.MIRROR_PASTE,
     Packet.MIRROR_MOUSE,
     Packet.MIRROR_FOCUS,
+    Packet.MIRROR_COPY,
     Packet.PEER_TERMINAL,
     Packet.WATCH,
     Packet.PEER_SIZES,
@@ -285,14 +286,24 @@ class PeerLink:
     @_PACKETS.handles(Packet.MIRROR_KEY)
     def _on_key(self, packet: Message) -> None:
         source = self._driven(packet)
-        if source is not None:
-            source.control.type_key(str(packet.get(Field.DATA, "")), _key_profile(packet.get(Field.KEY_PROFILE)))
+        if source is None:
+            return
+        data = str(packet.get(Field.DATA, ""))
+        if source.copying is not None:
+            source.copying.type(data)
+        else:
+            source.control.type_key(data, _key_profile(packet.get(Field.KEY_PROFILE)))
 
     @_PACKETS.handles(Packet.MIRROR_PASTE)
     def _on_paste(self, packet: Message) -> None:
         source = self._driven(packet)
-        if source is not None:
-            source.control.paste(str(packet.get(Field.DATA, "")))
+        if source is None:
+            return
+        text = str(packet.get(Field.DATA, ""))
+        if source.copying is not None:
+            source.copying.paste(text)
+        else:
+            source.control.paste(text)
 
     @_PACKETS.handles(Packet.MIRROR_MOUSE)
     def _on_mouse(self, packet: Message) -> None:
@@ -302,10 +313,29 @@ class PeerLink:
             action = MouseAction(int(mouse.get("action", 0)))
         except ValueError:
             return
+        if source is None:
+            return
+        column, row = int(mouse.get("column", 0)), int(mouse.get("row", 0))
+        if source.copying is not None:
+            source.copying.mouse(action, column, row)
+        elif not source.control.use_mouse(action, column, row) and action is MouseAction.WHEEL_UP:
+            # The wheel a program does not want reads the history, as
+            # it does for a client here (`TerminalControl._read_the_history`).
+            source.copy(scroll=True)
+
+    @_PACKETS.handles(Packet.MIRROR_COPY)
+    def _on_copy(self, packet: Message) -> None:
+        source = self._driven(packet)
         if source is not None:
-            # The wheel a program does not want reads the history, in
-            # copy mode here, which a peer does not reach yet.
-            source.control.use_mouse(action, int(mouse.get("column", 0)), int(mouse.get("row", 0)))
+            source.copy()
+
+    def copied(self, app: object, text: str) -> bool:
+        "Send what a person copied to the peer, when `app` is the copy mode of one of its mirrors (`Outward.copied_in_copy_mode`)."
+        for source in self.sources.values():
+            if source.copying is not None and source.copying.app is app:
+                self.queue({Field.CMD: Packet.MIRROR_COPIED, Field.PANE_ID: int(source.pane.pane_id), Field.DATA: text})
+                return True
+        return False
 
     @_PACKETS.handles(Packet.PEER_SIZES)
     def _on_sizes(self, packet: Message) -> None:

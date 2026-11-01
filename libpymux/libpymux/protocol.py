@@ -269,6 +269,10 @@ class Packet(StrEnum):
     # `focused`. The owner sends the program one focus report for all
     # its viewers (DEC 1004), so a peer never types one.
     MIRROR_FOCUS = "mirror-focus"
+    # "Open copy mode on this pane for me." The owner runs it and its
+    # frames show it, until the person leaves it with the keys they
+    # send meanwhile, which go to copy mode and not to the program.
+    MIRROR_COPY = "mirror-copy"
     # The terminal of the person at the peer, as the peer worked it out
     # from its own clients: `cell-size`, `color-base` and `keyboard`.
     # The owner weighs it with its own clients' terminals and answers a
@@ -304,6 +308,10 @@ class Packet(StrEnum):
     # It goes for every pane of a session the peer watches, seen or
     # not, and the peer serves it as one of its own panes said it.
     MIRROR_OSC = "mirror-osc"
+    # The person at the peer copied the text under `data` in copy mode:
+    # it goes to their own clipboard, as a person's copy and not as a
+    # program's OSC 52.
+    MIRROR_COPIED = "mirror-copied"
     # "That pane is not mirrored": there is none, under `error`.
     MIRROR_REFUSED = "mirror-refused"
 

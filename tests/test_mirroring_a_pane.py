@@ -14,9 +14,10 @@ import sys
 
 import anyio
 import pytest
-from libpymux.protocol import OLDEST_PEER_VERSION, PEER_VERSION, Field, Packet, peer_upgrade
+from libpymux.protocol import OLDEST_PEER_VERSION, PEER_VERSION, Field, Message, Packet, peer_upgrade
 from libpymux.wire import MSGPACK, encode_json
 from ptterm.control import TerminalControl
+from pyte.mouse import MouseAction
 
 from pymux.connection.server import ServerConnection
 from pymux.core.main import Pymux
@@ -111,6 +112,8 @@ def open_link(mux, pane):
     "The owner's end of a new peer link that mirrors `pane`, and the peer's end."
     server_end, client_end = connect_in_memory()
     connection = ServerConnection(mux, server_end)
+    # As `Serving` lists each connection it accepts.
+    mux.connections.append(connection)
     client_end.write_nowait(encode_json({**HELLO, Field.WIRE: [MSGPACK]}))
     client_end.write_nowait(encode_json({Field.CMD: Packet.MIRROR, Field.PANE_ID: int(pane.pane_id)}))
     return connection, client_end
@@ -231,6 +234,106 @@ async def test_a_peer_drives_the_pane_in_the_modes_the_program_set(pymux):
             while len(typed) < 3:
                 await anyio.sleep(0.01)
         assert typed == ["\x1bOA", "\x1b[200~pasted\x1b[201~", "\x1b[<0;4;2M"]
+
+        pymux.stop()
+
+
+def shows(sink: MirrorSink, text: str) -> bool:
+    return any(text in row for row in picture(sink.control)[0])
+
+
+async def until(client_end, sink: MirrorSink, seen) -> list[Message]:
+    "Apply what the link sends until `seen()` holds, and give what was not a frame."
+    others = []
+    with anyio.fail_after(5):
+        while not seen():
+            packet = await client_end.read()
+            if packet.get(Field.CMD) == Packet.MIRROR_FRAME:
+                sink.take(packet)
+            else:
+                others.append(packet)
+    return others
+
+
+#: Page up, in either table of copy mode's keys.
+PAGE_UP = "\x1b[5~"
+
+
+async def test_copy_mode_of_a_mirror_runs_on_the_owner_and_reads_its_history(pymux):
+    pane, owner = the_control(pymux)
+    owner.feed_output("".join("line %d\r\n" % number for number in range(40)))
+    pymux.handle_command("set-option -g mode-keys emacs")
+
+    async with pymux.running():
+        connection, client_end = open_link(pymux, pane)
+        sink = a_peer()
+        await converge(client_end, sink, owner)
+        assert not shows(sink, "line 0 ")
+
+        ask(client_end, Packet.MIRROR_COPY, pane)
+        # A page up moves by the window as last drawn, so a person sees
+        # each page before the next.
+        with anyio.fail_after(5):
+            while not shows(sink, "line 0 "):
+                ask(client_end, Packet.MIRROR_KEY, pane, data=PAGE_UP)
+                packet = await client_end.read()
+                while packet.get(Field.CMD) != Packet.MIRROR_FRAME:
+                    packet = await client_end.read()
+                sink.take(packet)
+
+        ask(client_end, Packet.MIRROR_KEY, pane, data="q")
+        with anyio.fail_after(5):
+            while source_of(connection).copying is not None:
+                await anyio.sleep(0.01)
+        await converge(client_end, sink, owner)
+
+        pymux.stop()
+
+
+async def test_what_a_peer_copies_in_copy_mode_goes_to_the_peer(pymux):
+    pane, owner = the_control(pymux)
+    owner.feed_output("the words to copy\r\n")
+    # The keys are tmux's emacs table, whatever $EDITOR says.
+    pymux.handle_command("set-option -g mode-keys emacs")
+
+    async with pymux.running():
+        connection, client_end = open_link(pymux, pane)
+        sink = a_peer()
+        await converge(client_end, sink, owner)
+
+        ask(client_end, Packet.MIRROR_COPY, pane)
+        await until(client_end, sink, lambda: source_of(connection).copying is not None)
+        # To the top, a selection, to the end of the line, and copy.
+        for key in (PAGE_UP, "\x00", "\x05", "\x17"):
+            ask(client_end, Packet.MIRROR_KEY, pane, data=key)
+        copied = []
+        with anyio.fail_after(5):
+            while not copied:
+                packet = await client_end.read()
+                if packet.get(Field.CMD) == Packet.MIRROR_COPIED:
+                    copied.append(packet[Field.DATA])
+        assert copied == ["the words to copy"]
+
+        pymux.stop()
+
+
+async def test_a_copy_from_the_owner_fills_the_paste_buffer_at_the_peer(pymux):
+    link = Peer(pymux, "owner")
+    link._take({Field.CMD: Packet.MIRROR_COPIED, Field.PANE_ID: 1, Field.DATA: "copied there"})
+    assert pymux.clipboard.get_data().text == "copied there"
+
+
+async def test_the_wheel_over_a_program_that_wants_no_mouse_opens_copy_mode_on_the_owner(pymux):
+    pane, owner = the_control(pymux)
+    owner.feed_output("".join("line %d\r\n" % number for number in range(40)))
+
+    async with pymux.running():
+        connection, client_end = open_link(pymux, pane)
+        sink = a_peer()
+        await converge(client_end, sink, owner)
+        ask(client_end, Packet.MIRROR_MOUSE, pane, mouse={"action": int(MouseAction.WHEEL_UP), "column": 1, "row": 1})
+        await until(client_end, sink, lambda: not shows(sink, "line 39"))
+        assert source_of(connection).copying is not None
 
         pymux.stop()
 
