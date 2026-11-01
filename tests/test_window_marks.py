@@ -121,9 +121,17 @@ def test_output_that_changes_no_text_is_no_activity():
     assert not arrangement.check_output([], 1.0)
     assert not window.activity
 
-    control.feed_output("\r\nan answer")
+    control.resize_screen(6, 30)
     pane.content_changed()
-    assert arrangement.check_output([], 2.0)
+    assert not arrangement.check_output([], 2.0), "a resize is no output"
+
+    control.feed_output("\x1b[2J\x1b[H> waiting")
+    pane.content_changed()
+    assert not arrangement.check_output([], 3.0), "the page cleared and drawn again the same"
+
+    control.feed_output("\x1b[1;1H\x1b[31m> waiting\x1b[0m")
+    pane.content_changed()
+    assert arrangement.check_output([], 4.0), "a colour is shown too"
     assert window.activity
 
 
