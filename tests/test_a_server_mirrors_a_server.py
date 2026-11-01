@@ -296,9 +296,11 @@ async def test_a_new_window_here_is_laid_out_there_at_the_peers_size(two_servers
     )
 
 
-async def test_a_window_the_peer_stops_watching_keeps_its_size_there(two_servers):
-    "Looking away resizes nothing: the program keeps the size it had while somebody watched."
+@pytest.mark.parametrize("default_size", [None, Size(rows=24, columns=80)], ids=["no-size", "new-session-x-y"])
+async def test_a_window_the_peer_stops_watching_keeps_its_size_there(two_servers, default_size):
+    "Looking away resizes nothing: the program keeps the size it had while somebody watched, though `-x -y` named one."
     owner, peer, client = two_servers
+    owner.sessions[0].default_size = default_size
     client.app.output.get_size = lambda: Size(rows=50, columns=200)
     peer.invalidate()
     there, here = await shown_here(owner, peer, client)

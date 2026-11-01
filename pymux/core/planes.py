@@ -161,7 +161,7 @@ class Planes:
         around the panes wants off what is left. **A manual size is
         already the window's own**, so nothing comes off it.
 
-        **Nobody watching is the session's `default_size`**, and no
+        **Nobody watching yet is the session's `default_size`**, and no
         status row comes off it. A window exists before a client
         attaches to it, and the program in a pane needs a size from the
         first byte it writes. `new-session -x -y` is what names that
@@ -234,14 +234,19 @@ class Planes:
         """
         How big a window of that session is while nobody is watching it.
 
-        The size `new-session -x -y` named, when it named one. Otherwise
-        the size the window took when it was made, and for a window
-        being made, what the clients give it now (`size_for_a_new_window`).
+        The size it had when somebody last watched it. Before anybody
+        did, the size `new-session -x -y` named, when it named one, and
+        otherwise what the clients give a window made now
+        (`size_for_a_new_window`).
+
+        **The watched size comes first.** `-x -y` names a size for
+        before a person looks. After them, it would resize every
+        program they leave, and resize it again when they come back.
         """
-        if session is not None and session.default_size is not None:
-            return session.default_size
         if window is not None and window.unwatched_size is not None:
             return window.unwatched_size
+        if session is not None and session.default_size is not None:
+            return session.default_size
         return self.size_for_a_new_window(session)
 
     def size_for_a_new_window(self, session: Session | None) -> Size:
