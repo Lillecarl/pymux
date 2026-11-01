@@ -116,7 +116,8 @@ async def upgrade(pymux: Pymux, command: list[str]) -> None:
             await _check(command, written.partial)
             for connection in list(pymux.connections):
                 client_state = connection.client_state
-                if client_state is not None and not client_state.temporary:
+                # A peer's mirrors say it in each pane, as a client says it on its terminal.
+                if connection.peer is not None or (client_state is not None and not client_state.temporary):
                     await connection.say_restarting(RESTART_WAIT, UPGRADING)
             # From the sweep on, a command that ends a pane would leave a
             # program neither image ends or reaps. Lillecarl/pymux#740.

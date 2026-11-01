@@ -221,6 +221,15 @@ def notice(
     return lines
 
 
+def link_notice(host: str, said: str, seconds: float, trying: bool = False) -> list[str]:
+    """
+    The lines a mirrored pane shows while the link to its server is
+    gone: `notice` without the line about keys. A key in the pane goes
+    to the pane, and the peer dials again by itself.
+    """
+    return notice(host, said, seconds, None, trying)[:-1]
+
+
 def _left(seconds: float) -> str:
     whole = max(1, math.ceil(seconds))
     return "1 second" if whole == 1 else "%d seconds" % (whole,)

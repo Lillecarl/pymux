@@ -41,6 +41,8 @@ class Pane:
         "terminal": Keep.SAVED,
         "chosen_name": Keep.SAVED,
         "clock_mode": Keep.SAVED,
+        # Told again by whoever draws it: the link a mirror waits for.
+        "notice": Keep.DROPPED,
         "user_vars": Keep.SAVED,
         "tags": Keep.SAVED,
         "current_directory": Keep.SAVED,
@@ -68,6 +70,10 @@ class Pane:
 
         # Displayed the clock instead of this pane content.
         self.clock_mode = False
+
+        #: Lines drawn over the whole pane in place of its content: a
+        #: mirror whose link is gone (`Peer`). None draws the content.
+        self.notice: tuple[str, ...] | None = None
 
         # Give unique ID.
         Pane._pane_counter += 1

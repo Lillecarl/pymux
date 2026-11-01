@@ -280,6 +280,63 @@ class BigClock(Container):
         return []
 
 
+class PaneNotice(Container):
+    """
+    Lines over the whole of a pane, as a block in its middle: what a
+    mirrored pane says while the link to its server is gone. A client
+    draws the same lines over its terminal (`client.reconnect.draw`).
+    """
+
+    def __init__(self, get_lines: Callable[[], tuple[str, ...] | None]) -> None:
+        self.get_lines = get_lines
+
+    @override
+    def reset(self) -> None:
+        pass
+
+    @override
+    def write_to_screen(
+        self,
+        screen: Screen,
+        mouse_handlers: MouseHandlers,
+        write_position: WritePosition,
+        parent_style: str,
+        erase_bg: bool,
+        z_index: int | None,
+    ) -> None:
+        lines = self.get_lines() or ()
+        xpos, ypos = write_position.xpos, write_position.ypos
+        width, height = write_position.width, write_position.height
+        bg = Char(" ", "")
+
+        def draw_func() -> None:
+            for y in range(ypos, ypos + height):
+                row = screen.data_buffer[y]
+                for x in range(xpos, xpos + width):
+                    row[x] = bg
+            widest = max((len(line) for line in lines), default=0)
+            left = xpos + max(0, (width - widest) // 2)
+            top = ypos + max(0, (height - len(lines)) // 2)
+            for number, line in enumerate(lines[:height]):
+                row = screen.data_buffer[top + number]
+                for offset, char in enumerate(line[: width - (left - xpos)]):
+                    row[left + offset] = Char(char, "")
+
+        screen.draw_with_z_index(z_index=Z_INDEX.CLOCK, draw_func=draw_func)
+
+    @override
+    def preferred_width(self, max_available_width: int) -> D:
+        return D()
+
+    @override
+    def preferred_height(self, width: int, max_available_height: int) -> D:
+        return D()
+
+    @override
+    def get_children(self) -> list[Container]:
+        return []
+
+
 class PaneNumber(Container):  # XXX: make FormattedTextControl
     """
     Number of panes, to be drawn in the middle of the pane.

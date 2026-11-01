@@ -41,7 +41,7 @@ from .cut_shade import Hidden, lifts, shade
 from .geometry import cut_backdrop, cut_shade_of, hidden_of_pane, pane_beside
 from .rects import Side
 from .titlebar import PaneTitleBar
-from .widgets import BigClock, PaneNumber
+from .widgets import BigClock, PaneNotice, PaneNumber
 from .z_index import Z_INDEX
 
 if TYPE_CHECKING:
@@ -358,6 +358,17 @@ def create_container_for_process(
                 ),
                 # The clock.
                 Float(content=ConditionalContainer(BigClock(pymux, on_click), filter=clock_is_visible)),
+                # What a mirror says while its link is gone.
+                Float(
+                    content=ConditionalContainer(
+                        PaneNotice(lambda: arrangement_pane.notice),
+                        filter=Condition(lambda: arrangement_pane.notice is not None),
+                    ),
+                    left=0,
+                    right=0,
+                    top=0,
+                    bottom=0,
+                ),
                 # Pane number.
                 Float(
                     content=ConditionalContainer(

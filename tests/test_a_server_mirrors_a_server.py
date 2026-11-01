@@ -505,6 +505,26 @@ def links_of(owner) -> list:
     return [connection for connection in owner.connections if connection.peer is not None]
 
 
+async def test_a_pane_says_the_owner_restarts_until_its_link_is_back(two_servers):
+    "What a client draws over its terminal while its server upgrades, a mirror draws over its pane. Lillecarl/pymux#869."
+    owner, peer, client = two_servers
+    there, here = await shown_here(owner, peer, client)
+    owner_control = there.terminal.terminal_control
+    await until(lambda: rows_of(here.terminal.terminal_control) == rows_of(owner_control), "the mirror shows the page")
+    (link,) = links_of(owner)
+    (dialled,) = peer.peers.by_address.values()
+
+    await link.say_restarting(30.0, "pymux is being upgraded.")
+    await until(lambda: dialled.restart is not None, "the peer hears the owner restarts")
+    link.detach_and_close()
+    await until(lambda: here.notice is not None, "the pane says the link is gone")
+    assert here.notice[0] == "pymux lost the server on %s." % (dialled.server,)
+    assert here.notice[1] == "pymux is being upgraded."
+    assert rows_of(here.terminal.terminal_control) == rows_of(owner_control), "the page under the notice stays"
+
+    await until(lambda: here.notice is None, "the first frame back takes the notice away")
+
+
 async def test_a_link_that_goes_is_dialled_again_with_copy_mode_where_it_was(two_servers):
     "As when the owner upgrades: the peer links again, and copy mode opens where the person left it."
     owner, peer, client = two_servers

@@ -21,7 +21,10 @@ from pyte.keep import Keep
 from pyte.osc import color_base_data
 
 from ..client.defaults import is_ssh_url
+from ..client.reconnect import link_notice
+from ..client.relink import COUNTDOWN_STEP, RESTART_RETRY
 from ..commands import CommandException
+from ..enums import Woke
 from ..log import logger
 from .copying import place_of
 from .dial import dial, dial_beside
@@ -181,6 +184,8 @@ class Peer:
         "_sizes_told": Keep.DROPPED,
         "stream": Keep.DROPPED,
         "tree": Keep.DROPPED,
+        "server": Keep.DROPPED,
+        "restart": Keep.DROPPED,
     }
 
     def __init__(self, pymux: Pymux, address: str, **connect_with: Any) -> None:
@@ -207,6 +212,10 @@ class Peer:
         self.stream: anyio.abc.ByteStream | None = None
         #: The owner said which versions of the link it speaks, and they meet ours.
         self.accepted = False
+        #: What the owner calls itself, as its trees say.
+        self.server: str | None = None
+        #: The owner said it restarts: why, and until when on the loop's clock.
+        self.restart: tuple[str, float] | None = None
 
     def send(self, packet: Message) -> None:
         if self.connected:
@@ -360,6 +369,8 @@ class Peer:
         linked = False
         wait = FIRST_REDIAL
         while True:
+            if linked:
+                self._say_gone(0.0, trying=True)
             try:
                 stream = await dial(self.address, **self.connect_with)
             except Exception as error:
@@ -367,14 +378,41 @@ class Peer:
                 if not linked:
                     logger.warning("Could not reach the server at %s: %s", self.address, self.error)
                     return
-                await anyio.sleep(wait)
-                wait = min(wait * 2, LAST_REDIAL)
+                wait = await self._count_down(wait)
                 continue
             linked = True
+            self.restart = None
             wait = FIRST_REDIAL
             if await self._hold(stream):
+                self._say_gone(None)
                 return
-            await anyio.sleep(wait)
+            wait = await self._count_down(wait)
+
+    async def _count_down(self, wait: float) -> float:
+        """
+        Wait to dial again, with the panes saying so, and answer the
+        wait after the next. An owner that restarts is dialled every
+        `RESTART_RETRY` until its window ends: its next image answers
+        within about a second.
+        """
+        restarting = self.restart is not None and anyio.current_time() < self.restart[1]
+        if restarting:
+            wait = RESTART_RETRY
+        ends_at = anyio.current_time() + wait
+        while (left := ends_at - anyio.current_time()) > 0:
+            self._say_gone(left)
+            await anyio.sleep(min(left, COUNTDOWN_STEP))
+        return wait if restarting else min(wait * 2, LAST_REDIAL)
+
+    def _say_gone(self, seconds: float | None, trying: bool = False) -> None:
+        "Put the notice a client draws while its server is gone over each pane of this link, or take it away."
+        lines = None
+        if seconds is not None:
+            why = self.restart[0] if self.restart is not None else (self.error or "the link went")
+            lines = tuple(link_notice(self.server or self.address, why, seconds, trying))
+        for pane in self.tree.panes.values():
+            pane.notice = lines
+        self.tree.pymux.invalidate(Woke.TREE_MIRRORED)
 
     async def _hold(self, stream: anyio.abc.ByteStream) -> bool:
         "Hold one link until it goes. True when the owner refused it, so dialling again is no use."
@@ -457,7 +495,15 @@ class Peer:
         return None
 
     def _take(self, packet: Message) -> None:
+        if packet.get(Field.CMD) == Packet.RESTARTING:
+            self.restart = (
+                str(packet.get(Field.MESSAGE) or "the server restarts"),
+                anyio.current_time() + float(packet.get(Field.WAIT) or 0),
+            )
+            return
         if packet.get(Field.CMD) == Packet.TREE:
+            if packet.get(Field.SERVER):
+                self.server = str(packet[Field.SERVER])
             try:
                 self.tree.update(
                     str(packet.get(Field.SERVER) or self.address),
@@ -496,6 +542,10 @@ class Peer:
         sink = self.sinks.get(pane_id) if isinstance(pane_id, int) else None
         if sink is None:
             return
+        pane = self.tree.panes.get(pane_id) if isinstance(pane_id, int) else None
+        if pane is not None and pane.notice is not None:
+            # The link is back for this pane, and the page under the notice is the owner's again.
+            pane.notice = None
         try:
             sink.take(packet)
         except Exception:
