@@ -22,7 +22,6 @@ from prompt_toolkit.enums import EditingMode
 from prompt_toolkit.filters import Condition
 from prompt_toolkit.key_binding.vi_state import InputMode
 from prompt_toolkit.layout.layout import Layout
-from prompt_toolkit.selection import SelectionState, SelectionType
 from prompt_toolkit.styles import (
     BaseStyle,
     ConditionalStyleTransformation,
@@ -916,17 +915,8 @@ class ClientState:
         copying = []
         for pane_id, pane in sorted(self.pymux.panes_by_id.items()):
             view = pane.terminal.copy_views.of(self.app)
-            if view is None:
-                continue
-            selection = view.buffer.selection_state
-            copying.append(
-                [
-                    pane_id,
-                    view.buffer.cursor_position,
-                    selection.original_cursor_position if selection is not None else None,
-                    selection.type.value if selection is not None else None,
-                ]
-            )
+            if view is not None:
+                copying.append([pane_id, *view.place])
         return copying
 
     def take_modes(self, modes: dict[str, Any]) -> None:
@@ -946,12 +936,8 @@ class ClientState:
             for pane_id, caret, start, kind in modes.get("copying", []):
                 pane = self.pymux.panes_by_id.get(pane_id)
                 view = pane.terminal.enter_copy_mode() if pane is not None else None
-                if view is None:
-                    continue
-                buffer = view.buffer
-                buffer.cursor_position = min(caret, len(buffer.text))
-                if start is not None:
-                    buffer.selection_state = SelectionState(min(start, len(buffer.text)), SelectionType(kind))
+                if view is not None:
+                    view.go_to(caret, start, kind)
 
             if modes["popup"] is not None:
                 layout.display_popup(*modes["popup"])
