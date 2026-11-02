@@ -8,7 +8,9 @@ server that is really there.
 from __future__ import annotations
 
 import base64
+import importlib.resources
 import json
+import re
 
 import pydantic
 import pymux_mcp.api
@@ -22,6 +24,21 @@ from pymux_mcp.api import OPERATIONS, Png
 from pymux_mcp.openapi import document
 from pymux_mcp.registry import UnknownOperation
 from pymux_mcp.server import build, render
+
+
+def test_the_skill_names_only_operations_that_exist():
+    "A skill that names a gone operation sends an agent to an error."
+    skill = (importlib.resources.files("pymux_mcp") / "skill" / "SKILL.md").read_text()
+    named = set(re.findall(r"`([a-z]+(?:\.[a-z_]+)?)`", skill))
+    operations = {name for name in named if name in OPERATIONS or "." in name}
+    assert operations, "the skill names no operation"
+    assert sorted(operations - set(OPERATIONS)) == []
+    assert {"tree", "pane.send", "pane.capture", "browser.open"} <= operations
+
+
+def test_the_plugin_starts_the_server_by_its_command():
+    manifest = json.loads((importlib.resources.files("pymux_mcp") / "skill" / "mcp.json").read_text())
+    assert manifest["mcpServers"]["pymux"]["command"] == "pymux-mcp"
 
 
 async def _nowhere(tmp_path):

@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "pymux": {
+      "type": "stdio",
+      "command": "pymux-mcp",
+      "args": [],
+      "alwaysLoad": false
+    }
+  }
+}

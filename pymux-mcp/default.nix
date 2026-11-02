@@ -36,6 +36,15 @@
       ''
         ${lib.concatMapStrings (file: "test -f ${lib.escapeShellArg file}\n") (fonts.faces ++ fonts.fallbacks)}
         echo ${lib.escapeShellArg (builtins.toJSON fonts)} > "$out/${python.sitePackages}/pymux_mcp/fonts.json"
+        # The skill at the installAgentSkills layout (share/skills/$pname/<skill>),
+        # as pymux installs its own. The directory is a Claude Code plugin too:
+        # linked under ~/.claude/skills, it brings the MCP server along. The
+        # server is `pymux-mcp` on the PATH, so a rebuild reaches the next
+        # reconnect without a new link.
+        skill="$out/share/skills/pymux-mcp/pymux-mcp"
+        install -Dm444 ${./pymux_mcp/skill/SKILL.md} "$skill/SKILL.md"
+        install -Dm444 ${./pymux_mcp/skill/mcp.json} "$skill/.mcp.json"
+        install -Dm444 ${./pymux_mcp/skill/plugin.json} "$skill/.claude-plugin/plugin.json"
       '';
     meta = rendered.meta // {
       description = "Drive a pymux server from an agent, over MCP";

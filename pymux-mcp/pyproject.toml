@@ -45,3 +45,5 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["pymux_mcp"]
+# The agent skill, which the package also installs under share/skills.
+artifacts = ["pymux_mcp/skill/*"]

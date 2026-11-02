@@ -1,0 +1,8 @@
+{
+  "name": "pymux-mcp",
+  "version": "0.1.0",
+  "description": "Drive a pymux server from an agent: panes, jobs and browsers.",
+  "license": "BSD-3-Clause",
+  "homepage": "https://github.com/Lillecarl/pymux",
+  "mcpServers": "./.mcp.json"
+}
