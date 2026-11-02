@@ -159,6 +159,7 @@ class PeerLink:
         except BrokenPipeError:
             pass
         finally:
+            logger.info("A peer link ends, after mirroring %d panes.", len(self.sources))
             self.close()
 
     def _frame_of(self, source: MirrorSource) -> bytes | None:

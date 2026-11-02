@@ -544,8 +544,10 @@ class ServerConnection:
                 await self.write_packet(refusal)
                 self.close_connection()
 
+            logger.info("Refusing a peer link of version %s.", packet.get(Field.VERSION, 0))
             self.spawn(refuse())
             return
+        logger.info("A peer links, at version %s.", packet.get(Field.VERSION, 0))
         self.peer = PeerLink(self, packet.get(Field.WIRE), peer_version(packet.get(Field.VERSION)))
         self.spawn(self.peer.run())
 
