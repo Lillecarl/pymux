@@ -237,9 +237,8 @@ class Terminals:
     def viewing_peers(self) -> list[tuple[PeerLink, PeerTerminal]]:
         "The servers that mirror a pane of this one, each with what its terminals say."
         viewing = []
-        for connection in self.pymux.connections:
-            link = connection.peer
-            if link is not None and link.sources and link.terminal is not None:
+        for link in self.pymux.peer_links():
+            if link.sources and link.terminal is not None:
                 viewing.append((link, link.terminal))
         return viewing
 

@@ -39,6 +39,7 @@ from pymux.answer import Answer, current_answer
 from pymux.client import reconnect as reconnect_module
 from pymux.client import relink
 from pymux.commands import handle_command
+from pymux.connection import server as server_module
 from pymux.core.forwarding import with_port
 from pymux.core.main import Pymux
 from pymux.core.snapshot.read import load, start
@@ -754,6 +755,22 @@ async def test_a_refused_key_stops_the_redial(two_servers):
     assert len(tries) == 1
     assert here.notice is not None and here.notice[1] == "Permission denied"
     assert here.notice[-1] == "`connect %s` tries again." % (owner.socket_name,)
+
+
+async def test_an_owner_drops_a_peer_link_that_stops_answering(two_servers, monkeypatch):
+    "A peer whose machine slept leaves a ghost link that still sizes the owner's panes. Lillecarl/pymux#877."
+    owner, peer, client = two_servers
+    monkeypatch.setattr(server_module, "PING_INTERVAL", 0.2)
+    await shown_here(owner, peer, client)
+    (link,) = links_of(owner)
+    (dialled,) = peer.peers.by_address.values()
+
+    await anyio.sleep(1.0)
+    assert links_of(owner) == [link], "a peer that answers keeps its link"
+
+    take = dialled._take
+    dialled._take = lambda packet: None if packet.get(Field.CMD) == Packet.PING else take(packet)
+    await until(lambda: link.closed, "the owner drops the link nobody answers on")
 
 
 async def test_a_chain_of_three_encodes_input_once_on_the_owner(two_servers):

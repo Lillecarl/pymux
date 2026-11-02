@@ -17,7 +17,7 @@ from collections import deque
 from typing import TYPE_CHECKING, ClassVar
 
 import anyio
-from libpymux.protocol import OLDEST_PEER_VERSION, PEER_VERSION, Field, Message, Packet
+from libpymux.protocol import OLDEST_PEER_VERSION, PEER_PINGS, PEER_VERSION, Field, Message, Packet
 from libpymux.wire import MSGPACK_ZSTD, choose, encode_json, encode_msgpack
 from prompt_toolkit.data_structures import Size
 from ptterm import Terminal
@@ -46,23 +46,6 @@ __all__ = ["PeerLink"]
 
 #: The method of `PeerLink` that handles each kind of packet.
 _PACKETS: PacketTable[PeerLink] = PacketTable()
-
-#: The packets a peer sends on a link, which the connection hands here.
-PEER_PACKETS = (
-    Packet.MIRROR,
-    Packet.MIRROR_PAUSE,
-    Packet.MIRROR_RESUME,
-    Packet.MIRROR_STOP,
-    Packet.MIRROR_KEY,
-    Packet.MIRROR_PASTE,
-    Packet.MIRROR_MOUSE,
-    Packet.MIRROR_FOCUS,
-    Packet.MIRROR_COPY,
-    Packet.MIRROR_WRITE,
-    Packet.PEER_TERMINAL,
-    Packet.WATCH,
-    Packet.PEER_SIZES,
-)
 
 #: How long a change to the sessions waits for more before the tree
 #: goes, so a burst of changes sends one tree.
@@ -140,8 +123,16 @@ class PeerLink:
         self._queue.append((source, False))
         self._ready.set()
 
+    async def ping(self) -> None:
+        "One ping, behind what is queued, so it never jumps the `wire` packet (`ServerConnection.watch_liveness`)."
+        self.queue({Field.CMD: Packet.PING})
+
     async def run(self) -> None:
         "Write what is queued until the connection goes, then let every pane go."
+        if self.version >= PEER_PINGS:
+            # A peer whose machine slept leaves this link a ghost that
+            # still sizes the panes it watched. Lillecarl/pymux#877.
+            self.connection.spawn(self.connection.watch_liveness(self.ping))
         try:
             while not self.connection.closed:
                 if not self._queue:

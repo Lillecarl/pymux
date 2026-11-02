@@ -63,12 +63,16 @@ READ_SIZE = 1 << 20
 #: one misreads it raises `PEER_VERSION`; one that stops speaking the
 #: older form raises `OLDEST_PEER_VERSION` too. Every field is named
 #: and has a default, so most changes need neither. Lillecarl/pymux#759.
-PEER_VERSION = 2
+PEER_VERSION = 3
 OLDEST_PEER_VERSION = 1
 
 #: From this version a frame may name an image the peer stored by its
 #: hash instead of sending it again (`pyte.grid`).
 IMAGES_BY_HASH = 2
+
+#: From this version a peer answers a ping, so an owner may drop a link
+#: that stops answering. Lillecarl/pymux#877.
+PEER_PINGS = 3
 
 
 def peer_upgrade(version: object, oldest: object) -> str | None:

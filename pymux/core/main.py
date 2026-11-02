@@ -826,13 +826,16 @@ class Pymux:
             # Another viewer was used since, so the colours change hands.
             self.terminals.sync_color_bases()
 
+    def peer_links(self) -> list[PeerLink]:
+        "The links of the servers that mirror panes of this one (`ServerConnection.role`)."
+        return [connection.peer for connection in self.connections if connection.peer is not None]
+
     def peer_copy_of(self, pane: Pane) -> MirrorCopy | None:
         "The copy mode a peer runs here over `pane`; the one of the peer used last, when several do."
         copies = [
-            (connection.peer.last_used, source.copying)
-            for connection in self.connections
-            if connection.peer is not None
-            for source in connection.peer.sources.values()
+            (link.last_used, source.copying)
+            for link in self.peer_links()
+            for source in link.sources.values()
             if source.pane is pane and source.copying is not None
         ]
         return max(copies, key=lambda copy: copy[0], default=(0, None))[1]
@@ -894,9 +897,9 @@ class Pymux:
         # watches this server hears that its sessions may have changed.
         # Lillecarl/pymux#759.
         self.peers.sync_sight()
-        for connection in self.connections:
-            if connection.peer is not None and connection.peer.watching:
-                connection.peer.tree_changed()
+        for link in self.peer_links():
+            if link.watching:
+                link.tree_changed()
 
     def _place_of(self, pane: Pane) -> tuple[Session, Window] | None:
         "The session and window that hold this pane, or None when it is gone."

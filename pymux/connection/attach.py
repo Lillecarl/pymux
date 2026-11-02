@@ -142,7 +142,7 @@ def start_gui(connection: ServerConnection, packet: Message) -> None:
         connection.spawn(connection.carry_audio())
 
     if connection.answers_ping:
-        connection.spawn(connection.watch_the_client())
+        connection.spawn(connection.watch_liveness())
 
 
 def detach_the_others(connection: ServerConnection, hang_up: bool = False) -> None:

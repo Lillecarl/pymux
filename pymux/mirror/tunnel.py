@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, ClassVar
 
 import anyio
 import anyio.abc
-from libpymux.protocol import Field, Packet
+from libpymux.protocol import Field, Message, Packet
 from libpymux.wire import MSGPACK, PacketReader, encode_json, encode_msgpack
 from pyte.keep import Keep
 
@@ -149,6 +149,11 @@ class OwnerTunnel:
         # The answer turns to msgpack too: it carries bytes.
         connection.send_packet({Field.CMD: Packet.WIRE, Field.WIRE: MSGPACK})
         connection.encode = encode_msgpack
+
+    def handle(self, packet: Message) -> None:
+        "The bytes of the peer's end (`Role`)."
+        if packet.get(Field.CMD) == Packet.TUNNEL_DATA and packet.get(Field.DATA):
+            self.near.take(packet[Field.DATA])
 
     async def run(self, pane_id: int, host: str, port: int) -> None:
         try:

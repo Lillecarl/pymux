@@ -8,6 +8,7 @@ from typing import (
     TYPE_CHECKING,
     Any,
     ClassVar,
+    Protocol,
 )
 
 import anyio
@@ -23,7 +24,7 @@ from ..audio import AudioLink
 from ..enums import Woke
 from ..graphics.graphics import CELL_SIZE_QUERY, ClientGraphics
 from ..log import logger
-from ..mirror.link import PEER_PACKETS, PeerLink
+from ..mirror.link import PeerLink
 from ..mirror.tunnel import OwnerTunnel
 from ..notify.osc import NO_PROGRESS, Progress
 from ..pipes.base import BrokenPipeError
@@ -39,12 +40,14 @@ from .replies import TerminalReplies
 from .requests import Requests
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from pymux.connection.client_state import ClientState
     from pymux.connection.recording import Recording
     from pymux.core.main import Pymux
     from pymux.pipes.base import PipeConnection
 
-__all__ = ["ServerConnection"]
+__all__ = ["Role", "ServerConnection"]
 
 #: How many reads in a row may fail before a connection is closed.
 #: A packet that cannot be read is answered and the next one is taken,
@@ -52,17 +55,31 @@ __all__ = ["ServerConnection"]
 #: and again is a connection nothing can use. Lillecarl/pymux#329.
 FAILURES_THAT_END_A_CONNECTION = 5
 
-#: How often to ask an attached client whether it is still there, in
-#: seconds, and how many unanswered pings end it.
+#: How often to ask the far end of a connection whether it is still
+#: there, in seconds, and how many unanswered pings end it.
 #:
 #: Thirty seconds of a ghost, and one small packet per fifteen seconds
-#: per attached client. It is a backstop and not the first line: over
+#: per attached client or peer link. It is a backstop and not the first line: over
 #: SSH the client notices its own machine woke (Lillecarl/pymux#445)
 #: and a server's sshd may reap the session too. This is what covers
 #: the cases neither does -- a client process that was stopped, or a
 #: transport with no liveness of its own. Lillecarl/pymux#446.
 PING_INTERVAL = 15.0
 PING_MISSES = 2
+
+#: The packets a connection takes itself whatever its role.
+_TRANSPORT_PACKETS = frozenset({Packet.WIRE, Packet.PONG})
+
+
+class Role(Protocol):
+    """
+    What a connection is for when it is not an attached client: a peer
+    link (`PeerLink`) or a tunnel (`OwnerTunnel`). The first packet
+    chooses it, and from then on every packet but the transport's own
+    goes to it. Lillecarl/pymux#882.
+    """
+
+    def handle(self, packet: Message) -> None: ...
 
 
 def _without_left(forwards: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -122,10 +139,10 @@ class ServerConnection:
         "pipeinput": Keep.DROPPED,
         # The next server measures the client's round trip again.
         "audio": Keep.DROPPED,
-        # The peer reconnects to the next server and mirrors again.
-        "peer": Keep.DROPPED,
-        # A tunnel's connections end with the server; a browser connects again.
-        "tunnel": Keep.DROPPED,
+        # A peer reconnects to the next server and mirrors again; a
+        # tunnel's connections end with the server, and a browser
+        # connects again.
+        "role": Keep.DROPPED,
         "_tasks": Keep.DROPPED,
         "closed": Keep.DROPPED,
         "_unanswered": Keep.DROPPED,
@@ -249,16 +266,15 @@ class ServerConnection:
         self.files = Files(self)
         #: This client's sound, when it plays it. Lillecarl/pymux#657.
         self.audio: AudioLink | None = None
-        #: The link of another server that mirrors panes of this one,
-        #: when this connection is one. Lillecarl/pymux#759.
-        self.peer: PeerLink | None = None
-        #: The tunnel a peer asked for on this connection, when it is
-        #: one (`mirror.tunnel`). Lillecarl/pymux#853.
-        self.tunnel: OwnerTunnel | None = None
+        #: What this connection is for, when it is not an attached
+        #: client: the link of a server that mirrors panes of this one
+        #: (Lillecarl/pymux#759), or a tunnel (Lillecarl/pymux#853).
+        self.role: Role | None = None
 
-        #: Whether this client answers a ping, and how many have gone
-        #: unanswered. Only a client that said it answers is ever
-        #: dropped for not answering. Lillecarl/pymux#446.
+        #: Whether this client answers a ping, and how many pings to
+        #: this connection have gone unanswered. Only a far end that
+        #: said it answers is ever dropped for not answering.
+        #: Lillecarl/pymux#446.
         self.answers_ping = False
         self._unanswered = 0
 
@@ -505,8 +521,16 @@ class ServerConnection:
                 failures = 0
 
     def _process(self, packet: Message) -> None:
-        "Hand a packet from the client to the method that handles its kind."
+        "Hand a packet to this connection's role, or to the method that handles its kind."
+        if self.role is not None and packet.get(Field.CMD) not in _TRANSPORT_PACKETS:
+            self.role.handle(packet)
+            return
         _PACKETS.handle(self, packet)
+
+    @property
+    def peer(self) -> PeerLink | None:
+        "The peer link this connection is, if it is one."
+        return self.role if isinstance(self.role, PeerLink) else None
 
     @_PACKETS.handles(Packet.WIRE)
     def _on_wire(self, packet: Message) -> None:
@@ -527,7 +551,7 @@ class ServerConnection:
     @_PACKETS.handles(Packet.PEER)
     def _on_peer(self, packet: Message) -> None:
         "Another server mirrors panes of this one over this connection, if the two speak a version in common."
-        if self.peer is not None:
+        if self.client_state is not None:
             return
         upgrade = peer_upgrade(packet.get(Field.VERSION), packet.get(Field.OLDEST))
         if upgrade is not None:
@@ -548,27 +572,17 @@ class ServerConnection:
             self.spawn(refuse())
             return
         logger.info("A peer links, at version %s.", packet.get(Field.VERSION, 0))
-        self.peer = PeerLink(self, packet.get(Field.WIRE), peer_version(packet.get(Field.VERSION)))
-        self.spawn(self.peer.run())
+        link = PeerLink(self, packet.get(Field.WIRE), peer_version(packet.get(Field.VERSION)))
+        self.role = link
+        self.spawn(link.run())
 
     @_PACKETS.handles(Packet.TUNNEL)
     def _on_tunnel(self, packet: Message) -> None:
         "A peer asks for a port on the machine a pane runs on."
-        if self.tunnel is None:
-            self.tunnel = OwnerTunnel(self)
-            self.spawn(self.tunnel.run(packet[Field.PANE_ID], packet[Field.DEST_HOST], packet[Field.DEST_PORT]))
-
-    @_PACKETS.handles(Packet.TUNNEL_DATA)
-    def _on_tunnel_data(self, packet: Message) -> None:
-        if self.tunnel is not None and packet.get(Field.DATA):
-            self.tunnel.near.take(packet[Field.DATA])
-
-    @_PACKETS.handles(*PEER_PACKETS)
-    def _on_peer_packet(self, packet: Message) -> None:
-        if self.peer is None:
-            logger.warning("A mirror packet on a connection that is no peer link. Ignoring.")
-        else:
-            self.peer.handle(packet)
+        if self.client_state is None:
+            tunnel = OwnerTunnel(self)
+            self.role = tunnel
+            self.spawn(tunnel.run(packet[Field.PANE_ID], packet[Field.DEST_HOST], packet[Field.DEST_PORT]))
 
     @_PACKETS.handles(Packet.SOUND, Packet.ECHO, Packet.MICROPHONE, Packet.BEHIND)
     def _on_sound(self, packet: Message) -> None:
@@ -890,9 +904,11 @@ class ServerConnection:
             return ""
         return "%s:%s" % (self.hostname or "?", what)
 
-    async def watch_the_client(self) -> None:
+    async def watch_liveness(self, ping: Callable[[], Awaitable[None]] | None = None) -> None:
         """
-        Drop a client that stops answering.
+        Drop a client or a peer link that stops answering. `ping` sends
+        one ping; a client's goes straight out, and a peer link's waits
+        in its queue (`PeerLink.ping`).
 
         **A closed socket is not enough to drop a client**: a socket can
         stay open long after the person is gone: a laptop that sleeps leaves a dead TCP
@@ -924,7 +940,10 @@ class ServerConnection:
                 return
 
             self._unanswered += 1
-            await self.write_packet({Field.CMD: Packet.PING})
+            if ping is None:
+                await self.write_packet({Field.CMD: Packet.PING})
+            else:
+                await ping()
 
     def detach_and_close(self, hang_up: bool = False) -> None:
         """

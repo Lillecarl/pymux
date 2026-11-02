@@ -218,9 +218,8 @@ class Outward:
         Lillecarl/pymux#759.
         """
         try:
-            for connection in self.pymux.connections:
-                if connection.peer is not None:
-                    connection.peer.pane_said(pane, code, param)
+            for link in self.pymux.peer_links():
+                link.pane_said(pane, code, param)
 
             # A notification the hub recorded goes to a terminal that
             # reports clicks as OSC 99 instead (`Notifier.notified`).
@@ -606,9 +605,8 @@ class Outward:
         The copy mode a peer's person reads here sends it to that peer.
         """
         app = get_app_or_none()
-        for connection in self.pymux.connections:
-            if connection.peer is not None and connection.peer.copied(app, text):
-                return
+        if any(link.copied(app, text) for link in self.pymux.peer_links()):
+            return
         try:
             client = self.pymux.get_client_state()
         except ValueError:

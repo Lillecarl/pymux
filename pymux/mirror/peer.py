@@ -623,6 +623,9 @@ class Peer:
         return None
 
     def _take(self, packet: Message) -> None:
+        if packet.get(Field.CMD) == Packet.PING:
+            self.send({Field.CMD: Packet.PONG})
+            return
         if packet.get(Field.CMD) == Packet.RESTARTING:
             self.restart = (
                 str(packet.get(Field.MESSAGE) or "the server restarts"),
@@ -684,11 +687,7 @@ class Peer:
     def _lender_used_last(self, pane: Pane) -> PeerLink | None:
         "The server that mirrors `pane` from here, when a person there used it after every client here."
         pymux = self.tree.pymux
-        lenders = [
-            connection.peer
-            for connection in pymux.connections
-            if connection.peer is not None and any(source.pane is pane for source in connection.peer.sources.values())
-        ]
+        lenders = [link for link in pymux.peer_links() if any(source.pane is pane for source in link.sources.values())]
         lender = max(lenders, key=lambda link: link.last_used, default=None)
         latest = pymux.latest_client()
         if lender is None or (latest is not None and latest.last_used >= lender.last_used):

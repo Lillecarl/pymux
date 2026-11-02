@@ -62,9 +62,8 @@ class Focus:
                 pane = client_state.session.arrangement.get_active_pane_for(client_state.app)
                 if pane is not None:
                     focused.add(pane.pane_id)
-        for connection in self.pymux.connections:
-            if connection.peer is not None:
-                focused.update(pane_id for pane_id, source in connection.peer.sources.items() if source.focused)
+        for link in self.pymux.peer_links():
+            focused.update(pane_id for pane_id, source in link.sources.items() if source.focused)
         if focused == self._focused_panes:
             return
         for pane_id, gained in [(one, True) for one in focused - self._focused_panes] + [
