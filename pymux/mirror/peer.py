@@ -34,6 +34,8 @@ from .tree import MirrorTree
 from .tunnel import Tunnels
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from prompt_toolkit.data_structures import Size
     from pyte.keys.events import KeyProfile
     from pyte.mouse import MouseAction
@@ -48,7 +50,7 @@ if TYPE_CHECKING:
     from .link import PeerLink
     from .sink import MirrorSink
 
-__all__ = ["Peer", "Peers"]
+__all__ = ["Peer", "Peers", "Told"]
 
 
 class Peers:
@@ -203,6 +205,58 @@ class ReturningPlace:
         self.landed: Session | None = None
 
 
+class Told:
+    """
+    What a peer told its owner and still holds, by key: each entry is
+    the packet that says it, or what makes that packet when a link
+    starts. A new link hears every entry again, in the order each was
+    first said, so state added here cannot be left out of a reconnect.
+    Lillecarl/pymux#883.
+    """
+
+    def __init__(self, send: Callable[[Message], None]) -> None:
+        self._send = send
+        self._held: dict[tuple[object, ...], Message | Callable[[], Message | None]] = {}
+
+    def say(self, key: tuple[object, ...], packet: Message) -> None:
+        "Hold `packet` under `key`, and send it unless it is what was said already."
+        if self._held.get(key) == packet:
+            return
+        self._held[key] = packet
+        self._send(packet)
+
+    def hold(self, key: tuple[object, ...], make: Callable[[], Message | None]) -> None:
+        "Hold what makes a packet when a link starts, and send nothing now."
+        self._held[key] = make
+
+    def holds(self, key: tuple[object, ...]) -> bool:
+        return key in self._held
+
+    def again(self, *keys: tuple[object, ...]) -> None:
+        """
+        Say these again, after everything held: what was said of a pane
+        before its mirror reached the owner found nothing there to hear it.
+        """
+        for key in keys:
+            entry = self._held.pop(key, None)
+            if entry is not None:
+                self._held[key] = entry
+                packet = entry() if callable(entry) else entry
+                if packet is not None:
+                    self._send(packet)
+
+    def forget(self, *keys: tuple[object, ...]) -> None:
+        for key in keys:
+            self._held.pop(key, None)
+
+    def replay(self) -> None:
+        "Say it all again, on a new link."
+        for entry in list(self._held.values()):
+            packet = entry() if callable(entry) else entry
+            if packet is not None:
+                self._send(packet)
+
+
 class _PaneWaiting:
     """
     A peer's wait (`relink.Waiting`): the notice lies over each pane of
@@ -251,16 +305,13 @@ class Peer:
         "address": Keep.REBUILT,
         "connect_with": Keep.REBUILT,
         "sinks": Keep.DROPPED,
-        "paused": Keep.DROPPED,
-        "watching": Keep.DROPPED,
+        "told": Keep.DROPPED,
         "copies": Keep.DROPPED,
         "connected": Keep.DROPPED,
         "error": Keep.DROPPED,
         "_send": Keep.DROPPED,
         "_receive": Keep.DROPPED,
-        "_terminal_told": Keep.DROPPED,
         "accepted": Keep.DROPPED,
-        "_sizes_told": Keep.DROPPED,
         "stream": Keep.DROPPED,
         "tree": Keep.DROPPED,
         "server": Keep.DROPPED,
@@ -275,10 +326,9 @@ class Peer:
         self.address = address
         self.connect_with = connect_with
         self.sinks: dict[int, MirrorSink] = {}
-        #: The mirrors nobody here watches now.
-        self.paused: set[int] = set()
-        #: This side asked for the owner's sessions.
-        self.watching = False
+        #: What this side told the owner and still holds, which every
+        #: new link hears again (`_hello`).
+        self.told = Told(self.send)
         #: Where copy mode stood on each pane before this server upgraded,
         #: for the first time the pane is mirrored again.
         self.copies: dict[int, Place] = {}
@@ -289,8 +339,6 @@ class Peer:
         #: Why the link went or never came, for the person to read.
         self.error: str | None = None
         self._send, self._receive = anyio.create_memory_object_stream[bytes](math.inf)
-        self._terminal_told: PeerTerminal | None = None
-        self._sizes_told: dict[int, Size] = {}
         #: The link's stream while it is up, which a stream beside it starts from.
         self.stream: anyio.abc.ByteStream | None = None
         #: The owner said which versions of the link it speaks, and they meet ours.
@@ -367,40 +415,32 @@ class Peer:
         self.send(
             {Field.CMD: Packet.PEER, Field.WIRE: offer, Field.VERSION: PEER_VERSION, Field.OLDEST: OLDEST_PEER_VERSION}
         )
-        if self.watching:
-            self.send({Field.CMD: Packet.WATCH})
-        if self._terminal_told is not None:
-            self._send_terminal(self._terminal_told)
-        if self._sizes_told:
-            self._send_sizes(self._sizes_told)
-        for pane_id, sink in self.sinks.items():
-            self.send({Field.CMD: Packet.MIRROR, Field.PANE_ID: pane_id})
-            if pane_id in self.paused:
-                self.pause(pane_id)
-            if sink.copying is not None:
-                self.copy_mode(pane_id, sink.copying)
+        self.told.replay()
 
     # -- what a mirror asks --------------------------------------------
 
     def mirror(self, pane_id: int, sink: MirrorSink) -> None:
         self.sinks[pane_id] = sink
-        self.send({Field.CMD: Packet.MIRROR, Field.PANE_ID: pane_id})
+        self.told.say(("mirror", pane_id), {Field.CMD: Packet.MIRROR, Field.PANE_ID: pane_id})
+        # Where the owner's frames last put copy mode, which is the
+        # owner's to move, so a new link reads it when it starts.
+        self.told.hold(("copy", pane_id), lambda: self._copy_packet(pane_id, sink.copying) if sink.copying else None)
+        self.told.again(("paused", pane_id), ("focus", pane_id))
         place = self.copies.pop(pane_id, None)
         if place is not None:
             sink.copying = place
             self.copy_mode(pane_id, place)
 
     def stop(self, pane_id: int) -> None:
-        self.paused.discard(pane_id)
+        self.told.forget(("mirror", pane_id), ("paused", pane_id), ("copy", pane_id), ("focus", pane_id))
         if self.sinks.pop(pane_id, None) is not None:
             self.send({Field.CMD: Packet.MIRROR_STOP, Field.PANE_ID: pane_id})
 
     def pause(self, pane_id: int) -> None:
-        self.paused.add(pane_id)
-        self.send({Field.CMD: Packet.MIRROR_PAUSE, Field.PANE_ID: pane_id})
+        self.told.say(("paused", pane_id), {Field.CMD: Packet.MIRROR_PAUSE, Field.PANE_ID: pane_id})
 
     def resume(self, pane_id: int) -> None:
-        self.paused.discard(pane_id)
+        self.told.forget(("paused", pane_id))
         self.send({Field.CMD: Packet.MIRROR_RESUME, Field.PANE_ID: pane_id})
 
     def key(self, pane_id: int, data: str, profile: KeyProfile) -> None:
@@ -429,50 +469,52 @@ class Peer:
         )
 
     def copy_mode(self, pane_id: int, at: Place | None = None) -> None:
+        self.send(self._copy_packet(pane_id, at))
+
+    def _copy_packet(self, pane_id: int, at: Place | None) -> Message:
         packet: Message = {Field.CMD: Packet.MIRROR_COPY, Field.PANE_ID: pane_id}
         if at is not None:
             packet[Field.COPYING] = list(at)
-        self.send(packet)
+        return packet
 
     def tell_sizes(self, sizes: dict[int, Size]) -> None:
         "Tell the owner the room each of its windows has here, when that changed."
-        if sizes == self._sizes_told:
-            return
-        self._sizes_told = sizes
-        self._send_sizes(sizes)
-
-    def _send_sizes(self, sizes: dict[int, Size]) -> None:
-        self.send(
+        self.told.say(
+            ("sizes",),
             {
                 Field.CMD: Packet.PEER_SIZES,
                 Field.SIZES: [[window_id, size.rows, size.columns] for window_id, size in sorted(sizes.items())],
-            }
+            },
         )
+
+    @property
+    def watching(self) -> bool:
+        "This side asked for the owner's sessions."
+        return self.told.holds(("watch",))
 
     def watch(self) -> None:
         "Ask the owner for its sessions, now and on every change."
-        self.watching = True
-        self.send({Field.CMD: Packet.WATCH})
+        self.told.say(("watch",), {Field.CMD: Packet.WATCH})
 
     def focus(self, pane_id: int, focused: bool) -> None:
-        self.send({Field.CMD: Packet.MIRROR_FOCUS, Field.PANE_ID: pane_id, Field.FOCUSED: focused})
+        packet: Message = {Field.CMD: Packet.MIRROR_FOCUS, Field.PANE_ID: pane_id, Field.FOCUSED: focused}
+        if focused:
+            self.told.say(("focus", pane_id), packet)
+        else:
+            self.told.forget(("focus", pane_id))
+            self.send(packet)
 
     def tell_terminal(self, terminal: PeerTerminal) -> None:
         "Tell the owner what the terminals here say, when it changed (`Terminals.tell_peers`)."
-        if terminal == self._terminal_told:
-            return
-        self._terminal_told = terminal
-        self._send_terminal(terminal)
-
-    def _send_terminal(self, terminal: PeerTerminal) -> None:
-        self.send(
+        self.told.say(
+            ("terminal",),
             {
                 Field.CMD: Packet.PEER_TERMINAL,
                 Field.CELL_SIZE: None if terminal.cell_size is None else list(terminal.cell_size),
                 Field.COLOR_BASE: None if terminal.color_base is None else color_base_data(terminal.color_base),
                 Field.KEYBOARD: terminal.keyboard_source_flags,
                 Field.THEME: terminal.theme,
-            }
+            },
         )
 
     async def run_command(self, text: str, pane_id: int | None, targets: dict[str, str]) -> CommandResult:

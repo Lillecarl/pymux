@@ -757,6 +757,28 @@ async def test_a_refused_key_stops_the_redial(two_servers):
     assert here.notice[-1] == "`connect %s` tries again." % (owner.socket_name,)
 
 
+async def test_a_new_link_hears_which_pane_has_the_focus(two_servers):
+    "What the peer told the owner, a new link hears again: here, that a terminal with the focus shows the pane. Lillecarl/pymux#883."
+    owner, peer, client = two_servers
+    there, here = await shown_here(owner, peer, client)
+    client.terminal_focused = True
+    peer.focus.sync_panes()
+
+    def focused_sources(old=None):
+        return [
+            source
+            for one in links_of(owner)
+            if one is not old
+            for source in one.peer.sources.values()
+            if source.focused
+        ]
+
+    await until(focused_sources, "the owner hears the pane has the focus")
+    (link,) = links_of(owner)
+    link.detach_and_close()
+    await until(lambda: focused_sources(old=link), "the new link hears it again")
+
+
 async def test_an_owner_drops_a_peer_link_that_stops_answering(two_servers, monkeypatch):
     "A peer whose machine slept leaves a ghost link that still sizes the owner's panes. Lillecarl/pymux#877."
     owner, peer, client = two_servers
