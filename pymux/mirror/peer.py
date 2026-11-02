@@ -23,7 +23,7 @@ from pyte.osc import color_base_data
 
 from ..client.defaults import is_ssh_url
 from ..client.reconnect import link_notice
-from ..client.relink import COUNTDOWN_STEP, RESTART_RETRY
+from ..client.relink import CONNECT_TIMEOUT, COUNTDOWN_STEP, RESTART_RETRY, clocks, wait_for_sleep
 from ..commands import CommandException
 from ..enums import Woke
 from ..log import logger
@@ -135,10 +135,14 @@ class Peers:
         "The link to `address`, opened in the server's scope if there is none yet."
         peer = self.by_address.get(address)
         if peer is None:
-            if self.pymux.tasks is None:
-                raise RuntimeError("A peer link was asked for outside `Pymux.running`, so nothing would hold it.")
             peer = self.by_address[address] = Peer(self.pymux, address, **connect_with)
             peer.tell_terminal(self.pymux.terminals.peer_terminal())
+        if not peer.running:
+            # A link that ended, because its first dial failed or the
+            # owner refused it, is tried again when asked for again.
+            if self.pymux.tasks is None:
+                raise RuntimeError("A peer link was asked for outside `Pymux.running`, so nothing would hold it.")
+            peer.running = True
             self.pymux.tasks.start_soon(peer.run)
         return peer
 
@@ -237,6 +241,8 @@ class Peer:
         "server": Keep.DROPPED,
         "restart": Keep.DROPPED,
         "places": Keep.DROPPED,
+        "running": Keep.DROPPED,
+        "_dial_now": Keep.DROPPED,
     }
 
     def __init__(self, pymux: Pymux, address: str, **connect_with: Any) -> None:
@@ -270,6 +276,20 @@ class Peer:
         #: Where each client was on this link's sessions before this
         #: server upgraded, by client id, until it is back there.
         self.places: dict[str, ReturningPlace] = {}
+        #: `run` holds or dials the link. It ends when the owner refuses
+        #: the link or the first dial fails, and `Peers.of` starts it again.
+        self.running = False
+        #: Set to end the wait before the next dial (`dial_now`).
+        self._dial_now: anyio.Event | None = None
+
+    def clocks(self) -> tuple[float, float]:
+        "The world's clock and the loop's (`relink.clocks`). A method, so a test can move one."
+        return clocks()
+
+    def dial_now(self) -> None:
+        "Dial at once when the link is down, rather than at the end of the wait."
+        if self._dial_now is not None:
+            self._dial_now.set()
 
     def return_clients(self) -> None:
         """
@@ -456,17 +476,26 @@ class Peer:
         was never reached, or one that refused the link, ends it. A
         mirror keeps the last screen it was sent while no link is up.
         """
+        self.running = True
+        try:
+            await self._dial_and_hold()
+        finally:
+            self.running = False
+
+    async def _dial_and_hold(self) -> None:
         linked = False
         wait = FIRST_REDIAL
         while True:
             if linked:
                 self._say_gone(0.0, trying=True)
             try:
-                stream = await dial(self.address, **self.connect_with)
+                # Only a dial after a loss is bounded, as the client's is.
+                stream = await dial(self.address, CONNECT_TIMEOUT if linked else None, **self.connect_with)
             except Exception as error:
                 self.error = str(error) or type(error).__name__
                 if not linked:
                     logger.warning("Could not reach the server at %s: %s", self.address, self.error)
+                    self.tree.pymux.show_message("Could not reach %s: %s" % (self.address, self.error))
                     return
                 wait = await self._count_down(wait)
                 continue
@@ -489,9 +518,12 @@ class Peer:
         if restarting:
             wait = RESTART_RETRY
         ends_at = anyio.current_time() + wait
-        while (left := ends_at - anyio.current_time()) > 0:
+        self._dial_now = dial_now = anyio.Event()
+        while (left := ends_at - anyio.current_time()) > 0 and not dial_now.is_set():
             self._say_gone(left)
-            await anyio.sleep(min(left, COUNTDOWN_STEP))
+            with anyio.move_on_after(min(left, COUNTDOWN_STEP)):
+                await dial_now.wait()
+        self._dial_now = None
         return wait if restarting else min(wait * 2, LAST_REDIAL)
 
     def _say_gone(self, seconds: float | None, trying: bool = False) -> None:
@@ -518,6 +550,7 @@ class Peer:
         try:
             async with stream, anyio.create_task_group() as tasks:
                 tasks.start_soon(self._write, stream)
+                tasks.start_soon(self._end_after_sleep, tasks.cancel_scope)
                 reader = PacketReader()
                 while refused is None:
                     try:
@@ -546,6 +579,14 @@ class Peer:
             self._send.close()
             logger.info("The link to %s went: %s", self.address, self.error)
         return refused is not None
+
+    async def _end_after_sleep(self, link: anyio.CancelScope) -> None:
+        "End the link when this machine slept, as an SSH client does (`relink.wait_for_sleep`)."
+        # A lambda, so a test that moves `self.clocks` mid-link is read.
+        why = await wait_for_sleep(lambda: self.clocks())
+        logger.info("The link to %s ends: %s", self.address, why)
+        self.error = why
+        link.cancel()
 
     async def _write(self, stream: anyio.abc.ByteStream) -> None:
         # A send that fails ends the link the read loop is holding.

@@ -659,6 +659,39 @@ async def test_a_link_that_goes_is_dialled_again_with_copy_mode_where_it_was(two
     await until(lambda: rows_of(control) == rows_of(owner_control), "the mirror follows the new link")
 
 
+async def test_connect_again_dials_a_link_that_never_came(two_servers, tmp_path):
+    "A link whose first dial failed is not left dead: `connect` again dials it, and says so. Lillecarl/pymux#874."
+    owner, peer, client = two_servers
+    later = tmp_path / "later.sock"
+    peer.handle_command("connect %s" % (later,))
+    (link,) = peer.peers.by_address.values()
+    await until(lambda: not link.running, "the first dial fails")
+    assert any(line.startswith("Could not reach %s" % (later,)) for line in peer.message_log)
+
+    later.symlink_to(owner.socket_name)
+    peer.handle_command("connect %s" % (later,))
+    assert peer.message_log[-1] == "Linking to %s." % (later,)
+    there = owner.arrangement.get_active_window().active_pane
+    await until(lambda: there.pane_id in link.tree.panes, "the owner's sessions arrive")
+
+    peer.handle_command("connect %s" % (later,))
+    assert peer.message_log[-1] == "%s is linked already." % (later,)
+
+
+async def test_a_sleep_here_ends_the_link_and_dials_again(two_servers):
+    "The peer's loop clock stops while its machine sleeps; the wall clock does not. Lillecarl/pymux#875."
+    owner, peer, client = two_servers
+    there, here = await shown_here(owner, peer, client)
+    (link,) = links_of(owner)
+    (dialled,) = peer.peers.by_address.values()
+
+    real = dialled.clocks
+    dialled.clocks = lambda: (real()[0] + 3600.0, real()[1])
+    await until(lambda: dialled.error == "This machine was asleep for 60 minutes.", "the peer sees it slept")
+    dialled.clocks = real
+    await until(lambda: any(one is not link for one in links_of(owner)), "the peer dials again")
+
+
 async def test_a_chain_of_three_encodes_input_once_on_the_owner(two_servers):
     "C mirrors B's mirror of A's pane: B's screen holds none of the program's modes, so B passes all on."
     owner, peer, client = two_servers

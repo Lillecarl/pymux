@@ -19,8 +19,16 @@ def connect(pymux: Pymux, args: argparse.Namespace):
     address is a socket path on this machine, or
     `ssh://[user@]host[:port][/path]`. A session never mixes the windows
     of two servers. Lillecarl/pymux#759.
+
+    Run again on a link that is down, it dials at once. Lillecarl/pymux#874.
     """
-    pymux.peers.of(args.address).watch()
+    peer = pymux.peers.of(args.address)
+    peer.watch()
+    if peer.connected:
+        pymux.show_message("%s is linked already." % (args.address,))
+        return
+    peer.dial_now()
+    pymux.show_message("Linking to %s." % (args.address,))
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
