@@ -58,11 +58,8 @@ from .audio import AudioClient, sound_devices
 from .command import NO_ANSWER
 from .defaults import is_ssh_url as is_ssh_url
 from .forwards import Forwards
-from .reconnect import (
-    Backoff,
-    why,
-)
-from .relink import Relink, Restarting
+from .reconnect import why
+from .relink import Relink, Restarting, TerminalWaiting
 from .ssh_requests import browser_asked, forward_asked, open_asked, reap_forwards, report_forwards
 from .terminal import DELETE_EVERY_IMAGE, TerminalClient
 
@@ -109,16 +106,6 @@ KEEPALIVE_MISSES = 3
 #: scope it belonged to completed a future whose waiter was gone.
 #: Lillecarl/pymux#587.
 CLOSE_SECONDS = 2.0
-
-#: How long a link has to last before the backoff forgets it, in
-#: seconds.
-#:
-#: **A link that opens and drops at once is not a link that came
-#: back.** Resetting the backoff the moment the connect returns makes
-#: a flapping server a storm at half a second a try, and the person
-#: watches "1 second" for ever. A link that held this long was really
-#: there, and the next failure starts from the first wait again.
-STABLE_LINK = 5.0
 
 #: What runs on the other machine when the address named no path. It
 #: prints the socket a local `pymux attach` would take: the newest
@@ -310,8 +297,13 @@ class SshClient(TerminalClient):
         #: `_attached` to say once it has a client to say it to.
         #: Lillecarl/pymux#442.
         self._forwards_moved = ""
-        #: The link while it is gone. Lillecarl/pymux#256.
-        self.relink = Relink(self)
+        #: The link while it is gone. Lambdas, so a test that replaces
+        #: `connect` is the one dialled. Lillecarl/pymux#256.
+        self.relink: Relink[Link] = Relink(
+            TerminalWaiting(self),
+            dial=lambda timeout: self.connect(timeout),
+            abort=lambda link: link[0].abort(),
+        )
         #: The ports this client was asked to forward. It outlives a
         #: connection on purpose: `connect` opens the wanted set again
         #: on the new one, so a link that dropped gives the tunnels
@@ -446,58 +438,38 @@ class SshClient(TerminalClient):
         """
         stdin_fd = sys.stdin.fileno()
         self._loop = asyncio.get_running_loop()
-        connection, reader = await self.connect()
-        waits = Backoff()
+        link = await self.connect()
         cannot = None
 
+        async def hold_one(link: Link) -> Exception | None:
+            connection, reader = link
+            lost = await self._attached(connection, reader, stdin_fd, detach_other_clients, color_depth)
+            if lost is None and self.restart_wait is not None:
+                # The server said it is restarting, then closed the
+                # channel. The next one takes over the socket, so this
+                # is a link to open again and not a detach. The old
+                # server's images go: the next one knows none of them.
+                # Lillecarl/pymux#409.
+                until = anyio.current_time() + self.restart_wait
+                self.restart_wait = None
+                if self.placed_images:
+                    os.write(sys.stdout.fileno(), DELETE_EVERY_IMAGE)
+                    self.placed_images = False
+                lost = Restarting(self.restart_why, until)
+            if self.hang_up_asked:
+                # `attach -x` on another terminal told this client to
+                # leave. The link going while that packet was on its way
+                # is still the end of this attachment: coming back would
+                # be coming back uninvited. Lillecarl/pymux#347.
+                return None
+            # None is the server closing the connection: a detach.
+            return lost
+
         with raw_mode(stdin_fd):
-            while True:
-                # The moment this attachment began, so the backoff can
-                # tell a link that held from one that dropped at once.
-                lived_from = anyio.current_time()
-                lost = await self._attached(connection, reader, stdin_fd, detach_other_clients, color_depth)
-
-                if lost is None and self.restart_wait is not None:
-                    # The server said it is restarting, then closed the
-                    # channel. The next one takes over the socket, so
-                    # this is a link to open again and not a detach.
-                    # The old server's images go: the next one knows
-                    # none of them. Lillecarl/pymux#409.
-                    until = anyio.current_time() + self.restart_wait
-                    self.restart_wait = None
-                    if self.placed_images:
-                        os.write(sys.stdout.fileno(), DELETE_EVERY_IMAGE)
-                        self.placed_images = False
-                    lost = Restarting(self.restart_why, until)
-
-                if lost is None:
-                    break  # The server closed the connection.
-
-                if self.hang_up_asked:
-                    # `attach -x` on another terminal told this client
-                    # to leave. The link going while that packet was on
-                    # its way is still the end of this attachment:
-                    # coming back would be coming back uninvited.
-                    # Lillecarl/pymux#347.
-                    break
-
-                # **A link that opened and dropped at once is not back.**
-                # Resetting here, at the top of every retry, made a
-                # server that accepts and drops a storm at the first
-                # wait, and the person watched "1 second" for ever.
-                if anyio.current_time() - lived_from >= STABLE_LINK:
-                    waits.reset()
-
-                try:
-                    again = await self.relink.again(stdin_fd, waits, lost)
-                except Exception as error:
-                    cannot = error
-                    break
-
-                if again is None:
-                    break  # The person stopped it.
-
-                connection, reader = again
+            try:
+                await self.relink.hold(link, hold_one)
+            except Exception as error:
+                cannot = error
 
         self._reset_terminal()
 
@@ -526,7 +498,6 @@ class SshClient(TerminalClient):
         the packets are awaited and one thread cannot do both.
         """
         lost = None
-        self.relink.slept_through = None
 
         async with anyio.create_task_group() as tasks:
 
@@ -553,9 +524,6 @@ class SshClient(TerminalClient):
             tasks.start_soon(self._while_the_link_holds, self._watch_signal)
             tasks.start_soon(self._while_the_link_holds, self._watch_size)
             tasks.start_soon(self._while_the_link_holds, reap_forwards, self)
-            # It writes no packet, so it needs no guard against a link
-            # that stopped taking them: ending the link is its whole job.
-            tasks.start_soon(self.relink.watch_for_suspend, connection)
 
             try:
                 # Inside the try, because the link can go between the
@@ -637,13 +605,6 @@ class SshClient(TerminalClient):
                 connection.close()
                 with anyio.move_on_after(CLOSE_SECONDS, shield=True):
                     await connection.wait_closed()
-
-        if lost is None and self.relink.slept_through is not None:
-            # The link ended cleanly because this client ended it. Left
-            # alone that reads as a detach, and the panes on the other
-            # machine would be abandoned by the one thing that was
-            # supposed to go back to them. Lillecarl/pymux#445.
-            lost = self.relink.slept_through
 
         return lost
 

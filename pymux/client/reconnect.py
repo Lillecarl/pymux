@@ -34,7 +34,9 @@ __all__ = [
     "Internet",
     "draw",
     "internet_reachable",
+    "link_ended_notice",
     "link_may_come_back",
+    "link_notice",
     "notice",
     "watch_internet",
     "why",
@@ -221,13 +223,18 @@ def notice(
     return lines
 
 
-def link_notice(host: str, said: str, seconds: float, trying: bool = False) -> list[str]:
+def link_notice(host: str, said: str, seconds: float, internet: bool | None = None, trying: bool = False) -> list[str]:
     """
     The lines a mirrored pane shows while the link to its server is
     gone: `notice` without the line about keys. A key in the pane goes
     to the pane, and the peer dials again by itself.
     """
-    return notice(host, said, seconds, None, trying)[:-1]
+    return notice(host, said, seconds, internet, trying)[:-1]
+
+
+def link_ended_notice(host: str, said: str, address: str) -> list[str]:
+    "The lines a mirrored pane shows once its link stopped trying, because the failure does not come back."
+    return ["pymux lost the server on %s." % (host,), said, "", "`connect %s` tries again." % (address,)]
 
 
 def _left(seconds: float) -> str:

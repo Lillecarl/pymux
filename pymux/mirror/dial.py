@@ -5,6 +5,7 @@ Reach another server's socket, here or over SSH, as one byte stream.
 from __future__ import annotations
 
 import contextlib
+import socket
 from typing import TYPE_CHECKING, Any
 
 import anyio
@@ -17,7 +18,7 @@ from ..client.ssh import CLOSE_SECONDS, open_socket, ssh_target
 if TYPE_CHECKING:
     from asyncssh import SSHClientConnection, SSHReader, SSHWriter
 
-__all__ = ["dial", "dial_beside"]
+__all__ = ["abort", "dial", "dial_beside"]
 
 
 async def dial(address: str, connect_timeout: float | None = None, **connect_with: Any) -> anyio.abc.ByteStream:
@@ -45,6 +46,15 @@ async def dial_beside(address: str, stream: anyio.abc.ByteStream) -> anyio.abc.B
     return await anyio.connect_unix(address)
 
 
+def abort(stream: anyio.abc.ByteStream) -> None:
+    "End a stream `dial` opened at once, so its reader sees it end: for a link that died while this machine slept."
+    if isinstance(stream, _SshStream):
+        stream.abort()
+        return
+    with contextlib.suppress(OSError):
+        stream.extra(anyio.abc.SocketAttribute.raw_socket).shutdown(socket.SHUT_RDWR)
+
+
 class _SshStream(anyio.abc.ByteStream):
     "One SSH channel to a unix socket, and the connection it lives on."
 
@@ -69,6 +79,10 @@ class _SshStream(anyio.abc.ByteStream):
         except OSError as error:
             raise anyio.BrokenResourceError from error
         return _SshStream(self._connection, reader, writer, self._path, owns_connection=False)
+
+    def abort(self) -> None:
+        "Drop the connection without the goodbye a dead link would never carry."
+        self._connection.abort()
 
     async def receive(self, max_bytes: int = READ_SIZE) -> bytes:
         try:

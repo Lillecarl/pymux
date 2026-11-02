@@ -36,6 +36,8 @@ from test_snapshot import _Copied
 from test_ssh_client import create_ssh_server
 
 from pymux.answer import Answer, current_answer
+from pymux.client import reconnect as reconnect_module
+from pymux.client import relink
 from pymux.commands import handle_command
 from pymux.core.forwarding import with_port
 from pymux.core.main import Pymux
@@ -66,6 +68,16 @@ async def until(condition, what: str, seen=None) -> None:
                 await anyio.sleep(0.01)
     except TimeoutError:
         raise AssertionError("never: %s%s" % (what, "" if seen is None else "; saw %r" % (seen(),))) from None
+
+
+@pytest.fixture(autouse=True)
+def the_probe_does_not_leave_this_machine(monkeypatch):
+    "A link that is gone probes the internet for its notice; here it answers at once."
+
+    async def answers(*arguments, **keywords):
+        return True
+
+    monkeypatch.setattr(reconnect_module, "internet_reachable", answers)
 
 
 @pytest.fixture
@@ -678,18 +690,70 @@ async def test_connect_again_dials_a_link_that_never_came(two_servers, tmp_path)
     assert peer.message_log[-1] == "%s is linked already." % (later,)
 
 
-async def test_a_sleep_here_ends_the_link_and_dials_again(two_servers):
+async def test_a_sleep_here_ends_the_link_and_dials_again(two_servers, tmp_path, monkeypatch):
     "The peer's loop clock stops while its machine sleeps; the wall clock does not. Lillecarl/pymux#875."
+    owner, peer, client = two_servers
+    monkeypatch.setattr(relink, "SUSPEND_POLL", 0.01)
+    server, port, client_key = await create_ssh_server(tmp_path, owner.socket_name)
+    try:
+        dialled = peer.peers.of(
+            "ssh://127.0.0.1:%d%s" % (port, owner.socket_name),
+            known_hosts=None,
+            client_keys=[client_key],
+            username="anybody",
+        )
+        await shown_here(owner, peer, client, dialled)
+        (link,) = links_of(owner)
+
+        real = dialled.relink.clocks
+        dialled.relink.clocks = lambda: (real()[0] + 3600.0, real()[1])
+        await until(lambda: dialled.error == "This machine was asleep for 60 minutes.", "the peer sees it slept")
+        dialled.relink.clocks = real
+        await until(lambda: any(one is not link for one in links_of(owner)), "the peer dials again")
+    finally:
+        server.close()
+
+
+async def test_a_sleep_leaves_a_link_on_this_machine_alone(two_servers, monkeypatch):
+    "Both ends of a unix socket slept together, so the link is still good. Lillecarl/pymux#880."
+    owner, peer, client = two_servers
+    monkeypatch.setattr(relink, "SUSPEND_POLL", 0.01)
+    await shown_here(owner, peer, client)
+    (link,) = links_of(owner)
+    (dialled,) = peer.peers.by_address.values()
+
+    read: list[float] = []
+
+    def asleep_an_hour():
+        read.append(1)
+        return (anyio.current_time() + 3600.0 * len(read), anyio.current_time())
+
+    dialled.relink.clocks = asleep_an_hour
+    await anyio.sleep(0.3)
+    assert read == [], "nothing watches the clocks of a local link"
+    assert links_of(owner) == [link] and dialled.connected
+
+
+async def test_a_refused_key_stops_the_redial(two_servers):
+    "After a link was up, a failure that never comes back ends the retries, and the panes say how to start again. Lillecarl/pymux#879."
+    import asyncssh
+
     owner, peer, client = two_servers
     there, here = await shown_here(owner, peer, client)
     (link,) = links_of(owner)
     (dialled,) = peer.peers.by_address.values()
+    tries: list[float] = []
 
-    real = dialled.clocks
-    dialled.clocks = lambda: (real()[0] + 3600.0, real()[1])
-    await until(lambda: dialled.error == "This machine was asleep for 60 minutes.", "the peer sees it slept")
-    dialled.clocks = real
-    await until(lambda: any(one is not link for one in links_of(owner)), "the peer dials again")
+    async def refused(timeout):
+        tries.append(timeout)
+        raise asyncssh.PermissionDenied("Permission denied")
+
+    dialled.relink.dial = refused
+    link.detach_and_close()
+    await until(lambda: not dialled.running, "the peer stops trying", seen=lambda: tries)
+    assert len(tries) == 1
+    assert here.notice is not None and here.notice[1] == "Permission denied"
+    assert here.notice[-1] == "`connect %s` tries again." % (owner.socket_name,)
 
 
 async def test_a_chain_of_three_encodes_input_once_on_the_owner(two_servers):

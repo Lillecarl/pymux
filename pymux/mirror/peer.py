@@ -22,13 +22,13 @@ from pyte.keep import Keep
 from pyte.osc import color_base_data
 
 from ..client.defaults import is_ssh_url
-from ..client.reconnect import link_notice
-from ..client.relink import CONNECT_TIMEOUT, COUNTDOWN_STEP, RESTART_RETRY, clocks, wait_for_sleep
+from ..client.reconnect import link_ended_notice, link_notice, why
+from ..client.relink import Relink, Restarting, Wait
 from ..commands import CommandException
 from ..enums import Woke
 from ..log import logger
 from .copying import place_of
-from .dial import dial, dial_beside
+from .dial import abort, dial, dial_beside
 from .program import HOLD_FOR_FRESH, RemoteProgram
 from .tree import MirrorTree
 from .tunnel import Tunnels
@@ -203,10 +203,35 @@ class ReturningPlace:
         self.landed: Session | None = None
 
 
-#: How long a peer waits to dial again after a link goes, at first and at most.
-#: An owner's hot upgrade takes a second or two.
-FIRST_REDIAL = 0.25
-LAST_REDIAL = 5.0
+class _PaneWaiting:
+    """
+    A peer's wait (`relink.Waiting`): the notice lies over each pane of
+    the link, and `connect` on its address dials at once.
+    """
+
+    def __init__(self, peer: Peer) -> None:
+        self.peer = peer
+        self._now: anyio.Event | None = None
+
+    def show(self, said: str, seconds: float, internet: bool | None, trying: bool) -> None:
+        self.peer.error = said
+        self.peer.say(tuple(link_notice(self.peer.server or self.peer.address, said, seconds, internet, trying)))
+
+    async def wait(self, seconds: float) -> Wait:
+        self._now = now = anyio.Event()
+        try:
+            with anyio.move_on_after(seconds):
+                await now.wait()
+        finally:
+            self._now = None
+        return Wait.NOW if now.is_set() else Wait.ON
+
+    def dial_now(self) -> None:
+        if self._now is not None:
+            self._now.set()
+
+    def done(self) -> None:
+        "The notice stays until the first frame of the new link takes it off its pane (`Peer._take`)."
 
 
 class Peer:
@@ -242,7 +267,8 @@ class Peer:
         "restart": Keep.DROPPED,
         "places": Keep.DROPPED,
         "running": Keep.DROPPED,
-        "_dial_now": Keep.DROPPED,
+        "relink": Keep.DROPPED,
+        "_waiting": Keep.DROPPED,
     }
 
     def __init__(self, pymux: Pymux, address: str, **connect_with: Any) -> None:
@@ -277,19 +303,22 @@ class Peer:
         #: server upgraded, by client id, until it is back there.
         self.places: dict[str, ReturningPlace] = {}
         #: `run` holds or dials the link. It ends when the owner refuses
-        #: the link or the first dial fails, and `Peers.of` starts it again.
+        #: the link, the first dial fails or a failure cannot come back,
+        #: and `Peers.of` starts it again.
         self.running = False
-        #: Set to end the wait before the next dial (`dial_now`).
-        self._dial_now: anyio.Event | None = None
-
-    def clocks(self) -> tuple[float, float]:
-        "The world's clock and the loop's (`relink.clocks`). A method, so a test can move one."
-        return clocks()
+        self._waiting = _PaneWaiting(self)
+        #: The link while it is gone, as an SSH client's (`relink`). A
+        #: sleep here breaks only a link that crosses the network.
+        self.relink: Relink[anyio.abc.ByteStream] = Relink(
+            self._waiting,
+            dial=lambda timeout: dial(self.address, timeout, **self.connect_with),
+            abort=abort,
+            watch_sleep=is_ssh_url(address),
+        )
 
     def dial_now(self) -> None:
         "Dial at once when the link is down, rather than at the end of the wait."
-        if self._dial_now is not None:
-            self._dial_now.set()
+        self._waiting.dial_now()
 
     def return_clients(self) -> None:
         """
@@ -472,91 +501,61 @@ class Peer:
 
     async def run(self) -> None:
         """
-        Hold the link, and dial again each time it goes. A server that
-        was never reached, or one that refused the link, ends it. A
-        mirror keeps the last screen it was sent while no link is up.
+        Hold the link, and dial again each time it goes (`Relink`). A
+        server that was never reached, one that refused the link, and a
+        failure that does not come back end it. A mirror keeps the last
+        screen it was sent while no link is up.
         """
         self.running = True
         try:
-            await self._dial_and_hold()
+            try:
+                stream = await dial(self.address, None, **self.connect_with)
+            except Exception as error:
+                self.error = why(error)
+                logger.warning("Could not reach the server at %s: %s", self.address, self.error)
+                self.tree.pymux.show_message("Could not reach %s: %s" % (self.address, self.error))
+                return
+            try:
+                await self.relink.hold(stream, self._hold)
+            except Exception as error:
+                # Lillecarl/pymux#879: a refused key is asked again only
+                # when a person asks.
+                self.error = why(error)
+                logger.warning("The link to %s stops trying: %s", self.address, self.error)
+                self.tree.pymux.show_message("%s: %s" % (self.address, self.error))
+                self.say(tuple(link_ended_notice(self.server or self.address, self.error, self.address)))
         finally:
             self.running = False
 
-    async def _dial_and_hold(self) -> None:
-        linked = False
-        wait = FIRST_REDIAL
-        while True:
-            if linked:
-                self._say_gone(0.0, trying=True)
-            try:
-                # Only a dial after a loss is bounded, as the client's is.
-                stream = await dial(self.address, CONNECT_TIMEOUT if linked else None, **self.connect_with)
-            except Exception as error:
-                self.error = str(error) or type(error).__name__
-                if not linked:
-                    logger.warning("Could not reach the server at %s: %s", self.address, self.error)
-                    self.tree.pymux.show_message("Could not reach %s: %s" % (self.address, self.error))
-                    return
-                wait = await self._count_down(wait)
-                continue
-            linked = True
-            self.restart = None
-            wait = FIRST_REDIAL
-            if await self._hold(stream):
-                self._say_gone(None)
-                return
-            wait = await self._count_down(wait)
-
-    async def _count_down(self, wait: float) -> float:
-        """
-        Wait to dial again, with the panes saying so, and answer the
-        wait after the next. An owner that restarts is dialled every
-        `RESTART_RETRY` until its window ends: its next image answers
-        within about a second.
-        """
-        restarting = self.restart is not None and anyio.current_time() < self.restart[1]
-        if restarting:
-            wait = RESTART_RETRY
-        ends_at = anyio.current_time() + wait
-        self._dial_now = dial_now = anyio.Event()
-        while (left := ends_at - anyio.current_time()) > 0 and not dial_now.is_set():
-            self._say_gone(left)
-            with anyio.move_on_after(min(left, COUNTDOWN_STEP)):
-                await dial_now.wait()
-        self._dial_now = None
-        return wait if restarting else min(wait * 2, LAST_REDIAL)
-
-    def _say_gone(self, seconds: float | None, trying: bool = False) -> None:
-        "Put the notice a client draws while its server is gone over each pane of this link, or take it away."
-        lines = None
-        if seconds is not None:
-            why = self.restart[0] if self.restart is not None else (self.error or "the link went")
-            lines = tuple(link_notice(self.server or self.address, why, seconds, trying))
+    def say(self, lines: tuple[str, ...] | None) -> None:
+        "Put a notice over each pane of this link, or take it away."
         for pane in self.tree.panes.values():
             pane.notice = lines
         self.tree.pymux.invalidate(Woke.TREE_MIRRORED)
 
-    async def _hold(self, stream: anyio.abc.ByteStream) -> bool:
-        "Hold one link until it goes. True when the owner refused it, so dialling again is no use."
+    async def _hold(self, stream: anyio.abc.ByteStream) -> Exception | None:
+        "Hold one link until it goes: why it went, or None when the owner refused it, so dialling again is no use."
         self._send, self._receive = anyio.create_memory_object_stream[bytes](math.inf)
         self.accepted = False
         self.error = None
+        self.restart = None
         self.connected = True
         self.stream = stream
         self._hello()
         refused: str | None = None
+        lost: Exception = ConnectionResetError("the server closed the link")
         # This runs in the server's own scope: what it raises would end
         # every client, so the link's trouble stays the link's.
         try:
             async with stream, anyio.create_task_group() as tasks:
                 tasks.start_soon(self._write, stream)
-                tasks.start_soon(self._end_after_sleep, tasks.cancel_scope)
                 reader = PacketReader()
                 while refused is None:
                     try:
                         data = await stream.receive()
                     except (anyio.EndOfStream, anyio.BrokenResourceError, anyio.ClosedResourceError) as error:
-                        self.error = str(error) or "the server closed the link"
+                        if str(error):
+                            lost = ConnectionResetError(str(error))
                         break
                     for packet in reader.feed(data):
                         if self.accepted:
@@ -571,22 +570,20 @@ class Peer:
                     self.tree.pymux.show_message("%s: %s" % (self.address, refused))
                 tasks.cancel_scope.cancel()
         except Exception as error:
-            self.error = str(error) or type(error).__name__
+            lost = error
             logger.exception("The link to %s failed.", self.address)
         finally:
             self.connected = False
             self.stream = None
             self._send.close()
-            logger.info("The link to %s went: %s", self.address, self.error)
-        return refused is not None
-
-    async def _end_after_sleep(self, link: anyio.CancelScope) -> None:
-        "End the link when this machine slept, as an SSH client does (`relink.wait_for_sleep`)."
-        # A lambda, so a test that moves `self.clocks` mid-link is read.
-        why = await wait_for_sleep(lambda: self.clocks())
-        logger.info("The link to %s ends: %s", self.address, why)
-        self.error = why
-        link.cancel()
+        if refused is not None:
+            self.say(None)
+            return None
+        if self.restart is not None:
+            # An owner that said it restarts is waited for until its window ends.
+            lost = Restarting(*self.restart)
+        logger.info("The link to %s went: %s", self.address, why(lost))
+        return lost
 
     async def _write(self, stream: anyio.abc.ByteStream) -> None:
         # A send that fails ends the link the read loop is holding.

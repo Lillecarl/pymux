@@ -40,6 +40,7 @@ from pymux.client.reconnect import (
     watch_internet,
     why,
 )
+from pymux.client.relink import Relink, Wait
 from pymux.client.ssh import SshClient
 from pymux.core.main import Pymux
 
@@ -281,6 +282,68 @@ class Link:
         self.aborted = True
 
 
+class _TriesAtOnce:
+    "A `relink.Waiting` that tries at once, and keeps the wait each countdown began with."
+
+    def __init__(self) -> None:
+        self.waits: list[float] = []
+        self._counting = False
+
+    def show(self, said, seconds, internet, trying):
+        if not trying and not self._counting:
+            self.waits.append(seconds)
+        self._counting = not trying
+
+    async def wait(self, seconds):
+        await anyio.sleep(0)
+        return Wait.NOW
+
+    def done(self):
+        pass
+
+
+def _a_relink(dial) -> tuple[Relink, _TriesAtOnce]:
+    waiting = _TriesAtOnce()
+    links = Relink(waiting, dial=dial, abort=lambda link: None, watch_sleep=False)
+    links.backoff = Backoff(random=lambda: 0.0)
+    return links, waiting
+
+
+async def test_a_link_that_drops_at_once_waits_longer_each_time():
+    "A server that accepts and drops is not back: the wait grows. Lillecarl/pymux#878."
+    held: list[int] = []
+
+    async def dial(timeout):
+        return len(held)
+
+    async def drops_at_once(link):
+        held.append(link)
+        return None if len(held) == 5 else ConnectionResetError("dropped")
+
+    links, waiting = _a_relink(dial)
+    await links.hold(0, drops_at_once)
+    assert waiting.waits == pytest.approx([0.5, 1.0, 2.0, 4.0], abs=0.05)
+
+
+async def test_a_refused_key_ends_the_retries():
+    "A refused key is an answer, and asking again locks the account out. Lillecarl/pymux#879."
+    import asyncssh
+
+    dialled: list[float] = []
+
+    async def refuses(timeout):
+        dialled.append(timeout)
+        raise asyncssh.PermissionDenied("Permission denied")
+
+    async def drops(link):
+        return ConnectionResetError("dropped")
+
+    links, _ = _a_relink(refuses)
+    with pytest.raises(asyncssh.PermissionDenied):
+        await links.hold(0, drops)
+    assert dialled == [relink.CONNECT_TIMEOUT]
+
+
 def moving_clocks(steps):
     """
     A `Relink.clocks` that walks through these `(wall, loop)` pairs.
@@ -300,7 +363,7 @@ def moving_clocks(steps):
 async def _watched(client, link, seconds: float = 2.0) -> None:
     "Run the suspend watch until it ends or the time is up."
     with anyio.move_on_after(seconds):
-        await client.relink.watch_for_suspend(link)
+        await client.relink.watch_for_suspend(link.abort)
 
 
 def a_client() -> SshClient:
@@ -796,9 +859,9 @@ async def test_a_client_told_to_hang_up_does_not_come_back(monkeypatch):
             read.append(packet.get(Field.CMD))
             return process(packet)
 
-        async def recording_link_again(stdin_fd, waits, lost):
+        async def recording_link_again(lost):
             retried.append(lost)
-            return await link_again(stdin_fd, waits, lost)
+            return await link_again(lost)
 
         it.client._process = recording_process
         it.client.relink.again = recording_link_again
