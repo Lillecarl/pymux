@@ -5,10 +5,16 @@ modifiers held around it. Lillecarl/pymux#620.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, cast
+
 from prompt_toolkit.keys import Keys
 from pyte.keys.parse import parse_key_data
 
 from pymux.wayland.window_pane import WindowWidget, evdev_of, evdev_of_event
+
+if TYPE_CHECKING:
+    from pymux.core.main import Pymux
+    from pymux.wayland.window_pane import WindowHost
 
 SHIFT, CTRL, ALT = 42, 29, 56
 
@@ -78,6 +84,6 @@ class _Wayland:
 
 def test_a_window_presses_the_keys_of_a_sequence():
     wayland = _Wayland()
-    widget = WindowWidget(wayland, 1, lambda: True)
+    widget = WindowWidget(cast("WindowHost", wayland), 1, cast("Pymux", None))
     widget.press_data("\x1b[61;5u\x1b[61;5:3u\x1b[45;5u")
     assert wayland.pressed == [((CTRL,), 13), ((CTRL,), 12)]

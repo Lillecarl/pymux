@@ -17,7 +17,7 @@ from collections import deque
 from typing import TYPE_CHECKING, ClassVar
 
 import anyio
-from libpymux.protocol import OLDEST_PEER_VERSION, PEER_PINGS, PEER_VERSION, Field, Message, Packet
+from libpymux.protocol import OLDEST_PEER_VERSION, PEER_PINGS, PEER_VERSION, PEER_WINDOWS, Field, Message, Packet
 from libpymux.wire import MSGPACK_ZSTD, choose, encode_json, encode_msgpack
 from prompt_toolkit.data_structures import Size
 from ptterm import Terminal
@@ -34,9 +34,11 @@ from ..log import logger
 from ..pipes.base import BrokenPipeError
 from ..style.style import DEFAULT_THEME
 from ..terminals import PeerTerminal
+from ..wayland.window_pane import WindowWidget
 from .copying import place_of
 from .source import MirrorSource
 from .tree import Tree, tree_of
+from .window_source import MirrorWindowSource
 
 if TYPE_CHECKING:
     from pymux.connection.server import ServerConnection
@@ -72,6 +74,7 @@ class PeerLink:
         # The peer reconnects to the next server and mirrors again.
         "connection": Keep.DROPPED,
         "sources": Keep.DROPPED,
+        "windows": Keep.DROPPED,
         "_queue": Keep.DROPPED,
         "_ready": Keep.DROPPED,
         "terminal": Keep.DROPPED,
@@ -88,6 +91,8 @@ class PeerLink:
         #: The version of the link both sides speak (`peer_version`).
         self.version = version
         self.sources: dict[PaneId, MirrorSource] = {}
+        #: The window panes the peer mirrors. Lillecarl/pymux#888.
+        self.windows: dict[PaneId, MirrorWindowSource] = {}
         #: What the terminals at the peer say, once it said.
         self.terminal: PeerTerminal | None = None
         #: When a person at the peer last used a mirror, by the
@@ -212,6 +217,9 @@ class PeerLink:
     def close(self) -> None:
         for source in self.sources.values():
             source.stop()
+        for window in self.windows.values():
+            window.stop()
+        self.windows.clear()
         viewed = bool(self.sources)
         self.sources.clear()
         self._queue.clear()
@@ -254,8 +262,10 @@ class PeerLink:
             return
         pane = self.connection.pymux.panes_by_id.get(pane_id)
         terminal = pane.terminal if pane is not None else None
+        if pane is not None and isinstance(terminal, WindowWidget):
+            self._mirror_window(pane, terminal, packet)
+            return
         if pane is None or not isinstance(terminal, Terminal):
-            # A window pane has no screen to lend. Lillecarl/pymux#620.
             self.connection.send_packet(
                 {Field.CMD: Packet.MIRROR_REFUSED, Field.PANE_ID: int(pane_id), Field.ERROR: "no such pane"}
             )
@@ -269,15 +279,58 @@ class PeerLink:
             self.connection.pymux.terminals.sync_viewers()
         source.start()
 
+    def _mirror_window(self, pane: Pane, widget: WindowWidget, packet: Message) -> None:
+        "Lend a window pane: its frames as pixels. Lillecarl/pymux#888."
+        pane_id = pane.pane_id
+        if pane_id in self.windows:
+            return
+        error = None
+        if self.version < PEER_WINDOWS:
+            error = "it shows a Wayland window, and the server mirroring it needs an upgrade to show one"
+        elif widget.host is not self.connection.pymux.wayland:
+            error = "it shows a Wayland window that this server mirrors itself"
+        if error is not None:
+            self.connection.send_packet(
+                {Field.CMD: Packet.MIRROR_REFUSED, Field.PANE_ID: int(pane_id), Field.ERROR: error}
+            )
+            return
+        codecs = frozenset(str(each) for each in packet.get(Field.CODECS) or ())
+        window = self.windows[pane_id] = MirrorWindowSource(self, pane, widget, codecs)
+        self.connection.pymux.peer_was_used(self)
+        window.start()
+
+    def window_drew(self, pane: Pane) -> None:
+        "A window pane drew a frame: send it on if the peer mirrors it (`Panes.window_pane_drew`)."
+        window = self.windows.get(pane.pane_id)
+        if window is not None:
+            window.drew()
+
+    def _window_of(self, packet: Message) -> MirrorWindowSource | None:
+        return self.windows.get(PaneId(int(packet.get(Field.PANE_ID, -1))))
+
+    @_PACKETS.handles(Packet.MIRROR_WINDOW_SHOWN)
+    def _on_window_shown(self, packet: Message) -> None:
+        window = self._window_of(packet)
+        if window is not None:
+            window.taken()
+
+    @_PACKETS.handles(Packet.MIRROR_WINDOW_INPUT)
+    def _on_window_input(self, packet: Message) -> None:
+        window = self._window_of(packet)
+        data = packet.get(Field.DATA)
+        if window is not None and isinstance(data, dict):
+            self.connection.pymux.peer_was_used(self)
+            window.input(data)
+
     @_PACKETS.handles(Packet.MIRROR_PAUSE)
     def _on_pause(self, packet: Message) -> None:
-        source = self._source_of(packet)
+        source = self._source_of(packet) or self._window_of(packet)
         if source is not None:
             source.pause()
 
     @_PACKETS.handles(Packet.MIRROR_RESUME)
     def _on_resume(self, packet: Message) -> None:
-        source = self._source_of(packet)
+        source = self._source_of(packet) or self._window_of(packet)
         if source is not None:
             source.resume()
 
@@ -286,6 +339,9 @@ class PeerLink:
         source = self._source_of(packet)
         if source is not None:
             self._drop(source)
+        window = self.windows.pop(PaneId(int(packet.get(Field.PANE_ID, -1))), None)
+        if window is not None:
+            window.stop()
 
     def _driven(self, packet: Message) -> MirrorSource | None:
         "The mirror a person at the peer drives, who is the person who used this server last now."

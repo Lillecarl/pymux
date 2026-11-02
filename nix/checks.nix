@@ -732,7 +732,7 @@ in
         ${waylandTestEnv}/bin/python -m pytest -q -p no:cacheprovider \
           -o faulthandler_timeout=60 \
           tests/test_wayland_server.py tests/test_wayland_absent.py tests/test_window_panes.py \
-          tests/test_portal.py
+          tests/test_portal.py tests/test_a_window_pane_crosses_a_link.py
       '';
 
   # How long the loop stalls while mpv plays in a window pane, and what

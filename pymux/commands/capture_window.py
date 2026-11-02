@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from typing import TYPE_CHECKING, cast
 
+import anyio
 from pyte.screen import Screen
 
 from pymux import screenshot
@@ -32,8 +33,11 @@ if TYPE_CHECKING:
 
 async def _drawn_again(pymux: Pymux, window: Window) -> None:
     "Let the window panes draw what they wait to draw: a window no client shows is not let do it otherwise."
-    toplevels = [pane.terminal.toplevel for pane in window.panes if isinstance(pane.terminal, WindowWidget)]
-    await pymux.wayland.drawn_again(toplevels, FRAME_WAIT)
+    widgets = [pane.terminal for pane in window.panes if isinstance(pane.terminal, WindowWidget)]
+    async with anyio.create_task_group() as tasks:
+        for host in {id(widget.host): widget.host for widget in widgets}.values():
+            toplevels = [widget.toplevel for widget in widgets if widget.host is host]
+            tasks.start_soon(host.drawn_again, toplevels, FRAME_WAIT)
 
 
 def _grid_of(pymux: Pymux, window: Window, cell: tuple[int, int]) -> screenshot.Grid:
@@ -43,7 +47,7 @@ def _grid_of(pymux: Pymux, window: Window, cell: tuple[int, int]) -> screenshot.
     for slot, rect in plan.rects.items():
         terminal = cast(Pane, slot.shown).terminal
         if isinstance(terminal, WindowWidget):
-            frame = pymux.wayland.frame(terminal.toplevel)
+            frame = terminal.host.frame(terminal.toplevel)
             panes.append((rect, None if frame is None else screenshot.Pixels(*frame)))
             continue
         screen = getattr(terminal, "screen", None)

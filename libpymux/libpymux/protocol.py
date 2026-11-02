@@ -35,7 +35,9 @@ __all__ = [
     "END",
     "IMAGES_BY_HASH",
     "OLDEST_PEER_VERSION",
+    "PEER_PINGS",
     "PEER_VERSION",
+    "PEER_WINDOWS",
     "READ_SIZE",
     "Field",
     "Framer",
@@ -63,7 +65,7 @@ READ_SIZE = 1 << 20
 #: one misreads it raises `PEER_VERSION`; one that stops speaking the
 #: older form raises `OLDEST_PEER_VERSION` too. Every field is named
 #: and has a default, so most changes need neither. Lillecarl/pymux#759.
-PEER_VERSION = 3
+PEER_VERSION = 4
 OLDEST_PEER_VERSION = 1
 
 #: From this version a frame may name an image the peer stored by its
@@ -73,6 +75,11 @@ IMAGES_BY_HASH = 2
 #: From this version a peer answers a ping, so an owner may drop a link
 #: that stops answering. Lillecarl/pymux#877.
 PEER_PINGS = 3
+
+#: From this version an owner lends a Wayland window pane: its pixels as
+#: `mirror-window-frame`s, and the person's input back as
+#: `mirror-window-input`. Lillecarl/pymux#888.
+PEER_WINDOWS = 4
 
 
 def peer_upgrade(version: object, oldest: object) -> str | None:
@@ -293,6 +300,14 @@ class Packet(StrEnum):
     # which the owner writes as they are: unlike `mirror-key`, nothing
     # encodes them. An owner too old to know it drops it.
     MIRROR_WRITE = "mirror-write"
+    # A person at the peer used a mirrored window pane, under `data`:
+    # `{"kind": "key", "modifiers": [...], "code": n}` in evdev codes,
+    # `{"kind": "text", "text": ...}`, or `{"kind": "pointer" | "scroll",
+    # "x", "y"}` in cells with the fraction of the cell, plus `button`
+    # and `pressed`, or `steps`. Lillecarl/pymux#888.
+    MIRROR_WINDOW_INPUT = "mirror-window-input"
+    # "I took the window frame you sent": the owner reads the next one.
+    MIRROR_WINDOW_SHOWN = "mirror-window-shown"
     # The terminal of the person at the peer, as the peer worked it out
     # from its own clients: `cell-size`, `color-base` and `keyboard`.
     # The owner weighs it with its own clients' terminals and answers a
@@ -323,6 +338,10 @@ class Packet(StrEnum):
     # `frame` (`pyte.grid`). One is in flight per pane at a time, so a
     # peer that falls behind gets the newest page and not each one.
     MIRROR_FRAME = "mirror-frame"
+    # A window pane's frame, as `window-frame` carries one, under
+    # `pane_id` and not `image`. One is in flight per pane until
+    # `mirror-window-shown`. Lillecarl/pymux#888.
+    MIRROR_WINDOW_FRAME = "mirror-window-frame"
     # An OSC sequence a pane wrote for the terminal of a person, under
     # `code` and `data`: the clipboard, a notification, the directory.
     # It goes for every pane of a session the peer watches, seen or

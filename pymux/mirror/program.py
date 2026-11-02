@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, ClassVar
 from pyte.keep import Keep
 
 from .sink import MirrorSink
+from .window import RemoteWindow
 
 if TYPE_CHECKING:
     import anyio.abc
@@ -17,10 +18,11 @@ if TYPE_CHECKING:
     from pyte.keys.events import KeyProfile
     from pyte.mouse import MouseAction
 
+    from ..core.pane import Pane
     from .copying import Place
     from .peer import Peer
 
-__all__ = ["HOLD_FOR_FRESH", "RemoteProgram"]
+__all__ = ["HOLD_FOR_FRESH", "RemoteProgram", "owner_pane_id"]
 
 #: How long a client holds its frames for the first frame of a mirror it
 #: shows again (`FrameHolds`). Without it the pane shows its last page
@@ -185,3 +187,11 @@ class RemoteProgram:
     @property
     def is_terminated(self) -> bool:
         return self._stopped or self.sink.refused is not None
+
+
+def owner_pane_id(pane: Pane) -> int | None:
+    "The id of the pane on the server that owns it, for a pane mirrored here: a terminal or a window."
+    if isinstance(pane.process, RemoteProgram):
+        return pane.process.pane_id
+    host = getattr(pane.terminal, "host", None)
+    return host.pane_id if isinstance(host, RemoteWindow) else None

@@ -29,7 +29,7 @@ from ..answer import Answer
 from ..commands import CommandException, Target, this_client
 from ..commands.common import find_pane, find_window, session_of_target, session_part
 from ..enums import Woke
-from .program import RemoteProgram
+from .program import owner_pane_id
 
 if TYPE_CHECKING:
     from ..connection.client_state import ClientState
@@ -89,7 +89,7 @@ def forwarded(
         caller = None
 
     targets = {dest: _there(peer, kind, found, session) for dest, kind, found, session in named}
-    caller_id = cast(RemoteProgram, caller.process).pane_id if caller is not None else None
+    caller_id = owner_pane_id(caller) if caller is not None else None
     text = shlex.join([command, *arguments])
     # What the command answers to and who ran it, now: the coroutine
     # runs later, when another command may be current.
@@ -119,7 +119,7 @@ def _resolve(pymux: Pymux, kind: Target, value: str) -> tuple[object, Session] |
 def _there(peer: Peer, kind: Target, found: object, session: Session) -> str:
     "A target resolved here, as the owner's ids spell it."
     if kind is Target.PANE:
-        return "%%%d" % (cast(RemoteProgram, cast("Pane", found).process).pane_id,)
+        return "%%%s" % (owner_pane_id(cast("Pane", found)),)
     if kind is Target.WINDOW:
         window_id = peer.tree.id_of_window(cast("Window", found))
         if window_id is None:

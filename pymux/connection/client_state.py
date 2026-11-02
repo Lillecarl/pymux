@@ -650,7 +650,7 @@ class ClientState:
             return
         drained = self.connection.pacing.drained
         self.connection.graphics.windows.refresh(
-            self.pymux.wayland.view_of(pane.pane_id, pane.terminal, write_position, drained)
+            pane.terminal.host.view_of(pane.pane_id, pane.terminal, write_position, drained)
         )
 
     def _windows_after_drain(self) -> None:
@@ -703,7 +703,7 @@ class ClientState:
             return []
         drained = self.connection.pacing.drained
         return [
-            self.pymux.wayland.view_of(pane.pane_id, widget, write_position, drained)
+            widget.host.view_of(pane.pane_id, widget, write_position, drained)
             for pane, widget, write_position in self.window_panes()
         ]
 

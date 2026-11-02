@@ -73,6 +73,7 @@ from ...options.tables import (
 )
 from ...options.window_options import WindowOptions
 from ...pipes.posix import PosixSocketListener
+from ...wayland.window_pane import is_window_pane
 from ..pane import Pane
 from ..session import Session
 from ..splits import HSplit, Split, VSplit, node_key
@@ -536,6 +537,7 @@ def _pane_rows(pane: Pane, window: Window | None, parent: Split | None, place: i
         title=_title_of(pane),
         current_command=os.path.basename(pane.process.get_name() or "") or None,
         pane_index=window.get_pane_index(pane) if window is not None else None,
+        window_pane=int(is_window_pane(pane)),
     )
     for name, value in sorted(pane.user_vars.items()):
         yield PaneUserVarRow(pane.pane_id, name, value)

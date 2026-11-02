@@ -16,8 +16,8 @@ cells under the picture, and a notice where the client cannot show it.
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
-from typing import TYPE_CHECKING, override
+from collections.abc import Awaitable, Callable, Iterable
+from typing import TYPE_CHECKING, Protocol, override
 
 from prompt_toolkit.application.current import get_app
 from prompt_toolkit.data_structures import Point
@@ -39,8 +39,49 @@ if TYPE_CHECKING:
     from prompt_toolkit.layout.screen import Screen
     from pyte.images import GraphicsImage, GraphicsPlacement
 
+    from pymux.core.main import Pymux
     from pymux.core.pane import Pane
-    from pymux.wayland.wayland import WaylandServer
+    from pymux.graphics.window_frames import WindowView
+
+
+class WindowHost(Protocol):
+    """
+    Where a window pane's window lives: this server's compositor
+    (`WaylandServer`), or another server that lends it over a peer link
+    (`RemoteWindow`). `toplevel` is the host's own name for the window.
+    Lillecarl/pymux#888.
+    """
+
+    def configure(self, toplevel: int, columns: int, rows: int) -> None: ...
+    def close(self, toplevel: int) -> None: ...
+    def press(self, toplevel: int, modifiers: tuple[int, ...], code: int, time: int) -> None: ...
+    def type_text(self, toplevel: int, text: str) -> bool: ...
+    def pointer(self, toplevel: int, position: Point, button: int | None, pressed: bool, time: int) -> None: ...
+    def scroll(self, toplevel: int, position: Point, steps: int, time: int) -> None: ...
+    def frame(self, toplevel: int) -> tuple[int, int, bytes] | None: ...
+    async def drawn_again(self, toplevels: Iterable[int], timeout: float) -> None: ...
+    def view_of(
+        self, pane_id: int, widget: WindowWidget, write_position: WritePosition, drained: Callable[[], Awaitable[None]]
+    ) -> WindowView: ...
+
+
+def may_type(pymux: Pymux) -> bool:
+    "The person at the keyboard may drive a window: not read only, and holding no prefix."
+    try:
+        state = pymux.get_client_state()
+    except ValueError:
+        return True
+    return not state.read_only and not state.has_prefix
+
+
+def client_shows_windows(pymux: Pymux) -> bool:
+    "Whether the client drawing now can show a window: it speaks kitty."
+    try:
+        state = pymux.get_client_state()
+    except ValueError:
+        return False
+    return bool(state.connection.graphics.kitty_supported)
+
 
 #: What a client that cannot draw kitty images sees in the pane.
 NOTICE = "This pane shows a Wayland window; its terminal does not speak the kitty graphics protocol."
@@ -239,7 +280,7 @@ class WindowControl(UIControl):
 
     @override
     def create_content(self, width: int, height: int) -> UIContent:
-        notice = not self.widget.wayland.client_shows_windows()
+        notice = not client_shows_windows(self.widget.pymux)
         words = NOTICE.split()
         lines: list[str] = []
         while notice and words:
@@ -328,12 +369,12 @@ class WindowWidget:
 
     is_copying = False
 
-    def __init__(self, wayland: WaylandServer, toplevel: int, takes_keys: Callable[[], bool]) -> None:
+    def __init__(self, host: WindowHost, toplevel: int, pymux: Pymux) -> None:
         #: Empty for ever: `enter_copy_mode` opens nothing.
         self.copy_views: PerApplication[None] = PerApplication()
-        self.wayland = wayland
+        self.host = host
+        self.pymux = pymux
         self.toplevel = toplevel
-        self.takes_keys = takes_keys
         self.app_id = ""
         self.screen = WindowScreen()
         self.process = WindowProcess(self)
@@ -357,13 +398,16 @@ class WindowWidget:
             return
         self.columns, self.rows = width, height
         self.process.sx, self.process.sy = width, height
-        self.wayland.configure(self.toplevel, width, height)
+        self.host.configure(self.toplevel, width, height)
+
+    def takes_keys(self) -> bool:
+        return may_type(self.pymux)
 
     def enter_copy_mode(self) -> None:
         "A window has no history to copy from."
 
     def close(self) -> None:
-        self.wayland.close(self.toplevel)
+        self.host.close(self.toplevel)
 
     def press(self, key: str) -> None:
         found = evdev_of(key)
@@ -372,10 +416,10 @@ class WindowWidget:
             # text; a named key with no evdev code goes nowhere.
             # Lillecarl/pymux#624.
             if not isinstance(key, Keys) and key.isprintable():
-                self.wayland.type_text(self.toplevel, key)
+                self.host.type_text(self.toplevel, key)
             return
         modifiers, code = found
-        self.wayland.press(self.toplevel, modifiers, code, now())
+        self.host.press(self.toplevel, modifiers, code, now())
 
     def press_data(self, data: str) -> None:
         "The keys in a sequence the terminal sent, which pymux has no name for."
@@ -383,19 +427,19 @@ class WindowWidget:
             found = evdev_of_event(item) if isinstance(item, KeyEvent) else None
             if found is not None:
                 modifiers, code = found
-                self.wayland.press(self.toplevel, modifiers, code, now())
+                self.host.press(self.toplevel, modifiers, code, now())
 
     def mouse(self, event: MouseEvent) -> None:
         if event.event_type == MouseEventType.SCROLL_UP:
-            self.wayland.scroll(self.toplevel, event.position, -1, now())
+            self.host.scroll(self.toplevel, event.position, -1, now())
             return
         if event.event_type == MouseEventType.SCROLL_DOWN:
-            self.wayland.scroll(self.toplevel, event.position, 1, now())
+            self.host.scroll(self.toplevel, event.position, 1, now())
             return
         pressed = event.event_type == MouseEventType.MOUSE_DOWN
         released = event.event_type == MouseEventType.MOUSE_UP
         button = _BUTTONS.get(event.button) if (pressed or released) else None
-        self.wayland.pointer(self.toplevel, event.position, button, pressed, now())
+        self.host.pointer(self.toplevel, event.position, button, pressed, now())
 
 
 def is_window_pane(pane: Pane) -> bool:

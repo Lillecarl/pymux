@@ -442,7 +442,7 @@ class PaneMaker:
         if window is None:
             return None
 
-        pane = self._window_pane_of(widget)
+        pane = self.window_pane_of(widget)
         if beside is not None:
             # One program, one set of tags: a caller finds all its windows by them.
             pane.tags.update(beside.tags)
@@ -462,7 +462,7 @@ class PaneMaker:
         session = self.pymux.session_holding(old)
         if session is None:
             return None
-        pane = self._window_pane_of(widget)
+        pane = self.window_pane_of(widget)
         pane.tags.update(old.tags)
         # The swap first: an ended program takes its pane out of the
         # session, and a session left with none stops the server.
@@ -471,7 +471,8 @@ class PaneMaker:
         self._window_pane_shown()
         return pane
 
-    def _window_pane_of(self, widget: WindowWidget) -> Pane:
+    def window_pane_of(self, widget: WindowWidget) -> Pane:
+        "A registered pane that shows `widget`'s window, in no window yet."
         pane = Pane(widget)
 
         def focus_pane_on_click() -> None:
@@ -490,9 +491,11 @@ class PaneMaker:
         self.pymux.invalidate(Woke.WINDOW_PANE_OPENED)
 
     def window_pane_drew(self, pane: Pane) -> None:
-        "A window pane's window drew a frame: send it to every client that shows it."
+        "A window pane's window drew a frame: send it to every client and every peer that shows it."
         for client_state in self.pymux._client_states.values():
             client_state.refresh_window_pane(pane)
+        for link in self.pymux.peer_links():
+            link.window_drew(pane)
 
     def window_pane_ended(self, pane: Pane) -> None:
         "The window of a window pane closed. A window leaves nothing to remain on exit."

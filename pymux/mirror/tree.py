@@ -43,7 +43,9 @@ from ..options.tables import (
     WindowTagRow,
 )
 from ..options.window_options import WindowOptions
-from .program import RemoteProgram
+from ..wayland.window_pane import WindowWidget
+from .program import RemoteProgram, owner_pane_id
+from .window import RemoteWindow
 
 if TYPE_CHECKING:
     from ..core.main import Pymux
@@ -189,7 +191,8 @@ class MirrorTree:
             # An overlay floats over no window. It is not mirrored yet.
             if row.window_id is None:
                 continue
-            pane = self.panes.get(row.pane_id) or self._new_pane(row.pane_id)
+            # A pane id never changes kind: `pymux wl` puts a new pane in the old one's place.
+            pane = self.panes.get(row.pane_id) or self._new_pane(row.pane_id, bool(row.window_pane))
             pane.chosen_name = row.pane_name
             pane.clock_mode = bool(row.clock_mode)
             pane.current_directory = row.pane_current_path
@@ -202,14 +205,22 @@ class MirrorTree:
             pane.bell = bool(row.bell)
             pane.user_vars = {var.name: var.value for var in user_vars.get(row.pane_id, ())}
             pane.tags = {tag.key: tag.value for tag in tags.get(row.pane_id, ())}
-            cast(RemoteProgram, pane.process).command = row.current_command
+            if isinstance(pane.terminal, WindowWidget):
+                pane.terminal.app_id = row.current_command or ""
+                pane.terminal.screen.titles.window = row.title or ""
+            else:
+                cast(RemoteProgram, pane.process).command = row.current_command
             kept[row.pane_id] = pane
         for remote_id, pane in self.panes.items():
             if remote_id not in kept:
                 self._drop_pane(pane)
         self.panes = kept
 
-    def _new_pane(self, remote_id: int) -> Pane:
+    def _new_pane(self, remote_id: int, window: bool) -> Pane:
+        if window:
+            host = RemoteWindow(self.peer, remote_id)
+            pane = host.pane = self.pymux.panes.window_pane_of(WindowWidget(host, remote_id, self.pymux))
+            return pane
         pane = self.pymux.panes.build_program_pane(RemoteProgram.of(self.peer, remote_id))
         self.pymux.panes.register_pane(pane)
         return pane
@@ -283,7 +294,7 @@ class MirrorTree:
         the old one again. A forwarded `select-pane` runs there and not
         here, so it does not come back. Lillecarl/pymux#872.
         """
-        if not self._updating and isinstance(pane.process, RemoteProgram):
+        if not self._updating and owner_pane_id(pane) is not None:
             self.pymux.handle_command("select-pane -t %%%d" % (pane.pane_id,))
 
     def _build_splits(

@@ -455,7 +455,7 @@ def client_grid_of(client_state: ClientState, colors: ColorOverrides, cell: tupl
         for placement, image, width, height, x, y, source in pane_placements(view, *cell)
     ]
     for _pane, widget, place in client_state.window_panes():
-        frame = client_state.pymux.wayland.frame(widget.toplevel)
+        frame = widget.host.frame(widget.toplevel)
         if frame is not None:
             images.append(window_shown(place.xpos, place.ypos, place.width, place.height, Pixels(*frame)))
     return Grid(rows, size.columns, paint.foreground, paint.background, cursor, images)

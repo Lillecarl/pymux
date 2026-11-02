@@ -125,8 +125,8 @@ async def _print_window_png(pymux: Pymux, widget: WindowWidget, args: argparse.N
         raise CommandException(
             "capture-pane: a window pane is pixels, so --font, --fallback, --cell, -S and -E draw nothing"
         )
-    await pymux.wayland.drawn_again([widget.toplevel], FRAME_WAIT)
-    frame = pymux.wayland.frame(widget.toplevel)
+    await widget.host.drawn_again([widget.toplevel], FRAME_WAIT)
+    frame = widget.host.frame(widget.toplevel)
     if frame is None:
         raise CommandException("capture-pane: the window has drawn no frame yet")
     pymux.print_command_line(await anyio.to_thread.run_sync(_window_png, *frame, args.fit))

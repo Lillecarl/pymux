@@ -26,8 +26,10 @@ from ..client.reconnect import link_ended_notice, link_notice, why
 from ..client.relink import Relink, Restarting, Wait
 from ..commands import CommandException
 from ..enums import Woke
+from ..graphics.kitty_frames import decoders
 from ..log import logger
 from ..options.tables import PeerCopyRow, PeerPlaceRow
+from ..wayland.window_pane import WindowWidget
 from .copying import place_of
 from .dial import abort, dial, dial_beside
 from .program import HOLD_FOR_FRESH, RemoteProgram
@@ -50,6 +52,7 @@ if TYPE_CHECKING:
     from .copying import Place
     from .link import PeerLink
     from .sink import MirrorSink
+    from .window import RemoteWindow
 
 __all__ = ["Peer", "Peers", "Told"]
 
@@ -170,6 +173,9 @@ class Peers:
                 windows.append(window)
         for peer in self.by_address.values():
             for pane in peer.tree.panes.values():
+                if isinstance(pane.terminal, WindowWidget):
+                    cast("RemoteWindow", pane.terminal.host).seen(id(pane) in seen)
+                    continue
                 program = cast(RemoteProgram, pane.process)
                 if program.seen(id(pane) in seen):
                     # Its page is old: the clients that show it wait for
@@ -324,7 +330,7 @@ class Peer:
     def __init__(self, pymux: Pymux, address: str, **connect_with: Any) -> None:
         self.address = address
         self.connect_with = connect_with
-        self.sinks: dict[int, MirrorSink] = {}
+        self.sinks: dict[int, MirrorSink | RemoteWindow] = {}
         #: What this side told the owner and still holds, which every
         #: new link hears again (`_hello`).
         self.told = Told(self.send)
@@ -418,9 +424,12 @@ class Peer:
 
     # -- what a mirror asks --------------------------------------------
 
-    def mirror(self, pane_id: int, sink: MirrorSink) -> None:
+    def mirror(self, pane_id: int, sink: MirrorSink | RemoteWindow) -> None:
         self.sinks[pane_id] = sink
-        self.told.say(("mirror", pane_id), {Field.CMD: Packet.MIRROR, Field.PANE_ID: pane_id})
+        # The codecs this side decodes, for a window pane. Lillecarl/pymux#888.
+        self.told.say(
+            ("mirror", pane_id), {Field.CMD: Packet.MIRROR, Field.PANE_ID: pane_id, Field.CODECS: sorted(decoders())}
+        )
         # Where the owner's frames last put copy mode, which is the
         # owner's to move, so a new link reads it when it starts.
         self.told.hold(("copy", pane_id), lambda: self._copy_packet(pane_id, sink.copying) if sink.copying else None)

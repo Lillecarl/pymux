@@ -292,7 +292,7 @@ class WaylandServer:
     # Windows in panes. Lillecarl/pymux#620.
 
     def _opened(self, compositor: Compositor, toplevel: int, launch: Launch | None, tasks: anyio.abc.TaskGroup) -> None:
-        widget = WindowWidget(self, toplevel, self._takes_keys)
+        widget = WindowWidget(self, toplevel, self.pymux)
         pane = None
         if launch is not None and launch.adopted is None:
             pane = launch.adopted = self.pymux.panes.adopt_window_pane(launch.pane, widget)
@@ -448,22 +448,6 @@ class WaylandServer:
             return window.options.frame_rate
         return 0
 
-    def _takes_keys(self) -> bool:
-        "The person at the keyboard may drive it, and holds no prefix."
-        try:
-            state = self.pymux.get_client_state()
-        except ValueError:
-            return True
-        return not state.read_only and not state.has_prefix
-
-    def client_shows_windows(self) -> bool:
-        "Whether the client drawing now can show a window: it speaks kitty."
-        try:
-            state = self.pymux.get_client_state()
-        except ValueError:
-            return False
-        return bool(state.connection.graphics.kitty_supported)
-
     def configure(self, toplevel: int, columns: int, rows: int) -> None:
         """
         Ask the window for the pixels of that many cells, at its scale.
@@ -537,14 +521,16 @@ class WaylandServer:
             return False
         return compositor.commit_text(text)
 
-    def _pixel_of(self, toplevel: int, position: Point) -> tuple[float, float]:
+    def _pixel_of(
+        self, toplevel: int, position: Point, fraction: tuple[float, float] | None = None
+    ) -> tuple[float, float]:
         """
         Where in the window's pixels the pointer is: the cell, and where in
         it the terminal said, for one that reports pixels; else the middle.
         Lillecarl/pymux#648. At the cell the window was sized for.
         """
         width, height = self._cells.get(toplevel) or self._cell_of(toplevel)
-        across, down = self._pointer_fraction()
+        across, down = fraction or self._pointer_fraction()
         return (position.x + across) * width, (position.y + down) * height
 
     def _pointer_fraction(self) -> tuple[float, float]:
@@ -559,11 +545,20 @@ class WaylandServer:
         client = self.pymux.client_of(get_app())
         return client is None or client.options.window_scroll == WindowScroll.SMOOTH
 
-    def pointer(self, toplevel: int, position: Point, button: int | None, pressed: bool, time: int) -> None:
+    def pointer(
+        self,
+        toplevel: int,
+        position: Point,
+        button: int | None,
+        pressed: bool,
+        time: int,
+        fraction: tuple[float, float] | None = None,
+    ) -> None:
+        "The pointer at a cell, and where in it: `fraction`, or what the client being handled reported."
         compositor = self.compositor
         if compositor is None:
             return
-        x, y = self._pixel_of(toplevel, position)
+        x, y = self._pixel_of(toplevel, position, fraction)
         with contextlib.suppress(KeyError):
             compositor.pointer_motion(toplevel, x, y, time)
             if button is not None:
@@ -571,11 +566,13 @@ class WaylandServer:
                     compositor.focus(toplevel)
                 compositor.pointer_button(button, pressed, time)
 
-    def scroll(self, toplevel: int, position: Point, steps: int, time: int) -> None:
+    def scroll(
+        self, toplevel: int, position: Point, steps: int, time: int, fraction: tuple[float, float] | None = None
+    ) -> None:
         compositor = self.compositor
         if compositor is None:
             return
-        x, y = self._pixel_of(toplevel, position)
+        x, y = self._pixel_of(toplevel, position, fraction)
         with contextlib.suppress(KeyError):
             compositor.pointer_motion(toplevel, x, y, time)
             if self._scrolls_smooth():

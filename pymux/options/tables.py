@@ -337,6 +337,8 @@ class PaneRow:
     title: str | None = shown()
     current_command: str | None = shown()
     pane_index: int | None = shown()
+    #: 1 for a pane that shows a Wayland window, which a peer mirrors as pixels.
+    window_pane: int = shown(0)
 
 
 @dataclass(frozen=True, slots=True)
