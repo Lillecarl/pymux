@@ -27,6 +27,7 @@ from ..client.relink import Relink, Restarting, Wait
 from ..commands import CommandException
 from ..enums import Woke
 from ..log import logger
+from ..options.tables import PeerCopyRow, PeerPlaceRow
 from .copying import place_of
 from .dial import abort, dial, dial_beside
 from .program import HOLD_FOR_FRESH, RemoteProgram
@@ -72,12 +73,10 @@ class Peers:
         self.by_address: dict[str, Peer] = {}
         #: The addresses a loaded snapshot was linked to.
         self.returning: list[str] = []
-        #: `[address, pane id, *place]` of each mirror a loaded snapshot
-        #: was in copy mode on (`copying`).
-        self.returning_copies: list[list[Any]] = []
-        #: `[client id, address, session id, window id]` of each client a
-        #: loaded snapshot had on a mirrored session (`places`).
-        self.returning_places: list[list[Any]] = []
+        #: Each mirror a loaded snapshot was in copy mode on (`copy_rows`).
+        self.returning_copies: list[PeerCopyRow] = []
+        #: Each client a loaded snapshot had on a mirrored session (`place_rows`).
+        self.returning_places: list[PeerPlaceRow] = []
         #: The ports here for loopback URLs of mirrored panes.
         self.tunnels = Tunnels(pymux)
 
@@ -90,20 +89,20 @@ class Peers:
         self.returning = []
         for address in returning:
             self.of(address).watch()
-        for row in self.returning_copies:
-            peer = self.by_address.get(row[0]) if len(row) == 5 else None
-            place = place_of(row[2:])
-            if peer is not None and type(row[1]) is int and place is not None:
-                peer.copies[row[1]] = place
+        for copy in self.returning_copies:
+            peer = self.by_address.get(copy.address)
+            place = place_of((copy.caret, copy.selection_start, copy.selection_kind))
+            if peer is not None and place is not None:
+                peer.copies[copy.pane_id] = place
         self.returning_copies = []
         until = anyio.current_time() + PLACE_KEPT
         for row in self.returning_places:
-            peer = self.by_address.get(row[1]) if len(row) == 4 else None
-            if peer is not None and all(type(one) is int for one in row[2:]):
-                peer.places[str(row[0])] = ReturningPlace(row[2], row[3], until)
+            peer = self.by_address.get(row.address)
+            if peer is not None:
+                peer.places[row.client_id] = ReturningPlace(row.session_id, row.window_id, until)
         self.returning_places = []
 
-    def places(self) -> list[list[Any]]:
+    def place_rows(self) -> list[PeerPlaceRow]:
         "Each client on a mirrored session, by its id, with the link and the owner's session and window."
         found = []
         for client_state in self.pymux._client_states.values():
@@ -116,7 +115,7 @@ class Peers:
             window = client_state.session.arrangement.get_active_window_for(client_state.app)
             window_id = remote.peer.tree.id_of_window(window) if window is not None else None
             if window_id is not None:
-                found.append([client_id, remote.peer.address, remote.session_id, window_id])
+                found.append(PeerPlaceRow(client_id, remote.peer.address, remote.session_id, window_id))
         return found
 
     def return_clients(self) -> None:
@@ -124,10 +123,10 @@ class Peers:
         for peer in self.by_address.values():
             peer.return_clients()
 
-    def copying(self) -> list[tuple[str, int, Place]]:
+    def copy_rows(self) -> list[PeerCopyRow]:
         "Each mirror here in copy mode, by address and the owner's pane id, with where it stands."
         return [
-            (address, pane_id, sink.copying)
+            PeerCopyRow(address, pane_id, *sink.copying)
             for address, peer in self.by_address.items()
             for pane_id, sink in sorted(peer.sinks.items())
             if sink.copying is not None

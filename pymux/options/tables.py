@@ -424,11 +424,34 @@ class NamedBufferRow:
 class ServerListRow:
     TABLE: ClassVar[str] = "server_lists"
     KEY: ClassVar[tuple[str, ...]] = ("list", "position")
-    list: str = field(
-        metadata=column(check="list IN ('prompt_history', 'message_log', 'peers', 'peer_copying', 'peer_places')")
-    )
+    list: str = field(metadata=column(check="list IN ('prompt_history', 'message_log', 'peers')"))
     position: int
     text: str
+
+
+@dataclass(frozen=True, slots=True)
+class PeerCopyRow:
+    "Where copy mode stands on a mirrored pane: the link, the owner's pane id, and the place (`mirror.copying.Place`)."
+
+    TABLE: ClassVar[str] = "peer_copies"
+    KEY: ClassVar[tuple[str, ...]] = ("address", "pane_id")
+    address: str
+    pane_id: int
+    caret: int
+    selection_start: int | None
+    selection_kind: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class PeerPlaceRow:
+    "Where a client is on a mirrored session: the link, and the owner's ids of the session and the window."
+
+    TABLE: ClassVar[str] = "peer_places"
+    KEY: ClassVar[tuple[str, ...]] = ("client_id",)
+    client_id: str
+    address: str
+    session_id: int
+    window_id: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -628,6 +651,8 @@ ROWS = (
     ClientWindowRow,
     NamedBufferRow,
     ServerListRow,
+    PeerCopyRow,
+    PeerPlaceRow,
     HookRow,
     KeyBindingRow,
     NotificationRow,

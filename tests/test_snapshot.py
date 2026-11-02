@@ -405,6 +405,10 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
 #: A table that holds one row, so no column of it can vary.
 ONE_ROW = {"server_options", "session_defaults"}
 
+#: Tables only a link to another server fills. The upgrade tests in
+#: `test_a_server_mirrors_a_server.py` take them through a snapshot.
+LINKED = {"peer_copies", "peer_places"}
+
 #: Columns that hold one value in every row however the server is used.
 CONSTANT = {
     ("counters", "value"),  # five counters, and two of them may agree
@@ -479,7 +483,7 @@ def _constant_columns(path) -> list[tuple[str, str]]:
     try:
         found = []
         for table in tables.TABLES:
-            if table in ONE_ROW:
+            if table in ONE_ROW or table in LINKED:
                 continue
             if db.execute("SELECT count(*) FROM %s" % table).fetchone()[0] < 2:
                 found.append((table, "(fewer than two rows)"))
