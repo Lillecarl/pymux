@@ -30,6 +30,8 @@ from .reconnect import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from asyncssh import SSHClientConnection
 
     from .ssh import Link, SshClient
@@ -40,6 +42,8 @@ __all__ = [
     "SUSPEND_POLL",
     "Relink",
     "Restarting",
+    "clocks",
+    "wait_for_sleep",
 ]
 
 #: How often to look for a gap between the clocks, in seconds.
@@ -105,6 +109,45 @@ class _Left:
 _LEFT = _Left()
 
 
+def clocks() -> tuple[float, float]:
+    "The world's clock and the loop's, read together."
+    return time.time(), anyio.current_time()
+
+
+async def wait_for_sleep(read_clocks: Callable[[], tuple[float, float]]) -> str:
+    """
+    Return once this machine has been asleep, with a sentence that says
+    for how long. `read_clocks` is `clocks`, or a test's.
+
+    **A sleep is invisible to everything else here.** The loop's
+    clock is `time.monotonic`, which on Linux does not run while
+    the machine is suspended, so every timer that would notice a
+    dead link is suspended with it: asyncssh's keepalive resumes
+    counting from where it stopped and takes its full four
+    intervals *after* the lid opens.
+
+    So this watches the one thing a sleep cannot hide: the world
+    moved and the loop did not. It needs no signal, no bus and no
+    platform code. Where the loop's clock keeps running through a
+    sleep there is no gap to find, and there is nothing to fix
+    either: the keepalive timers ran too.
+
+    **A gap ends a link rather than testing it.** A machine that has
+    been asleep has almost always lost its TCP connections.
+    Reconnecting a link that was alive costs about a second, while
+    waiting on a link that is dead costs the twenty seconds the
+    keepalive needs. Lillecarl/pymux#445, Lillecarl/pymux#875.
+    """
+    was_wall, was_loop = read_clocks()
+    while True:
+        await anyio.sleep(SUSPEND_POLL)
+        wall, loop = read_clocks()
+        asleep = (wall - was_wall) - (loop - was_loop)
+        was_wall, was_loop = wall, loop
+        if asleep >= SUSPEND_GAP:
+            return "This machine was asleep for %s." % (_how_long(asleep),)
+
+
 def _how_long(seconds: float) -> str:
     "A sleep, in the largest unit that keeps it a small number."
     if seconds < 90:
@@ -131,36 +174,11 @@ class Relink:
         A method so that a test can move one of them without sleeping
         a machine.
         """
-        return time.time(), anyio.current_time()
+        return clocks()
 
     async def watch_for_suspend(self, connection: SSHClientConnection) -> None:
         """
-        End the link when this machine has been asleep.
-
-        **A sleep is invisible to everything else here.** The loop's
-        clock is `time.monotonic`, which on Linux does not run while
-        the machine is suspended, so every timer that would notice a
-        dead link is suspended with it: asyncssh's keepalive resumes
-        counting from where it stopped and takes its full four
-        intervals *after* the lid opens. The person looks at a frozen
-        screen for that whole time, and the panes they are looking at
-        have been reachable for most of it.
-
-        So this watches the one thing a sleep cannot hide: the world
-        moved and the loop did not. It needs no signal, no bus and no
-        platform code, and it is right whichever way a platform
-        chooses. Where the loop's clock keeps running through a sleep
-        there is no gap to find, and there is nothing to fix either --
-        the keepalive timers ran too, so they have already given up by
-        the time anybody looks.
-
-        **A gap ends the link rather than testing it.** A machine that
-        has been asleep has almost always lost its TCP connections,
-        and the two outcomes are not equal: reconnecting a link that
-        was alive costs about a second and the panes are on the other
-        machine anyway, while waiting on a link that is dead costs the
-        twenty seconds the keepalive needs. A clock that was stepped
-        forwards by something other than a sleep pays the same second.
+        End the link when this machine has been asleep (`wait_for_sleep`).
 
         **A link this client ended reads as end of file either way**,
         and end of file is how a server says the person detached. So
@@ -175,19 +193,9 @@ class Relink:
         did to the socket, and `link_may_come_back` retries an
         `OSError`. Lillecarl/pymux#445.
         """
-        was_wall, was_loop = self.clocks()
-
-        while True:
-            await anyio.sleep(SUSPEND_POLL)
-
-            wall, loop = self.clocks()
-            asleep = (wall - was_wall) - (loop - was_loop)
-            was_wall, was_loop = wall, loop
-
-            if asleep >= SUSPEND_GAP:
-                self.slept_through = ConnectionResetError("This machine was asleep for %s." % (_how_long(asleep),))
-                connection.abort()
-                return
+        # A lambda, so a test that moves `self.clocks` mid-watch is read.
+        self.slept_through = ConnectionResetError(await wait_for_sleep(lambda: self.clocks()))
+        connection.abort()
 
     async def again(self, stdin_fd: int, waits: Backoff, lost: Exception) -> Link | None:
         """

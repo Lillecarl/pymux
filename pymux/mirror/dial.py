@@ -12,7 +12,7 @@ import anyio.abc
 from libpymux.protocol import READ_SIZE
 
 from ..client.defaults import is_ssh_url
-from ..client.ssh import open_socket, ssh_target
+from ..client.ssh import CLOSE_SECONDS, open_socket, ssh_target
 
 if TYPE_CHECKING:
     from asyncssh import SSHClientConnection, SSHReader, SSHWriter
@@ -20,16 +20,17 @@ if TYPE_CHECKING:
 __all__ = ["dial", "dial_beside"]
 
 
-async def dial(address: str, **connect_with: Any) -> anyio.abc.ByteStream:
+async def dial(address: str, connect_timeout: float | None = None, **connect_with: Any) -> anyio.abc.ByteStream:
     """
     A stream to the pymux socket `address` names: a path on this
     machine, or `ssh://[user@]host[:port][/path]`, which reaches the
-    socket the way `pymux -S ssh://...` does. `connect_with` goes to
-    asyncssh, for a test's key and hosts file.
+    socket the way `pymux -S ssh://...` does. `connect_timeout` bounds
+    an SSH connect, as `relink.CONNECT_TIMEOUT` says. `connect_with`
+    goes to asyncssh, for a test's key and hosts file.
     """
     if not is_ssh_url(address):
         return await anyio.connect_unix(address)
-    connection, reader, writer, path = await open_socket(ssh_target(address), connect_with)
+    connection, reader, writer, path = await open_socket(ssh_target(address), connect_with, connect_timeout)
     return _SshStream(connection, reader, writer, path, owns_connection=True)
 
 
@@ -94,5 +95,7 @@ class _SshStream(anyio.abc.ByteStream):
             self._writer.close()
             return
         self._connection.close()
-        with contextlib.suppress(Exception):
+        # Bounded as the client bounds its own close: a link that died
+        # while this machine slept must not hold the redial.
+        with contextlib.suppress(Exception), anyio.move_on_after(CLOSE_SECONDS):
             await self._connection.wait_closed()
