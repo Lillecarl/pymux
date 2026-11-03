@@ -53,6 +53,7 @@ from .window_source import MirrorWindowSource
 
 if TYPE_CHECKING:
     from pyte.kitty_clipboard import ClipboardWrite
+    from pyte.sequences.kitty_dnd import DndPacket
 
     from pymux.connection.server import ServerConnection
     from pymux.core.pane import Pane
@@ -236,6 +237,17 @@ class PeerLink:
         "Ask the peer's terminal for its clipboard, for `pane` (`RichClipboard._read`)."
         self.queue({Field.CMD: Packet.MIRROR_CLIPBOARD_READ, Field.PANE_ID: int(pane.pane_id), Field.DATA: sequence})
 
+    def pane_dnd(self, pane: Pane, packet: DndPacket) -> None:
+        "A drag and drop packet of a pane's program, for the drop or drag a terminal at the peer carries."
+        if self.hears(pane):
+            self.queue({Field.CMD: Packet.MIRROR_DND, Field.PANE_ID: int(pane.pane_id), Field.DATA: packet.param()})
+
+    @_PACKETS.handles(Packet.MIRROR_DND)
+    def _on_dnd(self, packet: Message) -> None:
+        source = self._driven(packet)
+        if source is not None:
+            self.connection.pymux.drag_and_drop.peer_said(self, source.pane, str(packet.get(Field.DATA, "")))
+
     @_PACKETS.handles(Packet.MIRROR_CLIPBOARD_ANSWER)
     def _on_clipboard_answer(self, packet: Message) -> None:
         self.connection.pymux.rich_clipboard.peer_answered(self, str(packet.get(Field.DATA, "")))
@@ -287,6 +299,7 @@ class PeerLink:
         self._queue.clear()
         self._ready.set()
         self._sized({})
+        self.connection.pymux.drag_and_drop.link_gone(self)
         if viewed:
             self.connection.pymux.terminals.sync_viewers()
             self.connection.pymux.focus.sync_panes()

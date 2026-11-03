@@ -290,6 +290,120 @@ async def test_kitty_paste_events_reach_a_pane_there_and_its_read_comes_back_her
         assert asked_there == []
 
 
+#: Two machine ids, as kitty hashes them, so the test can tell whose was sent.
+OWNERS_MACHINE = "1:" + "1" * 64
+PEERS_MACHINE = "1:" + "2" * 64
+
+
+def dnd(param: str) -> str:
+    return "\x1b]72;%s\x1b\\" % param
+
+
+async def kitty_here(owner, peer, client, monkeypatch):
+    """
+    The mirror shown on a client whose terminal speaks kitty's drag and
+    drop. Answers the owner's pane, its mirror, where the client drew
+    the mirror, what the owner's program hears and what the terminal is sent.
+    """
+    owner.drag_and_drop.machine_id = OWNERS_MACHINE
+    peer.drag_and_drop.machine_id = PEERS_MACHINE
+    there, here = await shown_here(owner, peer, client)
+    heard: list[str] = []
+    monkeypatch.setattr(there.terminal.screen, "write_process_input", heard.append)
+    connection = client.connection
+    monkeypatch.setattr(connection, "client_state", client, raising=False)
+    raw: list[str] = []
+    monkeypatch.setattr(connection, "write_output_raw", raw.append, raising=False)
+    monkeypatch.setattr(connection, "flush_output", lambda: None, raising=False)
+    peer.drag_and_drop.terminal_said(connection, "t=q")
+    await until(lambda: here in _drawn(client), "the mirror is drawn")
+    return there, here, client.layout_manager.pane_write_positions[here], heard, raw
+
+
+async def test_a_drop_here_reaches_the_registered_program_there(two_servers, monkeypatch):
+    "Its moves, its drop and its data reach the program, and the program's answers this terminal. Lillecarl/pymux#903."
+    owner, peer, client = two_servers
+    there, here, at, heard, raw = await kitty_here(owner, peer, client, monkeypatch)
+    connection = client.connection
+    program = there.terminal.terminal_control
+
+    program.feed_output(dnd("t=a:i=7;text/x-mine"))
+    await until(
+        lambda: "text/x-mine" in "".join(raw), "the terminal here registers for the program's type", lambda: raw
+    )
+
+    cell = "x=%d:y=%d" % (at.xpos + 2, at.ypos + 1)
+    peer.drag_and_drop.terminal_said(connection, "t=m:%s:X=0:Y=0:o=3;text/plain text/x-mine" % cell)
+    await until(lambda: heard, "the move reaches the program there")
+    assert heard == [dnd("t=m:x=2:y=1:X=0:Y=0:o=3:i=7;text/plain text/x-mine")]
+    # The program named no machine, so it runs on the owner's.
+    assert dnd("t=a:x=1;" + OWNERS_MACHINE) in raw
+    heard.clear()
+
+    program.feed_output(dnd("t=m:o=1:i=7;text/x-mine"))
+    await until(
+        lambda: dnd("t=m:x=0:y=0:X=0:Y=0:o=1;text/x-mine") in raw, "its answer reaches the terminal", lambda: raw
+    )
+
+    peer.drag_and_drop.terminal_said(connection, "t=M:%s:X=0:Y=0:o=3;text/plain text/x-mine" % cell)
+    program.feed_output(dnd("t=r:x=2:i=7"))
+    await until(lambda: dnd("t=r:x=2") in raw, "its request reaches the terminal", lambda: raw)
+    peer.drag_and_drop.terminal_said(connection, "t=r:x=2;aGk=")
+    peer.drag_and_drop.terminal_said(connection, "t=r:x=2")
+    await until(lambda: len(heard) == 3, "the drop and its data reach the program", lambda: heard)
+    assert heard == [
+        dnd("t=M:x=2:y=1:X=0:Y=0:o=3:i=7;text/plain text/x-mine"),
+        dnd("t=r:x=2:i=7;aGk="),
+        dnd("t=r:x=2:i=7"),
+    ]
+
+    program.feed_output(dnd("t=r:o=1:i=7"))
+    await until(lambda: dnd("t=r:o=1") in raw, "the end of the drop reaches the terminal", lambda: raw)
+    assert owner.drag_and_drop._peer_drops == {}
+
+
+async def test_a_drag_a_program_there_offers_goes_through_the_terminal_here(two_servers, monkeypatch):
+    "Lillecarl/pymux#903."
+    owner, peer, client = two_servers
+    there, here, at, heard, raw = await kitty_here(owner, peer, client, monkeypatch)
+    connection = client.connection
+    program = there.terminal.terminal_control
+
+    program.feed_output(dnd("t=o:x=1:i=3"))
+    await until(lambda: dnd("t=o:x=1;" + PEERS_MACHINE) in raw, "the terminal here offers drags", lambda: raw)
+
+    peer.drag_and_drop.terminal_said(connection, "t=o:x=%d:y=%d:X=40:Y=40" % (at.xpos + 4, at.ypos + 2))
+    await until(lambda: heard, "the gesture reaches the program there")
+    assert heard == [dnd("t=o:x=4:y=2:X=40:Y=40:i=3")]
+    assert dnd("t=o:x=1;" + OWNERS_MACHINE) in raw
+    heard.clear()
+
+    program.feed_output(dnd("t=o:o=1:i=3;text/plain") + dnd("t=p:x=0:i=3;aGk="))
+    await until(lambda: dnd("t=p;aGk=") in raw, "its offer and data reach the terminal", lambda: raw)
+    assert dnd("t=o:o=1;text/plain") in raw
+
+    peer.drag_and_drop.terminal_said(connection, "t=e:x=4")
+    await until(lambda: heard, "the end of the drag reaches the program")
+    assert heard == [dnd("t=e:x=4:i=3")]
+    assert owner.drag_and_drop._peer_drags == {}
+
+
+async def test_a_drop_on_a_pane_there_that_did_not_register_is_pasted(two_servers, monkeypatch):
+    owner, peer, client = two_servers
+    there, here, at, heard, raw = await kitty_here(owner, peer, client, monkeypatch)
+    connection = client.connection
+    typed: list[str] = []
+    monkeypatch.setattr(there.terminal.terminal_control.process, "write_input", typed.append)
+
+    cell = "x=%d:y=%d" % (at.xpos + 1, at.ypos + 1)
+    peer.drag_and_drop.terminal_said(connection, "t=M:%s:X=0:Y=0:o=3;text/plain" % cell)
+    assert dnd("t=r:x=1") in raw
+    peer.drag_and_drop.terminal_said(connection, "t=r:x=1;%s" % base64.b64encode(b"dropped here").decode())
+    peer.drag_and_drop.terminal_said(connection, "t=r:x=1")
+    await until(lambda: "dropped here" in "".join(typed), "the text is pasted there", lambda: typed)
+    assert heard == []
+
+
 async def test_a_pane_streams_only_while_seen(two_servers):
     "The client leaves for its own session: the mirror pauses, and catches up on its return."
     owner, peer, client = two_servers

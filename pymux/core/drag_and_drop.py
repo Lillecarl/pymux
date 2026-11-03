@@ -20,6 +20,13 @@ pane offers. Everything after goes between that pane and the terminal.
 The terminal keeps one machine id, the one pymux sent last. pymux sends
 a pane's id before that pane's drop or drag, since a pane may run on
 another machine, over ssh.
+
+**Mirrors.** The owner of a mirrored pane puts what its program
+registered in the frames (`KittyDnd.registration`), so the peer registers
+with its terminals for it. The peer serves a drop or drag over the pane
+as over its own, and its packets for the program cross as `mirror-dnd`.
+The owner gives them to the program and keeps the link that sent them,
+which then gets the program's answers. Lillecarl/pymux#903.
 """
 
 from __future__ import annotations
@@ -37,14 +44,16 @@ from ptterm import Terminal
 from pyte.keep import Keep
 from pyte.kitty_dnd import KittyDnd
 from pyte.screen import Screen
-from pyte.sequences.kitty_dnd import MACHINE_ID, START_OFFERING, STOP_OFFERING, DndPacket, DndType
+from pyte.sequences.kitty_dnd import MACHINE_ID, START_OFFERING, STOP_OFFERING, DndPacket, DndType, Malformed
 
 from ..log import logger
+from ..mirror.program import RemoteProgram
 from .drop_files import RemoteCopy, decoded, drops_directory, new_drop_root, paths_of
 
 if TYPE_CHECKING:
     from ..connection.client_state import ClientState
     from ..connection.server import ServerConnection
+    from ..mirror.link import PeerLink
     from .main import Pymux
     from .pane import Pane
 
@@ -88,6 +97,18 @@ def _registration(pane: Pane | None) -> KittyDnd | None:
     "What the program in `pane` registered, or None for a pane with no pyte screen."
     screen = None if pane is None else pane.screen
     return screen.kitty_dnd if isinstance(screen, Screen) else None
+
+
+def _drop_finished(packet: DndPacket) -> bool:
+    "A program's `t=r` that ends its drop, rather than asking for data."
+    return packet.type == DndType.REQUEST and not (packet.cell_x or packet.cell_y or packet.pixel_y)
+
+
+def _drag_over(packet: DndPacket) -> bool:
+    "A terminal's packet that ends the drag a program began."
+    finished = packet.type == DndType.DRAG_EVENT and packet.cell_x == _DRAG_FINISHED
+    failed = packet.type == DndType.DRAG_ERROR and packet.payload.partition(":")[0] != _STARTED
+    return finished or failed
 
 
 @dataclass
@@ -145,6 +166,8 @@ class DragAndDrop:
         "_terminals": Keep.DROPPED,
         "machine_id": Keep.REBUILT,
         "drops": Keep.REBUILT,
+        "_peer_drops": Keep.DROPPED,
+        "_peer_drags": Keep.DROPPED,
     }
 
     def __init__(self, pymux: Pymux) -> None:
@@ -154,6 +177,10 @@ class DragAndDrop:
         self.machine_id = server_machine_id()
         #: Where the copies of drops from another machine go.
         self.drops: Path = drops_directory()
+        #: The peer whose terminal carries a drop, or a drag, over a pane
+        #: here it mirrors.
+        self._peer_drops: dict[Pane, PeerLink] = {}
+        self._peer_drags: dict[Pane, PeerLink] = {}
 
     def _terminal(self, connection: ServerConnection) -> _Terminal:
         state = self._terminals.get(connection)
@@ -184,7 +211,15 @@ class DragAndDrop:
         connection.flush_output()
 
     def _tell(self, pane: Pane, packet: DndPacket, client_id: int) -> None:
-        "Write one packet to a pane's program, under its `i`. A program that has gone hears nothing."
+        """
+        Write one packet to a pane's program, under its `i`. A program that
+        has gone hears nothing. A mirrored pane's goes to its owner, which
+        knows the `i`.
+        """
+        program = pane.process
+        if isinstance(program, RemoteProgram):
+            program.dnd(replace(packet, client_id=0))
+            return
         screen = pane.screen
         if not isinstance(screen, Screen):
             return
@@ -471,10 +506,42 @@ class DragAndDrop:
         if pane is None or dnd is None:
             return
         self._tell(pane, packet, dnd.drag_client_id)
-        finished = packet.type == DndType.DRAG_EVENT and packet.cell_x == _DRAG_FINISHED
-        failed = packet.type == DndType.DRAG_ERROR and packet.payload.partition(":")[0] != _STARTED
-        if finished or failed:
+        if _drag_over(packet):
             state.drag = None
+
+    # A peer's terminal, over a pane here.
+
+    def peer_said(self, link: PeerLink, pane: Pane, param: str) -> None:
+        "One OSC 72 packet from a peer's terminal for a pane here that it mirrors, after its code. Never raises."
+        try:
+            self._from_peer(link, pane, DndPacket.decode(param))
+        except Malformed:
+            pass
+        except Exception:
+            logger.exception("Serving a drag and drop packet of a peer for pane %s failed.", pane.pane_id)
+
+    def _from_peer(self, link: PeerLink, pane: Pane, packet: DndPacket) -> None:
+        dnd = _registration(pane)
+        if dnd is None:
+            return
+        match packet.type:
+            case DndType.MOVE if packet.cell_x == -1 and packet.cell_y == -1:
+                self._peer_drops.pop(pane, None)
+                self._tell(pane, packet, dnd.drop_client_id)
+            case DndType.MOVE | DndType.DROP | DndType.REQUEST | DndType.REQUEST_ERROR:
+                self._peer_drops[pane] = link
+                self._tell(pane, packet, dnd.drop_client_id)
+            case DndType.OFFER | DndType.DRAG_EVENT | DndType.DRAG_ERROR | DndType.REMOTE_ITEM:
+                self._peer_drags[pane] = link
+                self._tell(pane, packet, dnd.drag_client_id)
+                if _drag_over(packet):
+                    self._peer_drags.pop(pane, None)
+
+    def link_gone(self, link: PeerLink) -> None:
+        "A peer's link ended: what its terminals carried ends with it."
+        for holders in (self._peer_drops, self._peer_drags):
+            for pane in [pane for pane, holder in holders.items() if holder is link]:
+                del holders[pane]
 
     # The panes.
 
@@ -495,15 +562,16 @@ class DragAndDrop:
                 # once, at its start, and the clients change.
                 self._tell(pane, DndPacket(DndType.QUERY), packet.client_id)
             case DndType.ACCEPT | DndType.STOP_ACCEPTING:
-                self._sync_all()
+                self.sync_all()
             case DndType.OFFER if packet.cell_x in (START_OFFERING, STOP_OFFERING):
-                self._sync_all()
+                self.sync_all()
             case DndType.MOVE | DndType.REQUEST:
                 self._up_from_drop_pane(pane, packet)
             case _:
                 self._up_from_drag_pane(pane, packet)
 
-    def _sync_all(self) -> None:
+    def sync_all(self) -> None:
+        "Register with every client's terminal for what the panes take part in now."
         for client in self.pymux._client_states.values():
             self.sync(client)
 
@@ -519,10 +587,15 @@ class DragAndDrop:
             drop = state.drop
             if drop is not None and drop.relayed and drop.pane is pane:
                 self._up(connection, state, packet)
-                finished = packet.type == DndType.REQUEST and not (packet.cell_x or packet.cell_y or packet.pixel_y)
-                if finished:
+                if _drop_finished(packet):
                     state.drop = None
                 return
+        link = self._peer_drops.get(pane)
+        if link is not None:
+            link.pane_dnd(pane, packet)
+            if _drop_finished(packet):
+                del self._peer_drops[pane]
+            return
         if packet.type == DndType.REQUEST:
             dnd = _registration(pane)
             self._tell(
@@ -544,6 +617,12 @@ class DragAndDrop:
                 if packet.type == DndType.DRAG_ERROR and packet.cell_y == -1:
                     state.drag = None
                 return
+        link = self._peer_drags.get(pane)
+        if link is not None:
+            link.pane_dnd(pane, packet)
+            if packet.type == DndType.DRAG_ERROR and packet.cell_y == -1:
+                del self._peer_drags[pane]
+            return
         refused = (packet.type == DndType.OFFER and not packet.cell_x) or (
             packet.type == DndType.DRAG_IMAGE and packet.cell_x < 0
         )
@@ -571,4 +650,7 @@ class DragAndDrop:
             if state.drag is pane:
                 self._send(connection, DndPacket(DndType.DRAG_ERROR, cell_y=-1))
                 state.drag = None
-        self._sync_all()
+        # The peer's own mirror of the pane goes too, and ends what it carried.
+        self._peer_drops.pop(pane, None)
+        self._peer_drags.pop(pane, None)
+        self.sync_all()

@@ -22,6 +22,7 @@ from pyte.keep import Keep
 from pyte.kitty_clipboard import ClipboardWrite
 from pyte.osc import color_base_data
 from pyte.sequences.kitty_clipboard import strict_b64decode
+from pyte.sequences.kitty_dnd import DndPacket, Malformed
 
 from ..client.defaults import is_ssh_url
 from ..client.reconnect import link_ended_notice, link_notice, why
@@ -434,6 +435,10 @@ class Peer:
         if self.connected:
             self._send.send_nowait(encode_json(packet))
 
+    def dnd(self, pane_id: int, param: str) -> None:
+        "A drag and drop packet from a terminal here, for the program in the owner's pane `pane_id`."
+        self.send({Field.CMD: Packet.MIRROR_DND, Field.PANE_ID: pane_id, Field.DATA: param})
+
     def send_clipboard_answer(self, sequence: str) -> None:
         "One packet of this side's answer to the owner's clipboard read (`RichClipboard.read_for_owner`)."
         self.send({Field.CMD: Packet.MIRROR_CLIPBOARD_ANSWER, Field.DATA: sequence})
@@ -746,6 +751,15 @@ class Peer:
             # pane's OSC 52 is.
             if pane is not None and write is not None and self.tree.pymux.options.set_clipboard is Clipboard.ON:
                 self.tree.pymux.rich_clipboard.serve_write(pane, write)
+            return
+        if packet.get(Field.CMD) == Packet.MIRROR_DND:
+            pane = self.tree.panes.get(pane_id) if isinstance(pane_id, int) else None
+            if pane is not None:
+                try:
+                    dnd = DndPacket.decode(str(packet.get(Field.DATA, "")))
+                except Malformed:
+                    return
+                self.tree.pymux.drag_and_drop.pane_said(pane, dnd)
             return
         if packet.get(Field.CMD) == Packet.MIRROR_CLIPBOARD_READ:
             self.tree.pymux.rich_clipboard.read_for_owner(self, str(packet.get(Field.DATA, "")))

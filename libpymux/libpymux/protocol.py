@@ -36,6 +36,7 @@ __all__ = [
     "IMAGES_BY_HASH",
     "OLDEST_PEER_VERSION",
     "PEER_ACTS",
+    "PEER_DND",
     "PEER_PINGS",
     "PEER_RICH_CLIPBOARD",
     "PEER_VERSION",
@@ -67,7 +68,7 @@ READ_SIZE = 1 << 20
 #: one misreads it raises `PEER_VERSION`; one that stops speaking the
 #: older form raises `OLDEST_PEER_VERSION` too. Every field is named
 #: and has a default, so most changes need neither. Lillecarl/pymux#759.
-PEER_VERSION = 6
+PEER_VERSION = 7
 OLDEST_PEER_VERSION = 1
 
 #: From this version a frame may name an image the peer stored by its
@@ -93,6 +94,11 @@ PEER_ACTS = 5
 #: pane's read may go to a peer's terminal (`mirror-clipboard-read`).
 #: Lillecarl/pymux#902.
 PEER_RICH_CLIPBOARD = 6
+
+#: From this version a frame carries what a pane's program registered for
+#: kitty's drag and drop, under `dnd`, and its OSC 72 packets cross as
+#: `mirror-dnd`. Lillecarl/pymux#903.
+PEER_DND = 7
 
 
 def peer_upgrade(version: object, oldest: object) -> str | None:
@@ -376,6 +382,10 @@ class Packet(StrEnum):
     # A paste event at the peer gave a mirrored pane the password under
     # `data`: the owner sends a read under it to this peer.
     MIRROR_CLIPBOARD_PASSWORD = "mirror-clipboard-password"
+    # One OSC 72 packet of a drop or a drag over a mirrored pane, after
+    # its code, under `data`: from the peer's terminal to the pane's
+    # program, and back.
+    MIRROR_DND = "mirror-dnd"
     # "That pane is not mirrored": there is none, under `error`.
     MIRROR_REFUSED = "mirror-refused"
 

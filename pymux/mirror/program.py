@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from ptterm.control import TerminalControl
     from pyte.keys.events import KeyProfile
     from pyte.mouse import MouseInput
+    from pyte.sequences.kitty_dnd import DndPacket
 
     from ..core.pane import Pane
     from .copying import Place
@@ -74,7 +75,8 @@ class RemoteProgram:
     def __init__(self, control: TerminalControl, peer: Peer, pane_id: int) -> None:
         self.peer = peer
         self.pane_id = pane_id
-        self.sink = MirrorSink(control, peer.tree.pymux.terminals.sync_pointer_shape, self._fresh)
+        pymux = peer.tree.pymux
+        self.sink = MirrorSink(control, pymux.terminals.sync_pointer_shape, self._fresh, pymux.drag_and_drop.sync_all)
         control.mirror = self
         self.sx = 0
         self.sy = 0
@@ -151,6 +153,11 @@ class RemoteProgram:
     def mouse(self, mouse: MouseInput) -> None:
         if not self._stopped:
             self.peer.mouse(self.pane_id, mouse)
+
+    def dnd(self, packet: DndPacket) -> None:
+        "A drag and drop packet for the program, from a terminal here (`DragAndDrop._tell`)."
+        if not self._stopped:
+            self.peer.dnd(self.pane_id, packet.param())
 
     def copy_mode(self, at: Place | None = None) -> None:
         "Copy mode runs on the owner, which holds the history (`Mirror.copy_mode`)."

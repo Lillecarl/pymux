@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from libpymux.protocol import IMAGES_BY_HASH, Field, Message, Packet
+from libpymux.protocol import IMAGES_BY_HASH, PEER_DND, Field, Message, Packet
 from pyte.grid import GridWriter
 
 from ..log import logger
@@ -51,6 +51,9 @@ class MirrorSource:
         #: The peer resumed and holds its window until a frame comes,
         #: so the next frame goes out though nothing changed.
         self.answer_owed = False
+        #: What the peer was last told the program registered for drag
+        #: and drop, or None before it was told.
+        self.registration: dict[str, Any] | None = None
 
     def start(self) -> None:
         self.control.followers.append(self)
@@ -121,6 +124,14 @@ class MirrorSource:
             place = self.copying.place
         frame: dict[str, Any] | None = self.writer.frame(screen)
         owed, self.answer_owed = self.answer_owed, False
+        if self.link.version >= PEER_DND:
+            # The pane's own screen holds it, and copy mode's holds none.
+            registration = self.control.screen.kitty_dnd.registration(
+                self.link.connection.pymux.drag_and_drop.machine_id
+            )
+            if registration != self.registration:
+                self.registration = registration
+                frame = {**(frame or {}), "dnd": registration}
         if frame is None:
             if not owed:
                 return None

@@ -94,7 +94,7 @@ def the_control(mux):
 
 def a_peer():
     told: list[None] = []
-    sink = MirrorSink(TerminalControl(backend=Quiet()), lambda: told.append(None), lambda: None)
+    sink = MirrorSink(TerminalControl(backend=Quiet()), lambda: told.append(None), lambda: None, lambda: None)
     sink.told = told  # type: ignore[attr-defined]
     return sink
 

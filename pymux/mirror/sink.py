@@ -27,13 +27,20 @@ class MirrorSink:
     "Applies the mirror packets of one pane to a control that mirrors it."
 
     def __init__(
-        self, control: TerminalControl, pointer_changed: Callable[[], None], framed: Callable[[], None]
+        self,
+        control: TerminalControl,
+        pointer_changed: Callable[[], None],
+        framed: Callable[[], None],
+        registered: Callable[[], None],
     ) -> None:
         self.control = control
         #: Told when a frame changes the shape the pointer takes over the pane.
         self.pointer_changed = pointer_changed
         #: Told of each frame, before it draws.
         self.framed = framed
+        #: Told when a frame changes what the program takes part in of
+        #: kitty's drag and drop (`KittyDnd.register`).
+        self.registered = registered
         #: Why the owner will not send this pane, once it said so.
         self.refused: str | None = None
         #: Where copy mode on the owner stands, while the frames show it.
@@ -57,6 +64,9 @@ class MirrorSink:
         self.control.put_frame(frame, self.store)
         if shapes.shape != before:
             self.pointer_changed()
+        dnd = frame.get("dnd")
+        if isinstance(dnd, dict) and self.control.screen.kitty_dnd.register(dnd):
+            self.registered()
 
     @_PACKETS.handles(Packet.MIRROR_REFUSED)
     def _on_refused(self, packet: Message) -> None:
