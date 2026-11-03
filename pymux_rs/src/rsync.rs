@@ -9,6 +9,7 @@ use pyo3::buffer::PyBuffer;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::pybacked::PyBackedBytes;
+use pyo3::types::PyBytes;
 use xxhash_rust::xxh3::xxh3_64;
 
 const RECORD: usize = 20;
@@ -26,6 +27,31 @@ fn weak_hash(block: &[u8]) -> (u32, u32) {
         beta = beta.wrapping_add((size - at as u32).wrapping_mul(byte));
     }
     (alpha & WEAK_MASK, beta & WEAK_MASK)
+}
+
+/// `pymux.client.kitty_rsync._records`: the signature records of the
+/// blocks of `run`, numbered from `first`. Lillecarl/pymux#921.
+#[pyfunction]
+pub fn rsync_records<'py>(
+    py: Python<'py>,
+    run: PyBackedBytes,
+    block_size: usize,
+    first: u64,
+) -> PyResult<Bound<'py, PyBytes>> {
+    if block_size == 0 {
+        return Err(PyValueError::new_err("a block holds at least one byte"));
+    }
+    let out = py.detach(|| {
+        let mut out = Vec::with_capacity(run.len().div_ceil(block_size) * RECORD);
+        for (index, block) in (first..).zip(run.chunks(block_size)) {
+            let (alpha, beta) = weak_hash(block);
+            out.extend_from_slice(&index.to_le_bytes());
+            out.extend_from_slice(&(alpha | (beta << 16)).to_le_bytes());
+            out.extend_from_slice(&xxh3_64(block).to_le_bytes());
+        }
+        out
+    });
+    Ok(PyBytes::new(py, &out))
 }
 
 #[pyclass(module = "pymux_rs")]

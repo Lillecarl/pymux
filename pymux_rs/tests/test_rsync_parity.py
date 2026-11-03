@@ -20,8 +20,9 @@ from hypothesis import strategies as st
 from pymux.client import kitty_rsync
 from pymux.graphics import kernels
 
-#: The reference, taken before any test could have installed the kernel.
+#: The references, taken before any test could have installed a kernel.
 PURE_BLOCKS = kitty_rsync._Blocks
+PURE_RECORDS = kitty_rsync._records
 
 
 def delta(old: bytes, new: bytes, blocks: type) -> bytes:
@@ -91,14 +92,32 @@ def test_unrelated_files_split_their_data_the_same():
     assert_same(rng.randbytes(2 * 1024 * 1024), rng.randbytes(2 * 1024 * 1024 + 7))
 
 
-def test_install_puts_the_kernel_in_place(monkeypatch):
+@given(st.binary(max_size=3000), st.integers(1, 700), st.integers(0, 2**40))
+@settings(max_examples=1500, deadline=None)
+def test_the_same_signature_is_written(run, block_size, first):
+    "Lillecarl/pymux#921."
+    assert pymux_rs.rsync_records(run, block_size, first) == PURE_RECORDS(run, block_size, first)
+
+
+def test_a_large_signature_is_the_same():
+    old = random.Random(921).randbytes(5 * kitty_rsync.DELTA_BYTES + 3)
+    patcher = kitty_rsync.Patcher(len(old))
+    pure = b"".join(patcher.signature(io.BytesIO(old)))
+    assert pymux_rs.rsync_records(old, patcher.block_size, 0) == pure[12:]
+
+
+def test_install_puts_the_kernels_in_place(monkeypatch):
     monkeypatch.setattr(kitty_rsync, "_Blocks", PURE_BLOCKS)
+    monkeypatch.setattr(kitty_rsync, "_records", PURE_RECORDS)
     kernels.install_rsync()
     assert kitty_rsync._Blocks is pymux_rs.RsyncBlocks
+    assert kitty_rsync._records is pymux_rs.rsync_records
 
 
 def test_pure_keeps_the_python(monkeypatch):
     monkeypatch.setattr(kitty_rsync, "_Blocks", PURE_BLOCKS)
+    monkeypatch.setattr(kitty_rsync, "_records", PURE_RECORDS)
     monkeypatch.setenv(kernels.PURE, "1")
     kernels.install_rsync()
     assert kitty_rsync._Blocks is PURE_BLOCKS
+    assert kitty_rsync._records is PURE_RECORDS

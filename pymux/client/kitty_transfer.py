@@ -183,6 +183,7 @@ class _Patch:
 
     def __init__(self, path: str, old: os.stat_result) -> None:
         self.path = path
+        kernels.install_rsync()
         self.patcher = Patcher(old.st_size)
         self.old = open(os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW), "rb", closefd=True)
         self.new = tempfile.NamedTemporaryFile("wb", dir=os.path.dirname(path), delete=False)

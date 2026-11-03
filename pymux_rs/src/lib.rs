@@ -346,5 +346,6 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(average_rgba, module)?)?;
     module.add_class::<vp9::Vp9Decoder>()?;
     module.add_class::<rsync::RsyncBlocks>()?;
+    module.add_function(wrap_pyfunction!(rsync::rsync_records, module)?)?;
     Ok(())
 }

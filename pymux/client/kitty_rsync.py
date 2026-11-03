@@ -63,6 +63,20 @@ def weak_hash(block: bytes | bytearray | memoryview) -> tuple[int, int]:
     return sum(block) % _M, sum(accumulate(block)) % _M
 
 
+def _records(run: bytes, block_size: int, first: int) -> bytes:
+    """
+    The signature records of the blocks of `run`, numbered from `first`;
+    the last block may be short. `pymux.graphics.kernels.install_rsync()`
+    puts `pymux_rs.rsync_records` in its place. Lillecarl/pymux#921.
+    """
+    out = bytearray()
+    for index, at in enumerate(range(0, len(run), block_size), first):
+        block = run[at : at + block_size]
+        alpha, beta = weak_hash(block)
+        out += _BLOCK.pack(index, alpha + _M * beta, xxhash.xxh3_64_intdigest(block))
+    return bytes(out)
+
+
 class Patcher:
     "The side that holds the old file: its signature, then the delta applied to it."
 
@@ -78,10 +92,10 @@ class Patcher:
         "The header, then one record per block of `old`, read from where it stands."
         yield _HEADER.pack(0, 0, 0, 0, self.block_size)
         index = 0
-        while block := old.read(self.block_size):
-            alpha, beta = weak_hash(block)
-            yield _BLOCK.pack(index, alpha + _M * beta, xxhash.xxh3_64_intdigest(block))
-            index += 1
+        blocks = max(1, DELTA_BYTES // self.block_size)
+        while run := old.read(blocks * self.block_size):
+            yield _records(run, self.block_size, index)
+            index += -(-len(run) // self.block_size)
 
     def apply(self, data: bytes, old: BinaryIO, write: Callable[[bytes], object]) -> None:
         "Apply what of the delta in `data` is whole; the rest waits for more."

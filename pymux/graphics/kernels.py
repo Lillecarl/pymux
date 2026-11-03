@@ -59,7 +59,7 @@ def install() -> None:
 
 def install_rsync() -> None:
     """
-    `pymux.client.kitty_rsync`'s block search in Rust. A call of its own:
+    `pymux.client.kitty_rsync`'s block search and signature in Rust. A call of its own:
     a client process never imports `pymux.core.main`, so the client calls
     this when a transfer first wants a delta. Lillecarl/pymux#916.
     """
@@ -72,6 +72,7 @@ def install_rsync() -> None:
     from ..client import kitty_rsync
 
     kitty_rsync._Blocks = pymux_rs.RsyncBlocks
+    kitty_rsync._records = pymux_rs.rsync_records
 
 
 def _install_images(native: ModuleType) -> None:
