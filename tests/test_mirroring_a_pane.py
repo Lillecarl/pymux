@@ -183,6 +183,25 @@ async def test_a_peer_takes_the_title_and_the_pointer(pymux):
         pymux.stop()
 
 
+async def test_text_at_another_size_reaches_the_peer(pymux):
+    "Lillecarl/pymux#910."
+    pane, owner = the_control(pymux)
+
+    async with pymux.running():
+        connection, client_end = open_link(pymux, pane)
+        sink = a_peer()
+        await converge(client_end, sink, owner)
+        owner.feed_output("\x1b]66;s=2:w=3;big\x1b\\")
+        blocks = sink.control.screen.text_sizes.blocks
+        with anyio.fail_after(5):
+            while not blocks:
+                sink.take(await client_end.read())
+                blocks = sink.control.screen.text_sizes.blocks
+        assert [(block.columns, block.rows, block.sent) for block in blocks] == [(6, 2, "s=2:w=3;big")]
+
+        pymux.stop()
+
+
 async def test_an_image_the_owner_shows_reaches_the_peer(pymux):
     pane, owner = the_control(pymux)
 
