@@ -434,6 +434,10 @@ class Peer:
         if self.connected:
             self._send.send_nowait(encode_json(packet))
 
+    def send_clipboard_answer(self, sequence: str) -> None:
+        "One packet of this side's answer to the owner's clipboard read (`RichClipboard.read_for_owner`)."
+        self.send({Field.CMD: Packet.MIRROR_CLIPBOARD_ANSWER, Field.DATA: sequence})
+
     def _hello(self) -> None:
         "Start a new link from what this side holds."
         # Zstd only across a network, as a client offers it.
@@ -742,6 +746,9 @@ class Peer:
             # pane's OSC 52 is.
             if pane is not None and write is not None and self.tree.pymux.options.set_clipboard is Clipboard.ON:
                 self.tree.pymux.rich_clipboard.serve_write(pane, write)
+            return
+        if packet.get(Field.CMD) == Packet.MIRROR_CLIPBOARD_READ:
+            self.tree.pymux.rich_clipboard.read_for_owner(self, str(packet.get(Field.DATA, "")))
             return
         if packet.get(Field.CMD) == Packet.MIRROR_COPIED:
             # A person's copy: the paste buffer of the sessions here, as a

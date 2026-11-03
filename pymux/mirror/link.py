@@ -232,6 +232,14 @@ class PeerLink:
             }
         )
 
+    def pane_reads(self, pane: Pane, sequence: str) -> None:
+        "Ask the peer's terminal for its clipboard, for `pane` (`RichClipboard._read`)."
+        self.queue({Field.CMD: Packet.MIRROR_CLIPBOARD_READ, Field.PANE_ID: int(pane.pane_id), Field.DATA: sequence})
+
+    @_PACKETS.handles(Packet.MIRROR_CLIPBOARD_ANSWER)
+    def _on_clipboard_answer(self, packet: Message) -> None:
+        self.connection.pymux.rich_clipboard.peer_answered(self, str(packet.get(Field.DATA, "")))
+
     def tree_changed(self) -> None:
         "Something the tree holds may have changed (`Pymux.invalidate`)."
         self._tree_changed.set()

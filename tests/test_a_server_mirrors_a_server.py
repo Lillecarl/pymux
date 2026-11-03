@@ -30,10 +30,14 @@ from prompt_toolkit.output.vt100 import Vt100_Output
 from pyte.keys.events import DEFAULT_KEY_PROFILE
 from pyte.mouse import MouseAction, MouseBits, MouseButton, MouseInput
 from pyte.osc import ColorBase
+from pyte.sequences.kitty_clipboard import ClipboardPacket
 from session import Connection
 from test_drag_a_border import DRAG, PRESS, _drawn, _mouse
 from test_kittys_clipboard import PNG as KITTY_PNG
 from test_kittys_clipboard import WRITE as KITTY_WRITE
+from test_kittys_clipboard import b64 as kitty_b64
+from test_kittys_clipboard import hear_the_pane
+from test_kittys_clipboard import osc as kitty_osc
 from test_snapshot import _Copied
 from test_ssh_client import create_ssh_server
 
@@ -195,6 +199,33 @@ async def test_a_kitty_copy_in_a_pane_there_reaches_the_paste_buffer_here_whole(
     data = peer.clipboard.get_data()
     assert data.text == "hello"
     assert data.types == {"text/plain": b"hello", "UTF8_STRING": b"hello", "image/png": KITTY_PNG}
+
+
+async def test_a_kitty_read_in_a_pane_there_asks_the_terminal_here(two_servers, monkeypatch):
+    "The person who pastes is at the peer: its terminal answers, and the answer reaches the pane. Lillecarl/pymux#902."
+    owner, peer, client = two_servers
+    owner.options.set_clipboard = Clipboard.ON
+    peer.options.set_clipboard = Clipboard.ON
+    there, _ = await shown_here(owner, peer, client)
+    monkeypatch.setattr(client.connection.replies, "kitty_clipboard", True, raising=False)
+    told: list[str] = []
+    monkeypatch.setattr(client.connection, "forward_osc", told.append)
+    heard = hear_the_pane(there)
+
+    there.terminal.terminal_control.feed_output(kitty_osc("type=read:id=nvim;%s" % (kitty_b64("text/plain"),)))
+    await until(lambda: any("type=read:" in sequence for sequence in told), "the terminal here is asked", lambda: told)
+    (asked,) = told
+    our_id = ClipboardPacket.parse(asked).id
+
+    data = "type=read:status=DATA:id=%s:mime=%s;%s" % (our_id, kitty_b64("text/plain"), kitty_b64("copied here"))
+    for packet in ("type=read:status=OK:id=" + our_id, data, "type=read:status=DONE:id=" + our_id):
+        peer.rich_clipboard.terminal_said(client.connection, packet)
+    await until(lambda: len(heard) == 3, "the answer reaches the pane there", lambda: heard)
+    assert heard == [
+        kitty_osc("type=read:status=OK:id=nvim"),
+        kitty_osc("type=read:status=DATA:id=nvim:mime=%s;%s" % (kitty_b64("text/plain"), kitty_b64("copied here"))),
+        kitty_osc("type=read:status=DONE:id=nvim"),
+    ]
 
 
 async def test_a_pane_streams_only_while_seen(two_servers):

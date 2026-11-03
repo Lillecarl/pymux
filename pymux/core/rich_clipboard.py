@@ -31,6 +31,7 @@ import weakref
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, ClassVar, Final
 
+from libpymux.protocol import PEER_RICH_CLIPBOARD
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.clipboard import ClipboardData
 from ptterm import Terminal
@@ -57,6 +58,8 @@ from ..notify.osc import build_osc
 if TYPE_CHECKING:
     from ..connection.client_state import ClientState
     from ..connection.server import ServerConnection
+    from ..mirror.link import PeerLink
+    from ..mirror.peer import Peer
     from .main import Pymux
     from .pane import Pane
 
@@ -119,6 +122,18 @@ class _Reading:
     mime: str = ""
     paste_into: Pane | None = None
     parts: list[bytes] = field(default_factory=list)
+    #: At the owner, the peer whose terminal answers the pane's read in
+    #: place of `connection`'s.
+    link: PeerLink | None = None
+    #: At a peer, the owner whose pane asked, and the owner's id of the read.
+    owner: Peer | None = None
+    owner_id: str = ""
+
+    def gone(self, pymux: Pymux) -> bool:
+        "Whether the terminal that would answer is gone."
+        if self.link is not None:
+            return self.link.connection.closed
+        return self.connection not in pymux._client_states
 
 
 @dataclass
@@ -262,16 +277,20 @@ class RichClipboard:
             self._answer(pane, answer_to(read, Status.EPERM))
             return
         connection = self._passwords.get(read.password) if read.password else None
+        link = None
         if connection is None:
             client = self.pymux.outward.download_client(pane)
-            connection = None if client is None else client.connection
-        if connection is None or connection not in self.pymux._client_states or not connection.replies.kitty_clipboard:
+            link = self._peer_used_after(pane, client)
+            connection = link.connection if link is not None else None if client is None else client.connection
+        if link is None and (
+            connection is None or connection not in self.pymux._client_states or not connection.replies.kitty_clipboard
+        ):
             self._answer(pane, answer_to(read, Status.EPERM))
             return
+        assert connection is not None
         now = time.monotonic()
         for our_id, reading in list(self._reads.items()):
-            stale = now - reading.started > READ_PATIENCE or reading.connection not in self.pymux._client_states
-            if stale:
+            if now - reading.started > READ_PATIENCE or reading.gone(self.pymux):
                 del self._reads[our_id]
                 if reading.pane is not None:
                     self._answer(reading.pane, ClipboardPacket(PacketType.READ, Status.EBUSY, id=reading.pane_id))
@@ -279,19 +298,63 @@ class RichClipboard:
             self._answer(pane, answer_to(read, Status.EBUSY))
             return
         our_id = self._new_id()
-        self._reads[our_id] = _Reading(connection, now, pane=pane, pane_id=read.id)
-        payload = b64(" ".join(read.mimes))
-        self._send(
-            connection,
-            ClipboardPacket(
-                PacketType.READ,
-                id=our_id,
-                primary=read.primary,
-                password=read.password,
-                name=read.name,
-                payload=payload,
-            ),
+        self._reads[our_id] = _Reading(connection, now, pane=pane, pane_id=read.id, link=link)
+        packet = ClipboardPacket(
+            PacketType.READ,
+            id=our_id,
+            primary=read.primary,
+            password=read.password,
+            name=read.name,
+            payload=b64(" ".join(read.mimes)),
         )
+        if link is not None:
+            link.pane_reads(pane, str(packet))
+        else:
+            self._send(connection, packet)
+
+    def _peer_used_after(self, pane: Pane, client: ClientState | None) -> PeerLink | None:
+        """
+        The peer whose person used a mirror of `pane` after `client`:
+        its terminal answers the pane's read. Lillecarl/pymux#902.
+        """
+        links = [link for link in self.pymux.peer_links() if link.hears(pane) and link.version >= PEER_RICH_CLIPBOARD]
+        link = max(links, key=lambda link: link.last_used, default=None)
+        if link is None or (client is not None and client.last_used >= link.last_used):
+            return None
+        return link
+
+    def peer_answered(self, link: PeerLink, sequence: str) -> None:
+        "One packet of a peer terminal's answer to a pane's read (`_read`)."
+        packet = ClipboardPacket.parse(sequence)
+        reading = None if packet is None else self._reads.get(packet.id)
+        if packet is None or reading is None or reading.link is not link:
+            return
+        self._read_answered(packet.id, reading, packet)
+
+    def read_for_owner(self, owner: Peer, sequence: str) -> None:
+        """
+        The owner's read for a mirrored pane: the terminal of the client
+        a person here used last answers it, and the answer goes back
+        (`peer_answered`). Under this server's own `set-clipboard`.
+        """
+        packet = ClipboardPacket.parse(sequence)
+        if packet is None:
+            return
+        client = self.pymux.latest_client()
+        connection = self._passwords.get(packet.password) if packet.password else None
+        if connection is None and client is not None:
+            connection = client.connection
+        if (
+            self.pymux.options.set_clipboard is Clipboard.OFF
+            or connection is None
+            or connection not in self.pymux._client_states
+            or not connection.replies.kitty_clipboard
+        ):
+            owner.send_clipboard_answer(str(ClipboardPacket(PacketType.READ, Status.EPERM, id=packet.id)))
+            return
+        our_id = self._new_id()
+        self._reads[our_id] = _Reading(connection, time.monotonic(), owner=owner, owner_id=packet.id)
+        self._send(connection, replace(packet, id=our_id))
 
     def terminal_said(self, connection: ServerConnection, param: str) -> None:
         "One OSC 5522 packet from a client's terminal, after its code."
@@ -317,6 +380,9 @@ class RichClipboard:
         "One packet of a terminal's answer to a read pymux sent."
         if packet.status not in _GOING_ON:
             del self._reads[our_id]
+        if reading.owner is not None:
+            reading.owner.send_clipboard_answer(str(replace(packet, id=reading.owner_id)))
+            return
         if reading.pane is not None:
             self._answer(reading.pane, replace(packet, id=reading.pane_id))
             return

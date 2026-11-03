@@ -89,7 +89,8 @@ PEER_WINDOWS = 4
 PEER_ACTS = 5
 
 #: From this version a pane's kitty clipboard write reaches a peer whole,
-#: as `mirror-clipboard-write`, and not only its text as OSC 52.
+#: as `mirror-clipboard-write`, and not only its text as OSC 52; and a
+#: pane's read may go to a peer's terminal (`mirror-clipboard-read`).
 #: Lillecarl/pymux#902.
 PEER_RICH_CLIPBOARD = 6
 
@@ -367,6 +368,11 @@ class Packet(StrEnum):
     # base64, `aliases` each alias to the type it shares, with
     # `primary`, `name` and `password` as the pane gave them.
     MIRROR_CLIPBOARD_WRITE = "mirror-clipboard-write"
+    # A pane's kitty clipboard read, as the OSC 5522 the peer's terminal
+    # is to get, under `data`; the peer sends each packet of the answer
+    # back as `mirror-clipboard-answer`, under the owner's id.
+    MIRROR_CLIPBOARD_READ = "mirror-clipboard-read"
+    MIRROR_CLIPBOARD_ANSWER = "mirror-clipboard-answer"
     # "That pane is not mirrored": there is none, under `error`.
     MIRROR_REFUSED = "mirror-refused"
 
