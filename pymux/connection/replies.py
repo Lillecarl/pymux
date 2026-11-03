@@ -35,6 +35,7 @@ from pyte.sequences.reports import (
     ask_cursor_position,
 )
 from pyte.sequences.strings import OscString, osc
+from pyte.sequences.text_sizing import TextSize
 
 from ..clusters import CLUSTER_WIDTH_PROBE, PROBE_ROWS, PROBES, Drawn, table_width
 from ..enums import ExtendedKeys, Woke
@@ -75,6 +76,24 @@ EMOJI_WIDTH_PROBE = (
     + ask_cursor_position()
     + csi(escape.CUP, EMOJI_WIDTH_ROW, 1)
     + csi(escape.ECH, 2)
+    + esc(escape.DECRC)
+)
+
+#: kitty's probe for its text sizing, OSC 66: a space two cells wide on
+#: row 6, and a space two by two on row 7, each followed by a cursor
+#: report. Column 3 says the terminal drew it; a terminal that does not
+#: read OSC 66 leaves the cursor in column 1. Rows 3 to 5 are the
+#: cluster probes'. The cells are erased again, which takes a block
+#: away whole. Lillecarl/pymux#890.
+TEXT_WIDTH_ROW = 6
+TEXT_SCALE_ROW = 7
+TEXT_SIZE_PROBE_ROWS = TEXT_SCALE_ROW + 1
+TEXT_SIZE_PROBE = (
+    esc(escape.DECSC)
+    + "".join(
+        csi(escape.CUP, row, 1) + str(size) + ask_cursor_position() + csi(escape.CUP, row, 1) + csi(escape.ECH, 2)
+        for row, size in ((TEXT_WIDTH_ROW, TextSize(" ", width=2)), (TEXT_SCALE_ROW, TextSize(" ", scale=2)))
+    )
     + esc(escape.DECRC)
 )
 
@@ -163,6 +182,7 @@ class TerminalReplies:
             PIXEL_MOUSE_QUERY
             + EMOJI_WIDTH_PROBE
             + (CLUSTER_WIDTH_PROBE if self.connection.size.rows >= PROBE_ROWS else "")
+            + (TEXT_SIZE_PROBE if self.connection.size.rows >= TEXT_SIZE_PROBE_ROWS else "")
             + SURVEY
             + osc(Osc.NOTIFICATION, NOTIFICATION_QUERY)
             + DND_QUERY
@@ -251,6 +271,8 @@ class TerminalReplies:
                 self._emoji_width_answered(column)
             case CursorPositionReport(row=row, column=column) if row in PROBES:
                 self._cluster_width_answered(row, column)
+            case CursorPositionReport(row=row, column=column) if row in (TEXT_WIDTH_ROW, TEXT_SCALE_ROW):
+                self._text_size_answered(row, column)
             # The terminal read a frame. Lillecarl/pymux#259.
             case StatusReport():
                 self.connection.pacing.status_answered()
@@ -302,6 +324,22 @@ class TerminalReplies:
             # The emoji already on its screen were written for the
             # other reading.
             self.connection.request_repaint()
+
+    def _text_size_answered(self, row: int, column: int) -> None:
+        sizes = self.connection.graphics.text_sizes
+        if row == TEXT_WIDTH_ROW:
+            sizes.widths = column == 3
+        else:
+            sizes.scales = column == 3
+        if column == 3:
+            logger.info(
+                "The terminal of client %s draws OSC 66 %s.",
+                self.connection.client_id or "?",
+                "widths" if row == TEXT_WIDTH_ROW else "scales",
+            )
+        # The probe erased two cells, and a terminal that draws OSC 66
+        # holds the blocks on its screen as cells at one size so far.
+        self.connection.request_repaint()
 
     def _cluster_width_answered(self, row: int, column: int) -> None:
         fit = self.cluster_fit()

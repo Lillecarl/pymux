@@ -488,6 +488,13 @@ class ClientState:
             self.pymux.drag_and_drop.sync(self)
 
             graphics = self.connection.graphics
+            if not graphics.supported and not graphics.text_sizes.speaks:
+                return
+            views = self.graphics_views()
+            try:
+                graphics.text_sizes.render(views)
+            except Exception:
+                logger.exception("Drawing the text at another size failed.")
             if not graphics.supported:
                 return
             # Taken, so a frame the renderer skipped does not count them twice.
@@ -496,7 +503,7 @@ class ClientState:
                 graphics.scrolled(drawn.scrolls_sent)
                 drawn.scrolls_sent = []
             try:
-                graphics.render(self.graphics_views())
+                graphics.render(views)
             except Exception:
                 logger.exception("Drawing the pane images failed.")
             if self.connection.pipe_connection.outstanding:
@@ -507,7 +514,13 @@ class ClientState:
             except Exception:
                 logger.exception("Drawing the window panes failed.")
 
+        def before_render(_):
+            # A frame with no screen before it erases the terminal first.
+            if self.connection is not None:
+                self.connection.graphics.text_sizes.frame_starts(self.app.renderer.last_rendered_screen is None)
+
         self.app.before_render += self.layout_manager.frame_started
+        self.app.before_render += before_render
         self.app.after_render += after_render
         # Last, so the images above still read the frame's arrangement.
         self.app.after_render += self.layout_manager.frame_ended

@@ -68,6 +68,7 @@ from . import sixel
 from .cell_images import CellImages
 from .kitty_frames import SHM_PROBE_ID
 from .placements import Placed, Scroll, Source, drawn_size, moved_by, pane_placements, put_command, visible_placements
+from .text_sizes import ClientTextSizes
 from .window_frames import WindowFrames
 
 if TYPE_CHECKING:
@@ -303,6 +304,10 @@ class ClientGraphics:
         self._placements: dict[tuple[int, int], _Placement] = {}
 
         self.cells = CellImages(self)
+
+        #: The text of the panes at another size, OSC 66.
+        #: Lillecarl/pymux#890.
+        self.text_sizes = ClientTextSizes(self)
 
         #: The scrolls the renderer wrote since the placements were last
         #: put: each may have moved one.
