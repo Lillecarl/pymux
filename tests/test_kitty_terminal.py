@@ -5,6 +5,7 @@ terminal that is not kitty. Lillecarl/pymux#912.
 
 from __future__ import annotations
 
+import io
 import os
 import shlex
 import sys
@@ -20,6 +21,7 @@ from pyte.sequences.file_transfer import Action, Compression, FileType, Transfer
 from session import once, over_connection
 from test_a_pane_asks_for_a_file import AskedClient, config, home  # noqa: F401
 
+from pymux.client.kitty_rsync import Differ, Patcher
 from pymux.client.kitty_transfer import READ_BYTES, REFUSED, Question, Transfers, Unasked
 from pymux.core.main import Pymux
 
@@ -253,18 +255,71 @@ def test_only_a_listed_file_is_read(home, tmp_path):
     assert transfers.reading == {}
 
 
-def test_a_delta_is_refused(home):
-    (home / "a.bin").write_bytes(DATA)
+#: A copy of `DATA` with one part changed, as a file looks the next day.
+CHANGED = DATA[:3000] + b"changed" + DATA[3100:]
+
+
+def test_a_read_comes_as_a_delta_against_the_programs_copy(home):
+    (home / "a.bin").write_bytes(CHANGED)
     transfers = _transfers(home, may_read=True)
     _accepted_reading(transfers, "a.bin")
+    patcher = Patcher(len(DATA))
+    signature = b"".join(patcher.signature(io.BytesIO(DATA)))
+    rsync = TransmissionType.RSYNC
+    _said(
+        transfers,
+        TransferCommand(Action.FILE, id="r", file_id="0", name=str(home / "a.bin"), transmission_type=rsync),
+        TransferCommand(Action.DATA, id="r", file_id="0", data=signature[:100]),
+    )
+    assert not transfers.has_data, "the delta waits for the whole signature"
+    _said(transfers, TransferCommand(Action.END_DATA, id="r", file_id="0", data=signature[100:]))
+    delta = _data(_pumped(transfers), "0")
+    assert len(delta) < len(CHANGED) // 2
+    patched = bytearray()
+    patcher.apply(delta, io.BytesIO(DATA), patched.extend)
+    patcher.finish()
+    assert patched == CHANGED
+
+
+def test_a_sent_delta_patches_the_file_that_is_there(home):
+    "The terminal sends its signature, and the program a delta. The mode stays the old file's."
+    (home / "a.bin").write_bytes(DATA)
+    (home / "a.bin").chmod(0o600)
+    transfers = _transfers(home)
+    _accepted_writing(transfers)
     effects = _said(
         transfers,
-        TransferCommand(
-            Action.FILE, id="r", file_id="0", name=str(home / "a.bin"), transmission_type=TransmissionType.RSYNC
-        ),
+        TransferCommand(Action.FILE, id="w", file_id="f", name="a.bin", transmission_type=TransmissionType.RSYNC),
     )
-    [refused] = _statuses(effects)
-    assert refused.startswith("EINVAL:pymux sends no rsync delta")
+    started = effects[0]
+    assert (started.status, started.transmission_type, started.size) == ("STARTED", TransmissionType.RSYNC, len(DATA))
+    assert effects[-1].action is Action.END_DATA
+    differ = Differ()
+    differ.add_signature(_data(effects, "f"))
+    differ.finish_signature()
+    delta = b"".join(differ.delta(io.BytesIO(CHANGED)))
+    assert len(delta) < len(CHANGED) // 2
+    effects = _said(transfers, TransferCommand(Action.END_DATA, id="w", file_id="f", data=delta))
+    assert _statuses(effects)[-1] == "OK"
+    assert (home / "a.bin").read_bytes() == CHANGED
+    assert (home / "a.bin").stat().st_mode & 0o777 == 0o600
+    assert [one.name for one in home.iterdir()] == ["a.bin"], "no temporary file is left"
+
+
+def test_a_delta_that_does_not_check_out_leaves_the_file_alone(home):
+    (home / "a.bin").write_bytes(DATA)
+    transfers = _transfers(home)
+    _accepted_writing(transfers)
+    _said(
+        transfers,
+        TransferCommand(Action.FILE, id="w", file_id="f", name="a.bin", transmission_type=TransmissionType.RSYNC),
+    )
+    wrong = bytes([1]) + (5).to_bytes(4, "little") + b"other" + bytes([2]) + (16).to_bytes(2, "little") + bytes(16)
+    effects = _said(transfers, TransferCommand(Action.END_DATA, id="w", file_id="f", data=wrong))
+    [failed] = _statuses(effects)
+    assert failed.startswith("EINVAL:Failed to verify overall file checksum")
+    assert (home / "a.bin").read_bytes() == DATA
+    assert [one.name for one in home.iterdir()] == ["a.bin"]
 
 
 def test_a_missing_path_is_said_for_its_spec(home):
@@ -343,6 +398,34 @@ async def test_kitten_transfer_reads_a_file_through_the_pymux_client(tmp_path, h
     assert target.read_bytes() == data
     assert "~/notes.txt" in b"".join(client.drawn).decode()
     assert client.heard.count(Packet.KITTY_TRANSFER_TAKEN) >= 3
+
+
+@pytest.mark.skipif(not KITTEN, reason="needs the kitten: PYMUX_KITTEN")
+async def test_kitten_transfer_sends_a_delta_through_the_pymux_client(tmp_path, home, config):
+    source = tmp_path / "source.bin"
+    source.write_bytes(CHANGED * 30)
+    target = home / "target.bin"
+    target.write_bytes(DATA * 30)
+    _client, said = await _through_the_client(
+        tmp_path, config, "%s transfer --transmit-deltas %s %s" % (KITTEN, source, target), "y"
+    )
+    assert "status=0" in said, said
+    assert target.read_bytes() == CHANGED * 30
+
+
+@pytest.mark.skipif(not KITTEN, reason="needs the kitten: PYMUX_KITTEN")
+async def test_kitten_transfer_reads_a_delta_through_the_pymux_client(tmp_path, home, config):
+    (home / "notes.txt").write_bytes(CHANGED * 30)
+    target = tmp_path / "got.txt"
+    target.write_bytes(DATA * 30)
+    _client, said = await _through_the_client(
+        tmp_path,
+        config,
+        "%s transfer --direction=upload --transmit-deltas %s %s" % (KITTEN, home / "notes.txt", target),
+        "y",
+    )
+    assert "status=0" in said, said
+    assert target.read_bytes() == CHANGED * 30
 
 
 @pytest.mark.skipif(not KITTEN, reason="needs the kitten: PYMUX_KITTEN")

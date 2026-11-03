@@ -16,8 +16,9 @@ answers as kitty would. `Transfers` follows kitty's `FileTransmission`
 - A file goes in parts of `READ_BYTES`, each once the server says the
   pane's program took the last (`pymux.client.kitty_terminal`), where
   kitty waits for its child's queue to drain.
-- No rsync deltas and no bypass password. A file asked for as a delta
-  is refused. A session with a password is asked about.
+- Deltas follow kitty's rsync (`pymux.client.kitty_rsync`). A file
+  patched in place keeps the mode the old one had.
+- No bypass password: a session with one is asked about.
 
 Every call blocks on the file system, so the client makes them off the
 loop that draws, one at a time and in order.
@@ -28,6 +29,7 @@ from __future__ import annotations
 import errno
 import os
 import stat
+import tempfile
 import time
 import zlib
 from collections import defaultdict, deque
@@ -47,6 +49,8 @@ from pyte.sequences.file_transfer import (
     TransferCommand,
     TransmissionType,
 )
+
+from .kitty_rsync import Differ, Patcher, RsyncError
 
 __all__ = [
     "REFUSED",
@@ -132,7 +136,13 @@ def _code_of(error: OSError) -> str:
 
 
 def _status(
-    session: str, code: str, message: str = "", file_id: str = "", name: str = "", size: int = -1
+    session: str,
+    code: str,
+    message: str = "",
+    file_id: str = "",
+    name: str = "",
+    size: int = -1,
+    transmission_type: TransmissionType = TransmissionType.SIMPLE,
 ) -> TransferCommand:
     return TransferCommand(
         Action.STATUS,
@@ -141,6 +151,7 @@ def _status(
         status=code + (":" + message if message else ""),
         name=name,
         size=size,
+        transmission_type=transmission_type,
     )
 
 
@@ -155,6 +166,43 @@ def absolute(name: str, home: Path) -> str:
 
 # ----------------------------------------------------------------------
 # Writing: the program sends files, and they land here.
+
+
+class _Patch:
+    """
+    A file a program sends as a delta: kitty's `PatchFile`. The old file
+    is read through no symlink, and the new one is written beside it and
+    renamed over it.
+    """
+
+    def __init__(self, path: str, old: os.stat_result) -> None:
+        self.path = path
+        self.patcher = Patcher(old.st_size)
+        self.old = open(os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW), "rb", closefd=True)
+        self.new = tempfile.NamedTemporaryFile("wb", dir=os.path.dirname(path), delete=False)
+        os.chmod(self.new.name, stat.S_IMODE(old.st_mode))
+
+    def signature(self) -> bytes:
+        signature = b"".join(self.patcher.signature(self.old))
+        self.old.seek(0)
+        return signature
+
+    def write(self, data: bytes) -> int:
+        self.patcher.apply(data, self.old, self.new.write)
+        return self.new.tell()
+
+    def finish(self) -> None:
+        self.patcher.finish()
+        self.new.close()
+        self.old.close()
+        os.replace(self.new.name, self.path)
+
+    def abandon(self) -> None:
+        self.old.close()
+        if not self.new.closed:
+            self.new.close()
+            with suppress(OSError):
+                os.unlink(self.new.name)
 
 
 class _Destination:
@@ -180,6 +228,12 @@ class _Destination:
         self.failed = False
         self.written = 0
         self.link_target = b""
+        self.patch: _Patch | None = None
+
+    @property
+    def can_patch_in_place(self) -> bool:
+        "kitty's test: a delta only for a regular file with no other name."
+        return self.existing is not None and not self.needs_unlink and stat.S_ISREG(self.existing.st_mode)
 
     def close(self) -> None:
         if not self.closed:
@@ -187,6 +241,9 @@ class _Destination:
             if self.file is not None:
                 self.file.close()
                 self.file = None
+            if self.patch is not None:
+                self.patch.abandon()
+                self.patch = None
 
     def _make_parents(self) -> str:
         parent = os.path.dirname(self.name)
@@ -229,6 +286,18 @@ class _Destination:
         decompressed = self.decompressor.decompress(data) if self.decompressor is not None else data
         if is_last and self.decompressor is not None:
             decompressed += self.decompressor.flush()
+        if self.patch is not None:
+            try:
+                self.written = self.patch.write(decompressed)
+                if is_last:
+                    self.patch.finish()
+                    self.patch = None
+            except RsyncError as error:
+                raise _Failed(Status.EINVAL, str(error), self.file_id) from error
+            if is_last:
+                self.close()
+                self.apply_metadata()
+            return
         if self.file is None:
             self._make_parents()
             self._unlink_existing()
@@ -314,8 +383,6 @@ class _Source:
     def __init__(self, command: TransferCommand) -> None:
         self.file_id = command.file_id
         self.path = command.name
-        if command.transmission_type is TransmissionType.RSYNC:
-            raise _Failed(Status.EINVAL, "pymux sends no rsync delta; transfer without --transmit-deltas", self.file_id)
         self.status = os.stat(self.path, follow_symlinks=False)
         if stat.S_ISDIR(self.status.st_mode):
             raise _Failed(Status.EINVAL, "Cannot send a directory", self.file_id)
@@ -323,12 +390,31 @@ class _Source:
         self.file: BinaryIO | None = None
         self.compressor: zlib._Compress | None = None
         self.transmitted = False
+        #: Reads the program's signature of its copy, then writes the delta.
+        self.differ = Differ() if command.transmission_type is TransmissionType.RSYNC else None
+        self.waiting_for_signature = self.differ is not None
+        self.delta: Iterator[bytes] | None = None
         if stat.S_ISLNK(self.status.st_mode):
             self.target = os.readlink(self.path).encode("utf-8")
             return
         self.file = open(os.open(self.path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW), "rb", closefd=True)
         if command.compression is Compression.ZLIB:
             self.compressor = zlib.compressobj()
+
+    @property
+    def ready(self) -> bool:
+        return not self.transmitted and not self.waiting_for_signature
+
+    def add_signature(self, command: TransferCommand) -> None:
+        if self.differ is None:
+            raise _Failed(Status.EINVAL, "Signature data for file that is not using rsync: %s" % (self.file_id,))
+        try:
+            self.differ.add_signature(command.data)
+            if command.action is Action.END_DATA:
+                self.differ.finish_signature()
+                self.waiting_for_signature = False
+        except RsyncError as error:
+            raise _Failed(Status.EINVAL, str(error), self.file_id) from error
 
     def close(self) -> None:
         if self.file is not None:
@@ -342,6 +428,12 @@ class _Source:
         elif self.file is None:
             self.transmitted = True
             data = b""
+        elif self.differ is not None:
+            if self.delta is None:
+                self.delta = self.differ.delta(self.file)
+            data = next(self.delta, b"")
+            if not data:
+                self.transmitted = True
         else:
             data = self.file.read(READ_BYTES)
             if not data or self.file.tell() >= self.status.st_size:
@@ -383,7 +475,9 @@ class _Reading(_Session):
 
     @property
     def has_data(self) -> bool:
-        return self.listing_sent and bool(self.pending or self.active is not None or self.queued)
+        return self.listing_sent and bool(
+            self.pending or self.active is not None or any(source.ready for source in self.queued.values())
+        )
 
     def close(self) -> None:
         if self.active is not None:
@@ -398,7 +492,7 @@ class _Reading(_Session):
             return self.pending.popleft()
         source = self.active
         if source is None:
-            source = next(iter(self.queued.values()), None)
+            source = next((one for one in self.queued.values() if one.ready), None)
             if source is None:
                 return None
             del self.queued[source.file_id]
@@ -671,11 +765,40 @@ class Transfers:
                 return
             out.append(_status(session.id, Status.OK, file_id=destination.file_id, name=destination.name))
             return
-        if session.acknowledges:
-            size = destination.existing.st_size if destination.existing is not None else -1
-            out.append(
-                _status(session.id, Status.STARTED, file_id=destination.file_id, name=destination.name, size=size)
+        if not session.acknowledges:
+            return
+        size = destination.existing.st_size if destination.existing is not None else -1
+        patches = (
+            command.transmission_type is TransmissionType.RSYNC
+            and destination.file_type is FileType.REGULAR
+            and destination.can_patch_in_place
+        )
+        signature = b""
+        if patches and destination.existing is not None:
+            try:
+                destination.patch = _Patch(destination.name, destination.existing)
+                signature = destination.patch.signature()
+            except OSError as error:
+                destination.close()
+                destination.failed = True
+                if session.says_errors:
+                    out.append(
+                        _status(session.id, _code_of(error), "Failed to open file to read signature", command.file_id)
+                    )
+                return
+        out.append(
+            _status(
+                session.id,
+                Status.STARTED,
+                file_id=destination.file_id,
+                name=destination.name,
+                size=size,
+                transmission_type=TransmissionType.RSYNC if patches else TransmissionType.SIMPLE,
             )
+        )
+        if patches:
+            out.extend(_chunks(signature, session.id, destination.file_id, mark_last=False))
+            out.append(TransferCommand(Action.END_DATA, id=session.id, file_id=destination.file_id))
 
     def _add_data(self, session: _Writing, command: TransferCommand, out: list[Effect]) -> None:
         destination = session.files.get(command.file_id)
@@ -765,10 +888,15 @@ class Transfers:
                         self._ask_to_read(session, out)
                 return
             case Action.DATA | Action.END_DATA:
-                # Signature data, for a delta this side never sends.
-                if session.says_errors:
-                    out.append(_status(session.id, Status.EINVAL, "pymux sends no rsync delta", command.file_id))
-                self._drop_reading(session.id, out)
+                try:
+                    source = session.queued.get(command.file_id)
+                    if source is None:
+                        raise _Failed(Status.EINVAL, "Signature data for unknown file_id: %s" % (command.file_id,))
+                    source.add_signature(command)
+                except _Failed as error:
+                    self._drop_reading(session.id, out)
+                    if session.says_errors:
+                        out.append(_status(session.id, error.code, error.message, error.file_id))
                 return
             case Action.STATUS | Action.FINISH:
                 self._drop_reading(session.id, out)

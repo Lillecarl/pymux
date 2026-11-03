@@ -64,6 +64,9 @@ dependencies = [
     # pygments carries, and anything a package installs beside them.
     # Lillecarl/pymux#194.
     "pygments>=2.15.0",
+    # kitty's rsync deltas hash blocks with XXH3-64 and a whole file with
+    # XXH3-128. Lillecarl/pymux#912.
+    "xxhash>=3.0.0",
     # The async of the server: task groups, a memory object stream, and
     # `wait_readable` in place of a callback nobody owns. 4.7 is what
     # `notify_closing` needs, and the posix pipe needs that to wake a
