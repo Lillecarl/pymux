@@ -673,6 +673,10 @@ class ServerConnection:
     def _on_kitty_transfer(self, packet: Message) -> None:
         self.pymux.kitty_transfers.terminal_said(self, str(packet.get(Field.DATA) or ""))
 
+    @_PACKETS.handles(Packet.KITTY_TRANSFER_TAKEN)
+    def _on_kitty_transfer_taken(self, packet: Message) -> None:
+        self.spawn(self.pymux.kitty_transfers.taken(self, str(packet.get(Field.DATA) or "")))
+
     @_PACKETS.handles(Packet.REDRAW)
     def _on_redraw(self, packet: Message) -> None:
         # The client drew a question over the frame, and it is gone.

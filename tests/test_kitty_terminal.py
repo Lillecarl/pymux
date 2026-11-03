@@ -20,9 +20,8 @@ from pyte.sequences.file_transfer import Action, Compression, FileType, Transfer
 from session import once, over_connection
 from test_a_pane_asks_for_a_file import AskedClient, config, home  # noqa: F401
 
-from pymux.client.kitty_transfer import REFUSED, Question, Transfers, Unasked
+from pymux.client.kitty_transfer import READ_BYTES, REFUSED, Question, Transfers, Unasked
 from pymux.core.main import Pymux
-from pymux.downloads import MAX_DOWNLOAD_BYTES
 
 SIZE = Size(rows=24, columns=80)
 DATA = bytes(range(256)) * 40
@@ -268,19 +267,6 @@ def test_a_delta_is_refused(home):
     assert refused.startswith("EINVAL:pymux sends no rsync delta")
 
 
-def test_a_file_past_the_bound_is_not_read(home, monkeypatch):
-    from pymux.client import kitty_transfer
-
-    monkeypatch.setattr(kitty_transfer, "MAX_DOWNLOAD_BYTES", 100)
-    (home / "a.bin").write_bytes(DATA)
-    transfers = _transfers(home, may_read=True)
-    _accepted_reading(transfers, "a.bin")
-    effects = _said(transfers, TransferCommand(Action.FILE, id="r", file_id="0", name=str(home / "a.bin")))
-    [refused] = _statuses(effects)
-    assert refused.startswith("EFBIG:")
-    assert MAX_DOWNLOAD_BYTES > 100
-
-
 def test_a_missing_path_is_said_for_its_spec(home):
     effects = _accepted_reading(_transfers(home, may_read=True), "nothing")
     assert _statuses(effects) == ["OK", "ENOENT:Failed to read spec", "OK"]
@@ -300,9 +286,11 @@ async def _through_the_client(tmp_path: Path, config: Path, command: str, answer
     pymux.serving.listen_on_socket(str(tmp_path / "pymux.sock"))
     connection_of: list = []
     client = AskedClient(config, send=lambda packet: connection_of[0]._process(packet))
+    client.heard = []
 
     def read_packet(packet: dict) -> None:
-        if packet[Field.CMD] == Packet.KITTY_TRANSFER:
+        if packet[Field.CMD] in (Packet.KITTY_TRANSFER, Packet.KITTY_TRANSFER_TAKEN):
+            client.heard.append(packet[Field.CMD])
             client._process(packet)
 
     async with over_connection(pymux=pymux, read_packet=read_packet) as session:
@@ -344,14 +332,17 @@ async def test_kitten_transfer_sends_a_file_through_the_pymux_client(tmp_path, h
 
 @pytest.mark.skipif(not KITTEN, reason="needs the kitten: PYMUX_KITTEN")
 async def test_kitten_transfer_reads_a_file_through_the_pymux_client(tmp_path, home, config):
-    (home / "notes.txt").write_bytes(DATA * 30)
+    "Part by part: each waits for the server to say the pane took the last. Lillecarl/pymux#914."
+    data = os.urandom(3 * READ_BYTES + 5)
+    (home / "notes.txt").write_bytes(data)
     target = tmp_path / "got.txt"
     client, said = await _through_the_client(
         tmp_path, config, "%s transfer --direction=upload %s %s" % (KITTEN, home / "notes.txt", target), "y"
     )
     assert "status=0" in said, said
-    assert target.read_bytes() == DATA * 30
+    assert target.read_bytes() == data
     assert "~/notes.txt" in b"".join(client.drawn).decode()
+    assert client.heard.count(Packet.KITTY_TRANSFER_TAKEN) >= 3
 
 
 @pytest.mark.skipif(not KITTEN, reason="needs the kitten: PYMUX_KITTEN")

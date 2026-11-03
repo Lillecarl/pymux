@@ -698,6 +698,10 @@ class TerminalClient(Client):
     def _on_kitty_transfer(self, packet: Message) -> None:
         self.kitty_terminal.said(packet)
 
+    @_PACKETS.handles(Packet.KITTY_TRANSFER_TAKEN)
+    def _on_kitty_transfer_taken(self, packet: Message) -> None:
+        self.kitty_terminal.taken(packet)
+
     @_PACKETS.handles(Packet.BROWSER_STOP)
     def _on_browser_stop(self, packet: Message) -> None:
         self.browsers.stop(packet[Field.BROWSER])

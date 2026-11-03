@@ -5,7 +5,8 @@ terminal that is not kitty. Lillecarl/pymux#912.
 `Transfers` does the work and blocks on the file system, so it runs off
 the loop that draws, one step at a time and in the order the commands
 came. While a program reads a file and no command waits, the next step
-is the next part of that file. The person answers through
+is the next part of that file, once the server says the pane's program
+took the last one (`Packet.KITTY_TRANSFER_TAKEN`). The person answers through
 `SendingFiles`, the question `pymux receive` asks.
 """
 
@@ -57,6 +58,8 @@ class KittyTerminal:
         self._queue: queue.SimpleQueue[_Step | None] | None = None
         #: How long "a" grants, as the configuration said when last read.
         self._grant_seconds = 0.0
+        #: The session whose last part the server has not said taken.
+        self._waiting: str | None = None
 
     def said(self, packet: Message) -> None:
         "A command of a pane's program."
@@ -64,8 +67,20 @@ class KittyTerminal:
         pane = str(packet.get(Field.PANE) or "?")
         self._run(lambda transfers: transfers.take(param, pane))
 
+    def taken(self, packet: Message) -> None:
+        "The server says a pane's program took the last part: the next may go."
+        session_id = str(packet.get(Field.DATA) or "")
+
+        def step(transfers: Transfers) -> list[Effect]:
+            if self._waiting == session_id:
+                self._waiting = None
+            return []
+
+        self._run(step)
+
     def connection_started(self) -> None:
         "The sessions of the last connection have nobody to answer: their files close."
+        self._waiting = None
         if self._stream is not None:
             self._stream.close()
             self._stream = None
@@ -101,7 +116,7 @@ class KittyTerminal:
                     try:
                         step = steps.receive_nowait()
                     except anyio.WouldBlock:
-                        if transfers.has_data:
+                        if self._pumps(transfers):
                             step = Transfers.pump
                         else:
                             try:
@@ -112,7 +127,7 @@ class KittyTerminal:
                         return
                     effects = await anyio.to_thread.run_sync(step, transfers)
                     with contextlib.suppress(BrokenPipeError):
-                        self._apply(effects)
+                        self._apply(effects, pumped=step is Transfers.pump)
         finally:
             transfers.close()
 
@@ -123,11 +138,11 @@ class KittyTerminal:
                 try:
                     step = steps.get_nowait()
                 except queue.Empty:
-                    step = Transfers.pump if transfers.has_data else steps.get()
+                    step = Transfers.pump if self._pumps(transfers) else steps.get()
                 if step is None:
                     return
                 with contextlib.suppress(BrokenPipeError):
-                    self._apply(step(transfers))
+                    self._apply(step(transfers), pumped=step is Transfers.pump)
         finally:
             transfers.close()
 
@@ -137,7 +152,10 @@ class KittyTerminal:
         self._grant_seconds = settings.grant_seconds
         return self.client.sending_files.granted() or all_under(paths, settings.roots)
 
-    def _apply(self, effects: list[Effect]) -> None:
+    def _pumps(self, transfers: Transfers) -> bool:
+        return transfers.has_data and self._waiting is None
+
+    def _apply(self, effects: list[Effect], pumped: bool = False) -> None:
         for effect in effects:
             match effect:
                 case TransferCommand():
@@ -146,6 +164,10 @@ class KittyTerminal:
                     self._ask(effect)
                 case Unasked():
                     self.client.sending_files.withdrawn(_REQUEST + effect.session)
+        part_of = next((effect.id for effect in effects if isinstance(effect, TransferCommand)), None)
+        if pumped and part_of is not None:
+            self._waiting = part_of
+            self.client.send_packet({Field.CMD: Packet.KITTY_TRANSFER_TAKEN, Field.DATA: part_of})
 
     def _ask(self, question: Question) -> None:
         client = self.client

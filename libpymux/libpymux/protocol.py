@@ -260,6 +260,11 @@ class Packet(StrEnum):
     # program in the pane `pane` said, and the client answers as the
     # terminal. Lillecarl/pymux#912.
     KITTY_TRANSFER = "kitty-transfer"
+    # Either side, with a session's id under `data`. The client sends it
+    # after a part of a file the program reads, and the server sends it
+    # back once the pane's program has taken that part. The client sends
+    # no more of the file before the answer. Lillecarl/pymux#914.
+    KITTY_TRANSFER_TAKEN = "kitty-transfer-taken"
 
     # Sound, on the attached connection of a client that said `audio` in
     # `start-gui`. Lillecarl/pymux#657.

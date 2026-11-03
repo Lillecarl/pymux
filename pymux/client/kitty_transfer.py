@@ -12,9 +12,10 @@ answers as kitty would. `Transfers` follows kitty's `FileTransmission`
   asks. A program that reads files names them before it needs an
   answer, so the question names them too, and a grant or `upload-paths`
   lets them pass.
-- A program reads only the files that the listing named, and no file
-  larger than `MAX_DOWNLOAD_BYTES`: the server holds what the pane has
-  not read yet.
+- A program reads only the files that the listing named.
+- A file goes in parts of `READ_BYTES`, each once the server says the
+  pane's program took the last (`pymux.client.kitty_terminal`), where
+  kitty waits for its child's queue to drain.
 - No rsync deltas and no bypass password. A file asked for as a delta
   is refused. A session with a password is asked about.
 
@@ -46,8 +47,6 @@ from pyte.sequences.file_transfer import (
     TransferCommand,
     TransmissionType,
 )
-
-from ..downloads import MAX_DOWNLOAD_BYTES
 
 __all__ = [
     "REFUSED",
@@ -93,7 +92,6 @@ class Status(StrEnum):
     EPERM = "EPERM"
     EISDIR = "EISDIR"
     ENOENT = "ENOENT"
-    EFBIG = "EFBIG"
 
 
 @dataclass(frozen=True, slots=True)
@@ -328,12 +326,6 @@ class _Source:
         if stat.S_ISLNK(self.status.st_mode):
             self.target = os.readlink(self.path).encode("utf-8")
             return
-        if self.status.st_size > MAX_DOWNLOAD_BYTES:
-            raise _Failed(
-                Status.EFBIG,
-                "larger than %d MiB, the most pymux carries" % (MAX_DOWNLOAD_BYTES // (1024 * 1024),),
-                self.file_id,
-            )
         self.file = open(os.open(self.path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW), "rb", closefd=True)
         if command.compression is Compression.ZLIB:
             self.compressor = zlib.compressobj()

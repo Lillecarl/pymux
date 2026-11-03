@@ -26,6 +26,7 @@ from enum import Enum, auto
 from typing import TYPE_CHECKING, ClassVar, Final
 
 from libpymux.protocol import Field, Packet
+from ptyhost.process import Process
 from pyte.keep import Keep
 from pyte.osc import Osc
 from pyte.screen import Screen
@@ -166,6 +167,15 @@ class KittyTransfers:
             self._tell(session.pane, OscString(Osc.FILE_TRANSFER, param))
         except Exception:
             logger.exception("Serving a file transfer command of client %s failed.", connection.client_id)
+
+    async def taken(self, connection: ServerConnection, session_id: str) -> None:
+        "Answer the pymux client once the session's program holds every part it sent."
+        session = self._sessions.get((connection, session_id))
+        process = None if session is None else session.pane.process
+        if isinstance(process, Process):
+            await process.input_written()
+        with suppress(BrokenPipeError):
+            connection.send_packet({Field.CMD: Packet.KITTY_TRANSFER_TAKEN, Field.DATA: session_id})
 
     def client_gone(self, connection: ServerConnection) -> None:
         "A client went: each program whose session its terminal carried hears so."
