@@ -158,14 +158,63 @@ class Patcher:
         write(data)
 
 
+class _Blocks:
+    """
+    The blocks of a signature, and the search for one of them in new bytes.
+    `pymux.graphics.kernels.install_rsync()` puts `pymux_rs.RsyncBlocks`
+    in its place, which answers the same. Lillecarl/pymux#916.
+    """
+
+    def __init__(self, block_size: int) -> None:
+        self.block_size = block_size
+        #: Each weak hash, with the strong hash and the index of every block that has it.
+        self._by_weak: dict[int, list[tuple[int, int]]] = {}
+
+    def add(self, records: bytes) -> None:
+        "Hold the blocks of whole signature records."
+        for index, weak_value, strong_value in _BLOCK.iter_unpack(records):
+            self._by_weak.setdefault(weak_value, []).append((strong_value, index))
+
+    def find(self, buffer: bytearray, start: int, limit: int) -> tuple[int, int | None]:
+        """
+        Roll a window of one block from `start` a byte at a time, and answer
+        the first place a block of the signature stands, with its index. The
+        first such block in the signature wins. At `limit`, or where the
+        window cannot move on in `buffer`, answer the place with None.
+        """
+        size = self.block_size
+        if start + size > len(buffer):
+            return start, None
+        by_weak = self._by_weak
+        view = memoryview(buffer)
+        try:
+            alpha, beta = weak_hash(view[start : start + size])
+            while True:
+                candidates = by_weak.get(alpha + _M * beta)
+                if candidates is not None:
+                    strong = xxhash.xxh3_64_intdigest(view[start : start + size])
+                    for value, index in candidates:
+                        if value == strong:
+                            return start, index
+                if start + size >= len(buffer):
+                    return start, None
+                leaving, entering = buffer[start], buffer[start + size]
+                alpha = (alpha - leaving + entering) % _M
+                beta = (beta - size * leaving + alpha) % _M
+                start += 1
+                if start >= limit:
+                    return start, None
+        finally:
+            view.release()
+
+
 class Differ:
     "The side that holds the new file: a signature in, the delta out."
 
     def __init__(self) -> None:
         self.block_size = 0
         self._unconsumed = bytearray()
-        #: Each weak hash, with the strong hash and the index of every block that has it.
-        self._blocks: dict[int, list[tuple[int, int]]] = {}
+        self._blocks: _Blocks | None = None
 
     def add_signature(self, data: bytes) -> None:
         self._unconsumed += data
@@ -185,10 +234,11 @@ class Differ:
                     "rsync signature header has too large block size %d > %d" % (block_size, MAX_BLOCK_SIZE)
                 )
             self.block_size = block_size
+            self._blocks = _Blocks(block_size)
             del self._unconsumed[: _HEADER.size]
         whole = len(self._unconsumed) - len(self._unconsumed) % _BLOCK.size
-        for index, weak_value, strong_value in _BLOCK.iter_unpack(memoryview(self._unconsumed)[:whole]):
-            self._blocks.setdefault(weak_value, []).append((strong_value, index))
+        assert self._blocks is not None
+        self._blocks.add(bytes(self._unconsumed[:whole]))
         del self._unconsumed[:whole]
 
     def finish_signature(self) -> None:
@@ -205,6 +255,8 @@ class Differ:
         """
         size = self.block_size
         blocks = self._blocks
+        if blocks is None:
+            raise RsyncError("No header was found in the signature data")
         checksum = xxhash.xxh3_128()
         out = bytearray()
         buffer = bytearray()
@@ -213,8 +265,6 @@ class Differ:
         start = data = 0
         #: The run of matched blocks not written yet, first and last.
         run: tuple[int, int] | None = None
-        alpha = beta = 0
-        rolled = False
 
         def fill(needed: int) -> bool:
             nonlocal ended
@@ -249,16 +299,8 @@ class Differ:
                 data = end
 
         while True:
-            if not rolled:
-                if not fill(start + size):
-                    break
-                alpha, beta = weak_hash(memoryview(buffer)[start : start + size])
-                rolled = True
-            match = None
-            candidates = blocks.get(alpha + _M * beta)
-            if candidates is not None:
-                strong = xxhash.xxh3_64_intdigest(memoryview(buffer)[start : start + size])
-                match = next((index for value, index in candidates if value == strong), None)
+            fill(start + size + 1)
+            start, match = blocks.find(buffer, start, data + DELTA_BYTES)
             if match is not None:
                 flush_data(start)
                 if run is not None and run[1] + 1 == match:
@@ -268,16 +310,10 @@ class Differ:
                     run = (match, match)
                 start += size
                 data = start
-                rolled = False
-            else:
-                if not fill(start + size + 1):
-                    break
-                leaving, entering = buffer[start], buffer[start + size]
-                alpha = (alpha - leaving + entering) % _M
-                beta = (beta - size * leaving + alpha) % _M
-                start += 1
-                if start - data >= DELTA_BYTES:
-                    flush_data(start)
+            elif start - data >= DELTA_BYTES:
+                flush_data(start)
+            elif ended:
+                break
             if data > 2 * DELTA_BYTES:
                 del buffer[:data]
                 start -= data

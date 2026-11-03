@@ -6,6 +6,7 @@
 //! them in place; this package imports nothing of pymux, which depends on
 //! it. Lillecarl/pymux#574.
 
+mod rsync;
 mod vp9;
 
 use std::collections::{BTreeMap, HashMap};
@@ -344,5 +345,6 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(rgb_to_rgba, module)?)?;
     module.add_function(wrap_pyfunction!(average_rgba, module)?)?;
     module.add_class::<vp9::Vp9Decoder>()?;
+    module.add_class::<rsync::RsyncBlocks>()?;
     Ok(())
 }

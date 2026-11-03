@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from . import _native
 
-__all__ = ["Vp9Decoder", "average_rgba", "encode_sixel", "rgb_to_rgba", "scale_rgba"]
+__all__ = ["RsyncBlocks", "Vp9Decoder", "average_rgba", "encode_sixel", "rgb_to_rgba", "scale_rgba"]
 
 #: `pymux.graphics.sixel.encode_sixel`.
 encode_sixel = _native.encode_sixel
@@ -32,3 +32,7 @@ average_rgba = _native.average_rgba
 #: `Vp9Decoder().decode(data, rects=None)` answers `(width, height,
 #: [(x, y, w, h, rgb)])`. Lillecarl/pymux#639.
 Vp9Decoder = _native.Vp9Decoder
+
+#: `pymux.client.kitty_rsync._Blocks`: a signature's blocks, and the
+#: rolling search for one in new bytes. Lillecarl/pymux#916.
+RsyncBlocks = _native.RsyncBlocks

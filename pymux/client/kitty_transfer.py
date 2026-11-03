@@ -55,6 +55,7 @@ from pyte.sequences.file_transfer import (
 )
 
 from ..core.kitty_bypass import bypass_matches
+from ..graphics import kernels
 from .kitty_rsync import Differ, Patcher, RsyncError
 
 __all__ = [
@@ -398,7 +399,10 @@ class _Source:
         self.compressor: zlib._Compress | None = None
         self.transmitted = False
         #: Reads the program's signature of its copy, then writes the delta.
-        self.differ = Differ() if command.transmission_type is TransmissionType.RSYNC else None
+        self.differ: Differ | None = None
+        if command.transmission_type is TransmissionType.RSYNC:
+            kernels.install_rsync()
+            self.differ = Differ()
         self.waiting_for_signature = self.differ is not None
         self.delta: Iterator[bytes] | None = None
         if stat.S_ISLNK(self.status.st_mode):

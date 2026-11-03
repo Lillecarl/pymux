@@ -23,7 +23,7 @@ from pyte.images import PixelFormat
 if TYPE_CHECKING:
     from types import ModuleType
 
-__all__ = ["install"]
+__all__ = ["install", "install_rsync"]
 
 #: Set to anything but "" or "0", and `install()` installs nothing.
 PURE = "PYTERM_PURE"
@@ -54,6 +54,24 @@ def install() -> None:
     else:
         if os.environ.get(PURE, "") in ("", "0"):
             _install_images(pymux_rs)
+    install_rsync()
+
+
+def install_rsync() -> None:
+    """
+    `pymux.client.kitty_rsync`'s block search in Rust. A call of its own:
+    a client process never imports `pymux.core.main`, so the client calls
+    this when a transfer first wants a delta. Lillecarl/pymux#916.
+    """
+    if os.environ.get(PURE, "") not in ("", "0"):
+        return
+    try:
+        import pymux_rs
+    except ImportError:
+        return
+    from ..client import kitty_rsync
+
+    kitty_rsync._Blocks = pymux_rs.RsyncBlocks
 
 
 def _install_images(native: ModuleType) -> None:
