@@ -22,6 +22,11 @@ server whose person used a mirror of the pane after every client here
 and its answers come back over the link. So do its questions of pace:
 the peer asks, and this side answers once the program took what came.
 
+**A bypass password opens a session only through the pymux client**, or a
+peer's. A pane encrypts it to this server's key (`kitty_bypass`), and
+the client is sent its `sha256:` form. A real kitty holds its own key,
+so a session that goes to it goes without the bypass, and kitty asks.
+
 **A file the terminal sends waits in the terminal.** Past `HOLD_BYTES`
 that the pane's program has not read, the server tells the client to
 stop reading its terminal (`Packet.HOLD_INPUT`), and kitty, whose child
@@ -34,8 +39,9 @@ from __future__ import annotations
 
 import time
 from contextlib import suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum, auto
+from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, Final
 
 import anyio
@@ -51,6 +57,7 @@ from ..enums import FileTransfer
 from ..log import logger
 from ..mirror.program import RemoteProgram
 from ..pipes.base import BrokenPipeError
+from .kitty_bypass import SHA256, BypassKey
 
 if TYPE_CHECKING:
     from ..connection.client_state import ClientState
@@ -106,6 +113,8 @@ class KittyTransfers:
         "_sessions": Keep.DROPPED,
         "_held": Keep.DROPPED,
         "_owner_takes": Keep.DROPPED,
+        # Read again from its file beside the socket.
+        "_key": Keep.DROPPED,
     }
 
     def __init__(self, pymux: Pymux) -> None:
@@ -115,6 +124,15 @@ class KittyTransfers:
         self._held: set[ServerConnection] = set()
         #: What waits, on a peer, for the owner to say a mirrored pane's program took a part.
         self._owner_takes: dict[tuple[Pane, str], anyio.Event] = {}
+        self._key: BypassKey | None = None
+
+    @property
+    def key(self) -> BypassKey:
+        "The key every pane encrypts a bypass password to, as `KITTY_PUBLIC_KEY`."
+        if self._key is None:
+            socket_name = self.pymux.socket_name
+            self._key = BypassKey(Path(socket_name + ".kitty-key") if socket_name else None)
+        return self._key
 
     def listens(self, connection: ServerConnection) -> bool:
         "Whether OSC 5113 from this terminal is cut out of its keys: it carries a session."
@@ -152,7 +170,7 @@ class KittyTransfers:
             if link is not None:
                 session = _Session(pane, link.connection, Route.PEER, now)
                 self._sessions[(link.connection, command.id)] = session
-                self._send(session, command)
+                self._send(session, self._bypass_for(session, command))
                 return
             route = None if client is None else self.route_for(client)
             if client is None or client.connection is None or route is None:
@@ -160,6 +178,7 @@ class KittyTransfers:
                     self._tell(pane, TransferCommand(Action.STATUS, id=command.id, status=_REFUSED))
                 return
             session = _Session(pane, client.connection, route, now)
+            command = self._bypass_for(session, command)
             self._sessions[(client.connection, command.id)] = session
             self._send(session, command)
             return
@@ -175,6 +194,19 @@ class KittyTransfers:
             return
         session.used = now
         self._send(session, command)
+
+    def _bypass_for(self, session: _Session, command: TransferCommand) -> TransferCommand:
+        """
+        The command as whoever answers the session reads its bypass: none
+        for a real kitty, and the `sha256:` form for the pymux client or a
+        peer. One that does not open becomes a form that matches no
+        password, so the session is refused, as kitty refuses it.
+        """
+        if not command.bypass:
+            return command
+        if session.route is Route.TERMINAL:
+            return replace(command, bypass="")
+        return replace(command, bypass=self.key.plain(command.id, command.bypass) or SHA256)
 
     def forget(self, pane: Pane) -> None:
         "A pane's program ended: its sessions end, and each terminal is told to drop its own."

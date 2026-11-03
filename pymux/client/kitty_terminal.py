@@ -29,7 +29,7 @@ from pyte.sequences.file_transfer import TransferCommand
 from pymux.config import client_options_in, find_config
 
 from .kitty_transfer import Effect, Question, Transfers, Unasked, absolute
-from .uploads import Answer, all_under, fitted, grant_answers, home_as_tilde, upload_settings
+from .uploads import Answer, UploadSettings, all_under, fitted, grant_answers, home_as_tilde, upload_settings
 
 if TYPE_CHECKING:
     from .terminal import TerminalClient
@@ -106,7 +106,11 @@ class KittyTerminal:
         self._queue.put(step)
 
     def _transfers(self) -> Transfers:
-        return Transfers(Path.home(), self._may_read)
+        return Transfers(Path.home(), self._may_read, bypass=self._bypass)
+
+    def _bypass(self) -> str:
+        "`file-transfer-bypass` from this client's own file. **It blocks.**"
+        return self._settings().bypass
 
     async def _serve_on_the_loop(self, steps: MemoryObjectReceiveStream[_Step]) -> None:
         transfers = self._transfers()
@@ -148,12 +152,15 @@ class KittyTerminal:
 
     def _may_read(self, paths: list[str]) -> bool:
         "Whether a grant or `upload-paths` lets these pass. **It blocks.**"
-        settings = upload_settings(client_options_in(self.client.config_file or find_config()), Path.home())
+        settings = self._settings()
         self._grant_seconds = settings.grant_seconds
         return self.client.sending_files.granted() or all_under(paths, settings.roots)
 
     def _pumps(self, transfers: Transfers) -> bool:
         return transfers.has_data and self._waiting is None
+
+    def _settings(self) -> UploadSettings:
+        return upload_settings(client_options_in(self.client.config_file or find_config()), Path.home())
 
     def _apply(self, effects: list[Effect], pumped: bool = False) -> None:
         for effect in effects:

@@ -67,6 +67,9 @@ dependencies = [
     # kitty's rsync deltas hash blocks with XXH3-64 and a whole file with
     # XXH3-128. Lillecarl/pymux#912.
     "xxhash>=3.0.0",
+    # The key `kitten transfer --permissions-bypass` encrypts its password
+    # to: X25519 and AES-256-GCM, as kitty's `kitty-1`. Lillecarl/pymux#917.
+    "cryptography",
     # The async of the server: task groups, a memory object stream, and
     # `wait_readable` in place of a callback nobody owns. 4.7 is what
     # `notify_closing` needs, and the posix pipe needs that to wake a

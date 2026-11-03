@@ -159,6 +159,9 @@ class PaneMaker:
             merged = pane_environment(self.pymux, environment)
             environment.clear()
             environment.update(merged)
+            # What `kitten transfer --permissions-bypass` encrypts to.
+            # Lillecarl/pymux#917.
+            environment["KITTY_PUBLIC_KEY"] = self.pymux.kitty_transfers.key.public
 
             # The shims, when they are on, reach the opener and the
             # notifier of this session before anything else on the PATH

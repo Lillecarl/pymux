@@ -18,7 +18,11 @@ answers as kitty would. `Transfers` follows kitty's `FileTransmission`
   kitty waits for its child's queue to drain.
 - Deltas follow kitty's rsync (`pymux.client.kitty_rsync`). A file
   patched in place keeps the mode the old one had.
-- No bypass password: a session with one is asked about.
+- A bypass password reaches here as the protocol's `sha256:` form, which
+  the server made of what the pane encrypted to its key
+  (`pymux.core.kitty_bypass`). It is checked against
+  `file-transfer-bypass` from this client's own file. As in kitty, one
+  that does not match refuses the session without a question.
 
 Every call blocks on the file system, so the client makes them off the
 loop that draws, one at a time and in order.
@@ -50,6 +54,7 @@ from pyte.sequences.file_transfer import (
     TransmissionType,
 )
 
+from ..core.kitty_bypass import bypass_matches
 from .kitty_rsync import Differ, Patcher, RsyncError
 
 __all__ = [
@@ -350,6 +355,8 @@ class _Session:
     used: float
     accepted: bool = False
     asked: bool = False
+    #: What a bypass password said, or `None` for a session with none.
+    bypass_ok: bool | None = None
 
     @property
     def acknowledges(self) -> bool:
@@ -603,15 +610,21 @@ class Transfers:
     commands for the programs, and the questions for the person.
 
     `may_read` says whether a grant or `upload-paths` lets these paths
-    pass without a question. **It blocks.**
+    pass without a question, and `bypass` is `file-transfer-bypass`.
+    **Both block.**
     """
 
     def __init__(
-        self, home: Path, may_read: Callable[[list[str]], bool], clock: Callable[[], float] = time.monotonic
+        self,
+        home: Path,
+        may_read: Callable[[list[str]], bool],
+        clock: Callable[[], float] = time.monotonic,
+        bypass: Callable[[], str] = str,
     ) -> None:
         self.home = home
         self.may_read = may_read
         self.clock = clock
+        self.bypass = bypass
         self.writing: dict[str, _Writing] = {}
         self.reading: dict[str, _Reading] = {}
 
@@ -711,8 +724,12 @@ class Transfers:
         if session is None:
             if command.action is not Action.SEND or len(self.writing) >= MAX_SESSIONS:
                 return
-            session = _Writing(command.id, pane, command.quiet, self.clock(), asked=True)
+            session = _Writing(command.id, pane, command.quiet, self.clock())
             self.writing[command.id] = session
+            if command.bypass:
+                out.extend(self.answered(command.id, bypass_matches(self.bypass(), command.id, command.bypass)))
+                return
+            session.asked = True
             out.append(Question(command.id, pane, reads=False))
             return
         if command.action is Action.SEND or not session.accepted:
@@ -854,6 +871,8 @@ class Transfers:
             if command.action is not Action.RECEIVE or len(self.reading) >= MAX_SESSIONS:
                 return
             session = _Reading(command.id, pane, command.quiet, self.clock(), expected=command.size)
+            if command.bypass:
+                session.bypass_ok = bypass_matches(self.bypass(), command.id, command.bypass)
             self.reading[command.id] = session
             if session.specs_complete:
                 self._ask_to_read(session, out)
@@ -910,6 +929,9 @@ class Transfers:
                 out.append(_status(command.id, Status.CANCELED))
 
     def _ask_to_read(self, session: _Reading, out: list[Effect]) -> None:
+        if session.bypass_ok is not None:
+            out.extend(self.answered(session.id, session.bypass_ok))
+            return
         session.asked = True
         paths = [absolute(spec, self.home) for _spec_id, spec in session.specs]
         if self.may_read(paths):

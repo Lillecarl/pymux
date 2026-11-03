@@ -334,8 +334,8 @@ KITTEN = os.environ.get("PYMUX_KITTEN", "")
 PANE_THAT_STAYS = "%s -c 'import time; time.sleep(30)'" % (sys.executable,)
 
 
-async def _through_the_client(tmp_path: Path, config: Path, command: str, answer: str):
-    "Run `command` in a pane whose client answers kitty's file transfer, answer its question, and wait."
+async def _through_the_client(tmp_path: Path, config: Path, command: str, answer: str | None):
+    "Run `command` in a pane whose client answers kitty's file transfer, answer its question unless `None`, and wait."
     said = tmp_path / "said"
     pymux = Pymux()
     pymux.serving.listen_on_socket(str(tmp_path / "pymux.sock"))
@@ -359,12 +359,13 @@ async def _through_the_client(tmp_path: Path, config: Path, command: str, answer
                     "/bin/sh -c %s"
                     % shlex.quote("%s >%s 2>&1; echo status=$? >>%s; %s" % (command, said, said, PANE_THAT_STAYS))
                 )
-            await once(
-                lambda: client.sending_files.asking is not None,
-                20.0,
-                lambda: "the client was never asked; the kitten said %r" % (said.exists() and said.read_text(),),
-            )
-            client._take_input(answer)
+            if answer is not None:
+                await once(
+                    lambda: client.sending_files.asking is not None,
+                    20.0,
+                    lambda: "the client was never asked; the kitten said %r" % (said.exists() and said.read_text(),),
+                )
+                client._take_input(answer)
             await once(
                 lambda: said.exists() and "status=" in said.read_text(),
                 30.0,
@@ -426,6 +427,21 @@ async def test_kitten_transfer_reads_a_delta_through_the_pymux_client(tmp_path, 
     )
     assert "status=0" in said, said
     assert target.read_bytes() == CHANGED * 30
+
+
+@pytest.mark.skipif(not KITTEN, reason="needs the kitten: PYMUX_KITTEN")
+async def test_kitten_transfer_with_the_bypass_password_asks_nothing(tmp_path, home, config):
+    "The kitten encrypts to the pane's KITTY_PUBLIC_KEY, the server's. Lillecarl/pymux#917."
+    config.write_text("set-client-option file-transfer-bypass sesame\n")
+    source = tmp_path / "source.bin"
+    source.write_bytes(DATA)
+    target = home / "target.bin"
+    client, said = await _through_the_client(
+        tmp_path, config, "%s transfer --permissions-bypass sesame %s %s" % (KITTEN, source, target), None
+    )
+    assert "status=0" in said, said
+    assert target.read_bytes() == DATA
+    assert "wants to write files here" not in b"".join(client.drawn).decode()
 
 
 @pytest.mark.skipif(not KITTEN, reason="needs the kitten: PYMUX_KITTEN")

@@ -86,6 +86,8 @@ class LocalOption(StrEnum):
     UPLOAD_PATHS = "upload-paths"
     #: How many minutes "a" lets one server read without asking.
     UPLOAD_GRANT = "upload-grant"
+    #: The password `kitten transfer --permissions-bypass` skips the question with.
+    FILE_TRANSFER_BYPASS = "file-transfer-bypass"
 
 
 LOCAL_CLIENT_OPTIONS: Final = frozenset(LocalOption)
@@ -109,6 +111,8 @@ class UploadSettings:
 
     roots: tuple[Path, ...] = ()
     grant_seconds: float = DEFAULT_GRANT_MINUTES * SECONDS_PER_MINUTE
+    #: `file-transfer-bypass`, or `""` for none.
+    bypass: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,15 +147,18 @@ def upload_settings(announced: Iterable[tuple[str, str]], home: Path) -> UploadS
     """
     roots: tuple[Path, ...] = ()
     grant = DEFAULT_GRANT_MINUTES * SECONDS_PER_MINUTE
+    bypass = ""
     for name, value in announced:
-        if name == LocalOption.UPLOAD_PATHS:
+        if name == LocalOption.FILE_TRANSFER_BYPASS:
+            bypass = value
+        elif name == LocalOption.UPLOAD_PATHS:
             roots = tuple(expand(part, home) for part in value.split(PATH_SEPARATOR) if part)
         elif name == LocalOption.UPLOAD_GRANT:
             with suppress(ValueError):
                 minutes = float(value)
                 if minutes >= 0:
                     grant = minutes * SECONDS_PER_MINUTE
-    return UploadSettings(roots, grant)
+    return UploadSettings(roots, grant, bypass)
 
 
 def _too_big(asked: str) -> str:
