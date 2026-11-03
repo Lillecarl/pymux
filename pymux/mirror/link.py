@@ -240,6 +240,10 @@ class PeerLink:
     def _on_clipboard_answer(self, packet: Message) -> None:
         self.connection.pymux.rich_clipboard.peer_answered(self, str(packet.get(Field.DATA, "")))
 
+    @_PACKETS.handles(Packet.MIRROR_CLIPBOARD_PASSWORD)
+    def _on_clipboard_password(self, packet: Message) -> None:
+        self.connection.pymux.rich_clipboard.peer_password(self, str(packet.get(Field.DATA, "")))
+
     def tree_changed(self) -> None:
         "Something the tree holds may have changed (`Pymux.invalidate`)."
         self._tree_changed.set()

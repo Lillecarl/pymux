@@ -228,6 +228,68 @@ async def test_a_kitty_read_in_a_pane_there_asks_the_terminal_here(two_servers, 
     ]
 
 
+async def test_kitty_paste_events_reach_a_pane_there_and_its_read_comes_back_here(two_servers, monkeypatch):
+    """
+    The pane set ?5522 there: the terminal here is told, its paste event
+    reaches the program, and the read under the event's password asks
+    this terminal again, though a client there was used later.
+    Lillecarl/pymux#902.
+    """
+    owner, peer, client = two_servers
+    owner.options.set_clipboard = Clipboard.ON
+    peer.options.set_clipboard = Clipboard.ON
+    there, _ = await shown_here(owner, peer, client)
+    typed: list[str] = []
+    monkeypatch.setattr(there.terminal.terminal_control.process, "write_input", typed.append)
+    connection = client.connection
+    monkeypatch.setattr(connection, "client_state", client, raising=False)
+    monkeypatch.setattr(connection.replies, "kitty_clipboard", True, raising=False)
+    told: list[str] = []
+    monkeypatch.setattr(connection, "forward_osc", told.append)
+    raw: list[str] = []
+    monkeypatch.setattr(connection, "write_output_raw", raw.append, raising=False)
+    monkeypatch.setattr(connection, "flush_output", lambda: None, raising=False)
+
+    there.terminal.terminal_control.feed_output("\x1b[?5522h")
+
+    def told_to_send_events():
+        peer.rich_clipboard.sync_paste_events(client)
+        return "\x1b[?5522h" in raw
+
+    await until(told_to_send_events, "the terminal here is told to send paste events", lambda: raw)
+
+    event = [
+        "type=read:status=OK:pw=%s" % kitty_b64("once"),
+        "type=read:status=DATA:mime=%s:pw=%s;%s" % (kitty_b64("."), kitty_b64("once"), kitty_b64("text/plain")),
+        "type=read:status=DONE:pw=%s" % kitty_b64("once"),
+    ]
+    for packet in event:
+        peer.rich_clipboard.terminal_said(connection, packet)
+    await until(
+        lambda: "".join(typed) == "".join(map(kitty_osc, event)), "the event reaches the program", lambda: typed
+    )
+
+    output = Vt100_Output(stdout=io.StringIO(), get_size=lambda: Size(rows=24, columns=80))
+    with create_pipe_input() as pipe:
+        theirs = owner.add_client(
+            output=output,
+            input=pipe,
+            color_depth=ColorDepth.DEPTH_8_BIT,
+            connection=Connection("there", None, owner, "/dev/pts/9"),
+        )
+        monkeypatch.setattr(theirs.connection.replies, "kitty_clipboard", True, raising=False)
+        asked_there: list[str] = []
+        monkeypatch.setattr(theirs.connection, "forward_osc", asked_there.append)
+        owner.client_was_used(theirs)
+
+        read = "type=read:id=p:pw=%s;%s" % (kitty_b64("once"), kitty_b64("text/plain"))
+        there.terminal.terminal_control.feed_output(kitty_osc(read))
+        await until(
+            lambda: any(":pw=" in sequence for sequence in told), "the read asks the terminal here", lambda: told
+        )
+        assert asked_there == []
+
+
 async def test_a_pane_streams_only_while_seen(two_servers):
     "The client leaves for its own session: the mirror pauses, and catches up on its return."
     owner, peer, client = two_servers

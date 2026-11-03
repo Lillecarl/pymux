@@ -373,6 +373,9 @@ class Packet(StrEnum):
     # back as `mirror-clipboard-answer`, under the owner's id.
     MIRROR_CLIPBOARD_READ = "mirror-clipboard-read"
     MIRROR_CLIPBOARD_ANSWER = "mirror-clipboard-answer"
+    # A paste event at the peer gave a mirrored pane the password under
+    # `data`: the owner sends a read under it to this peer.
+    MIRROR_CLIPBOARD_PASSWORD = "mirror-clipboard-password"
     # "That pane is not mirrored": there is none, under `error`.
     MIRROR_REFUSED = "mirror-refused"
 

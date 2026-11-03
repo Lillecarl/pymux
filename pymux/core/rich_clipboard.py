@@ -19,6 +19,11 @@ whose focused pane set it has the mode set too, and then sends no
 bracketed paste: an event that finds the focus moved on to a pane
 without the mode is read as text by pymux and pasted.
 
+A mirrored pane's read goes to a peer when a person there was last on
+the pane, or when its password came from a paste event there. The
+frames carry the pane's mode, so a peer's terminal sends paste events
+too. Lillecarl/pymux#902.
+
 Every packet pymux sends a terminal carries an id of pymux's own, so
 that an answer is known for pymux's and never reaches a pane as keys.
 """
@@ -29,9 +34,9 @@ import itertools
 import time
 import weakref
 from dataclasses import dataclass, field, replace
-from typing import TYPE_CHECKING, ClassVar, Final
+from typing import TYPE_CHECKING, Any, ClassVar, Final
 
-from libpymux.protocol import PEER_RICH_CLIPBOARD
+from libpymux.protocol import PEER_RICH_CLIPBOARD, Field, Packet
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.clipboard import ClipboardData
 from ptterm import Terminal
@@ -53,6 +58,7 @@ from pyte.sequences.kitty_clipboard import (
 from ..connection.client_io import PASTE_EVENTS_OFF, PASTE_EVENTS_ON
 from ..enums import Clipboard, Woke
 from ..log import logger
+from ..mirror.program import RemoteProgram
 from ..notify.osc import build_osc
 
 if TYPE_CHECKING:
@@ -147,6 +153,13 @@ class _PasteEvent:
     types: tuple[str, ...] = ()
 
 
+def _keep(passwords: dict[str, Any], password: str, holder: object) -> None:
+    "Remember who gave `password`, forgetting the oldest past `_PASSWORDS_KEPT`."
+    passwords[password] = holder
+    while len(passwords) > _PASSWORDS_KEPT:
+        del passwords[next(iter(passwords))]
+
+
 def text_of(types: dict[str, bytes]) -> str | None:
     "The text among `types`, or None."
     for mime in TEXT_TYPES:
@@ -166,6 +179,7 @@ class RichClipboard:
         "_reads": Keep.DROPPED,
         "_events": Keep.DROPPED,
         "_passwords": Keep.DROPPED,
+        "_peer_passwords": Keep.DROPPED,
         # A terminal left with the mode set sends paste events nobody
         # asked for; each becomes a text paste.
         "_events_on": Keep.DROPPED,
@@ -180,6 +194,8 @@ class RichClipboard:
         self._events: weakref.WeakKeyDictionary[ServerConnection, _PasteEvent] = weakref.WeakKeyDictionary()
         #: The terminal each recent paste event password came from.
         self._passwords: dict[str, ServerConnection] = {}
+        #: The peer each recent paste event password of a mirrored pane came from.
+        self._peer_passwords: dict[str, PeerLink] = {}
         #: The terminals told to send paste events.
         self._events_on: weakref.WeakSet[ServerConnection] = weakref.WeakSet()
 
@@ -204,6 +220,12 @@ class RichClipboard:
         "Tell `pane`'s program. A pane whose program has gone hears nothing."
         screen = pane.terminal.screen
         if not isinstance(screen, Screen):
+            return
+        program = pane.process
+        if isinstance(program, RemoteProgram):
+            # A mirrored screen drops its replies, and a paste event
+            # relayed to one is a person's input for the owner's program.
+            program.write_input(screen.encode_report(packet))
             return
         try:
             screen.reply(packet)
@@ -277,7 +299,9 @@ class RichClipboard:
             self._answer(pane, answer_to(read, Status.EPERM))
             return
         connection = self._passwords.get(read.password) if read.password else None
-        link = None
+        link = self._peer_passwords.get(read.password) if read.password else None
+        if link is not None:
+            connection = link.connection
         if connection is None:
             client = self.pymux.outward.download_client(pane)
             link = self._peer_used_after(pane, client)
@@ -322,6 +346,11 @@ class RichClipboard:
         if link is None or (client is not None and client.last_used >= link.last_used):
             return None
         return link
+
+    def peer_password(self, link: PeerLink, password: str) -> None:
+        "A paste event at the peer gave a mirrored pane `password`: a read under it goes there."
+        if password:
+            _keep(self._peer_passwords, password, link)
 
     def peer_answered(self, link: PeerLink, sequence: str) -> None:
         "One packet of a peer terminal's answer to a pane's read (`_read`)."
@@ -409,9 +438,12 @@ class RichClipboard:
             relayed = self._serves_paste_events(pane)
             self._events[connection] = _PasteEvent(pane, relayed, packet.primary, packet.password)
             if packet.password:
-                self._passwords[packet.password] = connection
-                while len(self._passwords) > _PASSWORDS_KEPT:
-                    del self._passwords[next(iter(self._passwords))]
+                _keep(self._passwords, packet.password, connection)
+                program = None if pane is None else pane.process
+                if relayed and isinstance(program, RemoteProgram):
+                    # The owner sends the pane's read under this
+                    # password here, whoever it saw last.
+                    program.peer.send({Field.CMD: Packet.MIRROR_CLIPBOARD_PASSWORD, Field.DATA: packet.password})
         event = self._events.get(connection)
         if event is None:
             return
