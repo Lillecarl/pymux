@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import sys
 
+from libpymux.protocol import Packet
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from pyte.sequences.file_transfer import Action, TransferCommand
-from session import over_connection
+from session import once, over_connection
 
+from pymux.core import kitty_transfers
 from pymux.options.options import ALL_CLIENT_OPTIONS
 
 SIZE = Size(rows=24, columns=80)
@@ -104,6 +106,53 @@ async def test_the_program_hears_when_the_terminal_goes():
         session.pymux.remove_client(state.connection)
         [gone] = wired.told()
         assert gone.status.startswith("EIO:")
+
+
+async def _sent_more_than_the_pane_holds(tmp_path, program: str, monkeypatch) -> tuple[list[str], Wired]:
+    "The terminal sends past `HOLD_BYTES` to a pane running `program`, and the client hears what the server says."
+    heard: list[str] = []
+    script = tmp_path / "program.py"
+    script.write_text(program)
+    monkeypatch.setattr(kitty_transfers, "STALL_SECONDS", 0.5)
+
+    def read_packet(packet: dict) -> None:
+        if packet["cmd"] in (Packet.HOLD_INPUT, Packet.RELEASE_INPUT):
+            heard.append(packet["cmd"])
+
+    async with over_connection(read_packet=read_packet) as session:
+        state, _ = await session.attach("one", SIZE)
+        state.connection.graphics.terminal_version = "kitty(0.49.2)"
+        with set_app(state.app):
+            await session.pymux.panes.create_window("%s %s" % (sys.executable, script))
+        pane = session.pymux.arrangement.get_active_window().panes[0]
+        write = pane.screen.write_process_input
+        wired = Wired(state, pane)
+        pane.screen.write_process_input = write
+        _program_says(pane, SEND)
+        data = TransferCommand(Action.DATA, id="s1", file_id="f1", data=b"x" * (2 * kitty_transfers.HOLD_BYTES))
+        state.connection._process({"cmd": "in", "data": str(data)})
+        await once(lambda: Packet.RELEASE_INPUT in heard, 20.0, lambda: "never released; heard %r" % (heard,))
+    return heard, wired
+
+
+async def test_a_terminal_waits_while_the_pane_reads_what_it_sent(tmp_path, monkeypatch):
+    "Lillecarl/pymux#915."
+    heard, wired = await _sent_more_than_the_pane_holds(
+        tmp_path,
+        "import os, time, tty\ntty.setraw(0)\ntime.sleep(0.2)\nwhile os.read(0, 65536):\n    pass\n",
+        monkeypatch,
+    )
+    assert heard[:2] == [Packet.HOLD_INPUT, Packet.RELEASE_INPUT]
+    assert str(TransferCommand(Action.CANCEL, id="s1")) not in wired.terminal
+
+
+async def test_a_program_that_reads_nothing_loses_its_session_and_the_terminal_goes_on(tmp_path, monkeypatch):
+    # Raw: a canonical line past 4095 bytes is thrown away, and the pty drains.
+    heard, wired = await _sent_more_than_the_pane_holds(
+        tmp_path, "import time, tty\ntty.setraw(0)\ntime.sleep(30)\n", monkeypatch
+    )
+    assert heard[:2] == [Packet.HOLD_INPUT, Packet.RELEASE_INPUT]
+    assert wired.terminal[-1] == str(TransferCommand(Action.CANCEL, id="s1"))
 
 
 async def test_the_terminal_drops_the_session_of_a_program_that_ended():

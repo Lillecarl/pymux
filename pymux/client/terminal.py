@@ -207,6 +207,10 @@ class TerminalClient(Client):
         self.kitty_flags: int | None = None
 
         self.__stdin_reader: PosixStdinReader | None = None
+        #: The server said to stop reading the terminal: a pane's program
+        #: is behind on a file the terminal sends it. Lillecarl/pymux#915.
+        self.input_held = False
+        self._input_released: anyio.Event | None = None
 
         #: What this client leaves with when it is attached. The server
         #: names it in an `exit` packet, which it sends before it closes
@@ -320,6 +324,7 @@ class TerminalClient(Client):
         self.downloads.clear()
         self.sending_files.connection_started()
         self.kitty_terminal.connection_started()
+        self._release_input()
         self._send_size()
         self.send_packet(
             {
@@ -701,6 +706,27 @@ class TerminalClient(Client):
     @_PACKETS.handles(Packet.KITTY_TRANSFER_TAKEN)
     def _on_kitty_transfer_taken(self, packet: Message) -> None:
         self.kitty_terminal.taken(packet)
+
+    @_PACKETS.handles(Packet.HOLD_INPUT)
+    def _on_hold_input(self, packet: Message) -> None:
+        self.input_held = True
+
+    @_PACKETS.handles(Packet.RELEASE_INPUT)
+    def _on_release_input(self, packet: Message) -> None:
+        self._release_input()
+
+    def _release_input(self) -> None:
+        self.input_held = False
+        if self._input_released is not None:
+            self._input_released.set()
+            self._input_released = None
+
+    async def input_released(self) -> None:
+        "Return once the server lets this client read its terminal."
+        while self.input_held:
+            if self._input_released is None:
+                self._input_released = anyio.Event()
+            await self._input_released.wait()
 
     @_PACKETS.handles(Packet.BROWSER_STOP)
     def _on_browser_stop(self, packet: Message) -> None:

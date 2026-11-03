@@ -88,7 +88,8 @@ class PosixClient(TerminalClient):
                     socket_fd = self.socket.fileno()
                     # A browser that ends says nothing on either fd, so
                     # the loop looks once a second while one runs.
-                    r, _, _ = select([stdin_fd, socket_fd], (), (), BROWSER_POLL if self.browsers.held else None)
+                    readers = [socket_fd] if self.input_held else [stdin_fd, socket_fd]
+                    r, _, _ = select(readers, (), (), BROWSER_POLL if self.browsers.held else None)
                     self.browsers.reap()
 
                     if socket_fd in r:

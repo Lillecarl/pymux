@@ -15,6 +15,13 @@ pane that started it. pymux keeps the id as it is: a bypass password is
 hashed with it.
 
 A session that neither takes is refused, as kitty refuses one.
+
+**A file the terminal sends waits in the terminal.** Past `HOLD_BYTES`
+that the pane's program has not read, the server tells the client to
+stop reading its terminal (`Packet.HOLD_INPUT`), and kitty, whose child
+the client is, stops writing. The person's keys wait with it, so a
+program that reads nothing for `STALL_SECONDS` loses its session and
+the keys go again.
 """
 
 from __future__ import annotations
@@ -25,6 +32,7 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from typing import TYPE_CHECKING, ClassVar, Final
 
+import anyio
 from libpymux.protocol import Field, Packet
 from ptyhost.process import Process
 from pyte.keep import Keep
@@ -55,6 +63,13 @@ _SILENT: Final = 2
 _REFUSED: Final = "EPERM:pymux has no terminal here that takes a file transfer"
 _TERMINAL_GONE: Final = "EIO:the terminal of the transfer went away"
 _CANCELED: Final = "CANCELED"
+_STALLED: Final = "EIO:the program read nothing of the transfer for %d seconds"
+
+#: Bytes a pane may hold for its program before its client's terminal waits.
+HOLD_BYTES: Final = 1024 * 1024
+
+#: How long a held terminal waits on a program that reads nothing.
+STALL_SECONDS: Final = 10.0
 
 
 class Route(Enum):
@@ -80,11 +95,14 @@ class KittyTransfers:
         "pymux": Keep.REBUILT,
         # A transfer in flight is lost with its connection.
         "_sessions": Keep.DROPPED,
+        "_held": Keep.DROPPED,
     }
 
     def __init__(self, pymux: Pymux) -> None:
         self.pymux = pymux
         self._sessions: dict[tuple[ServerConnection, str], _Session] = {}
+        #: The connections told to stop reading their terminal.
+        self._held: set[ServerConnection] = set()
 
     def listens(self, connection: ServerConnection) -> bool:
         "Whether OSC 5113 from this terminal is cut out of its keys: it carries a session."
@@ -165,6 +183,8 @@ class KittyTransfers:
                 del self._sessions[key]
             # As the terminal wrote it, and not written again.
             self._tell(session.pane, OscString(Osc.FILE_TRANSFER, param))
+            if session.route is Route.TERMINAL:
+                self._pace(key, session)
         except Exception:
             logger.exception("Serving a file transfer command of client %s failed.", connection.client_id)
 
@@ -177,8 +197,40 @@ class KittyTransfers:
         with suppress(BrokenPipeError):
             connection.send_packet({Field.CMD: Packet.KITTY_TRANSFER_TAKEN, Field.DATA: session_id})
 
+    def _pace(self, key: tuple[ServerConnection, str], session: _Session) -> None:
+        process = session.pane.process
+        connection = session.connection
+        if connection in self._held or not isinstance(process, Process) or process.input_unwritten <= HOLD_BYTES:
+            return
+        self._held.add(connection)
+        with suppress(BrokenPipeError):
+            connection.send_packet({Field.CMD: Packet.HOLD_INPUT})
+        connection.spawn(self._release_when_read(key, session, process))
+
+    async def _release_when_read(self, key: tuple[ServerConnection, str], session: _Session, process: Process) -> None:
+        "Let the terminal go on once the program read what waits, or once it stalls."
+        connection = session.connection
+        try:
+            while True:
+                before = process.input_unwritten
+                with anyio.move_on_after(STALL_SECONDS) as waited:
+                    await process.input_written()
+                if not waited.cancelled_caught:
+                    return
+                if process.input_unwritten < before:
+                    continue
+                if self._sessions.pop(key, None) is not None:
+                    self._send(session, TransferCommand(Action.CANCEL, id=key[1]))
+                    self._tell(session.pane, TransferCommand(Action.STATUS, id=key[1], status=_STALLED % STALL_SECONDS))
+                return
+        finally:
+            self._held.discard(connection)
+            with suppress(BrokenPipeError):
+                connection.send_packet({Field.CMD: Packet.RELEASE_INPUT})
+
     def client_gone(self, connection: ServerConnection) -> None:
         "A client went: each program whose session its terminal carried hears so."
+        self._held.discard(connection)
         for key, session in list(self._sessions.items()):
             if session.connection is connection:
                 del self._sessions[key]

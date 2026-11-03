@@ -181,6 +181,7 @@ class MemoryClient(TerminalClient):
         Lillecarl/pymux#419.
         """
         while True:
+            await self.input_released()
             await anyio.wait_readable(stdin_fd)
             if not self._process_stdin():
                 self.connection.close()

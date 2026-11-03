@@ -265,6 +265,12 @@ class Packet(StrEnum):
     # back once the pane's program has taken that part. The client sends
     # no more of the file before the answer. Lillecarl/pymux#914.
     KITTY_TRANSFER_TAKEN = "kitty-transfer-taken"
+    # Server: stop reading the terminal, and start again. A file that the
+    # client's terminal sends a pane through kitty's file transfer
+    # waits, in the terminal, for the pane's program to read what came
+    # before. Lillecarl/pymux#915.
+    HOLD_INPUT = "hold-input"
+    RELEASE_INPUT = "release-input"
 
     # Sound, on the attached connection of a client that said `audio` in
     # `start-gui`. Lillecarl/pymux#657.
