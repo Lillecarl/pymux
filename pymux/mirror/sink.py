@@ -67,6 +67,9 @@ class MirrorSink:
         dnd = frame.get("dnd")
         if isinstance(dnd, dict) and self.control.screen.kitty_dnd.register(dnd):
             self.registered()
+        palette = frame.get("palette")
+        if isinstance(palette, list):
+            self.control.screen.colors.take_palette(palette)
 
     @_PACKETS.handles(Packet.MIRROR_REFUSED)
     def _on_refused(self, packet: Message) -> None:

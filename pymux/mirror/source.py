@@ -54,6 +54,8 @@ class MirrorSource:
         #: What the peer was last told the program registered for drag
         #: and drop, or None before it was told.
         self.registration: dict[str, Any] | None = None
+        #: The palette entries the peer was last told the program set.
+        self.palette: tuple[tuple[int, str], ...] = ()
 
     def start(self) -> None:
         self.control.followers.append(self)
@@ -132,6 +134,15 @@ class MirrorSource:
             if registration != self.registration:
                 self.registration = registration
                 frame = {**(frame or {}), "dnd": registration}
+        # The program's OSC 4 entries, which the frames' cells only name
+        # by number. The peer's own `allow-program-palette` decides
+        # whether it draws them. An older peer ignores the field.
+        # Lillecarl/pymux#922.
+        program_palette = self.control.screen.colors.program_palette()
+        palette = () if program_palette is None else program_palette.entries
+        if palette != self.palette:
+            self.palette = palette
+            frame = {**(frame or {}), "palette": [list(entry) for entry in palette]}
         if frame is None:
             if not owed:
                 return None

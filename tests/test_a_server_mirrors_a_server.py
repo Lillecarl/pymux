@@ -167,6 +167,28 @@ async def test_a_session_there_shows_here(two_servers):
     await until(lambda: typed == ["ls\r"], "a key typed here reaches the program there")
 
 
+async def test_the_palette_a_program_there_set_reaches_the_mirror(two_servers):
+    "The cells name a colour by number; the entries behind it follow. Lillecarl/pymux#922."
+    owner, peer, client = two_servers
+    there, here = await shown_here(owner, peer, client)
+    control = here.terminal.terminal_control
+
+    def entries():
+        palette = control.screen.colors.program_palette()
+        return None if palette is None else palette.entries
+
+    there.terminal.terminal_control.feed_output("\x1b]4;1;rgb:ff/00/ff\x1b\\\x1b[31mred")
+    await until(lambda: entries() == ((1, "#ff00ff"),), "the entry reaches the mirror", entries)
+
+    # This side's option decides, as for a pane of its own.
+    assert control._program_palette() is None
+    peer.handle_command("set-option -g allow-program-palette on")
+    assert control._program_palette().words == {1: "#ff00ff"}
+
+    there.terminal.terminal_control.feed_output("\x1b]104\x1b\\")
+    await until(lambda: entries() is None, "the reset reaches the mirror", entries)
+
+
 async def test_a_copy_in_a_pane_there_reaches_the_clipboard_here(two_servers):
     "The owner passes the OSC on; the peer serves it under its own set-clipboard, though nobody looks at the pane."
     owner, peer, client = two_servers
