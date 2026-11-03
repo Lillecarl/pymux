@@ -21,6 +21,8 @@ from pymux.core.main import Pymux
 
 SIZE = Size(rows=12, columns=60)
 QUERY = "\x1b]72;t=q\x1b\\"
+#: Not this machine's id, as kitty hashes it.
+ELSEWHERE = "1:" + "0" * 64
 
 
 def osc(param: str) -> str:
@@ -198,6 +200,25 @@ async def test_a_drag_goes_between_its_pane_and_the_terminal():
         heard.clear()
         feed(state, pane, osc("t=o:o=1:i=3;text/plain"))
         assert heard == [osc("t=E:i=3;EPERM")]
+
+
+async def test_a_program_that_names_no_machine_runs_on_pymuxs():
+    recorder = Recorder()
+    pymux = Pymux(startup_command="sleep 30")
+    # Not "": the sandbox may have no /etc/machine-id.
+    pymux.drag_and_drop.machine_id = ELSEWHERE
+    async with over_connection(pymux=pymux, read_packet=recorder) as session:
+        state, (pane,), (at,) = await attached_to_kitty(pymux, session, recorder)
+        here = "x=%d:y=%d" % (at.xpos + 1, at.ypos + 1)
+        feed(state, pane, osc("t=a:i=7;text/x-mine") + osc("t=o:x=1:i=3"))
+        await sent(recorder, osc("t=o:x=1;" + ELSEWHERE))
+
+        say(state, osc("t=m:%s:X=0:Y=0:o=1;text/x-mine" % here))
+        say(state, osc("t=o:%s:X=0:Y=0" % here))
+        feed(state, pane, osc("t=m:o=1:i=7;text/x-mine"))
+        await sent(recorder, osc("t=m:x=0:y=0:X=0:Y=0:o=1;text/x-mine"))
+        assert osc("t=a:x=1") not in recorder.out
+        assert osc("t=o:x=1") not in recorder.out
 
 
 async def test_a_terminal_that_never_answers_gets_no_registration():

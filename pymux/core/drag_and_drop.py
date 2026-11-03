@@ -143,14 +143,15 @@ class DragAndDrop:
         # A drag in flight is lost with its connection. The panes keep
         # what they registered, and the next terminal is asked again.
         "_terminals": Keep.DROPPED,
-        "_machine_id": Keep.REBUILT,
+        "machine_id": Keep.REBUILT,
         "drops": Keep.REBUILT,
     }
 
     def __init__(self, pymux: Pymux) -> None:
         self.pymux = pymux
         self._terminals: weakref.WeakKeyDictionary[ServerConnection, _Terminal] = weakref.WeakKeyDictionary()
-        self._machine_id = server_machine_id()
+        #: This machine's id, and the one of a program that named none.
+        self.machine_id = server_machine_id()
         #: Where the copies of drops from another machine go.
         self.drops: Path = drops_directory()
 
@@ -210,12 +211,12 @@ class DragAndDrop:
             # A registration clears the machine id the terminal holds.
             self._send(connection, DndPacket(DndType.ACCEPT, payload=mimes))
             state.machine_id = ""
-            self._send_machine_id(connection, state, self._machine_id)
+            self._send_machine_id(connection, state, self.machine_id)
         offering = self._any_pane_offers()
         if offering != state.offering:
             state.offering = offering
             x = START_OFFERING if offering else STOP_OFFERING
-            self._send(connection, DndPacket(DndType.OFFER, cell_x=x, payload=self._machine_id if offering else ""))
+            self._send(connection, DndPacket(DndType.OFFER, cell_x=x, payload=self.machine_id if offering else ""))
 
     def _panes(self) -> list[Pane]:
         return [
@@ -298,7 +299,7 @@ class DragAndDrop:
             if pane is not None and not drop.relayed:
                 self._own_status(connection, drop)
             elif drop.relayed and dnd is not None:
-                self._send_machine_id(connection, state, dnd.machine_id)
+                self._send_machine_id(connection, state, dnd.machine_id or self.machine_id)
         elif pane is not None and not drop.relayed and offer_changed:
             self._own_status(connection, drop)
         is_drop = packet.type == DndType.DROP
@@ -367,7 +368,7 @@ class DragAndDrop:
             return
         drop.fetching = wanted[0]
         drop.index = drop.mimes.split().index(drop.fetching) + 1
-        self._send_machine_id(connection, self._terminal(connection), self._machine_id)
+        self._send_machine_id(connection, self._terminal(connection), self.machine_id)
         self._send(connection, DndPacket(DndType.REQUEST, cell_x=drop.index))
 
     def _finish_own(self, connection: ServerConnection, operation: int) -> None:
@@ -457,7 +458,9 @@ class DragAndDrop:
         if dnd is None or not dnd.offering:
             return
         state.drag = pane
-        self._send(connection, DndPacket(DndType.OFFER, cell_x=START_OFFERING, payload=dnd.offer_machine_id))
+        self._send(
+            connection, DndPacket(DndType.OFFER, cell_x=START_OFFERING, payload=dnd.offer_machine_id or self.machine_id)
+        )
         pixel_x, pixel_y = self._pixels_in(connection, packet, pane)
         self._tell(pane, replace(packet, cell_x=x, cell_y=y, pixel_x=pixel_x, pixel_y=pixel_y), dnd.drag_client_id)
 
