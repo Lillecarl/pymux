@@ -422,6 +422,7 @@ class PaneMaker:
             return client is None or not client.native_extra_cursors_of(pane)
 
         terminal_control.draws_extra_cursors = draws_extra_cursors
+        terminal_control.draws_program_palette = lambda: self.pymux.options_of_pane(pane).allow_program_palette
         terminal.screen.clipboard_func = lambda request: self.pymux.rich_clipboard.asked(pane, request)
         terminal.screen.dnd_func = lambda packet: self.pymux.drag_and_drop.pane_said(pane, packet)
         terminal.screen.file_transfer_func = lambda command: self.pymux.kitty_transfers.pane_said(pane, command)

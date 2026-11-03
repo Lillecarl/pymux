@@ -244,6 +244,14 @@ class SessionOptions(Options):
         False,
         doc="May a program inside a pane resize that pane? Off: making one taller makes another shorter.",
     )
+    allow_program_palette: bool = option(
+        False,
+        doc=(
+            "Draw a pane with the palette entries its program set (OSC 4), as fixed colours. Off: a "
+            "palette colour reaches the terminal as its number, and the terminal's theme paints it. "
+            "Lillecarl/pymux#16."
+        ),
+    )
     paint_screen: bool = option(
         False,
         doc=(
