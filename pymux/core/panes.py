@@ -433,10 +433,6 @@ class PaneMaker:
             session.arrangement.remove_pane(pane)
             self.end_if_empty(session)
 
-        # Make sure the right pane is focused for each client.
-        for client_state in self.pymux._client_states.values():
-            client_state.sync_focus()
-
     def end_if_empty(self, session: Session) -> None:
         "A session with no panes left is over. The last one to go stops the server."
         if session in self.pymux.sessions and not session.arrangement.has_panes:
