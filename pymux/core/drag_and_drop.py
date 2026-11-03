@@ -9,7 +9,9 @@ of each move to the pane under it. A pane whose program registered gets
 the move, the drop and the data, at its own cells and under its own
 `i`. Its answers go back up without it. A pane whose program did not
 register is pymux's to serve: pymux takes a file list or text and
-pastes it, as kitty pastes into a window that did not register.
+pastes it, as kitty pastes into a window that did not register. Files
+from another machine are copied here first (`drop_files.RemoteCopy`),
+and their copies' paths pasted.
 
 **Drags.** pymux offers drags while a pane's program does. kitty sends
 the gesture to pymux, and pymux sends it to the pane under it if that
@@ -22,15 +24,14 @@ another machine, over ssh.
 
 from __future__ import annotations
 
-import base64
 import hashlib
 import hmac
 import shlex
 import weakref
 from contextlib import suppress
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, Final
-from urllib.parse import unquote, urlparse
 
 from prompt_toolkit.application.current import set_app
 from ptterm import Terminal
@@ -40,6 +41,7 @@ from pyte.screen import Screen
 from pyte.sequences.kitty_dnd import MACHINE_ID, START_OFFERING, STOP_OFFERING, DndPacket, DndType
 
 from ..log import logger
+from .drop_files import RemoteCopy, decoded, drops_directory, new_drop_root, paths_of
 
 if TYPE_CHECKING:
     from ..connection.client_state import ClientState
@@ -47,11 +49,13 @@ if TYPE_CHECKING:
     from .main import Pymux
     from .pane import Pane
 
-__all__ = ["OWN_TYPES", "DragAndDrop", "decoded", "paths_of", "server_machine_id"]
+__all__ = ["OWN_TYPES", "DragAndDrop", "server_machine_id"]
+
+_URI_LIST: Final = "text/uri-list"
 
 #: The MIME types pymux takes for a pane that did not register, best
 #: first: a file list pastes as paths, text as itself.
-OWN_TYPES: Final = ("text/uri-list", "text/plain;charset=utf-8", "text/plain")
+OWN_TYPES: Final = (_URI_LIST, "text/plain;charset=utf-8", "text/plain")
 
 #: The key kitty hashes a machine id with, as the spec says.
 _MACHINE_ID_KEY: Final = b"tty-dnd-protocol-machine-id"
@@ -81,43 +85,6 @@ def server_machine_id() -> str:
     return "1:" + hmac.new(_MACHINE_ID_KEY, mid, hashlib.sha256).hexdigest()
 
 
-def paths_of(uri_list: str) -> list[str]:
-    "The paths of the file URLs in a text/uri-list, and any other line as it is: kitty's parse_uri_list."
-    found = []
-    for line in uri_list.splitlines():
-        if not line or line.startswith("#"):
-            continue
-        if not line.startswith("file://"):
-            found.append(line)
-            continue
-        try:
-            path = urlparse(line, allow_fragments=False).path
-        except ValueError:
-            found.append(line)
-            continue
-        if path:
-            found.append(unquote(path))
-    return found
-
-
-def decoded(chunks: list[str]) -> bytes:
-    """
-    The data of a chain of base64 chunks. A chunk need not end on a
-    group, and padding is optional at the end of the last; a chunk that
-    ends in padding ends its groups. Raises ValueError.
-    """
-    out: list[bytes] = []
-    carry = ""
-    for chunk in chunks:
-        text = carry + chunk
-        whole = len(text) if text.endswith("=") else len(text) // 4 * 4
-        out.append(base64.b64decode(text[:whole], validate=True))
-        carry = text[whole:]
-    if carry:
-        out.append(base64.b64decode(carry + "=" * (-len(carry) % 4), validate=True))
-    return b"".join(out)
-
-
 def _registration(pane: Pane | None) -> KittyDnd | None:
     "What the program in `pane` registered, or None for a pane with no pyte screen."
     screen = None if pane is None else pane.screen
@@ -139,9 +106,14 @@ class _Drop:
     pending: DndPacket | None = None
     pending_mimes: str = ""
     dropped: bool = False
-    #: pymux's own fetch: the type asked for, and the data so far.
+    #: pymux's own fetch: the type asked for, its index, and the data
+    #: so far; whether the terminal said its files are on another
+    #: machine, and their copy.
     fetching: str = ""
+    index: int = 0
     parts: list[str] = field(default_factory=list)
+    remote: bool = False
+    copy: RemoteCopy | None = None
 
 
 @dataclass
@@ -173,12 +145,15 @@ class DragAndDrop:
         # what they registered, and the next terminal is asked again.
         "_terminals": Keep.DROPPED,
         "_machine_id": Keep.REBUILT,
+        "drops": Keep.REBUILT,
     }
 
     def __init__(self, pymux: Pymux) -> None:
         self.pymux = pymux
         self._terminals: weakref.WeakKeyDictionary[ServerConnection, _Terminal] = weakref.WeakKeyDictionary()
         self._machine_id = server_machine_id()
+        #: Where the copies of drops from another machine go.
+        self.drops: Path = drops_directory()
 
     def _terminal(self, connection: ServerConnection) -> _Terminal:
         state = self._terminals.get(connection)
@@ -392,9 +367,9 @@ class DragAndDrop:
             self._finish_own(connection, _REFUSED)
             return
         drop.fetching = wanted[0]
-        index = drop.mimes.split().index(drop.fetching) + 1
+        drop.index = drop.mimes.split().index(drop.fetching) + 1
         self._send_machine_id(connection, self._terminal(connection), self._machine_id)
-        self._send(connection, DndPacket(DndType.REQUEST, cell_x=index))
+        self._send(connection, DndPacket(DndType.REQUEST, cell_x=drop.index))
 
     def _finish_own(self, connection: ServerConnection, operation: int) -> None:
         self._send(connection, DndPacket(DndType.REQUEST, operation=operation))
@@ -408,12 +383,19 @@ class DragAndDrop:
         if drop.relayed:
             self._tell_drop_pane(drop.pane, packet)
             return
+        if drop.copy is not None:
+            for request in drop.copy.took(packet):
+                self._send(connection, request)
+            self._copied(connection, drop)
+            return
         if not drop.fetching:
             return
         if packet.type == DndType.REQUEST_ERROR:
             logger.info("The terminal of client %s gave no drop data: %s.", connection.client_id, packet.payload)
             self._finish_own(connection, _REFUSED)
             return
+        # On a file list, X=1 says its files are on another machine.
+        drop.remote = drop.remote or packet.pixel_x == 1
         drop.parts.append(packet.payload)
         if packet.more or packet.payload:
             return
@@ -423,11 +405,37 @@ class DragAndDrop:
             logger.warning("Dropped a drop whose data is not base64.")
             self._finish_own(connection, _REFUSED)
             return
+        if drop.fetching == _URI_LIST and drop.remote:
+            self._copy(connection, drop, text)
+            return
         pane, fetching = drop.pane, drop.fetching
         self._finish_own(connection, _COPY)
-        if fetching == "text/uri-list":
+        if fetching == _URI_LIST:
             text = " ".join(shlex.quote(path) for path in paths_of(text))
         self._paste(connection, pane, text)
+
+    def _copy(self, connection: ServerConnection, drop: _Drop, uri_list: str) -> None:
+        "Files from another machine: pull each into a directory here, and paste their paths there."
+        drop.copy = RemoteCopy(new_drop_root(self.drops), drop.index, uri_list)
+        try:
+            requests = drop.copy.start()
+        except OSError as error:
+            logger.warning("No place for a drop from another machine: %s.", error)
+            self._finish_own(connection, _REFUSED)
+            return
+        for request in requests:
+            self._send(connection, request)
+        self._copied(connection, drop)
+
+    def _copied(self, connection: ServerConnection, drop: _Drop) -> None:
+        "Paste a copy that ended, or end the drop if it failed."
+        copy = drop.copy
+        if copy is None or not copy.done:
+            return
+        pasted = copy.pasted
+        self._finish_own(connection, _COPY if pasted else _REFUSED)
+        if pasted and drop.pane is not None:
+            self._paste(connection, drop.pane, " ".join(shlex.quote(path) for path in pasted))
 
     def _paste(self, connection: ServerConnection, pane: Pane, text: str) -> None:
         client = connection.client_state

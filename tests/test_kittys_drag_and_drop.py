@@ -16,7 +16,7 @@ from prompt_toolkit.data_structures import Size
 from run_commands import run_as
 from session import once, over_connection
 
-from pymux.core.drag_and_drop import decoded, paths_of
+from pymux.core.drop_files import decoded, paths_of
 from pymux.core.main import Pymux
 
 SIZE = Size(rows=12, columns=60)
