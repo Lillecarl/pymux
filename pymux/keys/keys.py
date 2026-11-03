@@ -121,8 +121,9 @@ _MODIFIED_F3_RE = re.compile(r"^\x1b\[1;([2-8])R\Z")
 #
 # "$" is in there for DECRQM, whose reply is "CSI ? <mode> ; <state> $ y".
 # Without it the parser stops buffering at the "$" and hands the rest
-# out as key presses.
-_KITTY_PREFIX_RE = re.compile(r"^\x1b\[[0-9;:<=>?$]*$")
+# out as key presses. The space after ">" is for kitty's multiple
+# cursors, whose replies end "SP q". Lillecarl/pymux#891.
+_KITTY_PREFIX_RE = re.compile(r"^\x1b\[(?:[0-9;:<=>?$]*|>[0-9;:]* )$")
 
 
 _STRING_PREFIX_RE = re.compile(

@@ -12,6 +12,7 @@ from libpymux.protocol import Field, Packet
 from prompt_toolkit.data_structures import Size
 from ptterm import Terminal
 from pyte import escape
+from pyte.extra_cursors import ExtraShape
 from pyte.keep import Keep
 from pyte.modes import ModeState, PrivateMode
 from pyte.osc import Osc
@@ -25,6 +26,7 @@ from pyte.sequences.reports import (
     ColorSchemeReport,
     CursorPositionReport,
     DeviceAttributes,
+    ExtraCursorsSupport,
     FocusReport,
     InBandSizeReport,
     KeyboardFlagsReport,
@@ -94,6 +96,7 @@ class TerminalReplies:
         "terminal_said": Keep.DROPPED,
         # The next server asks the terminal again.
         "pixel_mouse": Keep.DROPPED,
+        "extra_cursors": Keep.DROPPED,
         "sizes_in_band": Keep.DROPPED,  # the terminal reports again when the mode is set
         "widens_text_emoji": Keep.DROPPED,
         "clusters_drawn": Keep.DROPPED,
@@ -105,6 +108,9 @@ class TerminalReplies:
         #: Whether this client's terminal reports the mouse in pixels.
         #: Lillecarl/pymux#648.
         self.pixel_mouse = False
+        #: Whether this client's terminal draws kitty's extra cursors
+        #: itself, as it answered "CSI > SP q". Lillecarl/pymux#891.
+        self.extra_cursors = False
         #: Whether this client's terminal reports its size in band, DEC
         #: 2048, pixels and all. Lillecarl/pymux#797.
         self.sizes_in_band = False
@@ -224,6 +230,10 @@ class TerminalReplies:
                 # answers.
                 if state in _PIXEL_MOUSE_STATES and self.connection.graphics.cell_size_known:
                     self._turn_on_pixel_mouse()
+            case ExtraCursorsSupport(supported=supported) if ExtraShape.MAIN in supported:
+                self.extra_cursors = True
+                if self.connection.client_state is not None:
+                    self.connection.client_state.app.invalidate()
             case CursorPositionReport(row=row, column=column) if row == EMOJI_WIDTH_ROW:
                 self._emoji_width_answered(column)
             case CursorPositionReport(row=row, column=column) if row in PROBES:

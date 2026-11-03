@@ -82,6 +82,7 @@ class _NoReplies:
     "A terminal that answered nothing, by the rules of `TerminalReplies`."
 
     kitty_source_flags = 0
+    extra_cursors = False
 
     def __init__(self, connection: Connection) -> None:
         self.connection = connection

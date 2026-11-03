@@ -48,6 +48,7 @@ from ..style.colors import DefaultColors
 from ..style.nearest import NEAREST
 from ..style.style import DEFAULT_THEME, theme
 from ..wayland.window_pane import WindowWidget
+from .extra_cursors import Placed, cursors_on_the_client
 from .frame_holds import FrameHolds
 from .lookups import Lookups
 
@@ -478,6 +479,9 @@ class ClientState:
             if self.connection.pointer_shape_sent in RESIZE_SHAPES:
                 self.pymux.terminals.sync_pointer_shape_of(self.connection)
 
+            if self.connection.replies.extra_cursors:
+                self._send_extra_cursors()
+
             graphics = self.connection.graphics
             if not graphics.supported:
                 return
@@ -602,6 +606,43 @@ class ClientState:
         if self.connection is None:
             return DefaultColors()
         return self.connection.default_colors
+
+    def native_extra_cursors_of(self, pane: Pane) -> bool:
+        """
+        Whether this client's terminal draws `pane`'s extra cursors
+        itself: it can, and the pane is the one this client works in.
+        Lillecarl/pymux#891.
+        """
+        return (
+            self.connection is not None
+            and self.connection.replies.extra_cursors
+            and self.pymux.focus.pane_of(self) is pane
+        )
+
+    def _send_extra_cursors(self) -> None:
+        "Tell this client's terminal the focused pane's extra cursors, where this frame drew them."
+        assert self.connection is not None
+        pane = self.pymux.focus.pane_of(self)
+        cursors: frozenset[Placed] = frozenset()
+        extra = None
+        if pane is not None and not self.display_popup:
+            view = next((view for view in self.graphics_views() if view.pane_id == pane.pane_id), None)
+            if view is not None and view.screen is not None:
+                extra = view.screen.extra_cursors
+                cursors = cursors_on_the_client(
+                    view.screen,
+                    view.x,
+                    view.y,
+                    view.width,
+                    view.height,
+                    view.vertical_scroll,
+                    view.horizontal_scroll,
+                    view.covered,
+                )
+        data = self.connection.extra_cursors_sent.update(cursors, extra)
+        if data:
+            self.connection.write_output_raw(data)
+            self.connection.flush_output()
 
     def graphics_views(self) -> list[PaneView]:
         """

@@ -34,6 +34,8 @@ __all__ = ["SURVEY", "Answer", "TerminalAnswers", "readable"]
 #: version, the colours, the keyboard and the graphics already.
 SURVEY = (
     csi(escape.DA, private=Marker.GREATER)
+    # kitty's multiple cursors. Lillecarl/pymux#891.
+    + csi(Csi.DECSCUSR, private=Marker.GREATER)
     + csi(Csi.XTWINOPS, WindowOp.REPORT_TEXT_AREA_PIXELS)
     # The same with a 2: the whole window, and not its text area.
     + csi(Csi.XTWINOPS, WindowOp.REPORT_TEXT_AREA_PIXELS, 2)

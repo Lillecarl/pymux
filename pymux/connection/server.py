@@ -32,6 +32,7 @@ from ..style.colors import ColorDetection, DefaultColors
 from .attach import start_gui
 from .client_io import ClientInput, FrameOutput
 from .clipboard_reads import ClipboardReader
+from .extra_cursors import ExtraCursorsSent
 from .files import Files
 from .pacing import FramePacing
 from .packet_table import PacketTable
@@ -122,6 +123,8 @@ class ServerConnection:
         "default_colors": Keep.REBUILT,
         # Asked again of the terminal the client reattaches from.
         "_pointer_shape_sent": Keep.REBUILT,
+        # A new server clears them with its first frame.
+        "extra_cursors_sent": Keep.REBUILT,
         "_progress_sent": Keep.REBUILT,
         "answers_ping": Keep.REBUILT,
         "can_forward": Keep.REBUILT,
@@ -315,6 +318,10 @@ class ServerConnection:
 
         # The progress this client's terminal was told, the same way.
         self._progress_sent = NO_PROGRESS
+
+        # The extra cursors this client's terminal draws itself.
+        # Lillecarl/pymux#891.
+        self.extra_cursors_sent = ExtraCursorsSent()
 
         self.pymux.serving.serve_connection(self)
 

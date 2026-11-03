@@ -411,6 +411,13 @@ class PaneMaker:
 
         terminal_control.pointer_fraction = pointer_fraction
 
+        def draws_extra_cursors() -> bool:
+            "Whether the client being drawn shows this pane's extra cursors as cells. Lillecarl/pymux#891."
+            client = self.pymux.client_of(get_app())
+            return client is None or not client.native_extra_cursors_of(pane)
+
+        terminal_control.draws_extra_cursors = draws_extra_cursors
+
         return pane
 
     def take_ended_pane(self, pane: Pane) -> None:
