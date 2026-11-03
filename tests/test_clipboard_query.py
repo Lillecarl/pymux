@@ -39,11 +39,15 @@ async def test_the_terminal_answers_with_its_clipboard():
 
 
 async def test_an_empty_clipboard_answers_at_once_with_nothing():
-    "'ESC ] 52 ; c ; BEL' is an answer: no wait, and the terminal is asked again."
+    """
+    'ESC ] 52 ; c ; BEL' is an answer: no wait, and the terminal is asked
+    again. A read that waited out `CLIPBOARD_READ_SECONDS` sets `answers`
+    to False, so the last line says it did not wait, with no deadline
+    that a loaded machine can miss. Lillecarl/pymux#907.
+    """
     terminal = ClipboardTerminal()
     async with attached(terminal) as state:
-        with anyio.fail_after(CLIPBOARD_READ_SECONDS / 2):
-            assert await state.connection.clipboard.read("c") is None
+        assert await state.connection.clipboard.read("c") is None
         assert state.connection.clipboard.answers is True
 
 
