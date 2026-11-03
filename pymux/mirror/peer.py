@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 
     from prompt_toolkit.data_structures import Size
     from pyte.keys.events import KeyProfile
-    from pyte.mouse import MouseAction
+    from pyte.mouse import MouseInput
 
     from ..connection.client_state import ClientState
     from ..core.main import Pymux
@@ -467,12 +467,20 @@ class Peer:
     def paste(self, pane_id: int, text: str) -> None:
         self.send({Field.CMD: Packet.MIRROR_PASTE, Field.PANE_ID: pane_id, Field.DATA: text})
 
-    def mouse(self, pane_id: int, action: MouseAction, column: int, row: int) -> None:
+    def mouse(self, pane_id: int, mouse: MouseInput) -> None:
         self.send(
             {
                 Field.CMD: Packet.MIRROR_MOUSE,
                 Field.PANE_ID: pane_id,
-                Field.MOUSE: {"action": int(action), "column": column, "row": row},
+                Field.MOUSE: {
+                    "action": int(mouse.action),
+                    "column": mouse.column,
+                    "row": mouse.row,
+                    "button": int(mouse.button),
+                    "modifiers": int(mouse.modifiers),
+                    "across": mouse.across,
+                    "down": mouse.down,
+                },
             }
         )
 

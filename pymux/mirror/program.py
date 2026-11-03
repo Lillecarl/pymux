@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     import anyio.abc
     from ptterm.control import TerminalControl
     from pyte.keys.events import KeyProfile
-    from pyte.mouse import MouseAction
+    from pyte.mouse import MouseInput
 
     from ..core.pane import Pane
     from .copying import Place
@@ -148,9 +148,9 @@ class RemoteProgram:
         if not self._stopped:
             self.peer.paste(self.pane_id, text)
 
-    def mouse(self, action: MouseAction, column: int, row: int) -> None:
+    def mouse(self, mouse: MouseInput) -> None:
         if not self._stopped:
-            self.peer.mouse(self.pane_id, action, column, row)
+            self.peer.mouse(self.pane_id, mouse)
 
     def copy_mode(self, at: Place | None = None) -> None:
         "Copy mode runs on the owner, which holds the history (`Mirror.copy_mode`)."

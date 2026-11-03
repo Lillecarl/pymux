@@ -23,7 +23,7 @@ from prompt_toolkit.data_structures import Size
 from ptterm import Terminal
 from pyte.keep import Keep
 from pyte.keys.events import DEFAULT_KEY_PROFILE, KeyProfile
-from pyte.mouse import MouseAction
+from pyte.mouse import MODIFIERS, MouseAction, MouseBits, MouseButton, MouseInput
 from pyte.osc import Osc, color_base_of
 
 from ..connection.packet_table import PacketTable
@@ -382,17 +382,24 @@ class PeerLink:
     @_PACKETS.handles(Packet.MIRROR_MOUSE)
     def _on_mouse(self, packet: Message) -> None:
         source = self._driven(packet)
-        mouse = packet.get(Field.MOUSE) or {}
+        fields = packet.get(Field.MOUSE) or {}
         try:
-            action = MouseAction(int(mouse.get("action", 0)))
-        except ValueError:
+            mouse = MouseInput(
+                MouseAction(int(fields.get("action", 0))),
+                int(fields.get("column", 0)),
+                int(fields.get("row", 0)),
+                MouseButton(int(fields.get("button", MouseButton.LEFT))),
+                MouseBits(int(fields.get("modifiers", 0))) & MODIFIERS,
+                min(max(float(fields.get("across", 0.5)), 0.0), 1.0),
+                min(max(float(fields.get("down", 0.5)), 0.0), 1.0),
+            )
+        except TypeError, ValueError:
             return
         if source is None:
             return
-        column, row = int(mouse.get("column", 0)), int(mouse.get("row", 0))
         if source.copying is not None:
-            source.copying.mouse(action, column, row)
-        elif not source.control.use_mouse(action, column, row) and action is MouseAction.WHEEL_UP:
+            source.copying.mouse(mouse)
+        elif not source.control.use_mouse(mouse) and mouse.action is MouseAction.WHEEL_UP:
             # The wheel a program does not want reads the history, as
             # it does for a client here (`TerminalControl._read_the_history`).
             source.copy(scroll=True)

@@ -28,7 +28,7 @@ from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 from pyte.keys.events import DEFAULT_KEY_PROFILE
-from pyte.mouse import MouseAction
+from pyte.mouse import MouseAction, MouseBits, MouseButton, MouseInput
 from pyte.osc import ColorBase
 from session import Connection
 from test_drag_a_border import DRAG, PRESS, _drawn, _mouse
@@ -816,9 +816,10 @@ async def test_a_chain_of_three_encodes_input_once_on_the_owner(two_servers):
             await until(lambda: links_of(peer) and links_of(peer)[0].peer.sources, "C mirrors B's pane")
 
             last.paste("pasted")
-            last.mouse(MouseAction.PRESS, 3, 1)
+            # The button and the modifiers cross both links. Lillecarl/pymux#900.
+            last.mouse(MouseInput(MouseAction.PRESS, 3, 1, MouseButton.RIGHT, MouseBits.CONTROL))
             await until(lambda: len(typed) >= 2, "C's input reaches A", seen=lambda: typed)
-            assert typed == ["\x1b[200~pasted\x1b[201~", "\x1b[<0;4;2M"]
+            assert typed == ["\x1b[200~pasted\x1b[201~", "\x1b[<18;4;2M"]
 
             last.copy_mode()
             (a_to_b,) = links_of(owner)

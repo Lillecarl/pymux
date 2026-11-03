@@ -404,6 +404,13 @@ class PaneMaker:
         terminal_control.on_mouse_focus = focus_pane_on_click
         terminal_control.placeholder_ids = lambda image_id: self.pymux.outer_image_ids.id_of(pane.pane_id, image_id)
 
+        def pointer_fraction() -> tuple[float, float]:
+            "Where in its cell the mouse event being handled is, by the client it came from."
+            client = self.pymux.client_of(get_app())
+            return (0.5, 0.5) if client is None else client.connection.pointer_fraction
+
+        terminal_control.pointer_fraction = pointer_fraction
+
         return pane
 
     def take_ended_pane(self, pane: Pane) -> None:

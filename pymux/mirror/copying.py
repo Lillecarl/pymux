@@ -26,7 +26,7 @@ from prompt_toolkit.output.vt100 import Vt100_Output
 from prompt_toolkit.selection import SelectionType
 from prompt_toolkit.styles import DynamicStyle
 from ptterm.copy_mode import copy_mode_key_bindings
-from pyte.mouse import MouseAction
+from pyte.mouse import MouseAction, MouseInput
 from pyte.screen import Screen
 from pyte.streams import Stream
 
@@ -205,9 +205,10 @@ class MirrorCopy:
     def paste(self, text: str) -> None:
         self._input.send_text("\x1b[200~" + text + "\x1b[201~")
 
-    def mouse(self, action: MouseAction, column: int, row: int) -> None:
-        report = _SGR_BUTTONS.get(action)
+    def mouse(self, mouse: MouseInput) -> None:
+        "Copy mode reads presses and the wheel; a move selects nothing."
+        report = _SGR_BUTTONS.get(mouse.action)
         if report is None:
             return
         button, end = report
-        self._input.send_text("\x1b[<%d;%d;%d%s" % (button, column + 1, row + 1, end))
+        self._input.send_text("\x1b[<%d;%d;%d%s" % (button, mouse.column + 1, mouse.row + 1, end))
