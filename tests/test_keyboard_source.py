@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 from pyte.keys.events import KeyboardFlag
-from session import Connection
+from session import Client
 
 from pymux.core.main import Pymux
 from pymux.enums import ExtendedKeys
@@ -22,14 +22,12 @@ from pymux.options.options import ALL_SERVER_OPTIONS, SetOptionError
 from pymux.style.style import DEFAULT_THEME
 
 
-class FakeConnection(Connection):
-    "A client connection, with the mask that its detection found."
+class FakeClient(Client):
+    "A client, with the mask that its detection found."
 
     def __init__(self, flags=0):
         super().__init__()
         self.replies.kitty_source_flags = flags
-        # No other server mirrors panes over it.
-        self.peer = None
 
 
 class FakeClientState:
@@ -85,7 +83,7 @@ class FakePane:
 def make_pymux(*masks):
     "A pymux with one attached client for each mask."
     pymux = Pymux()
-    connections = [FakeConnection(mask) for mask in masks]
+    connections = [FakeClient(mask) for mask in masks]
     pymux._client_states = {connection: FakeClientState(pymux.current_session) for connection in connections}
     return pymux, connections
 
@@ -117,14 +115,14 @@ def test_two_clients_report_what_they_share():
 def test_connection_that_never_attached_does_not_count():
     "It runs one command and leaves. No terminal of a user is behind it."
     pymux, _ = make_pymux(0b11111)
-    pymux.connections = [*list(pymux._client_states), FakeConnection(0)]
+    pymux.connections = [*(client.connection for client in pymux._client_states), FakeClient(0).connection]
     assert pymux.terminals.keyboard_source_flags() == 0b11111
 
 
 def test_client_that_leaves_lets_rest_speak():
     pymux, connections = make_pymux(0b11111, 0)
     assert pymux.terminals.keyboard_source_flags() == 0
-    pymux.remove_client(connections[1])
+    pymux.remove_client(connections[1].connection)
     assert pymux.terminals.keyboard_source_flags() == 0b11111
 
 
@@ -135,13 +133,13 @@ def test_temporary_client_does_not_hold_the_mask_back():
     real client down while the command runs. Lillecarl/pymux#420.
     """
     pymux, connections = make_pymux(0b11111)
-    temporary = FakeConnection(0)
+    temporary = FakeClient(0)
     pymux._client_states[temporary] = FakeClientState(pymux.current_session)
     pymux._client_states[temporary].temporary = True
     assert pymux.terminals.keyboard_source_flags() == 0b11111
 
     # And when it leaves, the mask is the same: it never counted.
-    pymux.remove_client(temporary)
+    pymux.remove_client(temporary.connection)
     assert pymux.terminals.keyboard_source_flags() == 0b11111
 
 
@@ -174,7 +172,7 @@ def test_client_that_leaves_raises_mask_of_pane():
     pymux.terminals.sync_keyboard_source_flags()
     assert pane.screen.keyboard_source_flags == 0
 
-    pymux.remove_client(connections[1])
+    pymux.remove_client(connections[1].connection)
     assert pane.screen.keyboard_source_flags == 0b11111
 
 

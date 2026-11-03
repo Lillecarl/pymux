@@ -82,7 +82,7 @@ async def _attach(pymux: Pymux, detach_others: bool = False) -> ServerConnection
     client_end.write_nowait(_start_gui(detach_others))
 
     with anyio.fail_after(5.0):
-        while connection.client_state is None and not connection.closed:
+        while connection.client is None and not connection.closed:
             await anyio.sleep(0.005)
 
     return connection
@@ -110,7 +110,7 @@ async def test_the_client_that_asked_stays():
         second = await _attach(pymux, detach_others=True)
 
         assert not second.closed, "attach -d detached the client that asked"
-        assert second.client_state is not None
+        assert second.client is not None
 
 
 async def test_the_other_clients_go():
@@ -153,13 +153,13 @@ async def test_it_reaches_this_session_and_no_other():
         # a session with no window has nothing to put in it.
         elsewhere = pymux.create_session()
         await pymux.panes.create_window(WAITS, session=elsewhere)
-        pymux.attach_client_to(two.client_state, elsewhere)
+        pymux.attach_client_to(two.client.state, elsewhere)
 
-        was_on = {one: one.client_state.session, two: two.client_state.session}
+        was_on = {one: one.client.state.session, two: two.client.state.session}
         assert was_on[one] is not was_on[two], "this needs two sessions"
 
         taking_over = await _attach(pymux, detach_others=True)
-        taken = taking_over.client_state.session
+        taken = taking_over.client.state.session
         assert taken in was_on.values(), "nobody was on the session taken over"
 
         for connection, session in was_on.items():
@@ -196,15 +196,15 @@ async def test_the_command_detaches_the_others(monkeypatch):
 
         sitting = await _attach(pymux)
         asking = await _attach(pymux)
-        pymux.attach_client_to(sitting.client_state, here)
-        pymux.attach_client_to(asking.client_state, elsewhere)
+        pymux.attach_client_to(sitting.client.state, here)
+        pymux.attach_client_to(asking.client.state, elsewhere)
 
-        with set_app(asking.client_state.app):
+        with set_app(asking.client.state.app):
             pymux.handle_command("attach-session -t here -d")
 
         assert sitting.closed, "attach-session -d left the other client attached"
         assert not asking.closed, "attach-session -d detached the client that asked"
-        assert asking.client_state.session is here
+        assert asking.client.state.session is here
 
 
 async def test_the_command_reaches_this_session_and_no_other():
@@ -215,10 +215,10 @@ async def test_the_command_reaches_this_session_and_no_other():
         sitting = await _attach(pymux)
         watching = await _attach(pymux)
         asking = await _attach(pymux)
-        pymux.attach_client_to(sitting.client_state, here)
-        pymux.attach_client_to(watching.client_state, elsewhere)
+        pymux.attach_client_to(sitting.client.state, here)
+        pymux.attach_client_to(watching.client.state, elsewhere)
 
-        with set_app(asking.client_state.app):
+        with set_app(asking.client.state.app):
             pymux.handle_command("attach-session -t here -d")
 
         assert sitting.closed

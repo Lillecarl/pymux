@@ -538,7 +538,7 @@ class WaylandServer:
         client = self.pymux.client_of(get_app())
         if client is None:
             return (0.5, 0.5)
-        return client.connection.pointer_fraction
+        return client.client.pointer_fraction
 
     def _scrolls_smooth(self) -> bool:
         "Whether the client the scroll came from says `window-scroll smooth`."
@@ -716,7 +716,7 @@ class WaylandServer:
         client = self.pymux.latest_client()
         if client is None:
             return None
-        return await client.connection.clipboard.read(OSC52_LETTER[target])
+        return await client.client.clipboard.read(OSC52_LETTER[target])
 
     def _fallback(self, target: str) -> str:
         "What pymux itself knows was copied last."

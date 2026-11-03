@@ -67,7 +67,7 @@ async def test_a_client_may_not_attach_when_the_server_serves_one_terminal():
         client_end.write_nowait(encode_json(START_GUI))
         said = await _packets(client_end)
 
-        assert connection.client_state is None, "the client attached anyway"
+        assert connection.client is None, "the client attached anyway"
         assert [p["data"] for p in said if p["cmd"] == "out"] == [CANNOT_ATTACH]
         assert connection.closed, "the refused client is still connected"
 
@@ -167,7 +167,7 @@ async def test_an_ordinary_server_lets_a_client_attach():
         client_end.write_nowait(encode_json(START_GUI))
 
         with anyio.fail_after(5.0):
-            while connection.client_state is None:
+            while connection.client is None:
                 await anyio.sleep(0.005)
 
         connection.detach_and_close()

@@ -103,7 +103,7 @@ class StatusLine:
         "Each thing the window list shows, one fragment each."
         result: StyleAndTextTuples = []
 
-        recording = self.client_state.connection.recording
+        recording = self.client_state.client.recording
         if recording is not None:
             result.append(("class:recording", " ● REC %s " % recording.name))
 

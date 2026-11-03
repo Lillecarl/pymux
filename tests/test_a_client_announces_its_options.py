@@ -147,7 +147,7 @@ async def _attached(pymux: Pymux, announced) -> ServerConnection:
     client_end.write_nowait(_start_gui(announced))
 
     with anyio.fail_after(5.0):
-        while connection.client_state is None and not connection.closed:
+        while connection.client is None and not connection.closed:
             await anyio.sleep(0.005)
 
     return connection
@@ -170,7 +170,7 @@ async def a_server():
 
 async def test_the_client_draws_with_what_it_announced():
     async with a_server() as pymux:
-        client = (await _attached(pymux, [["theme", "grey"]])).client_state
+        client = (await _attached(pymux, [["theme", "grey"]])).client.state
 
         assert client.options.theme == "grey"
         assert client.style.get_attrs_for_style_str("class:statusbar").bgcolor == "5f5f87"
@@ -182,7 +182,7 @@ async def test_a_client_that_announces_nothing_starts_on_the_search():
     Lillecarl/pymux#346.
     """
     async with a_server() as pymux:
-        client = (await _attached(pymux, [])).client_state
+        client = (await _attached(pymux, [])).client.state
 
         assert client.options.theme == NEAREST
         assert client.theme_in_use == DEFAULT_THEME
@@ -193,8 +193,8 @@ async def test_two_clients_keep_their_own():
         one = await _attached(pymux, [["theme", "grey"]])
         two = await _attached(pymux, [])
 
-        assert one.client_state.options.theme == "grey"
-        assert two.client_state.options.theme == NEAREST
+        assert one.client.state.options.theme == "grey"
+        assert two.client.state.options.theme == NEAREST
 
 
 async def test_a_bad_value_never_fails_the_attach():
@@ -204,7 +204,7 @@ async def test_a_bad_value_never_fails_the_attach():
     they may not be able to reach.
     """
     async with a_server() as pymux:
-        client = (await _attached(pymux, [["theme", "nosuchtheme"], ["swap-light-and-dark-colors", "on"]])).client_state
+        client = (await _attached(pymux, [["theme", "nosuchtheme"], ["swap-light-and-dark-colors", "on"]])).client.state
 
         assert client is not None, "the attach was refused"
         assert client.options.theme == NEAREST
@@ -244,7 +244,7 @@ def test_a_person_who_types_it_with_nobody_attached_is_told():
 
 async def test_a_name_nobody_offers_never_fails_the_attach():
     async with a_server() as pymux:
-        client = (await _attached(pymux, [["not-an-option", "on"]])).client_state
+        client = (await _attached(pymux, [["not-an-option", "on"]])).client.state
 
         assert client is not None, "the attach was refused"
         assert "not-an-option" in (client.message or "")

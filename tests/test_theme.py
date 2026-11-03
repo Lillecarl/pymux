@@ -35,7 +35,7 @@ from prompt_toolkit.data_structures import Size
 from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
-from session import Connection
+from session import Client
 
 from pymux.answer import Answer
 from pymux.core.main import Pymux
@@ -86,7 +86,7 @@ async def create_client():
             output=output,
             input=pipe,
             color_depth=ColorDepth.DEPTH_8_BIT,
-            connection=Connection("here", None, pymux, "/dev/pts/8"),
+            client=Client("here", None, pymux, "/dev/pts/8"),
         )
         try:
             with set_app(state.app):
@@ -112,7 +112,7 @@ def _another_client(pymux, ttyname="/dev/pts/9"):
             output=output,
             input=pipe,
             color_depth=ColorDepth.DEPTH_8_BIT,
-            connection=Connection("here", None, pymux, ttyname),
+            client=Client("here", None, pymux, ttyname),
         )
 
 
@@ -193,7 +193,7 @@ async def test_the_theme_belongs_to_one_client():
     async with create_client() as (pymux, one):
         two = _another_client(pymux)
 
-        pymux.handle_command("set-client-option -t %s theme grey" % (two.connection.name,))
+        pymux.handle_command("set-client-option -t %s theme grey" % (two.client.connection.name,))
 
         assert bar_of(one.app) == "ansigreen"
         assert bar_of(two.app) == "5f5f87"
@@ -202,7 +202,7 @@ async def test_the_theme_belongs_to_one_client():
 async def test_a_client_says_what_its_own_theme_is():
     async with create_client() as (pymux, one):
         two = _another_client(pymux)
-        here, there = one.connection.name, two.connection.name
+        here, there = one.client.connection.name, two.client.connection.name
         pymux.handle_command("set-client-option -t %s theme grey" % (there,))
 
         assert _said(pymux, "show-client-options -t %s theme" % (there,)) == "grey"

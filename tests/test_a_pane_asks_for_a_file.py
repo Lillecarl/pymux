@@ -300,16 +300,16 @@ async def test_a_stopped_receive_withdraws_its_request():
     sent: list[dict] = []
     async with over_connection(read_packet=sent.append) as session:
         state, _ = await session.attach("asked", SIZE, forwards=True)
-        connection = state.connection
-        upload = connection.files.ask_for(["x"], "%1")
+        connection = state.client.connection
+        upload = connection.client.files.ask_for(["x"], "%1")
         with anyio.move_on_after(0.1):
-            await wait_for_files(session.pymux, connection, upload, Path("/"))
+            await wait_for_files(session.pymux, connection.client, upload, Path("/"))
         await once(
             lambda: any(packet["cmd"] == Packet.FILES_WITHDRAWN for packet in sent),
             10.0,
             lambda: "the server never withdrew the request; it sent %r" % ([packet["cmd"] for packet in sent],),
         )
-        assert upload.request not in connection.files.uploads
+        assert upload.request not in connection.client.files.uploads
 
 
 def test_the_keyboard_flags_are_off_while_it_asks(home, config):
@@ -446,22 +446,22 @@ async def test_the_client_answers_a_listing_without_asking(home, config):
 async def test_the_server_waits_for_a_listing_then_gives_up():
     async with over_connection() as session:
         state, _ = await session.attach("listed", SIZE, forwards=True)
-        connection = state.connection
+        connection = state.client.connection
 
         async def answer_soon() -> None:
-            await once(lambda: connection.files.listings, 10.0, lambda: "never asked")
-            [request] = connection.files.listings
+            await once(lambda: connection.client.files.listings, 10.0, lambda: "never asked")
+            [request] = connection.client.files.listings
             connection._process({Field.CMD: Packet.FILES_LISTED, Field.REQUEST: request, Field.PATHS: ["a/", "b"]})
 
         async with anyio.create_task_group() as tasks:
             tasks.start_soon(answer_soon)
-            assert await connection.files.names_in("~") == ["a/", "b"]
-        assert connection.files.listings == {}
+            assert await connection.client.files.names_in("~") == ["a/", "b"]
+        assert connection.client.files.listings == {}
 
         # Nobody answers this one.
         with anyio.fail_after(LIST_SECONDS + 5):
-            assert await connection.files.names_in("~") == []
-        assert connection.files.listings == {}
+            assert await connection.client.files.names_in("~") == []
+        assert connection.client.files.listings == {}
 
 
 def test_upload_paths_takes_several(home):
@@ -595,8 +595,8 @@ async def test_a_client_too_old_to_send_a_file_is_refused():
 async def test_the_request_ends_when_the_client_goes():
     async with over_connection() as session:
         state, _ = await session.attach("going", SIZE, forwards=True)
-        connection = state.connection
-        upload = connection.files.ask_for(["x"], "%1")
+        connection = state.client.connection
+        upload = connection.client.files.ask_for(["x"], "%1")
         await session.detach(state)
         with anyio.fail_after(10):
             [why] = await receive_into(upload, Path("/"), lambda _text: None)
@@ -626,8 +626,8 @@ async def test_pymux_receive_gets_a_file_from_the_client(tmp_path, home, config)
 
     async with over_connection(pymux=pymux, read_packet=read_packet) as session:
         state, _ = await session.attach("remote", SIZE, forwards=True)
-        state.connection.sends_files = True
-        connection_of.append(state.connection)
+        state.client.sends_files = True
+        connection_of.append(state.client.connection)
         async with anyio.create_task_group() as tasks:
             client.tasks = tasks
             with set_app(state.app):
@@ -692,8 +692,8 @@ async def test_a_shell_in_a_pane_completes_the_persons_paths(tmp_path, home, con
     )
     async with over_connection(pymux=pymux, read_packet=read_packet) as session:
         state, _ = await session.attach("remote", SIZE, forwards=True)
-        state.connection.sends_files = True
-        connection_of.append(state.connection)
+        state.client.sends_files = True
+        connection_of.append(state.client.connection)
         async with anyio.create_task_group() as tasks:
             client.tasks = tasks
             with set_app(state.app):

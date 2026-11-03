@@ -53,7 +53,7 @@ async def test_the_server_keeps_the_hostname_of_its_client():
     async with over_connection() as session:
         state, _size = await session.attach("the client", SIZE)
 
-        assert state.connection.hostname == OTHER_MACHINE
+        assert state.client.hostname == OTHER_MACHINE
 
 
 async def test_each_client_keeps_its_own():
@@ -62,8 +62,8 @@ async def test_each_client_keeps_its_own():
         here, _ = await session.attach("here", SIZE, hostname="workstation")
         there, _ = await session.attach("there", SIZE, hostname="buildbox-7")
 
-        assert here.connection.hostname == "workstation"
-        assert there.connection.hostname == "buildbox-7"
+        assert here.client.hostname == "workstation"
+        assert there.client.hostname == "buildbox-7"
 
 
 async def test_the_other_route_says_it_too():
@@ -71,4 +71,4 @@ async def test_the_other_route_says_it_too():
     async with in_this_process() as session:
         state, _ = await session.attach("only", SIZE, hostname="workstation")
 
-        assert state.connection.hostname == "workstation"
+        assert state.client.hostname == "workstation"

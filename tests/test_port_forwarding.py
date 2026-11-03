@@ -1453,7 +1453,7 @@ async def test_a_client_on_a_socket_cannot_forward():
 async def test_a_spelling_that_cannot_be_read_says_so():
     async with over_connection() as session:
         await session.attach("the client", SIZE)
-        session.pymux.clients[0].connection.can_forward = True
+        session.pymux.clients[0].client.can_forward = True
 
         said = await _errors_of(session, "forward-port -L nonsense")
 
@@ -1479,7 +1479,7 @@ async def test_the_request_reaches_the_client_that_asked():
 
     async with over_connection(read_packet=seen.append) as session:
         await session.attach("the client", SIZE)
-        session.pymux.clients[0].connection.can_forward = True
+        session.pymux.clients[0].client.can_forward = True
 
         with as_the_person(session):
             session.pymux.handle_command("forward-port -L 8080:localhost:3000")
@@ -1518,9 +1518,9 @@ async def test_the_listing_asks_for_a_fresh_table_and_shows_the_time_left():
 
     async with over_connection(read_packet=answer) as session:
         await session.attach("the client", SIZE)
-        connection = session.pymux.clients[0].connection
-        connection.can_forward = connection.answers_forwards = True
-        connection.forwards = [{**_URL_FORWARD, "port": 8080, "left": 900.0}]
+        connection = session.pymux.clients[0].client.connection
+        connection.client.can_forward = connection.client.answers_forwards = True
+        connection.client.forwards = [{**_URL_FORWARD, "port": 8080, "left": 900.0}]
         answering.append(connection)
 
         session.pymux.answer = Answer()
@@ -1535,9 +1535,9 @@ async def test_the_listing_draws_the_last_copy_when_nobody_answers(monkeypatch):
     monkeypatch.setattr(list_forwards_command, "FRESH_SECONDS", 0.1)
     async with over_connection() as session:
         await session.attach("the client", SIZE)
-        connection = session.pymux.clients[0].connection
-        connection.can_forward = connection.answers_forwards = True
-        connection.forwards = [{**_URL_FORWARD, "port": 8080, "left": 12.0}]
+        connection = session.pymux.clients[0].client.connection
+        connection.client.can_forward = connection.client.answers_forwards = True
+        connection.client.forwards = [{**_URL_FORWARD, "port": 8080, "left": 12.0}]
 
         session.pymux.answer = Answer()
         session.pymux.handle_command("list-forwards")
@@ -1551,8 +1551,8 @@ async def test_a_listing_after_an_unanswered_one_asks_again(monkeypatch):
     seen = []
     async with over_connection(read_packet=seen.append) as session:
         await session.attach("the client", SIZE)
-        connection = session.pymux.clients[0].connection
-        connection.can_forward = connection.answers_forwards = True
+        connection = session.pymux.clients[0].client.connection
+        connection.client.can_forward = connection.client.answers_forwards = True
 
         for _ in range(2):
             session.pymux.answer = Answer()
@@ -1581,7 +1581,7 @@ async def test_removing_asks_by_the_listening_end_alone():
 
     async with over_connection(read_packet=seen.append) as session:
         await session.attach("the client", SIZE)
-        session.pymux.clients[0].connection.can_forward = True
+        session.pymux.clients[0].client.can_forward = True
 
         session.pymux.handle_command("unforward-port -R 9222")
 
@@ -1608,9 +1608,9 @@ async def test_the_listing_reads_what_the_client_reported():
     """
     async with over_connection() as session:
         await session.attach("the client", SIZE)
-        connection = session.pymux.clients[0].connection
-        connection.can_forward = True
-        connection.forwards = [
+        connection = session.pymux.clients[0].client.connection
+        connection.client.can_forward = True
+        connection.client.forwards = [
             {
                 "direction": "local",
                 "listen_host": "localhost",
@@ -1642,9 +1642,9 @@ async def test_the_listing_marks_a_forward_pymux_made():
     """
     async with over_connection() as session:
         await session.attach("the client", SIZE)
-        connection = session.pymux.clients[0].connection
-        connection.can_forward = True
-        connection.forwards = [
+        connection = session.pymux.clients[0].client.connection
+        connection.client.can_forward = True
+        connection.client.forwards = [
             {
                 "direction": "local",
                 "listen_host": "localhost",
@@ -1692,7 +1692,7 @@ def _open_requests(seen: list) -> list:
 async def _opened(session, seen, url=LOOPBACK_URL, can_forward=True) -> dict:
     "Ask the session to open a URL, and read the packet the client got."
     await session.attach("the client", SIZE)
-    session.pymux.clients[0].connection.can_forward = can_forward
+    session.pymux.clients[0].client.can_forward = can_forward
 
     session.pymux.handle_command("open-url %s" % (url,))
 
@@ -1783,7 +1783,7 @@ async def test_the_question_names_the_port_it_would_bind():
     """
     async with over_connection() as session:
         await session.attach("the client", SIZE)
-        session.pymux.clients[0].connection.can_forward = True
+        session.pymux.clients[0].client.can_forward = True
         session.pymux.handle_command("set-option -g open-url-mode ask")
 
         session.pymux.handle_command("open-url %s" % (LOOPBACK_URL,))
@@ -1800,7 +1800,7 @@ async def test_asking_about_forwards_asks_about_a_url_that_brings_one():
     """
     async with over_connection() as session:
         await session.attach("the client", SIZE)
-        session.pymux.clients[0].connection.can_forward = True
+        session.pymux.clients[0].client.can_forward = True
         session.pymux.handle_command("set-option -g forward-mode ask")
 
         session.pymux.handle_command("open-url %s" % (LOOPBACK_URL,))
@@ -1825,7 +1825,7 @@ async def test_answering_yes_opens_it_with_the_forward():
 
     async with over_connection(read_packet=seen.append) as session:
         await session.attach("the client", SIZE)
-        session.pymux.clients[0].connection.can_forward = True
+        session.pymux.clients[0].client.can_forward = True
         session.pymux.handle_command("set-option -g forward-mode ask")
 
         session.pymux.handle_command("open-url %s" % (LOOPBACK_URL,))
@@ -1880,7 +1880,7 @@ async def test_a_person_forwarding_loopback_is_not_asked():
 
     async with over_connection(read_packet=seen.append) as session:
         await session.attach("the client", SIZE)
-        session.pymux.clients[0].connection.can_forward = True
+        session.pymux.clients[0].client.can_forward = True
 
         with as_the_person(session):
             session.pymux.handle_command("forward-port -L 8080:localhost:3000")
@@ -1901,7 +1901,7 @@ async def test_binding_off_loopback_is_asked_even_when_the_mode_is_on():
     """
     async with over_connection() as session:
         await session.attach("the client", SIZE)
-        session.pymux.clients[0].connection.can_forward = True
+        session.pymux.clients[0].client.can_forward = True
 
         with as_the_person(session):
             session.pymux.handle_command("forward-port -R 0.0.0.0:2222:localhost:22")
@@ -1927,7 +1927,7 @@ async def test_a_pane_is_asked_although_a_person_would_not_be():
     """
     async with over_connection() as session:
         await session.attach("the client", SIZE)
-        session.pymux.clients[0].connection.can_forward = True
+        session.pymux.clients[0].client.can_forward = True
 
         await session.command("forward-port -L 8080:localhost:3000")
 
@@ -1946,7 +1946,7 @@ async def test_answering_yes_forwards_it():
 
     async with over_connection(read_packet=seen.append) as session:
         await session.attach("the client", SIZE)
-        session.pymux.clients[0].connection.can_forward = True
+        session.pymux.clients[0].client.can_forward = True
 
         await session.command("forward-port -L 8080:localhost:3000")
         await once(
@@ -1981,7 +1981,7 @@ async def test_a_pane_cannot_confirm_its_own_request():
     """
     async with over_connection() as session:
         await session.attach("the client", SIZE)
-        session.pymux.clients[0].connection.can_forward = True
+        session.pymux.clients[0].client.can_forward = True
 
         await session.command("forward-port -c -L 8080:localhost:3000")
 
@@ -1996,7 +1996,7 @@ async def test_a_pane_cannot_confirm_its_own_request():
 async def test_the_mode_can_ask_for_everything():
     async with over_connection() as session:
         await session.attach("the client", SIZE)
-        session.pymux.clients[0].connection.can_forward = True
+        session.pymux.clients[0].client.can_forward = True
         session.pymux.handle_command("set-option -g forward-mode ask")
 
         with as_the_person(session):
@@ -2012,7 +2012,7 @@ async def test_the_mode_can_refuse_everything():
     """
     async with over_connection() as session:
         await session.attach("the client", SIZE)
-        session.pymux.clients[0].connection.can_forward = True
+        session.pymux.clients[0].client.can_forward = True
         session.pymux.handle_command("set-option -g forward-mode off")
 
         said = await _errors_of(session, "forward-port -L 8080:localhost:3000")
@@ -2027,7 +2027,7 @@ async def test_removing_a_forward_is_never_asked():
 
     async with over_connection(read_packet=seen.append) as session:
         await session.attach("the client", SIZE)
-        session.pymux.clients[0].connection.can_forward = True
+        session.pymux.clients[0].client.can_forward = True
         session.pymux.handle_command("set-option -g forward-mode ask")
 
         session.pymux.handle_command("unforward-port -L 8080")

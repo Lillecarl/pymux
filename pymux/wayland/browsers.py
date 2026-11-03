@@ -95,8 +95,8 @@ class Browsers:
         client_state = self.pymux.latest_client()
         if client_state is None:
             raise BrowserRefused("nobody is attached to open a browser for")
-        connection = client_state.connection
-        if not connection.starts_browsers:
+        client = client_state.client
+        if not client.starts_browsers:
             raise BrowserRefused("the client in use cannot start a browser; update pymux there")
 
         launch = Launch(secrets.token_hex(8), client_state, arguments, pane_label)
@@ -116,7 +116,7 @@ class Browsers:
                 raise BrowserRefused("the person said no")
 
             launch.port = free_port()
-            connection.send_packet(
+            client.connection.send_packet(
                 {
                     Field.CMD: Packet.BROWSER,
                     Field.BROWSER: launch.launch_id,
@@ -176,9 +176,10 @@ class Browsers:
         launch = self.launches.get(launch_id)
         if launch is None:
             return
-        connection = launch.client_state.connection
-        if connection is not None and launch.port:
-            connection.send_packet({Field.CMD: Packet.BROWSER_STOP, Field.BROWSER: launch_id})
+        if launch.port:
+            launch.client_state.client.connection.send_packet(
+                {Field.CMD: Packet.BROWSER_STOP, Field.BROWSER: launch_id}
+            )
         self.ended(launch_id)
 
     def client_gone(self, client_state: ClientState) -> None:

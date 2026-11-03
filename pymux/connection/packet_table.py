@@ -32,8 +32,10 @@ class PacketTable[T]:
 
         return register
 
-    def handle(self, owner: T, packet: Message) -> None:
-        "Hand the packet to the method for its kind. A kind with none is dropped."
+    def handle(self, owner: T, packet: Message) -> bool:
+        "Hand the packet to the method for its kind, and say whether one took it."
         handler = self._by_kind.get(packet.get(Field.CMD, ""))
-        if handler is not None:
-            handler(owner, packet)
+        if handler is None:
+            return False
+        handler(owner, packet)
+        return True

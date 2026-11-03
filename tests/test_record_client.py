@@ -42,9 +42,9 @@ async def recorded(pymux, tmp_path, monkeypatch, then=(), resize=False) -> tuple
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
         connection = pymux.connections[-1]
-        with set_app(connection.client_state.app):
+        with set_app(connection.client.state.app):
             pymux.handle_command("record-client -i 0.5 probe")
-        assert connection.recording is not None
+        assert connection.client.recording is not None
         await shows(session, "REC probe")
 
         if resize:
@@ -56,14 +56,14 @@ async def recorded(pymux, tmp_path, monkeypatch, then=(), resize=False) -> tuple
         # The status line changes when the recording ends.
         shown = rows_of(session)[:-1]
 
-        with set_app(connection.client_state.app):
+        with set_app(connection.client.state.app):
             pymux.handle_command("record-client")
-        assert connection.recording is None
+        assert connection.client.recording is None
         await shows(session, "Recorded")
 
         directory = tmp_path / "pymux" / "recordings"
         for command, writes in then:
-            with set_app(connection.client_state.app):
+            with set_app(connection.client.state.app):
                 pymux.handle_command(command)
             await once(lambda writes=writes: (directory / writes).exists(), 10.0, "%s wrote nothing" % command)
     return json.loads((directory / "probe.session.json").read_text()), shown
@@ -93,7 +93,7 @@ async def test_a_client_that_detaches_writes_its_recording(pymux, tmp_path, monk
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
         connection = pymux.connections[-1]
-        with set_app(connection.client_state.app):
+        with set_app(connection.client.state.app):
             pymux.handle_command("record-client gone")
         await shows(session, "REC gone")
         connection.detach_and_close()

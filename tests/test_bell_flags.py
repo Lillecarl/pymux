@@ -94,7 +94,7 @@ def test_a_client_that_lands_on_the_window_clears_its_flags():
 async def test_a_shell_that_rings_in_another_window_shows_in_the_status_line(pymux):
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
-        client = pymux.connections[-1].client_state
+        client = pymux.connections[-1].client.state
         app = client.app
         windows = client.session.arrangement.windows
         (first,) = windows

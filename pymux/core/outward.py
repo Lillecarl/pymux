@@ -171,7 +171,7 @@ class Outward:
                 # that was taken here moves the URL, and a message from
                 # this side would name the address that did not work.
                 packet[Field.FORWARD] = forward
-            client_state.connection.send_packet(packet)
+            client_state.client.connection.send_packet(packet)
 
     def url_forward(self, url: str, client_state: ClientState) -> dict[str, Any] | None:
         """
@@ -183,7 +183,7 @@ class Outward:
         address means "the machine the server runs on" and the browser
         is somewhere else. Lillecarl/pymux#437.
         """
-        if not client_state.connection.can_forward:
+        if not client_state.client.can_forward:
             return None
         options = self.pymux.current_session.options
         if not options.open_url_forward:
@@ -374,14 +374,12 @@ class Outward:
             # finished. Only OSC 99 to a terminal that shows OSC 99 goes
             # as it came: chunks, buttons, closes and all.
             # Lillecarl/pymux#497.
-            for connection in self.pymux._client_states:
-                # No connection is a socket command's temporary
-                # client: nothing to send to. Lillecarl/pymux#493.
-                if connection is None or code in (Osc.SIMPLE_NOTIFICATION, Osc.MESSAGE):
+            for client in self.pymux._client_states:
+                if code in (Osc.SIMPLE_NOTIFICATION, Osc.MESSAGE):
                     continue
-                if code == Osc.NOTIFICATION and connection.replies.notification_osc is not Osc.NOTIFICATION:
+                if code == Osc.NOTIFICATION and client.replies.notification_osc is not Osc.NOTIFICATION:
                     continue
-                connection.forward_osc(sequence)
+                client.forward_osc(sequence)
 
             # **The escape travels with the next frame, so there has to
             # be one.** A pane that writes wakes the clients watching
@@ -620,12 +618,12 @@ class Outward:
             return
         # Only `SshClient` says it can forward, so this is the fact that
         # the client came over SSH.
-        terminal_saves = client.connection.replies.identity.saves_downloads
-        route = route_of(client.options.file_transfer, client.connection.can_forward, terminal_saves)
+        terminal_saves = client.client.replies.identity.saves_downloads
+        route = route_of(client.options.file_transfer, client.client.can_forward, terminal_saves)
         refused = None
         if route is FileTransfer.PASSTHROUGH and not terminal_saves:
             refused = "file-transfer is passthrough, and this terminal saves no iTerm2 download"
-        elif route is FileTransfer.PYMUX and not client.connection.saves_files:
+        elif route is FileTransfer.PYMUX and not client.client.saves_files:
             refused = "this pymux client is too old to save one; start a new one"
         if refused is not None:
             message = "Did not send %s: %s." % (download.name, refused)
@@ -635,12 +633,12 @@ class Outward:
             return
         if route is FileTransfer.PASSTHROUGH:
             for sequence in sequences_of(download):
-                client.connection.forward_osc(sequence)
+                client.client.forward_osc(sequence)
             # The sequences go behind a frame, so there has to be one.
             self.pymux.invalidate(Woke.PANE_WROTE_AN_OSC)
             return
         for packet in file_packets(download):
-            client.connection.send_packet(packet)
+            client.client.connection.send_packet(packet)
 
     def copied_in_copy_mode(self, text: str) -> None:
         """
@@ -690,13 +688,9 @@ class Outward:
                 # megabyte gets nothing, and has to know why.
                 logger.warning("The copy is too long for the clipboard.")
                 return
-            connections = list(self.pymux._client_states) if client is None else [client.connection]
-            for connection in connections:
-                # No connection is a socket command's temporary
-                # client: nothing to send to. Lillecarl/pymux#493.
-                if connection is None:
-                    continue
-                connection.forward_osc(sequence)
+            clients = list(self.pymux._client_states) if client is None else [client.client]
+            for one in clients:
+                one.forward_osc(sequence)
             # The copy travels with the next frame, so there has to be
             # one. Copy mode's key press draws anyway; a pane's wl-copy
             # draws nothing, and its copy would wait for some other

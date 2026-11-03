@@ -350,8 +350,8 @@ async def _through_the_client(tmp_path: Path, config: Path, command: str, answer
 
     async with over_connection(pymux=pymux, read_packet=read_packet) as session:
         state, _ = await session.attach("remote", SIZE, forwards=True)
-        state.connection.answers_transfers = True
-        connection_of.append(state.connection)
+        state.client.answers_transfers = True
+        connection_of.append(state.client.connection)
         async with anyio.create_task_group() as tasks:
             client.tasks = tasks
             with set_app(state.app):

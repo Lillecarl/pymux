@@ -36,7 +36,7 @@ from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 from pyte.colors import parse_color
 from run_commands import run
-from session import Connection
+from session import Client
 
 from pymux.core.main import Pymux
 from pymux.layout.cut_shade import hex_of
@@ -64,7 +64,7 @@ async def create_client(commands=(), rows=ROWS, columns=COLUMNS):
                 output=output,
                 input=pipe,
                 color_depth=ColorDepth.DEPTH_8_BIT,
-                connection=Connection(),
+                client=Client(),
             )
             try:
                 with set_app(state.app):
@@ -205,7 +205,7 @@ async def test_the_shade_moves_the_terminals_own_background():
     Lillecarl/pymux#352.
     """
     async with create_client([*STRIP, PAINT_SCREEN_OFF]) as (pymux, state, draw):
-        state.connection.default_colors.background = parse_color("#404040")
+        state.client.default_colors.background = parse_color("#404040")
         await create_wide_column(pymux, state)
 
         assert backgrounds(state, draw())[COLUMNS - 1] == at_the_edge(pymux, "#404040")

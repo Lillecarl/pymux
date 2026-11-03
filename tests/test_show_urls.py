@@ -28,7 +28,7 @@ def test_the_labels_are_foots():
 
 
 async def labelled(pymux, session, copying=False):
-    with set_app(pymux.connections[-1].client_state.app):
+    with set_app(pymux.connections[-1].client.state.app):
         pane = pymux.arrangement.get_active_pane()
     pane.terminal.terminal_control.feed_output(LINKS)
     await shows(session, "b.io/second")
@@ -64,7 +64,7 @@ async def test_the_labels_show_over_a_pane_beside_another(pymux):
     """
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
-        client_state = pymux.connections[-1].client_state
+        client_state = pymux.connections[-1].client.state
         with set_app(client_state.app):
             pymux.handle_command("set-option pane-border-status on")
             pymux.handle_command("set-option paint-screen on")

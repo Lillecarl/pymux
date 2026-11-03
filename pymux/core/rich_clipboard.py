@@ -62,8 +62,8 @@ from ..mirror.program import RemoteProgram
 from ..notify.osc import build_osc
 
 if TYPE_CHECKING:
+    from ..connection.client import ClientRole
     from ..connection.client_state import ClientState
-    from ..connection.server import ServerConnection
     from ..mirror.link import PeerLink
     from ..mirror.peer import Peer
     from .main import Pymux
@@ -117,7 +117,7 @@ def wants_paste_events(pane: Pane | None) -> bool:
 class _Reading:
     "A read pymux sent a terminal under its own id."
 
-    connection: ServerConnection
+    client: ClientRole | None
     started: float
     #: The pane whose read this is, and its id; None for pymux's own
     #: read of a paste event's text.
@@ -129,7 +129,7 @@ class _Reading:
     paste_into: Pane | None = None
     parts: list[bytes] = field(default_factory=list)
     #: At the owner, the peer whose terminal answers the pane's read in
-    #: place of `connection`'s.
+    #: place of `client`'s.
     link: PeerLink | None = None
     #: At a peer, the owner whose pane asked, and the owner's id of the read.
     owner: Peer | None = None
@@ -139,7 +139,7 @@ class _Reading:
         "Whether the terminal that would answer is gone."
         if self.link is not None:
             return self.link.connection.closed
-        return self.connection not in pymux._client_states
+        return self.client not in pymux._client_states
 
 
 @dataclass
@@ -191,19 +191,19 @@ class RichClipboard:
         #: The reads sent to terminals, by pymux's id.
         self._reads: dict[str, _Reading] = {}
         #: The paste event each terminal is in the middle of.
-        self._events: weakref.WeakKeyDictionary[ServerConnection, _PasteEvent] = weakref.WeakKeyDictionary()
+        self._events: weakref.WeakKeyDictionary[ClientRole, _PasteEvent] = weakref.WeakKeyDictionary()
         #: The terminal each recent paste event password came from.
-        self._passwords: dict[str, ServerConnection] = {}
+        self._passwords: dict[str, ClientRole] = {}
         #: The peer each recent paste event password of a mirrored pane came from.
         self._peer_passwords: dict[str, PeerLink] = {}
         #: The terminals told to send paste events.
-        self._events_on: weakref.WeakSet[ServerConnection] = weakref.WeakSet()
+        self._events_on: weakref.WeakSet[ClientRole] = weakref.WeakSet()
 
     def _new_id(self) -> str:
         return _OUR_IDS + str(next(self._ids))
 
-    def _send(self, connection: ServerConnection, packet: ClipboardPacket) -> None:
-        connection.forward_osc(str(packet))
+    def _send(self, client: ClientRole, packet: ClipboardPacket) -> None:
+        client.forward_osc(str(packet))
         self.pymux.invalidate(Woke.CLIPBOARD_ASKED)
 
     def asked(self, pane: Pane, request: ClipboardRequest) -> None:
@@ -258,15 +258,12 @@ class RichClipboard:
             fifty_two = build_osc(Osc.CLIPBOARD, param)
         for link in self.pymux.peer_links():
             link.pane_wrote(pane, write, param)
-        for connection in self.pymux._client_states:
-            # No connection is a socket command's temporary client.
-            if connection is None:
-                continue
-            if connection.replies.kitty_clipboard:
+        for client in self.pymux._client_states:
+            if client.replies.kitty_clipboard:
                 for packet in five:
-                    connection.forward_osc(packet)
+                    client.forward_osc(packet)
             elif fifty_two is not None:
-                connection.forward_osc(fifty_two)
+                client.forward_osc(fifty_two)
         self.pymux.invalidate(Woke.CLIPBOARD_WRITTEN)
 
     def _packets(self, write: ClipboardWrite) -> list[str]:
@@ -298,20 +295,19 @@ class RichClipboard:
         if self.pymux.options.set_clipboard is Clipboard.OFF:
             self._answer(pane, answer_to(read, Status.EPERM))
             return
-        connection = self._passwords.get(read.password) if read.password else None
+        client = self._passwords.get(read.password) if read.password else None
         link = self._peer_passwords.get(read.password) if read.password else None
         if link is not None:
-            connection = link.connection
-        if connection is None:
-            client = self.pymux.outward.download_client(pane)
-            link = self.pymux.outward.peer_used_after(pane, client, PEER_RICH_CLIPBOARD)
-            connection = link.connection if link is not None else None if client is None else client.connection
+            client = None
+        if client is None and link is None:
+            client_state = self.pymux.outward.download_client(pane)
+            link = self.pymux.outward.peer_used_after(pane, client_state, PEER_RICH_CLIPBOARD)
+            client = None if link is not None or client_state is None else client_state.client
         if link is None and (
-            connection is None or connection not in self.pymux._client_states or not connection.replies.kitty_clipboard
+            client is None or client not in self.pymux._client_states or not client.replies.kitty_clipboard
         ):
             self._answer(pane, answer_to(read, Status.EPERM))
             return
-        assert connection is not None
         now = time.monotonic()
         for our_id, reading in list(self._reads.items()):
             if now - reading.started > READ_PATIENCE or reading.gone(self.pymux):
@@ -322,7 +318,7 @@ class RichClipboard:
             self._answer(pane, answer_to(read, Status.EBUSY))
             return
         our_id = self._new_id()
-        self._reads[our_id] = _Reading(connection, now, pane=pane, pane_id=read.id, link=link)
+        self._reads[our_id] = _Reading(client, now, pane=pane, pane_id=read.id, link=link)
         packet = ClipboardPacket(
             PacketType.READ,
             id=our_id,
@@ -333,8 +329,8 @@ class RichClipboard:
         )
         if link is not None:
             link.pane_reads(pane, str(packet))
-        else:
-            self._send(connection, packet)
+        elif client is not None:
+            self._send(client, packet)
 
     def peer_password(self, link: PeerLink, password: str) -> None:
         "A paste event at the peer gave a mirrored pane `password`: a read under it goes there."
@@ -358,23 +354,23 @@ class RichClipboard:
         packet = ClipboardPacket.parse(sequence)
         if packet is None:
             return
-        client = self.pymux.latest_client()
-        connection = self._passwords.get(packet.password) if packet.password else None
-        if connection is None and client is not None:
-            connection = client.connection
+        client_state = self.pymux.latest_client()
+        client = self._passwords.get(packet.password) if packet.password else None
+        if client is None and client_state is not None:
+            client = client_state.client
         if (
             self.pymux.options.set_clipboard is Clipboard.OFF
-            or connection is None
-            or connection not in self.pymux._client_states
-            or not connection.replies.kitty_clipboard
+            or client is None
+            or client not in self.pymux._client_states
+            or not client.replies.kitty_clipboard
         ):
             owner.send_clipboard_answer(str(ClipboardPacket(PacketType.READ, Status.EPERM, id=packet.id)))
             return
         our_id = self._new_id()
-        self._reads[our_id] = _Reading(connection, time.monotonic(), owner=owner, owner_id=packet.id)
-        self._send(connection, replace(packet, id=our_id))
+        self._reads[our_id] = _Reading(client, time.monotonic(), owner=owner, owner_id=packet.id)
+        self._send(client, replace(packet, id=our_id))
 
-    def terminal_said(self, connection: ServerConnection, param: str) -> None:
+    def terminal_said(self, client: ClientRole, param: str) -> None:
         "One OSC 5522 packet from a client's terminal, after its code."
         try:
             packet = ClipboardPacket.decode(param)
@@ -383,7 +379,7 @@ class RichClipboard:
             return
         if packet.type == PacketType.WRITE and packet.id.startswith(_OUR_IDS):
             if packet.status != Status.DONE:
-                logger.warning("The terminal of client %s refused a copy: %s.", connection.client_id, packet.status)
+                logger.warning("The terminal of client %s refused a copy: %s.", client.client_id, packet.status)
             return
         if packet.type != PacketType.READ:
             logger.debug("Dropped an OSC 5522 packet nobody waits for: %s.", packet.type)
@@ -392,7 +388,7 @@ class RichClipboard:
             if reading is not None:
                 self._read_answered(packet.id, reading, packet)
         else:
-            self._paste_event(connection, packet)
+            self._paste_event(client, packet)
 
     def _read_answered(self, our_id: str, reading: _Reading, packet: ClipboardPacket) -> None:
         "One packet of a terminal's answer to a read pymux sent."
@@ -412,32 +408,29 @@ class RichClipboard:
                 reading.paste_into = None
         elif packet.status == Status.DONE and reading.paste_into is not None:
             text = b"".join(reading.parts).decode("utf-8", "replace")
-            self._paste(reading.connection, reading.paste_into, text)
+            self._paste(reading.client, reading.paste_into, text)
 
-    def _paste_event(self, connection: ServerConnection, packet: ClipboardPacket) -> None:
+    def _paste_event(self, client: ClientRole, packet: ClipboardPacket) -> None:
         """
         One packet of a paste event: the terminal lists what its
         clipboard holds, unasked, under a one-time password.
         """
-        client = connection.client_state
-        if client is None:
-            return
         if packet.status == Status.OK:
-            pane = self.pymux.focus.pane_of(client)
+            pane = self.pymux.focus.pane_of(client.state)
             relayed = self._serves_paste_events(pane)
-            self._events[connection] = _PasteEvent(pane, relayed, packet.primary, packet.password)
+            self._events[client] = _PasteEvent(pane, relayed, packet.primary, packet.password)
             if packet.password:
-                _keep(self._passwords, packet.password, connection)
+                _keep(self._passwords, packet.password, client)
                 program = None if pane is None else pane.process
                 if relayed and isinstance(program, RemoteProgram):
                     # The owner sends the pane's read under this
                     # password here, whoever it saw last.
                     program.peer.send({Field.CMD: Packet.MIRROR_CLIPBOARD_PASSWORD, Field.DATA: packet.password})
-        event = self._events.get(connection)
+        event = self._events.get(client)
         if event is None:
             return
         if packet.status not in _GOING_ON:
-            del self._events[connection]
+            del self._events[client]
         if event.relayed and event.pane is not None:
             self._answer(event.pane, packet)
             return
@@ -447,17 +440,17 @@ class RichClipboard:
             except ValueError:
                 event.types = ()
         elif packet.status == Status.DONE:
-            self._read_for_a_paste(connection, event)
+            self._read_for_a_paste(client, event)
 
-    def _read_for_a_paste(self, connection: ServerConnection, event: _PasteEvent) -> None:
+    def _read_for_a_paste(self, client: ClientRole, event: _PasteEvent) -> None:
         "A paste event the pane in focus did not ask for: read the text, to paste it."
         mime = next((mime for mime in TEXT_TYPES if mime in event.types), None)
         if mime is None or event.pane is None:
             return
         our_id = self._new_id()
-        self._reads[our_id] = _Reading(connection, time.monotonic(), mime=mime, paste_into=event.pane)
+        self._reads[our_id] = _Reading(client, time.monotonic(), mime=mime, paste_into=event.pane)
         self._send(
-            connection,
+            client,
             ClipboardPacket(
                 PacketType.READ,
                 id=our_id,
@@ -468,13 +461,12 @@ class RichClipboard:
             ),
         )
 
-    def _paste(self, connection: ServerConnection, pane: Pane, text: str) -> None:
+    def _paste(self, client: ClientRole | None, pane: Pane, text: str) -> None:
         "Paste `text` into `pane`, as the terminal's bracketed paste would have."
-        client = connection.client_state
         terminal = pane.terminal
-        if not text or client is None or not isinstance(terminal, Terminal):
+        if client is None or not text or not isinstance(terminal, Terminal):
             return
-        with set_app(client.app):
+        with set_app(client.state.app):
             terminal.terminal_control.paste(text)
 
     def _serves_paste_events(self, pane: Pane | None) -> bool:
@@ -485,17 +477,15 @@ class RichClipboard:
         """
         return self.pymux.options.set_clipboard is not Clipboard.OFF and wants_paste_events(pane)
 
-    def sync_paste_events(self, client: ClientState) -> None:
+    def sync_paste_events(self, client_state: ClientState) -> None:
         "Set the paste events mode on a client's terminal while its focused pane has it set."
-        connection = client.connection
-        if connection is None:
-            return
-        wanted = self._serves_paste_events(self.pymux.focus.pane_of(client))
-        if wanted == (connection in self._events_on):
+        client = client_state.client
+        wanted = self._serves_paste_events(self.pymux.focus.pane_of(client_state))
+        if wanted == (client in self._events_on):
             return
         if wanted:
-            self._events_on.add(connection)
+            self._events_on.add(client)
         else:
-            self._events_on.discard(connection)
-        connection.write_output_raw(PASTE_EVENTS_ON if wanted else PASTE_EVENTS_OFF)
-        connection.flush_output()
+            self._events_on.discard(client)
+        client.write_output_raw(PASTE_EVENTS_ON if wanted else PASTE_EVENTS_OFF)
+        client.flush_output()

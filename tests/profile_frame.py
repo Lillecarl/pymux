@@ -124,7 +124,7 @@ from scroll_app import (
     scroll_step,
     viewport_bytes,
 )
-from session import Connection, over_connection
+from session import Client, over_connection
 
 from pymux.commands import handle_command
 from pymux.core.main import Pymux
@@ -163,9 +163,9 @@ class _Graphics:
     supported = False
 
 
-class _Connection(Connection):
+class _Client(Client):
     """
-    What `Pymux` asks a connection for, with graphics offered and
+    What `Pymux` asks a client for, with graphics offered and
     declined. The frame after each render offers the panes to the
     graphics protocol, and a terminal that does not speak it says so,
     which is what a frame in a terminal without kitty graphics costs.
@@ -193,7 +193,7 @@ async def server(panes: int):
                 output=output,
                 input=pipe,
                 color_depth=ColorDepth.DEPTH_8_BIT,
-                connection=_Connection(),
+                client=_Client(),
             )
             with set_app(state.app):
                 # What attaching brings: the bindings, and the window

@@ -323,14 +323,14 @@ def test_panes_get_nothing_while_sound_is_off():
     assert environment == {}
 
 
-class _Connection:
+class _Role:
     def __init__(self, client_id: str) -> None:
         self.client_id = client_id
 
 
 class _Client:
     def __init__(self, client_id: str, last_used: int, mode: ClientAudio = ClientAudio.ON) -> None:
-        self.connection = _Connection(client_id)
+        self.client = _Role(client_id)
         self.last_used = last_used
         self.options = ClientOptions(audio=mode, audio_frame=AudioFrame.MS_10)
         self.message = ""

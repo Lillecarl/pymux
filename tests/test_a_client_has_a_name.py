@@ -158,15 +158,15 @@ async def a_real_client(monkeypatch, config_file, chosen_name):
                 tg.start_soon(_attach)
                 try:
                     ends_at = time.monotonic() + 20.0
-                    while connection.client_state is None and time.monotonic() < ends_at:
+                    while connection.client is None and time.monotonic() < ends_at:
                         if finished:
                             if error is not None:
                                 raise error
                             raise AssertionError("the attach ended before it attached")
                         await anyio.sleep(0.02)
 
-                    assert connection.client_state is not None, "the client never attached"
-                    yield pymux, connection.client_state
+                    assert connection.client is not None, "the client never attached"
+                    yield pymux, connection.client.state
                 finally:
                     scope.cancel()
         finally:
@@ -220,7 +220,7 @@ async def test_without_one_the_derived_name_is():
 
         said = await _lines(session, "list-clients -F '#{client_name}'")
 
-        assert said == [state.connection.name]
+        assert said == [state.client.connection.name]
 
 
 async def test_the_derived_name_is_always_reachable():
@@ -230,7 +230,7 @@ async def test_the_derived_name_is_always_reachable():
 
         said = await _lines(session, "list-clients -F '#{client_tty}'")
 
-        assert said == [state.connection.name]
+        assert said == [state.client.connection.name]
         assert said != ["desk"]
 
 
@@ -239,7 +239,7 @@ async def test_either_name_selects_the_client():
         state, _ = await session.attach("here", SIZE, client_options=CALLED_DESK)
 
         assert clients_named(session.pymux, "desk") == [state]
-        assert clients_named(session.pymux, state.connection.name) == [state]
+        assert clients_named(session.pymux, state.client.connection.name) == [state]
 
 
 async def test_a_name_nobody_holds_selects_nothing():

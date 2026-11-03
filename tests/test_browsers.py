@@ -36,7 +36,7 @@ def question_of(state) -> str | None:
 async def asked(session, sent: list):
     "A client that starts browsers, and a launch that waits on its question."
     state, _size = await session.attach("one", SIZE)
-    state.connection.starts_browsers = True
+    state.client.starts_browsers = True
     got = await session.command("launch-browser -- --headless=new https://example.org")
     launch = await once(lambda: question_of(state), 5.0, "the client was never asked")
     return state, got, launch
@@ -54,7 +54,7 @@ async def test_a_yes_starts_the_browser_and_the_launch_says_where_it_listens():
         assert packet[Field.BROWSER] == launch
         assert packet[Field.ARGUMENTS] == ["--headless=new", "https://example.org"]
         assert packet[Field.PROGRAM] == "" and packet[Field.PROFILE] == ""
-        state.connection._process(
+        state.client.connection._process(
             {Field.CMD: Packet.BROWSER_STARTED, Field.BROWSER: launch, Field.PATH: "/devtools/browser/abc"}
         )
         code, out, _err = await once(lambda: finished(got), 5.0, "the launch never answered")
@@ -94,7 +94,7 @@ async def test_the_clients_reason_reaches_the_program():
         session.pymux.browsers.approve(launch)
         state.answer()
         await once(lambda: session.pymux.browsers.launches[launch].port, 5.0, "no port chosen")
-        state.connection._process(
+        state.client.connection._process(
             {Field.CMD: Packet.BROWSER_STARTED, Field.BROWSER: launch, Field.ERROR: "no Chromium browser here"}
         )
         code, _out, err = await once(lambda: finished(got), 5.0, "the launch never answered")
@@ -108,14 +108,14 @@ async def test_a_hold_ends_with_the_browser_and_stops_it_when_it_goes_first():
         session.pymux.browsers.approve(launch)
         state.answer()
         await once(lambda: session.pymux.browsers.launches[launch].port, 5.0, "no port chosen")
-        state.connection._process({Field.CMD: Packet.BROWSER_STARTED, Field.BROWSER: launch, Field.PATH: "/p"})
+        state.client.connection._process({Field.CMD: Packet.BROWSER_STARTED, Field.BROWSER: launch, Field.PATH: "/p"})
         await once(lambda: finished(got), 5.0, "the launch never answered")
 
         # The browser ends by itself: the hold answers.
         ended = session.pymux.browsers.launches[launch].ended
         held = await session.command("hold-browser %s" % (launch,))
         await once(lambda: ended.statistics().tasks_waiting, 5.0, "the hold never waited")
-        state.connection._process({Field.CMD: Packet.BROWSER_ENDED, Field.BROWSER: launch})
+        state.client.connection._process({Field.CMD: Packet.BROWSER_ENDED, Field.BROWSER: launch})
         assert (await once(lambda: finished(held), 5.0, "the hold never answered"))[0] == 0
 
         # The hold goes first, the way a killed `pymux-browser` does:
@@ -125,7 +125,7 @@ async def test_a_hold_ends_with_the_browser_and_stops_it_when_it_goes_first():
         session.pymux.browsers.approve(second)
         state.answer()
         await once(lambda: session.pymux.browsers.launches[second].port, 5.0, "no port chosen")
-        state.connection._process({Field.CMD: Packet.BROWSER_STARTED, Field.BROWSER: second, Field.PATH: "/p"})
+        state.client.connection._process({Field.CMD: Packet.BROWSER_STARTED, Field.BROWSER: second, Field.PATH: "/p"})
         await once(lambda: finished(got), 5.0, "the launch never answered")
         with anyio.move_on_after(0.2):
             await _hold(session.pymux, second, session.pymux.browsers.launches[second].ended)

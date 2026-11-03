@@ -18,7 +18,7 @@ from ..pipes.base import BrokenPipeError
 from .uploads import LIST_SECONDS, Listing, Upload
 
 if TYPE_CHECKING:
-    from .server import ServerConnection
+    from .client import ClientRole
 
 __all__ = ["Files"]
 
@@ -29,14 +29,14 @@ class Files:
     """
 
     KEEP: ClassVar[dict[str, Keep]] = {
-        "connection": Keep.REBUILT,
+        "client": Keep.REBUILT,
         # A `pymux receive` that waits ends when the client goes.
         "uploads": Keep.DROPPED,
         "listings": Keep.DROPPED,
     }
 
-    def __init__(self, connection: ServerConnection) -> None:
-        self.connection = connection
+    def __init__(self, client: ClientRole) -> None:
+        self.client = client
 
         self.uploads: dict[str, Upload] = {}
         self.listings: dict[str, Listing] = {}
@@ -44,9 +44,9 @@ class Files:
     def saved(self, packet: Message) -> None:
         # Where the client saved a pane's download, or why it did not.
         # Only the client knows the path. Lillecarl/pymux#743.
-        if self.connection.client_state is not None:
-            self.connection.client_state.message = str(packet.get(Field.MESSAGE) or "")
-            self.connection.client_state.app.invalidate()
+        if self.client.state is not None:
+            self.client.state.message = str(packet.get(Field.MESSAGE) or "")
+            self.client.state.app.invalidate()
 
     def took_part(self, packet: Message) -> None:
         # A file `pymux receive` asked this client for, a part at a
@@ -68,11 +68,11 @@ class Files:
         `uploads` when it stops waiting. Lillecarl/pymux#743.
         """
         upload = Upload(paths)
-        if self.connection.closed:
+        if self.client.connection.closed:
             upload.end("the client went before it answered")
             return upload
         self.uploads[upload.request] = upload
-        self.connection.send_packet(upload.packet(pane))
+        self.client.connection.send_packet(upload.packet(pane))
         return upload
 
     def stop_waiting(self, upload: Upload) -> None:
@@ -82,10 +82,10 @@ class Files:
         and a later "y" sends a file nobody takes.
         """
         self.uploads.pop(upload.request, None)
-        if upload.ended or self.connection.closed:
+        if upload.ended or self.client.connection.closed:
             return
         with suppress(BrokenPipeError):
-            self.connection.send_packet({Field.CMD: Packet.FILES_WITHDRAWN, Field.REQUEST: upload.request})
+            self.client.connection.send_packet({Field.CMD: Packet.FILES_WITHDRAWN, Field.REQUEST: upload.request})
 
     async def names_in(self, path: str) -> list[str]:
         """
@@ -93,11 +93,11 @@ class Files:
         machine, for completing `pymux receive`. Empty when it answers
         nothing within `LIST_SECONDS`, or goes.
         """
-        if self.connection.closed:
+        if self.client.connection.closed:
             return []
         listed = Listing(path)
         self.listings[listed.request] = listed
-        self.connection.send_packet(listed.packet())
+        self.client.connection.send_packet(listed.packet())
         with anyio.move_on_after(LIST_SECONDS):
             await listed.answered.wait()
         self.listings.pop(listed.request, None)

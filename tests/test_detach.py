@@ -13,7 +13,7 @@ from prompt_toolkit.data_structures import Size
 from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
-from session import Connection
+from session import Client
 
 from pymux.core.main import Pymux
 
@@ -24,11 +24,8 @@ async def test_client_over_connection_still_detaches():
     "A client has a connection to close, and closing it is not ending the session."
     detached = []
 
-    class _Connection(Connection):
-        "The one that records the detach, which is what the test reads."
-
-        def detach_and_close(self, hang_up: bool = False):
-            detached.append(True)
+    client = Client()
+    client.connection.detach_and_close = lambda hang_up=False: detached.append(True)
 
     pymux = Pymux()
     async with pymux.running():
@@ -39,7 +36,7 @@ async def test_client_over_connection_still_detaches():
                 output=output,
                 input=pipe,
                 color_depth=ColorDepth.DEPTH_8_BIT,
-                connection=_Connection(),
+                client=client,
             )
             try:
                 with set_app(state.app):

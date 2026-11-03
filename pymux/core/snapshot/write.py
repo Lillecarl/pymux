@@ -80,7 +80,6 @@ from ..splits import HSplit, Split, VSplit, node_key
 from ..window_tree import Window
 
 if TYPE_CHECKING:
-    from ...connection.client_state import ClientState
     from ..main import Pymux
 
 from .schema import CLIENT_SETTINGS, SAVED, SNAPSHOT_VERSION, SnapshotError, panes_of, terminal_of
@@ -564,9 +563,8 @@ def _clients(pymux: Pymux, mirrored: bool) -> dict[str, dict[str, Any]]:
         return session.session_id if session is not None and session in sessions else None
 
     clients: dict[str, dict[str, Any]] = {key: dict(value) for key, value in pymux.returning_clients.items()}
-    for connection in pymux.connections:
-        state: ClientState | None = connection.client_state
-        if state is None or not connection.client_id:
+    for client, state in pymux._client_states.items():
+        if not client.client_id:
             continue
         windows = {}
         for session in sessions:
@@ -578,15 +576,15 @@ def _clients(pymux: Pymux, mirrored: bool) -> dict[str, dict[str, Any]]:
                     active.window_id if active is not None else None,
                     previous.window_id if previous is not None else None,
                 )
-        clients[connection.client_id] = {
+        clients[client.client_id] = {
             "session_id": session_id(state.session),
             "previous_session_id": session_id(state.previous_session),
             "windows": windows,
             "settings": {name: _value(getattr(state, name)) for name in CLIENT_SETTINGS},
             "options": values_of(state.options),
             "modes": state.modes(),
-            "connected": connection.created,
-            "terminal_name": connection.name,
+            "connected": client.created,
+            "terminal_name": client.connection.name,
         }
     return clients
 

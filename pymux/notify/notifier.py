@@ -64,14 +64,12 @@ class Notifier:
         if record.pane_id is not None and record.pane_id in self.panes_in_sight():
             return
         shown = False
-        for connection, client_state in self.pymux._client_states.items():
+        for client, client_state in self.pymux._client_states.items():
             if client_state.temporary:
                 continue
             wanted = client_state.options.notification_popups
             if wanted is NotificationPopups.OFF or (
-                wanted is NotificationPopups.AUTO
-                and connection is not None
-                and connection.replies.notification_osc is not None
+                wanted is NotificationPopups.AUTO and client.replies.notification_osc is not None
             ):
                 continue
             client_state.popups = [*client_state.popups, record][-MAX_POPUPS:]
@@ -117,16 +115,16 @@ class Notifier:
         if record.pane_id is not None and record.pane_id in self.panes_in_sight():
             return
         spelled: dict[Osc, list[str]] = {}
-        for connection, client_state in self.pymux._client_states.items():
-            if connection is None or client_state.temporary:
+        for client, client_state in self.pymux._client_states.items():
+            if client_state.temporary:
                 continue
-            osc = connection.replies.notification_osc
+            osc = client.replies.notification_osc
             if osc is None or (osc, record.source) in _WENT_AS_IT_CAME:
                 continue
             if osc not in spelled:
                 spelled[osc] = self._spell(osc, record)
             for sequence in spelled[osc]:
-                connection.forward_osc(sequence)
+                client.forward_osc(sequence)
         if spelled:
             self.pymux.invalidate(Woke.NOTIFICATION_SENT)
 
@@ -171,7 +169,9 @@ class Notifier:
         closed = self.pymux.notifications.seen(self.panes_in_sight())
         if not closed:
             return
-        for connection in self.pymux._client_states:
-            if connection is not None and connection.replies.notification_closes:
+        for client in self.pymux._client_states:
+            if client.replies.notification_closes:
                 for ours in closed:
-                    connection.forward_osc(build_osc(Osc.NOTIFICATION, close_of(ours)))
+                    sequence = build_osc(Osc.NOTIFICATION, close_of(ours))
+                    if sequence is not None:
+                        client.forward_osc(sequence)

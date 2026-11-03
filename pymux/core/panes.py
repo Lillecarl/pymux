@@ -247,7 +247,7 @@ class PaneMaker:
     def _outer_term(self) -> str:
         "The TERM of the terminal the newest client sits at, as `hacks_and_lies.outer_term` reads it."
         client = self.pymux.latest_client()
-        return hacks_and_lies.outer_term(client.connection.colors.term if client is not None else "")
+        return hacks_and_lies.outer_term(client.client.colors.term if client is not None else "")
 
     def build_pane(
         self,
@@ -412,7 +412,7 @@ class PaneMaker:
         def pointer_fraction() -> tuple[float, float]:
             "Where in its cell the mouse event being handled is, by the client it came from."
             client = self.pymux.client_of(get_app())
-            return (0.5, 0.5) if client is None else client.connection.pointer_fraction
+            return (0.5, 0.5) if client is None else client.client.pointer_fraction
 
         terminal_control.pointer_fraction = pointer_fraction
 

@@ -55,8 +55,8 @@ from ..mirror.program import RemoteProgram
 from .drop_files import RemoteCopy, decoded, drops_directory, new_drop_root, paths_of, remove_old_drops
 
 if TYPE_CHECKING:
+    from ..connection.client import ClientRole
     from ..connection.client_state import ClientState
-    from ..connection.server import ServerConnection
     from ..mirror.link import PeerLink
     from .main import Pymux
     from .pane import Pane
@@ -239,7 +239,7 @@ class DragAndDrop:
 
     def __init__(self, pymux: Pymux) -> None:
         self.pymux = pymux
-        self._terminals: weakref.WeakKeyDictionary[ServerConnection, _Terminal] = weakref.WeakKeyDictionary()
+        self._terminals: weakref.WeakKeyDictionary[ClientRole, _Terminal] = weakref.WeakKeyDictionary()
         #: This machine's id, and the one of a program that named none.
         self.machine_id = server_machine_id()
         #: Where the copies of drops from another machine go.
@@ -255,33 +255,33 @@ class DragAndDrop:
         if gone:
             logger.info("Removed %d copies of old drops.", len(gone))
 
-    def _terminal(self, connection: ServerConnection) -> _Terminal:
-        state = self._terminals.get(connection)
+    def _terminal(self, client: ClientRole) -> _Terminal:
+        state = self._terminals.get(client)
         if state is None:
-            state = self._terminals[connection] = _Terminal()
+            state = self._terminals[client] = _Terminal()
         return state
 
     # The terminal.
 
-    def asked(self, connection: ServerConnection) -> None:
-        self._terminal(connection).asked = True
+    def asked(self, client: ClientRole) -> None:
+        self._terminal(client).asked = True
 
-    def is_asked(self, connection: ServerConnection) -> bool:
+    def is_asked(self, client: ClientRole) -> bool:
         "Whether OSC 72 from this terminal is cut out of its keys."
-        state = self._terminals.get(connection)
+        state = self._terminals.get(client)
         return state is not None and state.asked
 
-    def speaks(self, connection: ServerConnection) -> bool:
-        state = self._terminals.get(connection)
+    def speaks(self, client: ClientRole) -> bool:
+        state = self._terminals.get(client)
         return state is not None and state.speaks
 
-    def _send(self, connection: ServerConnection, packet: DndPacket) -> None:
+    def _send(self, client: ClientRole, packet: DndPacket) -> None:
         "Write one packet to a terminal now: a drag waits for no frame."
-        client = connection.client_state
-        if client is None or client.temporary:
+        client_state = client.state
+        if client_state is None or client_state.temporary:
             return
-        connection.write_output_raw(str(packet))
-        connection.flush_output()
+        client.write_output_raw(str(packet))
+        client.flush_output()
 
     def _tell(self, pane: Pane, packet: DndPacket, client_id: int) -> None:
         """
@@ -301,30 +301,30 @@ class DragAndDrop:
         except OSError:
             logger.debug("Pane %s went before its drag and drop packet.", pane.pane_id)
 
-    def sync(self, client: ClientState) -> None:
+    def sync(self, client_state: ClientState) -> None:
         """
         Register with a client's terminal for what the panes take part in:
         drops always, with every type a pane named; drags while a pane
         offers them. Never inside a pane's chain going up.
         """
-        connection = client.connection
-        if connection is None or client.temporary:
+        client = client_state.client
+        if client is None or client_state.temporary:
             return
-        state = self._terminals.get(connection)
+        state = self._terminals.get(client)
         if state is None or not state.speaks or state.chain_up:
             return
         mimes = self._accepted_mimes()
         if mimes != state.accepting:
             state.accepting = mimes
             # A registration clears the machine id the terminal holds.
-            self._send(connection, DndPacket(DndType.ACCEPT, payload=mimes))
+            self._send(client, DndPacket(DndType.ACCEPT, payload=mimes))
             state.machine_id = ""
-            self._send_machine_id(connection, state, self.machine_id)
+            self._send_machine_id(client, state, self.machine_id)
         offering = self._any_pane_offers()
         if offering != state.offering:
             state.offering = offering
             x = START_OFFERING if offering else STOP_OFFERING
-            self._send(connection, DndPacket(DndType.OFFER, cell_x=x, payload=self.machine_id if offering else ""))
+            self._send(client, DndPacket(DndType.OFFER, cell_x=x, payload=self.machine_id if offering else ""))
 
     def _panes(self) -> list[Pane]:
         return [
@@ -342,39 +342,39 @@ class DragAndDrop:
     def _any_pane_offers(self) -> bool:
         return any((dnd := _registration(pane)) is not None and dnd.offering for pane in self._panes())
 
-    def _send_machine_id(self, connection: ServerConnection, state: _Terminal, machine_id: str) -> None:
+    def _send_machine_id(self, client: ClientRole, state: _Terminal, machine_id: str) -> None:
         if machine_id != state.machine_id:
             state.machine_id = machine_id
-            self._send(connection, DndPacket(DndType.ACCEPT, cell_x=MACHINE_ID, payload=machine_id))
+            self._send(client, DndPacket(DndType.ACCEPT, cell_x=MACHINE_ID, payload=machine_id))
 
-    def terminal_said(self, connection: ServerConnection, param: str) -> None:
+    def terminal_said(self, client: ClientRole, param: str) -> None:
         "One OSC 72 packet from a client's terminal, after its code. Never raises."
         try:
-            packet = self._terminal(connection).incoming.take(param)
+            packet = self._terminal(client).incoming.take(param)
             if packet is not None:
-                self._from_terminal(connection, packet)
+                self._from_terminal(client, packet)
         except Exception:
-            logger.exception("Serving a drag and drop packet of client %s failed.", connection.client_id)
+            logger.exception("Serving a drag and drop packet of client %s failed.", client.client_id)
 
-    def _from_terminal(self, connection: ServerConnection, packet: DndPacket) -> None:
-        state = self._terminal(connection)
+    def _from_terminal(self, client: ClientRole, packet: DndPacket) -> None:
+        state = self._terminal(client)
         match packet.type:
             case DndType.QUERY:
                 state.speaks = True
-                if connection.client_state is not None:
-                    self.sync(connection.client_state)
+                if client.state is not None:
+                    self.sync(client.state)
             case DndType.MOVE | DndType.DROP:
-                self._moved(connection, state, packet)
+                self._moved(client, state, packet)
             case DndType.REQUEST | DndType.REQUEST_ERROR:
-                self._data_arrived(connection, state, packet)
+                self._data_arrived(client, state, packet)
             case DndType.OFFER:
-                self._gesture(connection, state, packet)
+                self._gesture(client, state, packet)
             case DndType.DRAG_EVENT | DndType.DRAG_ERROR | DndType.REMOTE_ITEM:
                 self._drag_news(state, packet)
 
     # Drops.
 
-    def _moved(self, connection: ServerConnection, state: _Terminal, packet: DndPacket) -> None:
+    def _moved(self, client: ClientRole, state: _Terminal, packet: DndPacket) -> None:
         "A move or the drop. A MIME list in chunks is gathered first."
         drop = state.drop
         if packet.cell_x == -1 and packet.cell_y == -1:
@@ -396,24 +396,24 @@ class DragAndDrop:
             drop.mimes = packet.payload
         drop.allowed = packet.operation
 
-        client = connection.client_state
-        found = None if client is None else self._pane_at(client, packet.cell_x, packet.cell_y)
+        client_state = client.state
+        found = None if client_state is None else self._pane_at(client_state, packet.cell_x, packet.cell_y)
         pane = None if found is None else found[0]
         if pane is not drop.pane:
-            self._leave(connection, drop)
+            self._leave(client, drop)
             drop.pane = pane
             dnd = _registration(pane)
             drop.relayed = dnd is not None and dnd.accepting
             if pane is not None and not drop.relayed:
-                self._own_status(connection, drop)
+                self._own_status(client, drop)
             elif drop.relayed and dnd is not None:
-                self._send_machine_id(connection, state, dnd.machine_id or self.machine_id)
+                self._send_machine_id(client, state, dnd.machine_id or self.machine_id)
         elif pane is not None and not drop.relayed and offer_changed:
-            self._own_status(connection, drop)
+            self._own_status(client, drop)
         is_drop = packet.type == DndType.DROP
         if found is not None and drop.relayed:
             pane, x, y = found
-            pixel_x, pixel_y = self._pixels_in(connection, packet, pane)
+            pixel_x, pixel_y = self._pixels_in(client, packet, pane)
             self._tell_drop_pane(
                 pane,
                 replace(packet, cell_x=x, cell_y=y, pixel_x=pixel_x, pixel_y=pixel_y, payload=drop.mimes, more=0),
@@ -421,39 +421,39 @@ class DragAndDrop:
         if is_drop:
             drop.dropped = True
             if pane is None:
-                self._send(connection, DndPacket(DndType.REQUEST))
+                self._send(client, DndPacket(DndType.REQUEST))
                 state.drop = None
             elif not drop.relayed:
-                self._fetch(connection, drop)
+                self._fetch(client, drop)
 
-    def _leave(self, connection: ServerConnection, drop: _Drop) -> None:
+    def _leave(self, client: ClientRole, drop: _Drop) -> None:
         "The drag moved off a pane: that pane hears it left, and the terminal that nothing takes it yet."
         if drop.pane is None:
             return
         if drop.relayed:
             self._tell_drop_pane(drop.pane, DndPacket(DndType.MOVE, cell_x=-1, cell_y=-1))
-        self._send(connection, DndPacket(DndType.MOVE, operation=_REFUSED))
+        self._send(client, DndPacket(DndType.MOVE, operation=_REFUSED))
 
     def _tell_drop_pane(self, pane: Pane, packet: DndPacket) -> None:
         dnd = _registration(pane)
         self._tell(pane, packet, 0 if dnd is None else dnd.drop_client_id)
 
-    def _pane_at(self, client: ClientState, x: int, y: int) -> tuple[Pane, int, int] | None:
+    def _pane_at(self, client_state: ClientState, x: int, y: int) -> tuple[Pane, int, int] | None:
         "The pane a client shows at cell (x, y) of its terminal, and the cell in the pane."
-        if client.display_popup:
+        if client_state.display_popup:
             return None
-        for pane, at in client.layout_manager.pane_write_positions.items():
+        for pane, at in client_state.layout_manager.pane_write_positions.items():
             if at.xpos <= x < at.xpos + at.width and at.ypos <= y < at.ypos + at.height:
-                if pane.clock_mode or pane.is_copying_for(client.app) or not isinstance(pane.screen, Screen):
+                if pane.clock_mode or pane.is_copying_for(client_state.app) or not isinstance(pane.screen, Screen):
                     return None
                 return pane, x - at.xpos, y - at.ypos
         return None
 
-    def _pixels_in(self, connection: ServerConnection, packet: DndPacket, pane: Pane) -> tuple[int, int]:
+    def _pixels_in(self, client: ClientRole, packet: DndPacket, pane: Pane) -> tuple[int, int]:
         "The pixel of a move within the pane, where the cell size is known."
-        graphics = connection.graphics
-        client = connection.client_state
-        at = None if client is None else client.layout_manager.pane_write_positions.get(pane)
+        graphics = client.graphics
+        client_state = client.state
+        at = None if client_state is None else client_state.layout_manager.pane_write_positions.get(pane)
         if at is None or not graphics.cell_size_known:
             return packet.pixel_x, packet.pixel_y
         return packet.pixel_x - at.xpos * graphics.cell_width, packet.pixel_y - at.ypos * graphics.cell_height
@@ -462,28 +462,28 @@ class DragAndDrop:
         offered = drop.mimes.split()
         return [mime for mime in OWN_TYPES if mime in offered]
 
-    def _own_status(self, connection: ServerConnection, drop: _Drop) -> None:
+    def _own_status(self, client: ClientRole, drop: _Drop) -> None:
         "Tell the terminal whether pymux takes this drag, for a pane that did not register."
         wanted = self._own_types(drop)
         operation = _COPY if wanted and drop.allowed & _COPY else _REFUSED
-        self._send(connection, DndPacket(DndType.MOVE, operation=operation, payload=" ".join(wanted)))
+        self._send(client, DndPacket(DndType.MOVE, operation=operation, payload=" ".join(wanted)))
 
-    def _fetch(self, connection: ServerConnection, drop: _Drop) -> None:
+    def _fetch(self, client: ClientRole, drop: _Drop) -> None:
         "pymux's own drop: ask for the best type it takes."
         wanted = self._own_types(drop)
         if not wanted:
-            self._finish_own(connection, _REFUSED)
+            self._finish_own(client, _REFUSED)
             return
         drop.fetching = wanted[0]
         drop.index = drop.mimes.split().index(drop.fetching) + 1
-        self._send_machine_id(connection, self._terminal(connection), self.machine_id)
-        self._send(connection, DndPacket(DndType.REQUEST, cell_x=drop.index))
+        self._send_machine_id(client, self._terminal(client), self.machine_id)
+        self._send(client, DndPacket(DndType.REQUEST, cell_x=drop.index))
 
-    def _finish_own(self, connection: ServerConnection, operation: int) -> None:
-        self._send(connection, DndPacket(DndType.REQUEST, operation=operation))
-        self._terminal(connection).drop = None
+    def _finish_own(self, client: ClientRole, operation: int) -> None:
+        self._send(client, DndPacket(DndType.REQUEST, operation=operation))
+        self._terminal(client).drop = None
 
-    def _data_arrived(self, connection: ServerConnection, state: _Terminal, packet: DndPacket) -> None:
+    def _data_arrived(self, client: ClientRole, state: _Terminal, packet: DndPacket) -> None:
         "Data, or an error, the terminal sends for a request."
         drop = state.drop
         if drop is None or drop.pane is None:
@@ -493,14 +493,14 @@ class DragAndDrop:
             return
         if drop.copy is not None:
             for request in drop.copy.took(packet):
-                self._send(connection, request)
-            self._copied(connection, drop)
+                self._send(client, request)
+            self._copied(client, drop)
             return
         if not drop.fetching:
             return
         if packet.type == DndType.REQUEST_ERROR:
-            logger.info("The terminal of client %s gave no drop data: %s.", connection.client_id, packet.payload)
-            self._finish_own(connection, _REFUSED)
+            logger.info("The terminal of client %s gave no drop data: %s.", client.client_id, packet.payload)
+            self._finish_own(client, _REFUSED)
             return
         # On a file list, X=1 says its files are on another machine.
         drop.remote = drop.remote or packet.pixel_x == 1
@@ -511,56 +511,56 @@ class DragAndDrop:
             text = decoded(drop.parts).decode("utf-8", "replace")
         except ValueError:
             logger.warning("Dropped a drop whose data is not base64.")
-            self._finish_own(connection, _REFUSED)
+            self._finish_own(client, _REFUSED)
             return
         if drop.fetching == _URI_LIST and drop.remote:
-            self._copy(connection, drop, text)
+            self._copy(client, drop, text)
             return
         pane, fetching = drop.pane, drop.fetching
-        self._finish_own(connection, _COPY)
+        self._finish_own(client, _COPY)
         if fetching == _URI_LIST:
             text = " ".join(shlex.quote(path) for path in paths_of(text))
-        self._paste(connection, pane, text)
+        self._paste(client, pane, text)
 
-    def _copy(self, connection: ServerConnection, drop: _Drop, uri_list: str) -> None:
+    def _copy(self, client: ClientRole, drop: _Drop, uri_list: str) -> None:
         "Files from another machine: pull each into a directory here, and paste their paths there."
         drop.copy = RemoteCopy(new_drop_root(self.drops), drop.index, uri_list)
         try:
             requests = drop.copy.start()
         except OSError as error:
             logger.warning("No place for a drop from another machine: %s.", error)
-            self._finish_own(connection, _REFUSED)
+            self._finish_own(client, _REFUSED)
             return
         for request in requests:
-            self._send(connection, request)
+            self._send(client, request)
         if self.pymux.tasks is not None:
             self.pymux.tasks.start_soon(self.prune_drops)
-        self._copied(connection, drop)
+        self._copied(client, drop)
 
-    def _copied(self, connection: ServerConnection, drop: _Drop) -> None:
+    def _copied(self, client: ClientRole, drop: _Drop) -> None:
         "Paste a copy that ended, or end the drop if it failed."
         copy = drop.copy
         if copy is None or not copy.done:
             return
         pasted = copy.pasted
-        self._finish_own(connection, _COPY if pasted else _REFUSED)
+        self._finish_own(client, _COPY if pasted else _REFUSED)
         if pasted and drop.pane is not None:
-            self._paste(connection, drop.pane, " ".join(shlex.quote(path) for path in pasted))
+            self._paste(client, drop.pane, " ".join(shlex.quote(path) for path in pasted))
 
-    def _paste(self, connection: ServerConnection, pane: Pane, text: str) -> None:
-        client = connection.client_state
+    def _paste(self, client: ClientRole, pane: Pane, text: str) -> None:
+        client_state = client.state
         terminal = pane.terminal
-        if not text or client is None or not isinstance(terminal, Terminal):
+        if not text or client_state is None or not isinstance(terminal, Terminal):
             return
-        with set_app(client.app):
+        with set_app(client_state.app):
             terminal.terminal_control.paste(text)
 
     # Drags.
 
-    def _gesture(self, connection: ServerConnection, state: _Terminal, packet: DndPacket) -> None:
+    def _gesture(self, client: ClientRole, state: _Terminal, packet: DndPacket) -> None:
         "The person began a drag at a cell: it goes to the pane there, if that pane offers drags."
-        client = connection.client_state
-        found = None if client is None else self._pane_at(client, packet.cell_x, packet.cell_y)
+        client_state = client.state
+        found = None if client_state is None else self._pane_at(client_state, packet.cell_x, packet.cell_y)
         if found is None:
             return
         pane, x, y = found
@@ -569,9 +569,9 @@ class DragAndDrop:
             return
         state.drag = pane
         self._send(
-            connection, DndPacket(DndType.OFFER, cell_x=START_OFFERING, payload=dnd.offer_machine_id or self.machine_id)
+            client, DndPacket(DndType.OFFER, cell_x=START_OFFERING, payload=dnd.offer_machine_id or self.machine_id)
         )
-        pixel_x, pixel_y = self._pixels_in(connection, packet, pane)
+        pixel_x, pixel_y = self._pixels_in(client, packet, pane)
         self._tell(pane, replace(packet, cell_x=x, cell_y=y, pixel_x=pixel_x, pixel_y=pixel_y), dnd.drag_client_id)
 
     def _drag_news(self, state: _Terminal, packet: DndPacket) -> None:
@@ -647,21 +647,21 @@ class DragAndDrop:
 
     def sync_all(self) -> None:
         "Register with every client's terminal for what the panes take part in now."
-        for client in self.pymux._client_states.values():
-            self.sync(client)
+        for client_state in self.pymux._client_states.values():
+            self.sync(client_state)
 
-    def _up(self, connection: ServerConnection, state: _Terminal, packet: DndPacket) -> None:
+    def _up(self, client: ClientRole, state: _Terminal, packet: DndPacket) -> None:
         "A pane's packet, without its `i`, to the terminal. A chain stays whole."
         state.chain_up = bool(packet.more)
-        self._send(connection, replace(packet, client_id=0))
-        if not state.chain_up and connection.client_state is not None:
-            self.sync(connection.client_state)
+        self._send(client, replace(packet, client_id=0))
+        if not state.chain_up and client.state is not None:
+            self.sync(client.state)
 
     def _up_from_drop_pane(self, pane: Pane, packet: DndPacket) -> None:
-        for connection, state in list(self._terminals.items()):
+        for client, state in list(self._terminals.items()):
             drop = state.drop
             if drop is not None and drop.relayed and drop.pane is pane:
-                self._up(connection, state, packet)
+                self._up(client, state, packet)
                 if _drop_finished(packet):
                     state.drop = None
                 return
@@ -686,9 +686,9 @@ class DragAndDrop:
             )
 
     def _up_from_drag_pane(self, pane: Pane, packet: DndPacket) -> None:
-        for connection, state in list(self._terminals.items()):
+        for client, state in list(self._terminals.items()):
             if state.drag is pane:
-                self._up(connection, state, packet)
+                self._up(client, state, packet)
                 if packet.type == DndType.DRAG_ERROR and packet.cell_y == -1:
                     state.drag = None
                 return
@@ -737,15 +737,15 @@ class DragAndDrop:
 
     def _end_over(self, pane: Pane) -> None:
         "End each terminal's drop or drag over `pane`."
-        for connection, state in list(self._terminals.items()):
+        for client, state in list(self._terminals.items()):
             if state.drop is not None and state.drop.pane is pane:
                 if state.drop.copy is not None:
                     state.drop.copy.stop()
                 if state.drop.dropped:
-                    self._send(connection, DndPacket(DndType.REQUEST))
+                    self._send(client, DndPacket(DndType.REQUEST))
                 else:
-                    self._send(connection, DndPacket(DndType.MOVE, operation=_REFUSED))
+                    self._send(client, DndPacket(DndType.MOVE, operation=_REFUSED))
                 state.drop = None
             if state.drag is pane:
-                self._send(connection, DndPacket(DndType.DRAG_ERROR, cell_y=-1))
+                self._send(client, DndPacket(DndType.DRAG_ERROR, cell_y=-1))
                 state.drag = None

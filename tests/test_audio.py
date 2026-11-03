@@ -302,7 +302,7 @@ async def carrying(pymux, devices, client_id="the-client", frame=AudioFrame.MS_1
             tasks.start_soon(client.read)
             await once(lambda: client_id in pymux.audio.links, 10.0, "the client never played sound")
             for client_state in pymux.clients:
-                if getattr(client_state.connection, "client_id", None) == client_id:
+                if getattr(client_state.client, "client_id", None) == client_id:
                     client_state.options.audio_frame = frame
             pymux.audio.client_options_changed()
             await once(lambda: client.audio.frame_ms == frame.ms, 10.0, "the client never heard its frame")

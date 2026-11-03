@@ -85,8 +85,8 @@ class _NoReplies:
     extra_cursors = False
     kitty_clipboard = False
 
-    def __init__(self, connection: Connection) -> None:
-        self.connection = connection
+    def __init__(self, client: Client) -> None:
+        self.client = client
         self.terminal_said = TerminalAnswers()
         self.notification_closes = False
         self.notification_osc = None
@@ -94,18 +94,64 @@ class _NoReplies:
     @property
     def identity(self) -> Identity:
         "The same rule as `TerminalReplies.identity`."
-        return identify(self.connection.graphics.terminal_version, self.connection.colors.term)
+        return identify(self.client.graphics.terminal_version, self.client.colors.term)
 
 
-class Connection:
+class _Transport:
     """
-    What `Pymux` asks a connection for, and nothing else.
+    What production reads of the `ServerConnection` under a stub
+    client: its name, its size, a pipe that moved no bytes, and a way
+    to leave.
+    """
 
-    A key press invalidates, and an invalidate tells every connection
-    about the pointer and the keyboard, so a stub that a test feeds
-    keys through needs both methods here; the tests that press no key
-    never call them. This is the one such stub, and every in-process
-    session in the suite builds one.
+    closed = False
+    peer = None
+
+    def __init__(self, client: Client, pymux) -> None:
+        self.client: Client | None = client
+        #: The server to leave, for `detach_and_close`. A stub built
+        #: without one cannot be detached, which is every stub that
+        #: nothing detaches. Lillecarl/pymux#335.
+        self._pymux = pymux
+        self.pipe_connection = _NoPipe()
+        self.size = DEFAULT_SIZE
+        self.rate_down = Rate()
+        self.rate_up = Rate()
+
+    @property
+    def name(self) -> str:
+        "The same rule as `ServerConnection.name`."
+        client = self.client
+        if client is None or not client.ttyname:
+            return ""
+        return "%s:%s" % (client.hostname or "?", client.ttyname)
+
+    def detach_and_close(self, hang_up: bool = False) -> None:
+        """
+        What `ServerConnection.detach_and_close` does that a test can
+        see: the client leaves the server.
+
+        The real one also ends the application and closes two pipes,
+        and neither exists here. `hang_up` is the `attach -x` packet,
+        which needs a transport to arrive over and so is judged in
+        `test_the_others_are_hung_up.py`. Lillecarl/pymux#347.
+        """
+        if self._pymux is not None:
+            self._pymux.remove_client(self)
+
+    def send_packet(self, packet):
+        pass
+
+
+class Client:
+    """
+    What `Pymux` asks a client's role for, and nothing else.
+
+    A key press invalidates, and an invalidate tells every client about
+    the pointer and the keyboard, so a stub that a test feeds keys
+    through needs both methods here; the tests that press no key never
+    call them. This is the one such stub, and every in-process session
+    in the suite builds one.
     """
 
     pointer_shape = None
@@ -139,10 +185,6 @@ class Connection:
         #: What a client reports of the machine it runs on.
         #: Lillecarl/pymux#271.
         self.environment = environment or {}
-        #: The server to leave, for `detach_and_close`. A stub built
-        #: without one cannot be detached, which is every stub that
-        #: nothing detaches. Lillecarl/pymux#335.
-        self._pymux = pymux
         #: What the terminal at the other end said it draws with. A
         #: stub answers nothing, which is what a terminal that never
         #: replied is. Lillecarl/pymux#223.
@@ -150,42 +192,20 @@ class Connection:
         #: The graphics of a terminal that answered no query: no
         #: protocol, no cell size. It writes nowhere. Lillecarl/pymux#726.
         self.graphics = ClientGraphics(lambda data: None, lambda: None)
-        # What a `ServerConnection` holds that production reads, each
-        # as a client that never answered and moved no bytes.
+        # What a `ClientRole` holds that production reads, each as a
+        # client that never answered.
         self.colors = ColorDetection()
-        self.pipe_connection = _NoPipe()
-        self.size = DEFAULT_SIZE
-        self.rate_down = Rate()
-        self.rate_up = Rate()
         self.replies = _NoReplies(self)
         self.recording = None
         self.client_id = ""
+        self.pid = 0
         self.starts_browsers = False
         # As every pymux client of this build says it does.
         self.saves_files = True
         self.pacing = _NoPacing()
         self.pointer_fraction = (0.5, 0.5)
         self.clipboard = _NoClipboard()
-
-    @property
-    def name(self) -> str:
-        "The same rule as `ServerConnection.name`."
-        if not self.ttyname:
-            return ""
-        return "%s:%s" % (self.hostname or "?", self.ttyname)
-
-    def detach_and_close(self, hang_up: bool = False) -> None:
-        """
-        What `ServerConnection.detach_and_close` does that a test can
-        see: the client leaves the server.
-
-        The real one also ends the application and closes two pipes,
-        and neither exists here. `hang_up` is the `attach -x` packet,
-        which needs a transport to arrive over and so is judged in
-        `test_the_others_are_hung_up.py`. Lillecarl/pymux#347.
-        """
-        if self._pymux is not None:
-            self._pymux.remove_client(self)
+        self.connection = _Transport(self, pymux)
 
     def set_pointer_shape(self, shape):
         return False
@@ -194,11 +214,8 @@ class Connection:
         pass
 
     def set_progress(self, progress):
-        "What `ServerConnection.set_progress` was given last."
+        "What `ClientRole.set_progress` was given last."
         self.progress = progress
-
-    def send_packet(self, packet):
-        pass
 
 
 #: The size a temporary client reports. Nothing draws in it; a window that
@@ -365,7 +382,7 @@ async def in_this_process(pymux=None):
                 output=output,
                 input=pipe,
                 color_depth=ColorDepth.DEPTH_8_BIT,
-                connection=Connection(
+                client=Client(
                     hostname,
                     environment,
                     pymux,
@@ -391,7 +408,7 @@ async def in_this_process(pymux=None):
             return state, size
 
         async def detach(state):
-            pymux.remove_client(state.connection)
+            pymux.remove_client(state.client.connection)
 
         def typed(state, text):
             state.app.input.send_text(text)
@@ -408,7 +425,7 @@ async def in_this_process(pymux=None):
                 output=output,
                 input=pipe,
                 color_depth=ColorDepth.DEPTH_8_BIT,
-                connection=Connection(),
+                client=Client(),
                 temporary=True,
             )
             watch("command client", state)
@@ -416,7 +433,7 @@ async def in_this_process(pymux=None):
                 with set_app(state.app):
                     pymux.handle_command(text)
             finally:
-                pymux.remove_client(state.connection)
+                pymux.remove_client(state.client.connection)
             return state
 
         async with pymux.running():
@@ -466,8 +483,8 @@ async def over_connection(pymux=None, read_packet=None):
 
     - `ServerConnection._tasks`, the background coroutines. A task that
       never finishes keeps its connection.
-    - `Pymux._client_states` and `Pymux.connections`, both keyed by or
-      holding the connection.
+    - `Pymux._client_states`, keyed by the client's role, and
+      `Pymux.connections`, holding the connection.
     - The `ClientInput` pipe input, whose parser holds callbacks back
       into the connection.
 
@@ -572,7 +589,6 @@ async def over_connection(pymux=None, read_packet=None):
         pymux.connections.append(connection)
 
         watch("%s connection" % name, connection)
-        watch("%s connection input" % name, connection.pipeinput)
 
         draining = anyio.CancelScope()
         pymux.tasks.start_soon(drain, client_end, draining)
@@ -609,7 +625,7 @@ async def over_connection(pymux=None, read_packet=None):
         )
 
         state = await once(
-            lambda: connection.client_state,
+            lambda: connection.client.state if connection.client is not None else None,
             5.0,
             "the server never made a client for this connection",
             polls=ATTACH_POLLS,
@@ -630,6 +646,8 @@ async def over_connection(pymux=None, read_packet=None):
         ends[id(state)] = (client_end, draining)
 
         watch("%s client" % name, state)
+        watch("%s client role" % name, state.client)
+        watch("%s connection input" % name, state.client.pipeinput)
         watch("%s application" % name, state.app)
         watch("%s layout manager" % name, state.layout_manager)
         return state, size
@@ -644,7 +662,7 @@ async def over_connection(pymux=None, read_packet=None):
         and a check that looked before it finished would call every
         connection a leak.
         """
-        connection = state.connection
+        connection = state.client.connection
         client_end, draining = ends.pop(id(state))
 
         client_end.close()

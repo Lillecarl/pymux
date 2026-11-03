@@ -64,7 +64,7 @@ if TYPE_CHECKING:
 
     from opuslib import Encoder
 
-    from pymux.connection.server import ServerConnection
+    from pymux.connection.client import ClientRole
     from pymux.core.main import Pymux
 
 try:
@@ -337,9 +337,9 @@ class AudioLink:
     speaker, which it is told.
     """
 
-    def __init__(self, connection: ServerConnection) -> None:
-        self.connection = connection
-        self.client_id = connection.client_id
+    def __init__(self, client: ClientRole) -> None:
+        self.client = client
+        self.client_id = client.client_id
         self._queue: deque[Message] = deque(maxlen=SEND_QUEUE)
         self._ready = anyio.Event()
         #: The client's `audio-frame`: the frames both ways are this long.
@@ -387,7 +387,7 @@ class AudioLink:
                 await self._ready.wait()
                 self._ready = anyio.Event()
                 while self._queue:
-                    await self.connection._write_urgent(self._queue.popleft())
+                    await self.client.connection._write_urgent(self._queue.popleft())
 
     async def _stats(self, every: float) -> None:
         while True:
@@ -407,7 +407,7 @@ class AudioLink:
             await anyio.sleep(1.0)
             now = anyio.current_time()
             if self.adaptive and self.struggles(now):
-                self.connection.pymux.audio.raise_frame(self, now)
+                self.client.pymux.audio.raise_frame(self, now)
 
     async def _echo(self) -> None:
         for _ in range(FIRST_ECHOES):
@@ -488,7 +488,7 @@ class AudioLink:
                     logger.warning("A microphone frame from client %s did not decode.", self.client_id or "?")
         elif kind == Packet.MICROPHONE and packet.get(Field.ERROR) == "silent":
             self.silent = True
-            self.connection.pymux.audio.microphone_silent(self)
+            self.client.pymux.audio.microphone_silent(self)
 
     def open_microphone(self, wanted: bool) -> bool:
         "Open or close the client's microphone. Whether that changed it."
@@ -565,7 +565,7 @@ class AudioServer:
 
     def _client_of(self, link: AudioLink):
         for client_state in self.pymux.clients:
-            if client_state.connection.client_id == link.client_id:
+            if client_state.client.client_id == link.client_id:
                 return client_state
         return None
 
@@ -616,7 +616,7 @@ class AudioServer:
         """
         playing = {client_id: link for client_id, link in self.links.items() if self._audio_of(link) != ClientAudio.OFF}
         latest = self.pymux.latest_client()
-        client_id = latest.connection.client_id if latest is not None and latest.connection is not None else None
+        client_id = latest.client.client_id if latest is not None else None
         if client_id and client_id in playing:
             return playing[client_id]
         return next(reversed(playing.values()), None)

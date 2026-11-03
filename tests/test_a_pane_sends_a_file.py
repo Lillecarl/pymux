@@ -210,8 +210,8 @@ class Collected:
     def __init__(self, state) -> None:
         self.sequences: list[str] = []
         self.packets: list[dict] = []
-        state.connection.forward_osc = self.sequences.append
-        state.connection.send_packet = self.packets.append
+        state.client.forward_osc = self.sequences.append
+        state.client.connection.send_packet = self.packets.append
 
     def files(self) -> list[dict]:
         return [packet for packet in self.packets if packet[Field.CMD] == Packet.FILE]
@@ -235,7 +235,7 @@ def saved(packets: list[dict]) -> bytes:
 
 def on_iterm2(state) -> None:
     "The client's terminal answered XTVERSION as iTerm2, which saves a download."
-    state.connection.graphics.terminal_version = "iTerm2 3.5.14"
+    state.client.graphics.terminal_version = "iTerm2 3.5.14"
 
 
 async def test_a_local_client_gets_the_sequence():
@@ -267,7 +267,7 @@ async def test_a_single_file_passes_through_as_one():
 async def test_a_remote_client_gets_packets():
     async with in_this_process() as session:
         state, _ = await session.attach("remote", SIZE)
-        state.connection.can_forward = True
+        state.client.can_forward = True
         got = Collected(state)
         pane = await a_pane(session.pymux, state)
 
@@ -291,7 +291,7 @@ async def test_the_option_wins_over_auto(chosen, remote, packets):
     async with in_this_process() as session:
         state, _ = await session.attach("one", SIZE)
         on_iterm2(state)
-        state.connection.can_forward = remote
+        state.client.can_forward = remote
         ALL_CLIENT_OPTIONS["file-transfer"].set_value(session.pymux, chosen, target=state)
         got = Collected(state)
         pane = await a_pane(session.pymux, state)
@@ -306,7 +306,7 @@ async def test_a_local_terminal_that_saves_no_download_gets_the_file_from_pymux(
     "auto: the pymux client writes to this machine's downloads directory. Lillecarl/pymux#746."
     async with in_this_process() as session:
         state, _ = await session.attach("local", SIZE)
-        state.connection.graphics.terminal_version = "kitty(0.49.2)"
+        state.client.graphics.terminal_version = "kitty(0.49.2)"
         got = Collected(state)
         pane = await a_pane(session.pymux, state)
 
@@ -335,8 +335,8 @@ async def test_a_client_too_old_to_save_a_file_is_told_so():
     "It drops `file` packets unread, and the person never learned. Lillecarl/pymux#745."
     async with in_this_process() as session:
         state, _ = await session.attach("old", SIZE)
-        state.connection.can_forward = True
-        state.connection.saves_files = False
+        state.client.can_forward = True
+        state.client.saves_files = False
         got = Collected(state)
         pane = await a_pane(session.pymux, state)
 
@@ -602,7 +602,7 @@ async def test_pymux_send_file_reaches_the_download_directory(tmp_path, monkeypa
 
         # And the server shows the person where it went.
         [answer] = client.sent
-        state.connection._process(answer)
+        state.client.connection._process(answer)
         assert state.message == "Saved %s." % (target,)
 
 

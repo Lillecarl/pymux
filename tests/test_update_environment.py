@@ -130,6 +130,6 @@ async def test_the_client_reports_it_over_the_wire():
     async with over_connection() as session:
         state, _ = await session.attach("the client", SIZE, environment=AT_A_DESK)
 
-        assert state.connection.environment["EDITOR"] == "vim"
+        assert state.client.environment["EDITOR"] == "vim"
         assert state.session.environment["DISPLAY"] == ":0"
         assert "EDITOR" not in state.session.environment

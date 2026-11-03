@@ -20,7 +20,7 @@ async def test_a_recording_holds_both_directions_and_the_pane_it_ran_in(pymux, t
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
-        client_state = pymux.connections[-1].client_state
+        client_state = pymux.connections[-1].client.state
         (pane,) = pymux.panes_by_id.values()
 
         with set_app(client_state.app):
@@ -68,7 +68,7 @@ async def test_a_pane_whose_program_ends_writes_its_recording(pymux, tmp_path, m
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
-        client_state = pymux.connections[-1].client_state
+        client_state = pymux.connections[-1].client.state
         with set_app(client_state.app):
             pymux.handle_command("split-window 'sleep 1000'")
             pymux.handle_command("record-pane ended")

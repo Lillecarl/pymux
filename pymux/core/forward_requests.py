@@ -82,10 +82,10 @@ class ForwardRequests:
         make a forward that cannot be made wastes the only answer they
         can give.
         """
-        if not asker.client_state.connection.can_forward:
+        if not asker.client_state.client.can_forward:
             raise CommandException(
                 "%s did not reach this server over SSH, so it cannot forward a port."
-                % (asker.client_state.connection.name,)
+                % (asker.client_state.client.connection.name,)
             )
         return asker
 
@@ -123,4 +123,4 @@ class ForwardRequests:
         `client` has already refused a client that cannot
         forward at all. Lillecarl/pymux#436.
         """
-        client_state.connection.send_packet(packet)
+        client_state.client.connection.send_packet(packet)

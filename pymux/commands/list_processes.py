@@ -25,10 +25,10 @@ def list_processes(pymux: Pymux, args: argparse.Namespace) -> None:
     lines = ["server %d" % os.getpid()]
     lines.extend("sound %d" % pid for pid in pymux.audio.pids())
     lines.extend("portal %d" % pid for pid in pymux.portal.pids())
-    for connection in pymux.connections:
+    for client in pymux._client_states:
         # A client of another machine says a pid of that machine.
-        if connection.pid and connection.hostname == here:
-            lines.append("client %d" % connection.pid)
+        if client.pid and client.hostname == here:
+            lines.append("client %d" % client.pid)
     for line in lines:
         pymux.print_command_line(line)
 

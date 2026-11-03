@@ -133,7 +133,7 @@ class Peers:
         "Each client on a mirrored session, by its id, with the link and the owner's session and window."
         found = []
         for client_state in self.pymux._client_states.values():
-            client_id = client_state.connection.client_id
+            client_id = client_state.client.client_id
             if client_state.temporary or not client_id:
                 continue
             remote = client_state.session.remote
@@ -409,9 +409,9 @@ class Peer:
         pymux = self.tree.pymux
         now = anyio.current_time()
         by_id = {
-            client_state.connection.client_id: client_state
+            client_state.client.client_id: client_state
             for client_state in pymux._client_states.values()
-            if client_state.connection.client_id and not client_state.temporary
+            if client_state.client.client_id and not client_state.temporary
         }
         for client_id, place in list(self.places.items()):
             client_state = by_id.get(client_id)

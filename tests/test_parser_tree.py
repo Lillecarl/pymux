@@ -456,9 +456,9 @@ async def test_unforward_port_offers_the_listenings_that_were_shown():
 
     async with over_connection() as session:
         await session.attach("the client", Size(rows=24, columns=80))
-        connection = session.pymux.clients[0].connection
-        connection.can_forward = True
-        connection.forwards = [
+        connection = session.pymux.clients[0].client.connection
+        connection.client.can_forward = True
+        connection.client.forwards = [
             {
                 "direction": "local",
                 "listen_host": "localhost",

@@ -34,8 +34,8 @@ async def test_the_terminal_answers_with_its_clipboard():
     terminal = ClipboardTerminal()
     terminal.selections["c"] = "from the desktop"
     async with attached(terminal) as state:
-        assert await state.connection.clipboard.read("c") == "from the desktop"
-        assert state.connection.clipboard.answers is True
+        assert await state.client.clipboard.read("c") == "from the desktop"
+        assert state.client.clipboard.answers is True
 
 
 async def test_an_empty_clipboard_answers_at_once_with_nothing():
@@ -47,8 +47,8 @@ async def test_an_empty_clipboard_answers_at_once_with_nothing():
     """
     terminal = ClipboardTerminal()
     async with attached(terminal) as state:
-        assert await state.connection.clipboard.read("c") is None
-        assert state.connection.clipboard.answers is True
+        assert await state.client.clipboard.read("c") is None
+        assert state.client.clipboard.answers is True
 
 
 async def test_the_primary_is_its_own_selection():
@@ -56,7 +56,7 @@ async def test_the_primary_is_its_own_selection():
     terminal.selections["c"] = "clipboard"
     terminal.selections["p"] = "primary"
     async with attached(terminal) as state:
-        assert await state.connection.clipboard.read("p") == "primary"
+        assert await state.client.clipboard.read("p") == "primary"
 
 
 async def test_a_long_answer_in_pieces_arrives_whole():
@@ -64,24 +64,24 @@ async def test_a_long_answer_in_pieces_arrives_whole():
     terminal = ClipboardTerminal(chunk=997)
     terminal.selections["c"] = "0123456789" * 20_000
     async with attached(terminal) as state:
-        assert await state.connection.clipboard.read("c") == "0123456789" * 20_000
+        assert await state.client.clipboard.read("c") == "0123456789" * 20_000
 
 
 async def test_keys_around_an_answer_still_reach_the_parser():
     async with attached(ClipboardTerminal()) as state:
-        connection = state.connection
-        connection.clipboard._asked = True
-        assert connection.clipboard.take_answer("a\x1b]52;c;aGk=\x07b") == "ab"
-        assert connection.clipboard.take_answer("x\x1b]52;c;aG") == "x"
-        assert connection.clipboard.take_answer("k=\x1b\\y") == "y"
+        connection = state.client.connection
+        connection.client.clipboard._asked = True
+        assert connection.client.clipboard.take_answer("a\x1b]52;c;aGk=\x07b") == "ab"
+        assert connection.client.clipboard.take_answer("x\x1b]52;c;aG") == "x"
+        assert connection.client.clipboard.take_answer("k=\x1b\\y") == "y"
 
 
 async def test_a_silent_terminal_is_asked_once():
     terminal = ClipboardTerminal(answers=False)
     async with attached(terminal) as state:
-        assert await state.connection.clipboard.read("c") is None
-        assert state.connection.clipboard.answers is False
+        assert await state.client.clipboard.read("c") is None
+        assert state.client.clipboard.answers is False
 
         with anyio.fail_after(CLIPBOARD_READ_SECONDS / 2):
-            assert await state.connection.clipboard.read("c") is None
+            assert await state.client.clipboard.read("c") is None
         assert terminal.queries == 1

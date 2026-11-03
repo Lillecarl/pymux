@@ -121,7 +121,7 @@ async def test_a_read_only_client_may_still_leave():
             pymux.handle_command("detach-client")
 
         await once(
-            lambda: state.connection.closed,
+            lambda: state.client.connection.closed,
             5.0,
             "a read-only client could not detach itself",
         )
@@ -185,7 +185,7 @@ async def test_a_read_only_client_cannot_detach_everybody_else():
             session.pymux.handle_command("detach-client -a")
 
         assert watching.message == "client is read-only"
-        assert not working.connection.closed
+        assert not working.client.connection.closed
 
 
 async def test_a_read_only_client_cannot_detach_a_named_client():
@@ -193,10 +193,10 @@ async def test_a_read_only_client_cannot_detach_a_named_client():
         working, watching = await _two_clients(session)
 
         with set_app(watching.app):
-            session.pymux.handle_command("detach-client -t %s" % (working.connection.name,))
+            session.pymux.handle_command("detach-client -t %s" % (working.client.connection.name,))
 
         assert watching.message == "client is read-only"
-        assert not working.connection.closed
+        assert not working.client.connection.closed
 
 
 async def test_a_read_only_client_cannot_take_the_session():
@@ -212,7 +212,7 @@ async def test_a_read_only_client_cannot_take_the_session():
             session.pymux.handle_command("attach-session -x")
 
         assert watching.message == "client is read-only"
-        assert not working.connection.closed
+        assert not working.client.connection.closed
 
 
 async def test_an_ordinary_client_still_takes_the_session():
@@ -225,7 +225,7 @@ async def test_an_ordinary_client_still_takes_the_session():
             session.pymux.handle_command("detach-client -a")
 
         await once(
-            lambda: working.connection.closed,
+            lambda: working.client.connection.closed,
             5.0,
             "an ordinary client could not detach the others",
         )
@@ -253,7 +253,7 @@ async def test_a_read_only_client_cannot_set_somebody_else_up():
         was = working.options.theme
 
         with set_app(watching.app):
-            session.pymux.handle_command("set-client-option -t %s theme grey" % (working.connection.name,))
+            session.pymux.handle_command("set-client-option -t %s theme grey" % (working.client.connection.name,))
 
         assert watching.message == "client is read-only"
         assert working.options.theme == was

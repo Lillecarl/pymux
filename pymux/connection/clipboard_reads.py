@@ -19,7 +19,7 @@ from pyte.sequences.strings import Terminator, osc
 from ..enums import Woke
 
 if TYPE_CHECKING:
-    from .server import ServerConnection
+    from .client import ClientRole
 
 __all__ = ["ClipboardReader"]
 
@@ -45,7 +45,7 @@ class ClipboardReader:
     """
 
     KEEP: ClassVar[dict[str, Keep]] = {
-        "connection": Keep.REBUILT,
+        "client": Keep.REBUILT,
         # Asked again of the terminal the client reattaches from.
         "answers": Keep.REBUILT,
         "_waiters": Keep.REBUILT,
@@ -53,8 +53,8 @@ class ClipboardReader:
         "_partial": Keep.REBUILT,
     }
 
-    def __init__(self, connection: ServerConnection) -> None:
-        self.connection = connection
+    def __init__(self, client: ClientRole) -> None:
+        self.client = client
 
         #: Whether this terminal answers a clipboard query: None until
         #: one is asked, False after one went unanswered, True once an
@@ -79,14 +79,14 @@ class ClipboardReader:
         None when the terminal does not answer in time, has been seen not
         to, or answered with nothing. Lillecarl/pymux#383.
         """
-        if self.answers is False or self.connection.client_state is None or self.connection.client_state.temporary:
+        if self.answers is False or self.client.state is None or self.client.state.temporary:
             return None
         done = anyio.Event()
         answer: list[str] = []
         self._waiters.append((done, answer))
         self._asked = True
-        self.connection.forward_osc(osc(Osc.CLIPBOARD, selection, QUERY))
-        self.connection.pymux.invalidate(Woke.CLIPBOARD_ASKED)
+        self.client.forward_osc(osc(Osc.CLIPBOARD, selection, QUERY))
+        self.client.pymux.invalidate(Woke.CLIPBOARD_ASKED)
         with anyio.move_on_after(CLIPBOARD_READ_SECONDS):
             await done.wait()
         if not done.is_set():
@@ -118,13 +118,13 @@ class ClipboardReader:
             prefixes.append(_CLIPBOARD_REPLY)
         # kitty's clipboard answers whenever it likes: a paste event
         # comes unasked. Lillecarl/pymux#893.
-        if self.connection.replies.kitty_clipboard:
+        if self.client.replies.kitty_clipboard:
             prefixes.append(_KITTY_CLIPBOARD_REPLY)
         # kitty's drag and drop, once asked. Lillecarl/pymux#892.
-        if self.connection.pymux.drag_and_drop.is_asked(self.connection):
+        if self.client.pymux.drag_and_drop.is_asked(self.client):
             prefixes.append(_KITTY_DND_REPLY)
         # kitty's file transfer, while a session runs. Lillecarl/pymux#912.
-        if self.connection.pymux.kitty_transfers.listens(self.connection):
+        if self.client.pymux.kitty_transfers.listens(self.client.connection):
             prefixes.append(_FILE_TRANSFER_REPLY)
         if not prefixes and not self._partial:
             return data
@@ -142,11 +142,11 @@ class ClipboardReader:
             return data[:start]
         end, length = min(ends)
         if prefix == _KITTY_CLIPBOARD_REPLY:
-            self.connection.pymux.rich_clipboard.terminal_said(self.connection, data[body:end])
+            self.client.pymux.rich_clipboard.terminal_said(self.client, data[body:end])
         elif prefix == _KITTY_DND_REPLY:
-            self.connection.pymux.drag_and_drop.terminal_said(self.connection, data[body:end])
+            self.client.pymux.drag_and_drop.terminal_said(self.client, data[body:end])
         elif prefix == _FILE_TRANSFER_REPLY:
-            self.connection.pymux.kitty_transfers.terminal_said(self.connection, data[body:end])
+            self.client.pymux.kitty_transfers.terminal_said(self.client.connection, data[body:end])
         else:
             self._answered(data[body:end])
         return data[:start] + self.take_answer(data[end + length :])

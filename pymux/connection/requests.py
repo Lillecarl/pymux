@@ -23,6 +23,7 @@ from ..ids import PaneId
 from ..keys.actions import Origin, started_by
 from ..pipes.base import BrokenPipeError
 from .attach import create_app
+from .client import ClientRole
 
 if TYPE_CHECKING:
     from pymux.connection.client_state import ClientState
@@ -90,7 +91,7 @@ class Requests:
         """
         Execute a run command from the client.
         """
-        temporary = self.connection.client_state is None
+        temporary = self.connection.client is None
 
         if temporary:
             # A command over the socket has no client of its own: it runs
@@ -105,9 +106,8 @@ class Requests:
             # would open the window in another. Lillecarl/pymux#323.
             session = self.connection.pymux.session_holding(pane) if pane is not None else None
 
-            create_app(self.connection, start=False, session=session)
-            client_state = self.connection.client_state
-            if client_state is not None and pane is not None and session is not None:
+            client_state = create_app(ClientRole(self.connection), start=False, session=session)
+            if pane is not None and session is not None:
                 client_state.caller_pane_id = pane.pane_id
                 with set_app(client_state.app):
                     session.arrangement.set_active_window_from_pane_id(pane.pane_id)
@@ -116,9 +116,8 @@ class Requests:
             # attached to yet: the bindings and the first window it
             # would have gotten then arrive now. Later ones noop.
             # Under the temporary application, so the new pane focuses.
-            if client_state is not None:
-                with set_app(client_state.app):
-                    await self.connection.pymux.startup()
+            with set_app(client_state.app):
+                await self.connection.pymux.startup()
 
         pymux = self.connection.pymux
         # Who sent this, and from where: the client resolves both fresh
@@ -130,10 +129,11 @@ class Requests:
             forwarded=bool(packet.get(Field.FORWARDED)),
         )
 
-        client_state = self.connection.client_state
-        if client_state is None:
+        client = self.connection.client
+        if client is None:
             self.connection.close_connection()
             return
+        client_state = client.state
 
         with set_app(client_state.app):
             try:

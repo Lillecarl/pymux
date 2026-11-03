@@ -38,7 +38,7 @@ def take_environment_from(pymux: Pymux, client_state: ClientState) -> None:
     here, except for the names this option lists -- those belong to
     whoever attached. Lillecarl/pymux#271, Lillecarl/pymux#270.
     """
-    reported = client_state.connection.environment
+    reported = client_state.client.environment
     environment = client_state.session.environment
 
     for pattern in client_state.session.options.update_environment.split():

@@ -458,8 +458,8 @@ async def _questions_of(pymux) -> list[tuple]:
 def _copy_modes_of(pymux) -> list:
     "What the returning client reads the history of, as its record says."
     for connection in pymux.connections:
-        if connection.client_id == "returning":
-            return connection.client_state.modes()["copying"]
+        if connection.client.client_id == "returning":
+            return connection.client.state.modes()["copying"]
     return pymux.returning_clients["returning"]["modes"]["copying"]
 
 
@@ -526,8 +526,8 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
         await _run_jobs(pymux)
         connection = pymux.connections[-1]
         # The web viewer here sends no id; a terminal client does.
-        connection.client_id = "returning"
-        with set_app(connection.client_state.app):
+        connection.client.client_id = "returning"
+        with set_app(connection.client.state.app):
             for command in (
                 "split-window -v",
                 "split-window -v",
@@ -580,7 +580,7 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                     await once(lambda: viewed in _viewers_of(pymux), 10.0, "the viewer never came")
                 await settled(session, 0.1)
         await settled(session)
-        _vary_what_no_command_reaches(pymux, connection.client_state)
+        _vary_what_no_command_reaches(pymux, connection.client.state)
         jobs = _jobs_of(pymux)
         questions = await _questions_of(pymux)
 
@@ -658,14 +658,14 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                     while "marker" not in _text(reloaded):
                         await anyio.sleep(0.05)
                 async with attached(fresh):
-                    back = fresh.connections[-1].client_state
+                    back = fresh.connections[-1].client.state
                     welcome_back(fresh, back, "gone")
                     (elsewhere,) = back.session.arrangement.windows
                     assert back.session.name == "second"
                     assert back.session.arrangement.previous_window_for(back.app) is elsewhere
                     assert (back.options.name, back.read_only, back.message) == ("phone", True, "job 2 exited 4")
                     assert "gone" not in fresh.returning_clients
-                    assert back.connection.created == 1000.5
+                    assert back.client.created == 1000.5
                     # What it was in the middle of, and the prompt holds the keyboard.
                     assert (back.has_prefix, back.key_tables, back.confirm_text) == (True, ["resize"], "Kill the pane?")
                     assert back.chooser is Chooser.WINDOW and back.choose_window_filter.text == "sl"
@@ -673,13 +673,13 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                     assert (back.prompt_command, back.prompt_buffer.text) == ("rename-window '%%'", "half typ")
                     assert back.app.layout.has_focus(back.prompt_buffer)
                 async with attached(fresh):
-                    back = fresh.connections[-1].client_state
+                    back = fresh.connections[-1].client.state
                     welcome_back(fresh, back, "away")
                     assert (back.menu_title, back.menu_entries) == ("Do", [("a", "again", "display-message again")])
                     assert back.command_buffer.text == "kill-ses"
                     assert back.app.layout.has_focus(back.command_buffer)
                 async with attached(fresh):
-                    back = fresh.connections[-1].client_state
+                    back = fresh.connections[-1].client.state
                     welcome_back(fresh, back, "returning")
                     copying = [pane for pane in fresh.panes_by_id.values() if pane.is_copying_for(back.app)]
                     assert len(copying) == 2
@@ -913,7 +913,7 @@ async def test_a_viewer_is_written_again_by_the_second_write(pymux, tmp_path):
         pymux.tasks.start_soon(pymux.jobs.supervise, job)
         with anyio.fail_after(10):
             await pymux.jobs.wait(job)
-        with set_app(pymux.connections[-1].client_state.app):
+        with set_app(pymux.connections[-1].client.state.app):
             pymux.handle_command("view-job -k %d" % job.job_id)
         await once(lambda: job.job_id in _viewers_of(pymux), 10.0, "the viewer never came")
         written = Snapshot(tmp_path / "twice.sqlite")

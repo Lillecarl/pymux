@@ -36,10 +36,11 @@ from prompt_toolkit.layout.screen import Screen, WritePosition
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 from pyte.modes import PrivateMode
-from session import Connection
+from session import Client
 from test_server_tasks import FakePipe
 
 from pymux.commands import handle_command
+from pymux.connection.client import ClientRole
 from pymux.connection.server import ServerConnection
 from pymux.core.main import Pymux
 from pymux.enums import WindowSize
@@ -127,7 +128,7 @@ async def two_clients(commands=()):
                     output=output,
                     input=pipe,
                     color_depth=ColorDepth.DEPTH_8_BIT,
-                    connection=Connection(),
+                    client=Client(),
                 )
                 client = _Client(pymux, state, size)
                 opened.append(client)
@@ -223,11 +224,12 @@ async def test_focus_in_uses_client():
     """
     async with two_clients(["set-window-option window-size latest"]) as (pymux, big, _small):
         connection = ServerConnection(pymux, FakePipe())
-        connection.client_state = big.state
-        connection.replies.arrived(FOCUS_OUT)
+        connection.client = client = ClientRole(connection)
+        client.state = big.state
+        client.replies.arrived(FOCUS_OUT)
         assert plane(pymux).columns == SMALL.columns
 
-        connection.replies.arrived(FOCUS_IN)
+        client.replies.arrived(FOCUS_IN)
         assert plane(pymux).columns == BIG.columns
         connection.close_connection()
 

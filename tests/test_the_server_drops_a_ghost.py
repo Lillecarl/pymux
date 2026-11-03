@@ -44,7 +44,7 @@ async def test_a_client_that_answers_is_asked_and_kept(monkeypatch):
 
     async with over_connection(read_packet=seen.append) as session:
         state, _size = await session.attach("the client", SIZE, pings=True)
-        connection = state.connection
+        connection = state.client.connection
 
         await once(lambda: _pings(seen), 5.0, "the server to ask")
 

@@ -40,12 +40,12 @@ async def _answered(answer: str, drawn: str) -> tuple[str, bool]:
     async with over_connection(pymux=Pymux(startup_command=command), read_packet=recorder) as session:
         state, _ = await session.attach("one", SIZE)
         await once(lambda: "X" in recorder.out, 10.0, "the pane never drew")
-        state.connection._process({Field.CMD: Packet.DETECT})
+        state.client.connection._process({Field.CMD: Packet.DETECT})
         await once(lambda: EMOJI_WIDTH_PROBE in recorder.out, 10.0, "the terminal was never asked")
         before = len(recorder.out)
-        state.connection._process({"cmd": "in", "data": answer})
+        state.client.connection._process({"cmd": "in", "data": answer})
         await once(lambda: drawn in recorder.out[before:], 10.0, lambda: "never drawn: %r" % recorder.out[before:])
-        return recorder.out[before:], state.connection.replies.widens_text_emoji
+        return recorder.out[before:], state.client.replies.widens_text_emoji
 
 
 async def test_a_terminal_that_widens_it_is_sent_the_character_alone():
@@ -63,9 +63,9 @@ async def test_a_terminal_that_keeps_it_narrow_changes_nothing():
     command = 'sh -c \'printf "%sX\\n"; sleep 0.5; printf "%sY\\n"; sleep 30\'' % (EMOJI, EMOJI)
     async with over_connection(pymux=Pymux(startup_command=command), read_packet=recorder) as session:
         state, _ = await session.attach("one", SIZE)
-        state.connection._process({Field.CMD: Packet.DETECT})
+        state.client.connection._process({Field.CMD: Packet.DETECT})
         await once(lambda: EMOJI_WIDTH_PROBE in recorder.out, 10.0, "the terminal was never asked")
         before = len(recorder.out)
-        state.connection._process({"cmd": "in", "data": "\x1b[2;2R"})
+        state.client.connection._process({"cmd": "in", "data": "\x1b[2;2R"})
         await once(lambda: EMOJI in recorder.out[before:], 10.0, lambda: "never drawn: %r" % recorder.out[before:])
-        assert not state.connection.replies.widens_text_emoji
+        assert not state.client.replies.widens_text_emoji

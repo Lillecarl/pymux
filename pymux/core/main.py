@@ -76,6 +76,7 @@ if TYPE_CHECKING:
     from prompt_toolkit.output import ColorDepth, Output
 
     from ..commands.wait_for import WaitChannel
+    from ..connection.client import ClientRole
     from ..mirror.copying import MirrorCopy
     from ..mirror.link import PeerLink
     from ..pipes.posix import PosixSocketListener
@@ -202,7 +203,7 @@ class Pymux:
         session_name: str | None = None,
         size_with_no_client: Size | None = None,
     ):
-        self._client_states = {}  # connection -> client_state
+        self._client_states: dict[ClientRole, ClientState] = {}
 
         #: How many times a client has been used, over the session.
         #: `client_was_used` bumps it and stamps the client, and
@@ -278,7 +279,7 @@ class Pymux:
         #: Lillecarl/pymux#159.
         self._serves_one_terminal = False
 
-        self.connections = []
+        self.connections: list[ServerConnection] = []
 
         self.terminals = Terminals(self)
         self.planes = Planes(self)
@@ -1029,17 +1030,18 @@ class Pymux:
         terminal it sits at, by its XTVERSION answer or its TERM, or
         else "key-profile". Lillecarl/pymux#706.
         """
-        named = client.connection.replies.identity.key_profile if client is not None else ""
+        named = client.client.replies.identity.key_profile if client is not None else ""
         options = client.session.options if client is not None else self.session_defaults
         return KEY_PROFILES[named or options.key_profile]
 
-    def finish_recordings(self, holders: Iterable[Pane | ServerConnection] | None = None) -> None:
+    def finish_recordings(self, holders: Iterable[Pane | ClientRole] | None = None) -> None:
         """
         Write out what `record-pane` and `record-client` were recording
-        of `holders`: panes and client connections, every one by default.
+        of `holders`: panes and clients, every one by default.
         """
         if holders is None:
-            holders = [*self.panes_by_id.values(), *self.connections]
+            clients = [connection.client for connection in self.connections if connection.client is not None]
+            holders = [*self.panes_by_id.values(), *clients]
         for holder in holders:
             recording, holder.recording = holder.recording, None
             if recording is None:
@@ -1260,8 +1262,8 @@ class Pymux:
         one of them attached. Lillecarl/pymux#347.
         """
         client_state = self.client_of(app)
-        if client_state is not None and client_state.connection is not None:
-            client_state.connection.detach_and_close(hang_up=hang_up)
+        if client_state is not None:
+            client_state.client.connection.detach_and_close(hang_up=hang_up)
 
         # Redraw all clients -> Maybe their size has to change.
         self.invalidate(Woke.CLIENT_DETACHED)
@@ -1271,7 +1273,7 @@ class Pymux:
         output: Output,
         input: Input,
         color_depth: ColorDepth,
-        connection: ServerConnection,
+        client: ClientRole,
         temporary: bool = False,
         session: Session | None = None,
     ) -> ClientState:
@@ -1285,16 +1287,19 @@ class Pymux:
 
         client_state = ClientState(
             self,
-            connection=connection,
+            client=client,
             input=input,
             output=output,
             color_depth=color_depth,
             session=session,
         )
+        # Before anything walks the clients: they reach this one's
+        # record through its role.
+        client.state = client_state
         client_state.temporary = temporary
         client_state.app.renderer.reference = self.options.render_mode is RenderMode.REFERENCE
 
-        self._client_states[connection] = client_state
+        self._client_states[client] = client_state
 
         # Attaching counts as using it, so `window-size latest` has an
         # answer before anybody has pressed a key. tmux stamps a client
@@ -1335,7 +1340,8 @@ class Pymux:
         -- so the cost is memory and a longer walk for every broadcast.
         Lillecarl/pymux#226.
         """
-        gone = self._client_states.pop(connection, None)
+        client = connection.client
+        gone = self._client_states.pop(client, None) if client is not None else None
         if connection in self.connections:
             self.connections.remove(connection)
             self.counters.client_left(connection.pipe_connection)

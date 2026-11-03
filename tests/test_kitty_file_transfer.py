@@ -30,8 +30,8 @@ class Wired:
     def __init__(self, state, pane) -> None:
         self.terminal: list[str] = []
         self.program: list[str] = []
-        state.connection.write_output_raw = self.terminal.append
-        state.connection.flush_output = lambda: None
+        state.client.write_output_raw = self.terminal.append
+        state.client.flush_output = lambda: None
         pane.screen.write_process_input = self.program.append
 
     def told(self) -> list[TransferCommand]:
@@ -41,7 +41,7 @@ class Wired:
 
 async def _attached(session, version: str):
     state, _ = await session.attach("one", SIZE)
-    state.connection.graphics.terminal_version = version
+    state.client.graphics.terminal_version = version
     with set_app(state.app):
         await session.pymux.panes.create_window(PANE_THAT_STAYS)
     pane = session.pymux.arrangement.get_active_window().panes[0]
@@ -59,7 +59,7 @@ async def test_a_session_goes_to_kitty_and_its_answers_come_back():
         _program_says(pane, SEND)
         assert wired.terminal == [str(SEND)]
 
-        state.connection._process({"cmd": "in", "data": str(OK)})
+        state.client.connection._process({"cmd": "in", "data": str(OK)})
         assert wired.program == [str(OK)], "as the terminal wrote it"
 
         data = TransferCommand(Action.DATA, id="s1", file_id="f1", data=b"abc")
@@ -70,7 +70,7 @@ async def test_a_session_goes_to_kitty_and_its_answers_come_back():
 async def test_an_answer_for_no_session_reaches_nobody():
     async with over_connection() as session:
         state, _pane, wired = await _attached(session, "kitty(0.49.2)")
-        state.connection._process({"cmd": "in", "data": str(OK)})
+        state.client.connection._process({"cmd": "in", "data": str(OK)})
         assert wired.program == []
 
 
@@ -103,7 +103,7 @@ async def test_the_program_hears_when_the_terminal_goes():
     async with over_connection() as session:
         state, pane, wired = await _attached(session, "kitty(0.49.2)")
         _program_says(pane, SEND)
-        session.pymux.remove_client(state.connection)
+        session.pymux.remove_client(state.client.connection)
         [gone] = wired.told()
         assert gone.status.startswith("EIO:")
 
@@ -121,7 +121,7 @@ async def _sent_more_than_the_pane_holds(tmp_path, program: str, monkeypatch) ->
 
     async with over_connection(read_packet=read_packet) as session:
         state, _ = await session.attach("one", SIZE)
-        state.connection.graphics.terminal_version = "kitty(0.49.2)"
+        state.client.graphics.terminal_version = "kitty(0.49.2)"
         with set_app(state.app):
             await session.pymux.panes.create_window("%s %s" % (sys.executable, script))
         pane = session.pymux.arrangement.get_active_window().panes[0]
@@ -130,7 +130,7 @@ async def _sent_more_than_the_pane_holds(tmp_path, program: str, monkeypatch) ->
         pane.screen.write_process_input = write
         _program_says(pane, SEND)
         data = TransferCommand(Action.DATA, id="s1", file_id="f1", data=b"x" * (2 * kitty_transfers.HOLD_BYTES))
-        state.connection._process({"cmd": "in", "data": str(data)})
+        state.client.connection._process({"cmd": "in", "data": str(data)})
         await once(lambda: Packet.RELEASE_INPUT in heard, 20.0, lambda: "never released; heard %r" % (heard,))
     return heard, wired
 

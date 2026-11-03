@@ -328,7 +328,7 @@ def clients_named(pymux: Pymux, wanted: str) -> list[ClientState]:
         if wanted
         in (
             client_state.options.name,
-            client_state.connection.name,
+            client_state.client.connection.name,
         )
     ]
     if not found:
@@ -341,9 +341,9 @@ def the_client(pymux: Pymux, target: str | None, command: str) -> ClientState:
     if target is not None:
         return clients_named(pymux, target)[0]
     here = this_client(pymux)
-    if here is not None and here.connection is not None:
+    if here is not None:
         return here
-    clients = [one for one in pymux.clients if one.connection is not None]
+    clients = pymux.clients
     if not clients:
         raise CommandException("%s: no client is attached" % (command,))
     return max(clients, key=lambda client: client.last_used)

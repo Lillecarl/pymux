@@ -115,9 +115,9 @@ async def upgrade(pymux: Pymux, command: list[str]) -> None:
             written.write(pymux)
             await _check(command, written.partial)
             for connection in list(pymux.connections):
-                client_state = connection.client_state
+                client = connection.client
                 # A peer's mirrors say it in each pane, as a client says it on its terminal.
-                if connection.peer is not None or (client_state is not None and not client_state.temporary):
+                if connection.peer is not None or (client is not None and not client.state.temporary):
                     await connection.say_restarting(RESTART_WAIT, UPGRADING)
             # From the sweep on, a command that ends a pane would leave a
             # program neither image ends or reaps. Lillecarl/pymux#740.
@@ -188,11 +188,10 @@ async def _answer_the_caller(pymux: Pymux) -> None:
     every command sends at its end never goes. Lillecarl/pymux#606.
     """
     try:
-        connection = pymux.get_client_state().connection
+        client = pymux.get_client_state().client
     except ValueError:
         return
-    if connection is not None:
-        await connection.requests.answer(0)
+    await client.connection.requests.answer(0)
 
 
 def _refuse(pymux: Pymux) -> None:
@@ -391,7 +390,7 @@ def welcome_back(pymux: Pymux, client_state: ClientState, client_id: str) -> Non
         setattr(client_state.options, name, value)
     pymux.terminals.sync_color_bases()
     if record.get("connected") is not None:
-        client_state.connection.created = record["connected"]
+        client_state.client.created = record["connected"]
 
     session = sessions.get(record["session_id"])
     if session is not None:

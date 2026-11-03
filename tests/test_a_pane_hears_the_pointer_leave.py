@@ -25,10 +25,10 @@ async def test_a_pointer_that_moves_to_another_pane_leaves_the_first(tmp_path):
     pymux = Pymux()
     async with over_connection(pymux=pymux) as session:
         state, _size = await session.attach("one", SIZE)
-        graphics = state.connection.graphics
+        graphics = state.client.graphics
         graphics.cell_width, graphics.cell_height = CELL
         graphics.cell_size_known = True
-        state.connection.replies.pixel_mouse = True
+        state.client.replies.pixel_mouse = True
         pymux.session_defaults.mouse = True
 
         await run_as(pymux, state, "split-window -h %s" % shlex.quote("sh -c %s" % shlex.quote(program)))
@@ -46,7 +46,7 @@ async def test_a_pointer_that_moves_to_another_pane_leaves_the_first(tmp_path):
         def move_to(pane) -> None:
             where = drawn(pane)
             x, y = (where.xpos + 2) * CELL[0] + 5, (where.ypos + 1) * CELL[1] + 10
-            state.connection._process({"cmd": "in", "data": "\x1b[<35;%d;%dM" % (x, y)})
+            state.client.connection._process({"cmd": "in", "data": "\x1b[<35;%d;%dM" % (x, y)})
 
         move_to(right)
         await once(lambda: heard.exists() and b"\x1b[<35;" in heard.read_bytes(), 10.0, "no move reached the program")

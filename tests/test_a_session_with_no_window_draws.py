@@ -18,7 +18,7 @@ from prompt_toolkit.data_structures import Size
 from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
-from session import Connection
+from session import Client
 
 from pymux.core.main import Pymux
 
@@ -37,7 +37,7 @@ async def client():
                 output=output,
                 input=pipe,
                 color_depth=ColorDepth.DEPTH_8_BIT,
-                connection=Connection(),
+                client=Client(),
             )
             assert not state.session.arrangement.windows
             yield state

@@ -25,7 +25,7 @@ from prompt_toolkit.data_structures import Size
 from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
-from session import Connection
+from session import Client
 
 from pymux import introspect, log
 from pymux.answer import Answer
@@ -60,7 +60,7 @@ async def create_server(tmp_path, monkeypatch):
                 output=output,
                 input=pipe,
                 color_depth=ColorDepth.DEPTH_8_BIT,
-                connection=Connection(),
+                client=Client(),
             )
             # What the first client brings: the window this server is
             # described by, holding the pane the command runs in.

@@ -160,7 +160,7 @@ async def test_a_pane_that_draws_keeps_the_pacing_of_a_terminal_behind(rate):
     async with create_session() as (mux, state):
         with set_app(state.app):
             mux.handle_command("set-window-option frame-rate %d" % rate)
-        pipe = state.connection.pipe_connection
+        pipe = state.client.connection.pipe_connection
         pipe.holds_frames_while_behind, pipe.outstanding = True, 1
         assert state.should_skip_render()
 
@@ -182,7 +182,7 @@ async def test_a_frame_held_for_the_terminals_answer_asks_for_no_other():
         asked = []
         state.app.invalidate = lambda: asked.append(True)
         before = state.app.min_redraw_interval
-        state.connection.pacing.waits_for_terminal = True
+        state.client.pacing.waits_for_terminal = True
 
         assert state.should_skip_render()
         assert asked == []

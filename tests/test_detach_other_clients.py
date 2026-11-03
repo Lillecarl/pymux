@@ -162,9 +162,9 @@ async def test_t_detaches_the_client_of_that_name():
         pymux = session.pymux
         here, _ = await session.attach("here", SIZE)
         there, _ = await session.attach("there", SIZE)
-        assert here.connection.name != there.connection.name
+        assert here.client.connection.name != there.client.connection.name
 
-        run_at(here, "detach-client -t %s" % (there.connection.name,))
+        run_at(here, "detach-client -t %s" % (there.client.connection.name,))
 
         assert pymux.clients == [here]
 
@@ -195,7 +195,7 @@ async def test_t_can_detach_the_client_that_asked():
         here, _ = await session.attach("here", SIZE)
         there, _ = await session.attach("there", SIZE)
 
-        run_at(here, "detach-client -t %s" % (here.connection.name,))
+        run_at(here, "detach-client -t %s" % (here.client.connection.name,))
 
         assert pymux.clients == [there]
 
@@ -207,7 +207,7 @@ async def test_t_over_the_wire_takes_the_name_the_client_reported():
         here, _ = await session.attach("here", SIZE, ttyname="/dev/pts/7")
         there, _ = await session.attach("there", SIZE, ttyname="/dev/pts/8")
 
-        assert there.connection.name == "buildbox-3:/dev/pts/8"
+        assert there.client.connection.name == "buildbox-3:/dev/pts/8"
 
         run_at(here, "detach-client -t buildbox-3:/dev/pts/8")
 
@@ -221,7 +221,7 @@ async def test_a_client_with_no_terminal_is_named_by_its_process():
 
         # `session.py` reports 4242 as the pid of every client it
         # attaches.
-        assert state.connection.name == "buildbox-3:client-4242"
+        assert state.client.connection.name == "buildbox-3:client-4242"
 
 
 async def test_the_name_carries_the_machine_so_two_ttys_do_not_collide():
@@ -233,9 +233,9 @@ async def test_the_name_carries_the_machine_so_two_ttys_do_not_collide():
         one, _ = await session.attach("one", SIZE, hostname="laptop", ttyname="/dev/pts/3")
         two, _ = await session.attach("two", SIZE, hostname="desktop", ttyname="/dev/pts/3")
 
-        assert one.connection.name == "laptop:/dev/pts/3"
-        assert two.connection.name == "desktop:/dev/pts/3"
-        assert one.connection.name != two.connection.name
+        assert one.client.connection.name == "laptop:/dev/pts/3"
+        assert two.client.connection.name == "desktop:/dev/pts/3"
+        assert one.client.connection.name != two.client.connection.name
 
 
 async def test_a_reaches_the_other_client_over_the_wire():

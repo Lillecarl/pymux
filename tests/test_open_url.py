@@ -561,7 +561,7 @@ async def test_client_that_could_not_open_says_so_in_its_status_line():
     async with over_connection() as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
-        connection = state.connection
+        connection = state.client.connection
 
         connection._process({"cmd": "open-failed", "data": URL})
 

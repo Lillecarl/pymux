@@ -19,7 +19,7 @@ from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.mouse_events import MouseButton, MouseEvent, MouseEventType, MouseModifier
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
-from session import Connection, once
+from session import Client, once
 from test_window_panes import PROBE, logged
 
 pytest.importorskip("pysmithay")
@@ -73,7 +73,7 @@ async def mirrored_window(tmp_path, codec: WindowCodec):
                 output=output,
                 input=pipe,
                 color_depth=ColorDepth.DEPTH_8_BIT,
-                connection=Connection("here", None, peer, "/dev/pts/8"),
+                client=Client("here", None, peer, "/dev/pts/8"),
             )
             async with await anyio.open_process(
                 [sys.executable, str(PROBE), str(log)],

@@ -64,8 +64,8 @@ async def test_a_client_is_listed_with_its_cell_once_its_terminal_said():
         cell = "list-clients -F '[#{client_cell_width}x#{client_cell_height}]'"
         assert await _lines(session, cell) == ["[x]"]
 
-        state.connection._process({"cmd": "in", "data": "\x1b[6;19;9t"})
-        await once(lambda: state.connection.graphics.cell_size_known, 10.0, "the cell never arrived")
+        state.client.connection._process({"cmd": "in", "data": "\x1b[6;19;9t"})
+        await once(lambda: state.client.graphics.cell_size_known, 10.0, "the cell never arrived")
         assert await _lines(session, cell) == ["[9x19]"]
 
 

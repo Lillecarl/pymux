@@ -28,6 +28,7 @@ from pymux.connection.rate import frames_per_second, per_second
 from pymux.tags import spelled
 
 if TYPE_CHECKING:
+    from pymux.connection.client import ClientRole
     from pymux.connection.client_state import ClientState
     from pymux.connection.rate import Rate
     from pymux.connection.server import ServerConnection
@@ -625,15 +626,15 @@ def _created(context: FormatContext) -> str:
     return str(int(context.pymux.created))
 
 
-def _connection_of(context: FormatContext) -> ServerConnection | None:
+def _client_of(context: FormatContext) -> ClientRole | None:
     """
-    The connection of the client this is drawn for, when there is one.
+    The client this is drawn for, when there is one.
 
     A command formats without a client and answers nothing, which is
     what tmux does when its own client is NULL.
     """
     client = context.client
-    return client.connection if client is not None else None
+    return client.client if client is not None else None
 
 
 def _pane_mode(context: FormatContext) -> str:
@@ -702,8 +703,8 @@ def _client_hostname(context: FormatContext) -> str:
     the server's answer and this is the other one. The client reports
     it when it attaches. Lillecarl/pymux#287, Lillecarl/pymux#330.
     """
-    connection = _connection_of(context)
-    return connection.hostname if connection is not None else ""
+    client = _client_of(context)
+    return client.hostname if client is not None else ""
 
 
 def _client_name(context: FormatContext) -> str:
@@ -732,8 +733,8 @@ def _client_tty(context: FormatContext) -> str:
     says why the machine is always in front of it.
     Lillecarl/pymux#335, Lillecarl/pymux#340.
     """
-    connection = _connection_of(context)
-    return connection.name if connection is not None else ""
+    client = _client_of(context)
+    return client.connection.name if client is not None else ""
 
 
 def _client_created(context: FormatContext) -> str:
@@ -744,45 +745,45 @@ def _client_created(context: FormatContext) -> str:
     of one terminal apart: a reattach from the same window takes the
     same name and a later time.
     """
-    connection = _connection_of(context)
-    return str(int(connection.created)) if connection is not None else ""
+    client = _client_of(context)
+    return str(int(client.created)) if client is not None else ""
 
 
 def _client_activity(context: FormatContext) -> str:
     "When a person last pressed a key or used the mouse at this client, in seconds. tmux's own."
-    connection = _connection_of(context)
-    return str(int(connection.activity)) if connection is not None else ""
+    client = _client_of(context)
+    return str(int(client.activity)) if client is not None else ""
 
 
 def _client_id(context: FormatContext) -> str:
-    connection = _connection_of(context)
-    return connection.client_id if connection is not None else ""
+    client = _client_of(context)
+    return client.client_id if client is not None else ""
 
 
 def _client_termname(context: FormatContext) -> str:
     "What the client says its terminal is. (`TERM`, as it reported it.)"
-    connection = _connection_of(context)
-    return connection.colors.term if connection is not None else ""
+    client = _client_of(context)
+    return client.colors.term if client is not None else ""
 
 
 def _client_width(context: FormatContext) -> str:
-    connection = _connection_of(context)
-    return str(connection.size.columns) if connection is not None else ""
+    client = _client_of(context)
+    return str(client.connection.size.columns) if client is not None else ""
 
 
 def _client_height(context: FormatContext) -> str:
-    connection = _connection_of(context)
-    return str(connection.size.rows) if connection is not None else ""
+    client = _client_of(context)
+    return str(client.connection.size.rows) if client is not None else ""
 
 
 def _client_cell(side: Callable[[ClientGraphics], int]) -> Callable[[FormatContext], str]:
     "One side of the client's cell in pixels, as tmux 3.4 names it; nothing until the terminal answered."
 
     def answer(context: FormatContext) -> str:
-        connection = _connection_of(context)
-        if connection is None or not connection.graphics.cell_size_known:
+        client = _client_of(context)
+        if client is None or not client.graphics.cell_size_known:
             return ""
-        return str(side(connection.graphics))
+        return str(side(client.graphics))
 
     return answer
 
@@ -794,8 +795,8 @@ def _client_bytes(count: Callable[[PipeConnection], int]) -> Callable[[FormatCon
     """
 
     def bytes_of(context: FormatContext) -> str:
-        connection = _connection_of(context)
-        return str(count(connection.pipe_connection)) if connection is not None else ""
+        client = _client_of(context)
+        return str(count(client.connection.pipe_connection)) if client is not None else ""
 
     return bytes_of
 
@@ -810,10 +811,10 @@ def _client_rate(
     """
 
     def rate_of(context: FormatContext) -> str:
-        connection = _connection_of(context)
-        if connection is None:
+        client = _client_of(context)
+        if client is None:
             return ""
-        return per_second(rate(connection).read_now(count(connection.pipe_connection)))
+        return per_second(rate(client.connection).read_now(count(client.connection.pipe_connection)))
 
     return rate_of
 
@@ -823,10 +824,10 @@ def _client_fps(context: FormatContext) -> str:
     The frames a second this client gets, over the last few seconds.
     A status line shows it where a template puts it. Lillecarl/pymux#596.
     """
-    connection = _connection_of(context)
-    if connection is None:
+    client = _client_of(context)
+    if client is None:
         return ""
-    return frames_per_second(connection.pacing.rate_frames.read_now(connection.pacing.frames_sent))
+    return frames_per_second(client.pacing.rate_frames.read_now(client.pacing.frames_sent))
 
 
 def _client_window_fps(context: FormatContext) -> str:
@@ -836,10 +837,10 @@ def _client_window_fps(context: FormatContext) -> str:
     `#{client_fps}` counts, which a video in a Wayland pane does not
     move.
     """
-    connection = _connection_of(context)
-    if connection is None:
+    client = _client_of(context)
+    if client is None:
         return ""
-    rate = connection.pacing.rate_window_frames.read_now(connection.pacing.window_frames_sent)
+    rate = client.pacing.rate_window_frames.read_now(client.pacing.window_frames_sent)
     return frames_per_second(rate) if rate else ""
 
 

@@ -364,9 +364,7 @@ def _clicked(pymux, state, param):
     "kitty's answer arriving on the connection of the client `state` is."
     from pymux.connection.replies import TerminalReplies
 
-    TerminalReplies._route_notification(
-        SimpleNamespace(connection=SimpleNamespace(pymux=pymux, client_state=state)), param
-    )
+    TerminalReplies._route_notification(SimpleNamespace(client=SimpleNamespace(pymux=pymux, state=state)), param)
 
 
 async def test_a_click_on_a_notification_shows_its_pane():

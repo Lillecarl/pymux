@@ -123,7 +123,9 @@ async def attached(pymux, read_only: bool = False):
         async with anyio.create_task_group() as tg:
             tg.start_soon(feed)
             try:
-                await once(lambda: connection.client_state, 10.0, "no client was made")
+                await once(
+                    lambda: connection.client is not None and connection.client.state, 10.0, "no client was made"
+                )
                 yield session
             finally:
                 logger.removeHandler(keep)
@@ -342,13 +344,13 @@ async def test_the_comparison_waits_for_a_slow_wire(pymux):
         said(session, type="text", text="echo slow-wire")
 
         def committed_text() -> str:
-            screen = connection.client_state.app.renderer._last_screen
+            screen = connection.client.state.app.renderer._last_screen
             if screen is None:
                 return ""
             return "".join(cell.char for row in screen.data_buffer.values() for cell in row.values())
 
         await once(lambda: "slow-wire" in committed_text(), 10.0, "no frame drew the text")
-        assert await wire_differs(session, connection.client_state) == []
+        assert await wire_differs(session, connection.client.state) == []
 
 
 async def settled(session: SessionScreen, seconds: float = 0.3) -> None:
@@ -401,7 +403,7 @@ async def test_the_terminal_holds_the_frame_beside_a_scrolling_pane(pymux, tmp_p
         await shows(session, "DONE-FLOOD")
         await settled(session)
 
-        client_state = pymux.connections[-1].client_state
+        client_state = pymux.connections[-1].client.state
         found = await wire_differs(session, client_state)
         assert not found, "\n".join([*found[:20], "", *rows_of(session)])
 
@@ -484,7 +486,7 @@ async def test_switching_panes_keeps_the_line_between_them(pymux, painted, switc
     """
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
-        client_state = pymux.connections[-1].client_state
+        client_state = pymux.connections[-1].client.state
         with set_app(client_state.app):
             if painted:
                 pymux.handle_command("set-option paint-screen on")
@@ -511,7 +513,7 @@ async def test_redraw_writes_what_the_terminal_lost(pymux):
     """
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
-        client_state = pymux.connections[-1].client_state
+        client_state = pymux.connections[-1].client.state
         with set_app(client_state.app):
             pymux.handle_command("split-window -h 'sleep 1000'")
         await settled(session)
@@ -542,7 +544,7 @@ async def test_redraw_brings_back_the_alternate_screen_the_terminal_left(pymux):
     """
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
-        client_state = pymux.connections[-1].client_state
+        client_state = pymux.connections[-1].client.state
         assert session.screen.in_alternate_screen
         session._stream.feed("\x1b[?1049l")
         assert not session.screen.in_alternate_screen
@@ -563,7 +565,7 @@ async def test_which_key_leaves_nothing_behind(pymux):
     """
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
-        client_state = pymux.connections[-1].client_state
+        client_state = pymux.connections[-1].client.state
         with set_app(client_state.app):
             pymux.handle_command("set-option which-key on")
         said(session, type="text", text="echo " + "row " * 12)
@@ -589,7 +591,7 @@ async def test_a_key_the_prefix_does_not_bind_ends_the_prefix(pymux):
     "C-g after the prefix binds nothing, so it lets go. Lillecarl/pymux#540."
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
-        client_state = pymux.connections[-1].client_state
+        client_state = pymux.connections[-1].client.state
 
         said(session, type="input", keys="C-b")
         await once(lambda: client_state.has_prefix, 10.0, "the prefix was never held")
@@ -646,7 +648,7 @@ async def test_every_frame_beside_a_pane_is_on_the_terminal(pymux, seed, mode):
     rnd = random.Random(seed)
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
-        client_state = pymux.connections[-1].client_state
+        client_state = pymux.connections[-1].client.state
         with set_app(client_state.app):
             pymux.handle_command("set-option render-mode %s" % mode)
             pymux.handle_command("split-window -h 'sleep 1000'")
@@ -702,7 +704,7 @@ async def test_every_frame_of_a_strip_glide_is_on_the_terminal(pymux, seed, glid
     monkeypatch.setattr(plan_container, "monotonic", lambda: now[0])
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
-        client_state = pymux.connections[-1].client_state
+        client_state = pymux.connections[-1].client.state
         with set_app(client_state.app):
             pymux.handle_command("set-window-option strip on")
             pymux.handle_command("set-option strip-animation-time %d" % glide)
@@ -812,7 +814,7 @@ def ink_clear(rows: int) -> str:
 async def test_a_clear_over_coloured_lines_leaves_the_colours_a_redraw_writes(pymux, split, ink):
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
-        client_state = pymux.connections[-1].client_state
+        client_state = pymux.connections[-1].client.state
         if split:
             with set_app(client_state.app):
                 pymux.handle_command("split-window -h 'sleep 1000'")
@@ -851,7 +853,7 @@ async def test_every_colour_on_the_terminal_is_what_a_redraw_writes(pymux, seed,
     rnd = random.Random(seed)
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
-        client_state = pymux.connections[-1].client_state
+        client_state = pymux.connections[-1].client.state
         with set_app(client_state.app):
             pymux.handle_command("set-option frame-rate %d" % rate)
             pymux.handle_command("split-window -h 'sleep 1000'")

@@ -246,7 +246,7 @@ class RemoteWindow:
     def _at(self, position: Point) -> dict[str, float]:
         "Where the pointer is, in cells, with where in its cell the client being handled said."
         client = self.peer.tree.pymux.client_of(get_app())
-        across, down = (0.5, 0.5) if client is None else client.connection.pointer_fraction
+        across, down = (0.5, 0.5) if client is None else client.client.pointer_fraction
         return {"x": position.x + across, "y": position.y + down}
 
     def pointer(self, toplevel: int, position: Point, button: int | None, pressed: bool, time: int) -> None:

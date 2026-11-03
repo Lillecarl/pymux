@@ -178,8 +178,12 @@ async def measure(name: str, offer: dict) -> dict:
             async with await anyio.open_process(
                 ["cat"], stdin=client_sock.fileno(), stdout=subprocess.DEVNULL
             ) as reader:
-                state = await once(lambda: connection.client_state, 10.0, "the server never made a client")
-                graphics = state.connection.graphics
+                state = await once(
+                    lambda: connection.client is not None and connection.client.state,
+                    10.0,
+                    "the server never made a client",
+                )
+                graphics = state.client.graphics
                 graphics.kitty_supported = True
                 graphics.detected = True
                 graphics.cell_width, graphics.cell_height = CELL
@@ -206,13 +210,13 @@ async def measure(name: str, offer: dict) -> dict:
                         await once(lambda: pymux.wayland.panes, 20.0, "mpv never opened a pane")
                         # The first frames open the codec and size the window.
                         await anyio.sleep(2.0)
-                        before = state.connection.pipe_connection.bytes_out
+                        before = state.client.connection.pipe_connection.bytes_out
                         await tick(SECONDS, dump, lateness)
-                        sent = state.connection.pipe_connection.bytes_out - before
+                        sent = state.client.connection.pipe_connection.bytes_out - before
                         (toplevel,) = pymux.wayland.panes
                         drawn = pymux.wayland.frame(toplevel)
                         window_size = drawn[:2] if drawn is not None else None
-                        compressed = state.connection.pipe_connection._compressor is not None
+                        compressed = state.client.connection.pipe_connection._compressor is not None
                     finally:
                         if player.returncode is None:
                             player.kill()

@@ -83,7 +83,7 @@ async def with_a_window(
     log.touch()
     async with over_connection(pymux=pymux, read_packet=recorder) as session:
         state, _size = await session.attach("one", SIZE, frames=frames, codecs=codecs, shows=shows)
-        graphics = state.connection.graphics
+        graphics = state.client.graphics
         graphics.kitty_supported = kitty
         graphics.detected = True
         if cell is not None:
@@ -280,7 +280,7 @@ async def test_a_client_that_answers_frames_has_one_unanswered_at_most(tmp_path)
         # The window is held too: it was not told to draw on.
         assert logged(log).count("frame") <= drawn + 1
         for answered in range(1, 4):
-            state.connection._process({"cmd": "frame-shown"})
+            state.client.connection._process({"cmd": "frame-shown"})
             await once(
                 lambda answered=answered: len(frames_of(recorder)) > answered,
                 10.0,
@@ -309,7 +309,7 @@ async def test_the_terminals_answer_lets_the_next_frame_go(tmp_path):
         assert first[-1]["answer"]
         image = first[-1]["image"]
         for answered in range(1, 3):
-            state.connection._process({"cmd": "in", "data": "\x1b_Gi=%d;OK\x1b\\" % image})
+            state.client.connection._process({"cmd": "in", "data": "\x1b_Gi=%d;OK\x1b\\" % image})
             await once(
                 lambda answered=answered: len(frames_of(recorder)) > answered,
                 10.0,
@@ -451,8 +451,8 @@ async def with_a_shell(tmp_path, monkeypatch):
     pymux.socket_name = str(tmp_path / "pymux.sock.test")
     async with over_connection(pymux=pymux, read_packet=Recorder()) as session:
         state, _size = await session.attach("one", SIZE)
-        state.connection.graphics.kitty_supported = True
-        state.connection.graphics.detected = True
+        state.client.graphics.kitty_supported = True
+        state.client.graphics.detected = True
         await once(lambda: pymux.wayland.display, 10.0, "the compositor never started")
         window = state.session.arrangement.get_active_window()
         (shell,) = window.panes
@@ -658,7 +658,7 @@ async def test_a_key_pymux_cannot_name_reaches_the_window(tmp_path):
     "ctrl+=, foot's zoom, as the client's terminal sends it. Lillecarl/pymux#627."
     async with with_a_window(tmp_path) as (_pymux, state, _pane, _recorder, log, _probe):
         await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
-        state.connection._process({"cmd": "in", "data": "\x1b[61;5u"})
+        state.client.connection._process({"cmd": "in", "data": "\x1b[61;5u"})
         await once(lambda: "key 13 0" in logged(log), 10.0, lambda: "ctrl+= never arrived: %s" % logged(log)[-8:])
         lines = logged(log)
         assert lines.index("key 29 1") < lines.index("key 13 1")
@@ -668,8 +668,8 @@ async def test_text_no_key_types_reaches_the_window(tmp_path):
     "é and an emoji, which no key of the US keymap types, arrive as text. Lillecarl/pymux#624."
     async with with_a_window(tmp_path, text=True) as (_pymux, state, _pane, _recorder, log, _probe):
         await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
-        state.connection._process({"cmd": "in", "data": "é"})
-        state.connection._process({"cmd": "in", "data": "😀"})
+        state.client.connection._process({"cmd": "in", "data": "é"})
+        state.client.connection._process({"cmd": "in", "data": "😀"})
         await once(lambda: "text 😀" in logged(log), 10.0, lambda: "the text never arrived: %s" % logged(log)[-8:])
         assert [line for line in logged(log) if line.startswith("text")] == ["text é", "text 😀"]
 
@@ -696,7 +696,7 @@ async def test_a_click_from_the_terminal_reaches_the_window(tmp_path):
         column, row = 3, 1
         x, y = where.xpos + column, where.ypos + row
         for end in ("M", "m"):
-            state.connection._process({"cmd": "in", "data": "\x1b[<0;%d;%d%s" % (x + 1, y + 1, end)})
+            state.client.connection._process({"cmd": "in", "data": "\x1b[<0;%d;%d%s" % (x + 1, y + 1, end)})
         await once(
             lambda: "button 272 0" in logged(log),
             10.0,
@@ -713,11 +713,11 @@ async def test_a_terminal_that_reports_pixels_puts_the_pointer_on_the_pixel(tmp_
     async with with_a_window(tmp_path, cell=(10, 20)) as (pymux, state, pane, recorder, log, _probe):
         await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
         # kitty, which numbers its first pixel 0.
-        state.connection.graphics.terminal_version = "kitty(0.49.2)"
+        state.client.graphics.terminal_version = "kitty(0.49.2)"
         # What a client sends after it queried its terminal.
-        state.connection._process({Field.CMD: Packet.DETECT})
+        state.client.connection._process({Field.CMD: Packet.DETECT})
         await once(lambda: "\x1b[?1016$p" in recorder.out, 10.0, "the terminal was never asked")
-        state.connection._process({"cmd": "in", "data": "\x1b[?1016;2$y"})
+        state.client.connection._process({"cmd": "in", "data": "\x1b[?1016;2$y"})
         await once(lambda: "\x1b[?1016h" in recorder.out, 10.0, "pixel mode was never turned on")
         where = await once(
             lambda: state.layout_manager.pane_write_positions.get(pane), 10.0, "the pane was never drawn"
@@ -726,7 +726,7 @@ async def test_a_terminal_that_reports_pixels_puts_the_pointer_on_the_pixel(tmp_
         # probe's 64x32 buffer, which is all the window takes events on.
         x, y = (where.xpos + 3) * 10 + 7, where.ypos * 20 + 13
         for end in ("M", "m"):
-            state.connection._process({"cmd": "in", "data": "\x1b[<0;%d;%d%s" % (x, y, end)})
+            state.client.connection._process({"cmd": "in", "data": "\x1b[<0;%d;%d%s" % (x, y, end)})
         await once(lambda: "button 272 0" in logged(log), 10.0, lambda: "no click: %s" % logged(log)[-6:])
         motion = [line for line in logged(log) if line.startswith("motion")][-1]
         width, height = pymux.terminals.cell_size()
@@ -737,11 +737,11 @@ async def test_a_terminal_that_can_never_report_pixels_keeps_the_mouse_in_cells(
     "iTerm2 3.7 answers 1016 with 4, permanently reset: it knows the mode and never does it."
     async with with_a_window(tmp_path, cell=(10, 20)) as (_pymux, state, _pane, _recorder, log, _probe):
         await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
-        state.connection.graphics.terminal_version = "iTerm2 3.7.6"
-        state.connection._process({Field.CMD: Packet.DETECT})
-        state.connection._process({"cmd": "in", "data": "\x1b[?1016;4$y"})
-        state.connection._process({"cmd": "in", "data": "\x1b[0n"})
-        assert not state.connection.replies.pixel_mouse
+        state.client.graphics.terminal_version = "iTerm2 3.7.6"
+        state.client.connection._process({Field.CMD: Packet.DETECT})
+        state.client.connection._process({"cmd": "in", "data": "\x1b[?1016;4$y"})
+        state.client.connection._process({"cmd": "in", "data": "\x1b[0n"})
+        assert not state.client.replies.pixel_mouse
 
 
 async def test_a_terminal_that_keeps_its_cell_size_keeps_the_mouse_in_cells(tmp_path):
@@ -749,8 +749,8 @@ async def test_a_terminal_that_keeps_its_cell_size_keeps_the_mouse_in_cells(tmp_
     async with with_a_window(tmp_path) as (pymux, state, pane, _recorder, log, _probe):
         await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
         pymux.session_defaults.mouse = True
-        state.connection._process({Field.CMD: Packet.DETECT})
-        state.connection._process({"cmd": "in", "data": "\x1b[?1016;2$y"})
+        state.client.connection._process({Field.CMD: Packet.DETECT})
+        state.client.connection._process({"cmd": "in", "data": "\x1b[?1016;2$y"})
         where = await once(
             lambda: state.layout_manager.pane_write_positions.get(pane), 10.0, "the pane was never drawn"
         )
@@ -758,9 +758,9 @@ async def test_a_terminal_that_keeps_its_cell_size_keeps_the_mouse_in_cells(tmp_
         # of the pane. Read as pixels, it would land on the pane's first.
         x, y = where.xpos + 3, where.ypos + 1
         for end in ("M", "m"):
-            state.connection._process({"cmd": "in", "data": "\x1b[<0;%d;%d%s" % (x + 1, y + 1, end)})
+            state.client.connection._process({"cmd": "in", "data": "\x1b[<0;%d;%d%s" % (x + 1, y + 1, end)})
         await once(lambda: "button 272 0" in logged(log), 10.0, lambda: "no click: %s" % logged(log)[-6:])
-        assert not state.connection.replies.pixel_mouse
+        assert not state.client.replies.pixel_mouse
         width, height = pymux.terminals.cell_size()
         motion = [line for line in logged(log) if line.startswith("motion")][-1]
         assert motion == "motion %d %d" % (3.5 * width, 1.5 * height)
@@ -774,7 +774,7 @@ async def test_the_terminal_shows_the_pointer_the_window_asks_for(tmp_path):
         where = await once(
             lambda: state.layout_manager.pane_write_positions.get(pane), 10.0, "the pane was never drawn"
         )
-        state.connection._process({"cmd": "in", "data": "\x1b[<35;%d;%dM" % (where.xpos + 4, where.ypos + 2)})
+        state.client.connection._process({"cmd": "in", "data": "\x1b[<35;%d;%dM" % (where.xpos + 4, where.ypos + 2)})
         await once(lambda: "\x1b]22;text\x1b\\" in recorder.out, 10.0, "the pointer never changed")
         assert pane.screen.pointer_shapes.shape == "text"
 
@@ -787,15 +787,15 @@ async def test_a_pointer_that_moves_off_the_pane_leaves_the_window(tmp_path):
         where = await once(
             lambda: state.layout_manager.pane_write_positions.get(pane), 10.0, "the pane was never drawn"
         )
-        state.connection._process({"cmd": "in", "data": "\x1b[<35;%d;%dM" % (where.xpos + 4, where.ypos + 2)})
-        state.connection._process({"cmd": "in", "data": "\x1b[<35;%d;%dM" % (where.xpos + 5, where.ypos + 2)})
+        state.client.connection._process({"cmd": "in", "data": "\x1b[<35;%d;%dM" % (where.xpos + 4, where.ypos + 2)})
+        state.client.connection._process({"cmd": "in", "data": "\x1b[<35;%d;%dM" % (where.xpos + 5, where.ypos + 2)})
         # The second move is inside the pane too, so it is no leave.
         width, height = pymux.terminals.cell_size()
         second = "motion %d %d" % (4.5 * width, 1.5 * height)
         await once(lambda: second in logged(log), 10.0, lambda: "no second move: %s" % logged(log)[-6:])
         assert "leave" not in logged(log)
         below = where.ypos + where.height
-        state.connection._process({"cmd": "in", "data": "\x1b[<35;%d;%dM" % (where.xpos + 4, below + 1)})
+        state.client.connection._process({"cmd": "in", "data": "\x1b[<35;%d;%dM" % (where.xpos + 4, below + 1)})
         await once(lambda: "leave" in logged(log), 10.0, lambda: "no leave: %s" % logged(log)[-6:])
 
 
@@ -804,10 +804,10 @@ async def test_a_pointer_that_leaves_the_terminal_leaves_the_window(tmp_path):
     async with with_a_window(tmp_path, cell=(10, 20)) as (pymux, state, pane, recorder, log, _probe):
         await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
         pymux.session_defaults.mouse = True
-        state.connection.graphics.terminal_version = "kitty(0.49.2)"
-        state.connection._process({Field.CMD: Packet.DETECT})
+        state.client.graphics.terminal_version = "kitty(0.49.2)"
+        state.client.connection._process({Field.CMD: Packet.DETECT})
         await once(lambda: "\x1b[?1016$p" in recorder.out, 10.0, "the terminal was never asked")
-        state.connection._process({"cmd": "in", "data": "\x1b[?1016;2$y"})
+        state.client.connection._process({"cmd": "in", "data": "\x1b[?1016;2$y"})
         await once(lambda: "\x1b[?1016h" in recorder.out, 10.0, "pixel mode was never turned on")
         where = await once(
             lambda: state.layout_manager.pane_write_positions.get(pane), 10.0, "the pane was never drawn"
@@ -815,15 +815,15 @@ async def test_a_pointer_that_leaves_the_terminal_leaves_the_window(tmp_path):
         x, y = (where.xpos + 3) * 10 + 7, where.ypos * 20 + 13
         # The first move is the window's enter, and the second its motion.
         for across in (x, x + 1):
-            state.connection._process({"cmd": "in", "data": "\x1b[<35;%d;%dM" % (across, y)})
+            state.client.connection._process({"cmd": "in", "data": "\x1b[<35;%d;%dM" % (across, y)})
         await once(
             lambda: any(line.startswith("motion") for line in logged(log)),
             10.0,
             lambda: "no motion arrived: %s" % logged(log)[-6:],
         )
-        state.connection._process({"cmd": "in", "data": "\x1b[<%d;%d;%dM" % (256 | 32, x, y)})
+        state.client.connection._process({"cmd": "in", "data": "\x1b[<%d;%d;%dM" % (256 | 32, x, y)})
         await once(lambda: "leave" in logged(log), 10.0, lambda: "no leave: %s" % logged(log)[-6:])
-        assert state.connection.pointer_cell is None
+        assert state.client.pointer_cell is None
 
 
 @pytest.mark.parametrize("scroll", list(WindowScroll))
@@ -836,7 +836,7 @@ async def test_a_scroll_reaches_the_window_as_the_client_says(tmp_path, scroll):
         where = await once(
             lambda: state.layout_manager.pane_write_positions.get(pane), 10.0, "the pane was never drawn"
         )
-        state.connection._process({"cmd": "in", "data": "\x1b[<65;%d;%dM" % (where.xpos + 4, where.ypos + 2)})
+        state.client.connection._process({"cmd": "in", "data": "\x1b[<65;%d;%dM" % (where.xpos + 4, where.ypos + 2)})
         line = await once(
             lambda: next((one for one in logged(log) if one.startswith("axis")), None), 10.0, "no scroll arrived"
         )

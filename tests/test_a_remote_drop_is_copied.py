@@ -147,9 +147,9 @@ async def test_a_drop_from_another_machine_pastes_the_copy(tmp_path: Path):
     pymux.drag_and_drop.drops = tmp_path
     async with over_connection(pymux=pymux, read_packet=read_packet) as session:
         state, _ = await session.attach("one", Size(rows=12, columns=60))
-        state.connection._process({Field.CMD: Packet.DETECT})
+        state.client.connection._process({Field.CMD: Packet.DETECT})
         await sent(osc("t=q"))
-        state.connection._process({"cmd": "in", "data": osc("t=q")})
+        state.client.connection._process({"cmd": "in", "data": osc("t=q")})
         state.app.invalidate()
         await once(lambda: state.layout_manager.pane_write_positions, 10.0, "the pane was never drawn")
         ((pane, at),) = state.layout_manager.pane_write_positions.items()
@@ -157,7 +157,7 @@ async def test_a_drop_from_another_machine_pastes_the_copy(tmp_path: Path):
         pane.terminal.terminal_control.process.write_input = typed.append
 
         def say(text: str) -> None:
-            state.connection._process({"cmd": "in", "data": text})
+            state.client.connection._process({"cmd": "in", "data": text})
 
         say(osc("t=M:x=%d:y=%d:X=0:Y=0:o=1;text/uri-list" % (at.xpos, at.ypos)))
         await sent(osc("t=r:x=1"))

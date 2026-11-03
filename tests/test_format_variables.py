@@ -78,11 +78,11 @@ async def test_the_client_is_what_a_client_variable_reads(pymux):
     those are two machines. Lillecarl/pymux#287, Lillecarl/pymux#330.
     """
 
-    class Connection:
+    class Role:
         hostname = "buildbox-3"
 
     class Client:
-        connection = Connection()
+        client = Role()
         session = pymux.current_session
 
     assert format_pymux_string(pymux, "#{client_hostname}", client=Client()) == "buildbox-3"

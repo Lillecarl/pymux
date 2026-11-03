@@ -28,7 +28,7 @@ async def test_copy_mode_jumps_between_the_marked_rows(pymux):
             while _marked_rows(shell, RowMark.PROMPT) < 2:
                 await anyio.sleep(0.02)
 
-        with set_app(pymux.connections[-1].client_state.app):
+        with set_app(pymux.connections[-1].client.state.app):
             pymux.handle_command("copy-mode")
             view = shell.terminal.copy_view
             view.buffer.cursor_position = len(view.buffer.text)

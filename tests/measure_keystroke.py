@@ -96,7 +96,7 @@ from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 from pyterm_pytest.instructions import count_instructions
 from recorded import how_to_record, moved, read_counts, write_list
-from session import Connection
+from session import Client
 
 from pymux.core.main import Pymux
 
@@ -200,7 +200,7 @@ async def create_client(size):
                     output=output,
                     input=pipe,
                     color_depth=ColorDepth.DEPTH_8_BIT,
-                    connection=Connection(),
+                    client=Client(),
                 )
 
                 with set_app(state.app):

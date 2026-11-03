@@ -204,24 +204,6 @@ def test_notification_reaches_every_client():
         assert connection.written == [sequence("99", "i=1:a=report;done")]
 
 
-def test_notification_skips_client_with_no_connection():
-    "The same temporary client as in `test_shape_skips_client_with_no_connection`."
-    pymux, connections = make_pymux()
-    pymux._client_states = {None: FakeClientState(), **pymux._client_states}
-    pymux.outward.forward_osc(FakePane(), "99", "i=mine;done")
-    for connection in connections:
-        assert connection.written == [sequence("99", "i=1:a=report;done")]
-
-
-def test_clipboard_write_skips_client_with_no_connection():
-    "Copy mode fans out the same way `forward_osc` does."
-    pymux, connections = make_pymux()
-    pymux._client_states = {None: FakeClientState(), **pymux._client_states}
-    pymux.outward.write_user_clipboard("hello")
-    for connection in connections:
-        assert connection.written == [sequence("52", "c;aGVsbG8=")]
-
-
 def test_notification_without_identifier_gets_one():
     "So a click on it can be routed. Lillecarl/pymux#779."
     pymux, connections = make_pymux()
@@ -317,21 +299,6 @@ def test_client_that_never_saw_shape_is_not_told_to_reset_it():
     pymux, connections = make_pymux()
     pymux.terminals.sync_pointer_shape()
     assert connections[0].written == []
-
-
-def test_shape_skips_client_with_no_connection():
-    """
-    A socket command runs under a temporary client with no
-    connection. There is no terminal to send to, and stopping for it
-    would starve every client after it -- the `None` entry stands
-    first here, so the old code served nobody. Lillecarl/pymux#493.
-    """
-    pane = FakePane(pointer_shape="pointer")
-    pymux, connections = make_pymux(focused=[0, 1], pane=pane)
-    pymux._client_states = {None: FakeClientState(), **pymux._client_states}
-    pymux.terminals.sync_pointer_shape()
-    assert connections[0].written == [sequence("22", "pointer")]
-    assert connections[1].written == [sequence("22", "pointer")]
 
 
 def test_no_pane_asks_for_no_shape():

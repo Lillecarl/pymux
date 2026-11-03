@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pymux.connection.server import ServerConnection
+    from pymux.connection.client import ClientRole
     from pymux.connection.uploads import Upload
     from pymux.core.main import Pymux
     from pymux.core.pane import Pane
@@ -30,7 +30,7 @@ def receive(pymux: Pymux, args: argparse.Namespace):
     Lillecarl/pymux#743.
     """
     refuse_without_a_waiter(pymux, "wait")
-    pane, connection = _sender(pymux)
+    pane, client = _sender(pymux)
 
     caller = pymux.caller
     here = caller.cwd if caller is not None else None
@@ -38,12 +38,12 @@ def receive(pymux: Pymux, args: argparse.Namespace):
     if not directory.is_dir():
         raise CommandException("%s is not a directory." % (directory,))
 
-    upload = connection.files.ask_for(list(args.paths), "%%%d" % (pane.pane_id,))
-    return wait_for_files(pymux, connection, upload, directory)
+    upload = client.files.ask_for(list(args.paths), "%%%d" % (pane.pane_id,))
+    return wait_for_files(pymux, client, upload, directory)
 
 
-def _sender(pymux: Pymux) -> tuple[Pane, ServerConnection]:
-    "The caller's pane, and the connection of the client that sends its files."
+def _sender(pymux: Pymux) -> tuple[Pane, ClientRole]:
+    "The caller's pane, and the client that sends its files."
     pane = find_pane(pymux, None)
     if pane is None:
         raise CommandException("There is no pane to ask from.")
@@ -52,10 +52,9 @@ def _sender(pymux: Pymux) -> tuple[Pane, ServerConnection]:
         raise CommandException("Nobody is attached to the session of this pane, so nobody can send a file.")
     if client.options.file_transfer is FileTransfer.PASSTHROUGH:
         raise CommandException("file-transfer is passthrough, and only the pymux client sends a file.")
-    connection = client.connection
-    if not connection.sends_files:
+    if not client.client.sends_files:
         raise CommandException("This pymux client is too old to send a file; start a new one.")
-    return pane, connection
+    return pane, client.client
 
 
 def list_person_files(pymux: Pymux, args: argparse.Namespace):
@@ -67,20 +66,20 @@ def list_person_files(pymux: Pymux, args: argparse.Namespace):
     person. Lillecarl/pymux#748.
     """
     refuse_without_a_waiter(pymux, "wait")
-    _pane, connection = _sender(pymux)
-    return _print_listing(pymux, connection, args.directory)
+    _pane, client = _sender(pymux)
+    return _print_listing(pymux, client, args.directory)
 
 
-async def _print_listing(pymux: Pymux, connection: ServerConnection, directory: str) -> None:
-    for name in await connection.files.names_in(directory):
+async def _print_listing(pymux: Pymux, client: ClientRole, directory: str) -> None:
+    for name in await client.files.names_in(directory):
         answer(pymux, name)
 
 
-async def wait_for_files(pymux: Pymux, connection: ServerConnection, upload: Upload, directory: Path) -> None:
+async def wait_for_files(pymux: Pymux, client: ClientRole, upload: Upload, directory: Path) -> None:
     try:
         failed = await receive_into(upload, directory, lambda text: answer(pymux, text))
     finally:
-        connection.files.stop_waiting(upload)
+        client.files.stop_waiting(upload)
     if failed:
         raise CommandException("\n".join("Did not receive %s." % (why,) for why in failed))
 

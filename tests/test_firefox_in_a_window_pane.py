@@ -90,7 +90,7 @@ async def _answer_frames(state, recorder: Recorder, late: float) -> None:
         while answered < len(recorder.frames):
             answered += 1
             await anyio.sleep(late)
-            state.connection._process({"cmd": "frame-shown"})
+            state.client.connection._process({"cmd": "frame-shown"})
         await anyio.sleep(0.01)
 
 
@@ -115,13 +115,13 @@ async def firefox_in_a_pane(tmp_path, page: str, route: str):
             tasks.start_soon(_answer_frames, state, recorder, late)
         if client.get("codecs"):
             state.session.arrangement.get_active_window_for(state.app).options.window_codec = WindowCodec.VP9
-        graphics = state.connection.graphics
+        graphics = state.client.graphics
         graphics.kitty_supported = True
         graphics.detected = True
         graphics.cell_width, graphics.cell_height = (10, 20)
         graphics.cell_size_known = True
         if shm:
-            state.connection._process({"cmd": "in", "data": "\x1b_Gi=%d;OK\x1b\\" % SHM_PROBE_ID})
+            state.client.connection._process({"cmd": "in", "data": "\x1b_Gi=%d;OK\x1b\\" % SHM_PROBE_ID})
         await once(lambda: pymux.wayland.display, 10.0, "the compositor never started")
         environment = dict(
             os.environ,

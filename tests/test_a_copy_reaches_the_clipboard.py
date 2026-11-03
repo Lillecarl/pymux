@@ -33,8 +33,8 @@ WRITTEN = "hello world"
 SELECTED = "hello"
 
 
-class FakeConnection:
-    "A client connection that collects what pymux writes to it."
+class FakeClient:
+    "A client that collects what pymux writes to its terminal."
 
     pointer_cell = None
 
@@ -69,9 +69,9 @@ def a_selection(mux):
 
 def listening(mux):
     "One client, and what pymux writes to its terminal."
-    connection = FakeConnection()
-    mux._client_states = {connection: FakeClientState()}
-    return connection
+    client = FakeClient()
+    mux._client_states = {client: FakeClientState()}
+    return client
 
 
 def asked_for(text):
@@ -81,12 +81,12 @@ def asked_for(text):
 
 
 async def test_a_copy_reaches_the_terminal_of_the_client(pymux):
-    connection = listening(pymux)
+    client = listening(pymux)
     pane, view = a_selection(pymux)
 
     view.copy_selection()
 
-    assert connection.written == [asked_for(SELECTED)]
+    assert client.written == [asked_for(SELECTED)]
 
 
 async def test_a_copy_reaches_the_terminal_of_the_client_that_made_it(pymux):
@@ -97,16 +97,16 @@ async def test_a_copy_reaches_the_terminal_of_the_client_that_made_it(pymux):
     clients = {}
     for name in ("copying", "watching"):
         state = FakeClientState()
-        state.app, state.connection = DummyApplication(), FakeConnection()
+        state.app, state.client = DummyApplication(), FakeClient()
         clients[name] = state
-    pymux._client_states = {state.connection: state for state in clients.values()}
+    pymux._client_states = {state.client: state for state in clients.values()}
     pane, view = a_selection(pymux)
 
     with set_app(clients["copying"].app):
         view.copy_selection()
 
-    assert clients["copying"].connection.written == [asked_for(SELECTED)]
-    assert clients["watching"].connection.written == []
+    assert clients["copying"].client.written == [asked_for(SELECTED)]
+    assert clients["watching"].client.written == []
 
 
 async def test_a_copy_reaches_the_paste_buffer_of_the_session(pymux):

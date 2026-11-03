@@ -69,7 +69,7 @@ async def test_the_status_line_says_so():
 async def test_the_terminal_is_told_on_the_way_in_and_out(monkeypatch):
     async with create_session() as (pymux, state):
         sent = []
-        monkeypatch.setattr(state.connection, "forward_osc", sent.append, raising=False)
+        monkeypatch.setattr(state.client, "forward_osc", sent.append, raising=False)
 
         press(state, Keys.F12, Keys.F12)
 

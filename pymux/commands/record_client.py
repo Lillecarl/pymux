@@ -27,25 +27,25 @@ def record_client(pymux: Pymux, args: argparse.Namespace) -> None:
     client detaches.
     """
     client_state = the_client(pymux, args.target_client, "record-client")
-    connection = client_state.connection
-    if connection.recording is not None:
-        recording, connection.recording = connection.recording, None
+    client = client_state.client
+    if client.recording is not None:
+        recording, client.recording = client.recording, None
         try:
             written = recording.finish()
         except OSError as e:
             raise CommandException("record-client: %s" % e)
         pymux.show_message("Recorded %s" % written)
     else:
-        size = connection.size
-        connection.recording = Recording(
+        size = client.connection.size
+        client.recording = Recording(
             args.name or a_name("client"),
             size.rows,
             size.columns,
-            connection.colors.term,
+            client.colors.term,
             args.idle_time_limit,
         )
         pymux.waking.redraw(client_state)
-        pymux.show_message("Recording %s to %s" % (connection.recording.name, recordings_directory()))
+        pymux.show_message("Recording %s to %s" % (client.recording.name, recordings_directory()))
     pymux.invalidate()
 
 

@@ -94,7 +94,7 @@ async def test_each_client_reads_its_own_counts():
 
         said = await _lines(session, "list-clients -F '#{client_tty} #{client_bytes_down} #{client_bytes_up}'")
 
-        pipes = {state.connection.name: state.connection.pipe_connection for state in (here, there)}
+        pipes = {state.client.connection.name: state.client.connection.pipe_connection for state in (here, there)}
         counted = {name: (pipe.bytes_out, pipe.bytes_in) for name, pipe in pipes.items()}
         read = {name: (int(down), int(up)) for name, down, up in (line.split() for line in said)}
         assert read.keys() == counted.keys()
@@ -118,7 +118,7 @@ async def test_a_client_reads_its_rate_in_a_unit():
 async def test_a_client_that_leaves_stays_in_the_total():
     async with over_connection() as session:
         here, _ = await session.attach("here", SIZE)
-        pipe = here.connection.pipe_connection
+        pipe = here.client.connection.pipe_connection
         before = traffic(session.pymux)
 
         await session.detach(here)

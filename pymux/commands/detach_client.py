@@ -27,9 +27,7 @@ def _detach(pymux: Pymux, client_state: ClientState, hang_up: bool = False) -> N
     listing found has both, and the connection is the thing that
     closes. Lillecarl/pymux#335.
     """
-    connection = client_state.connection
-    if connection is not None:
-        connection.detach_and_close(hang_up=hang_up)
+    client_state.client.connection.detach_and_close(hang_up=hang_up)
 
 
 def detach_client(pymux: Pymux, args: argparse.Namespace) -> None:

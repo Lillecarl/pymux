@@ -131,15 +131,15 @@ async def _answered(answer: str, then: str | None = None) -> str:
     async with over_connection(pymux=Pymux(startup_command=command), read_packet=recorder) as session:
         state, _ = await session.attach("one", SIZE)
         await once(lambda: "X" in recorder.out, 10.0, "the pane never drew")
-        state.connection._process({Field.CMD: Packet.DETECT})
+        state.client.connection._process({Field.CMD: Packet.DETECT})
         await once(lambda: TEXT_SIZE_PROBE in recorder.out, 10.0, "the terminal was never asked")
         before = len(recorder.out)
-        state.connection._process({"cmd": "in", "data": answer})
+        state.client.connection._process({"cmd": "in", "data": answer})
         # A full frame either way, so the one that does not draw OSC 66
         # has a frame to read too.
-        state.connection.request_repaint()
+        state.client.request_repaint()
         await once(lambda: "X" in recorder.out[before:], 10.0, lambda: "never drawn: %r" % recorder.out[before:])
-        if state.connection.graphics.text_sizes.scales:
+        if state.client.graphics.text_sizes.scales:
             await once(lambda: str(BIG) in recorder.out[before:], 10.0, lambda: "no block: %r" % recorder.out[before:])
         if then is not None:
             before = len(recorder.out)

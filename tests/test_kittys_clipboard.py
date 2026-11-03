@@ -66,9 +66,9 @@ async def test_a_write_reaches_kitty_again_and_the_pane_hears_done():
     pymux = Pymux(startup_command="sleep 30")
     async with over_connection(pymux=pymux, read_packet=recorder) as session:
         state, _ = await session.attach("one", SIZE)
-        state.connection._process({Field.CMD: Packet.DETECT})
-        state.connection._process({"cmd": "in", "data": SPEAKS_5522})
-        await once(lambda: state.connection.replies.kitty_clipboard, 10.0, "the answer was never read")
+        state.client.connection._process({Field.CMD: Packet.DETECT})
+        state.client.connection._process({"cmd": "in", "data": SPEAKS_5522})
+        await once(lambda: state.client.replies.kitty_clipboard, 10.0, "the answer was never read")
         await run_as(pymux, state, "set-option set-clipboard on")
 
         pane = pane_of(state)
@@ -90,7 +90,7 @@ async def test_a_write_reaches_kitty_again_and_the_pane_hears_done():
         assert "type=walias:id=pymux-1:mime=%s;%s" % (b64("text/plain"), b64("UTF8_STRING")) in recorder.out
 
         # kitty's answer is pymux's, and no pane hears it as keys.
-        state.connection._process({"cmd": "in", "data": "\x1b]5522;type=write:status=DONE:id=pymux-1\x1b\\"})
+        state.client.connection._process({"cmd": "in", "data": "\x1b]5522;type=write:status=DONE:id=pymux-1\x1b\\"})
         assert heard == ["\x1b]5522;type=write:status=DONE:id=pane-1\x1b\\"]
 
 
@@ -137,9 +137,9 @@ def osc(packet: str) -> str:
 async def attached_to_kitty(session, recorder: Recorder):
     "A client whose terminal said it speaks OSC 5522."
     state, _ = await session.attach("one", SIZE)
-    state.connection._process({Field.CMD: Packet.DETECT})
-    state.connection._process({"cmd": "in", "data": SPEAKS_5522})
-    await once(lambda: state.connection.replies.kitty_clipboard, 10.0, "the answer was never read")
+    state.client.connection._process({Field.CMD: Packet.DETECT})
+    state.client.connection._process({"cmd": "in", "data": SPEAKS_5522})
+    await once(lambda: state.client.replies.kitty_clipboard, 10.0, "the answer was never read")
     return state
 
 
@@ -164,7 +164,7 @@ async def test_a_pane_read_goes_to_the_terminal_and_its_answer_comes_back():
         heard.clear()
 
         data = "type=read:status=DATA:id=pymux-1:mime=%s;%s" % (b64("text/plain"), b64("copied"))
-        state.connection._process(
+        state.client.connection._process(
             {
                 "cmd": "in",
                 "data": osc("type=read:status=OK:id=pymux-1") + osc(data) + osc("type=read:status=DONE:id=pymux-1"),
@@ -194,7 +194,7 @@ async def test_a_pane_with_paste_events_gets_them_from_kitty():
             osc("type=read:status=DATA:mime=%s:pw=%s;%s" % (b64("."), b64("once"), b64("text/plain image/png"))),
             osc("type=read:status=DONE:pw=%s" % b64("once")),
         ]
-        state.connection._process({"cmd": "in", "data": "".join(event)})
+        state.client.connection._process({"cmd": "in", "data": "".join(event)})
         assert heard == event
 
         # The pane's read under that password goes to that terminal.
@@ -241,7 +241,7 @@ async def test_a_paste_event_for_a_pane_without_the_mode_is_pasted_as_text():
         typed: list[str] = []
         pane.terminal.terminal_control.process.write_input = typed.append
 
-        state.connection._process(
+        state.client.connection._process(
             {
                 "cmd": "in",
                 "data": osc("type=read:status=OK:pw=%s" % b64("once"))
@@ -253,7 +253,7 @@ async def test_a_paste_event_for_a_pane_without_the_mode_is_pasted_as_text():
         await once(lambda: asked in recorder.out, 10.0, lambda: "never asked: %r" % recorder.out[-300:])
 
         text = osc("type=read:status=DATA:id=pymux-1:mime=%s;%s" % (b64("text/plain"), b64("pasted")))
-        state.connection._process({"cmd": "in", "data": osc("type=read:status=OK:id=pymux-1") + text})
+        state.client.connection._process({"cmd": "in", "data": osc("type=read:status=OK:id=pymux-1") + text})
         assert typed == []
-        state.connection._process({"cmd": "in", "data": osc("type=read:status=DONE:id=pymux-1")})
+        state.client.connection._process({"cmd": "in", "data": osc("type=read:status=DONE:id=pymux-1")})
         assert typed == ["pasted"]

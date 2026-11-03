@@ -60,7 +60,7 @@ async def test_show_urls_labels_an_issue_number_and_opens_it(pymux, monkeypatch,
     monkeypatch.setattr(pymux.outward, "open_url", lambda url, confirmed=False, pane=None: opened.append(url))
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
-        with set_app(pymux.connections[-1].client_state.app):
+        with set_app(pymux.connections[-1].client.state.app):
             pane = pymux.arrangement.get_active_pane()
         pane.current_directory = str(tmp_path)
         pane.terminal.terminal_control.feed_output("\r\nsee #579 now\r\n")

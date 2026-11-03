@@ -81,7 +81,7 @@ def client_shows_windows(pymux: Pymux) -> bool:
         state = pymux.get_client_state()
     except ValueError:
         return False
-    return bool(state.connection.graphics.kitty_supported)
+    return bool(state.client.graphics.kitty_supported)
 
 
 #: What a client that cannot draw kitty images sees in the pane.

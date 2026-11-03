@@ -112,7 +112,7 @@ async def _attach(pymux: Pymux, tasks, hang_up_others: bool = False):
     )
 
     with anyio.fail_after(5.0):
-        while connection.client_state is None and not connection.closed:
+        while connection.client is None and not connection.closed:
             await anyio.sleep(0.005)
 
     return connection, heard
@@ -153,7 +153,7 @@ async def test_without_the_flag_nobody_is_told_anything():
 
             second, _ = await _attach(pymux, tasks)
             # The `-d` path, without the hangup.
-            detach_the_others(second)
+            detach_the_others(second.client)
 
             await _until(lambda: first.closed, "the connection to close")
             assert heard.exits == []
@@ -201,10 +201,10 @@ async def test_attach_session_x_tells_them_to_hang_up():
 
             sitting, heard = await _attach(pymux, tasks)
             asking, _ = await _attach(pymux, tasks)
-            pymux.attach_client_to(sitting.client_state, here)
-            pymux.attach_client_to(asking.client_state, elsewhere)
+            pymux.attach_client_to(sitting.client.state, here)
+            pymux.attach_client_to(asking.client.state, elsewhere)
 
-            with set_app(asking.client_state.app):
+            with set_app(asking.client.state.app):
                 pymux.handle_command("attach-session -t here -x")
 
             await _until(lambda: heard.exits, "the exit packet")
@@ -222,10 +222,10 @@ async def test_attach_session_x_detaches_them_too():
 
             sitting, _ = await _attach(pymux, tasks)
             asking, _ = await _attach(pymux, tasks)
-            pymux.attach_client_to(sitting.client_state, here)
-            pymux.attach_client_to(asking.client_state, elsewhere)
+            pymux.attach_client_to(sitting.client.state, here)
+            pymux.attach_client_to(asking.client.state, elsewhere)
 
-            with set_app(asking.client_state.app):
+            with set_app(asking.client.state.app):
                 pymux.handle_command("attach-session -t here -x")
 
             await _until(lambda: sitting.closed, "the other client to go")
@@ -240,10 +240,10 @@ async def test_detach_client_takes_the_same_flag():
 
             sitting, heard = await _attach(pymux, tasks)
             asking, _ = await _attach(pymux, tasks)
-            pymux.attach_client_to(sitting.client_state, here)
+            pymux.attach_client_to(sitting.client.state, here)
 
-            with set_app(asking.client_state.app):
-                pymux.handle_command("detach-client -P -t %s" % (sitting.client_state.connection.name,))
+            with set_app(asking.client.state.app):
+                pymux.handle_command("detach-client -P -t %s" % (sitting.client.state.client.connection.name,))
 
             await _until(lambda: heard.exits, "the exit packet")
             assert heard.exits[-1]["hang-up"] is True
@@ -257,10 +257,10 @@ async def test_detach_client_without_it_says_nothing():
 
             sitting, heard = await _attach(pymux, tasks)
             asking, _ = await _attach(pymux, tasks)
-            pymux.attach_client_to(sitting.client_state, here)
+            pymux.attach_client_to(sitting.client.state, here)
 
-            with set_app(asking.client_state.app):
-                pymux.handle_command("detach-client -t %s" % (sitting.client_state.connection.name,))
+            with set_app(asking.client.state.app):
+                pymux.handle_command("detach-client -t %s" % (sitting.client.state.client.connection.name,))
 
             await _until(lambda: sitting.closed, "the other client to go")
             assert heard.exits == []
@@ -288,7 +288,7 @@ async def test_a_real_client_asks_for_it(monkeypatch, tmp_path):
             async with a_server() as pymux:
                 here = await _a_session_with_a_window(pymux, "here")
                 sitting, heard = await _attach(pymux, tasks)
-                pymux.attach_client_to(sitting.client_state, here)
+                pymux.attach_client_to(sitting.client.state, here)
 
                 server_end, client_end = connect_in_memory()
                 context = contextvars.copy_context()

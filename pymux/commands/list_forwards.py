@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 import anyio
 
 if TYPE_CHECKING:
-    from pymux.connection.server import ServerConnection
+    from pymux.connection.client import ClientRole
     from pymux.core.main import Pymux
 
 
@@ -42,18 +42,18 @@ def list_forwards(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None] | N
     many connections it carries instead, because its clock has not
     started. Lillecarl/pymux#487.
     """
-    asked = [client.connection for client in pymux.clients if client.connection.answers_forwards]
+    asked = [client.client for client in pymux.clients if client.client.answers_forwards]
     if asked:
         return _list_fresh(pymux, asked)
     _list(pymux)
     return None
 
 
-async def _list_fresh(pymux: Pymux, asked: list[ServerConnection]) -> None:
+async def _list_fresh(pymux: Pymux, asked: list[ClientRole]) -> None:
     with anyio.move_on_after(FRESH_SECONDS):
         async with anyio.create_task_group() as tasks:
-            for connection in asked:
-                tasks.start_soon(connection.fresh_forwards)
+            for client in asked:
+                tasks.start_soon(client.fresh_forwards)
     _list(pymux)
 
 
@@ -61,7 +61,7 @@ def _list(pymux: Pymux) -> None:
     lines: list[str] = []
 
     for client in pymux.clients:
-        for one in client.connection.forwards:
+        for one in client.client.forwards:
             notes = []
             if one.get("ours"):
                 notes.append("pymux")
@@ -74,7 +74,7 @@ def _list(pymux: Pymux) -> None:
             lines.append(
                 "%s: %s -> %s%s"
                 % (
-                    client.connection.name,
+                    client.client.connection.name,
                     _listen(one),
                     one.get("dest", ""),
                     " (%s)" % (", ".join(notes),) if notes else "",

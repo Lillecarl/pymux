@@ -102,19 +102,21 @@ def live_objects(pymux):
     yield from pymux.jobs.listing()
     for connection in pymux.connections:
         yield connection
-        yield connection.files
         yield connection.requests
-        yield connection.replies
-        yield connection.pacing
-        yield connection.clipboard
-        if connection.client_state is not None:
-            yield connection.client_state
+        client = connection.client
+        if client is not None:
+            yield client
+            yield client.files
+            yield client.replies
+            yield client.pacing
+            yield client.clipboard
+            yield client.state
 
 
 async def test_every_attribute_has_a_fate(pymux):
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
-        client_state = pymux.connections[-1].client_state
+        client_state = pymux.connections[-1].client.state
         with set_app(client_state.app):
             pymux.handle_command("split-window -h")
         await settled(session)

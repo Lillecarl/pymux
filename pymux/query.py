@@ -302,10 +302,10 @@ def _key_names(pymux: Pymux) -> Iterator[KeyNameView]:
 
 
 def _forwards(pymux: Pymux) -> Iterator[ForwardView]:
-    for connection in pymux.connections:
-        for one in connection.forwards:
+    for client in pymux._client_states:
+        for one in client.forwards:
             yield ForwardView(
-                connection.client_id or "",
+                client.client_id or "",
                 one.get("direction", ""),
                 # The port really bound, which is what `list-forwards`
                 # shows and so what a person can name. Lillecarl/pymux#441.

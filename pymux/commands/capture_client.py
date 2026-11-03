@@ -45,7 +45,7 @@ def _colors_of(pymux: Pymux, client_state: ClientState) -> ColorOverrides:
 
 def _cell_of(pymux: Pymux, client_state: ClientState) -> tuple[int, int]:
     "The client's own cell in pixels, when its terminal said; the server's otherwise."
-    graphics = client_state.connection.graphics
+    graphics = client_state.client.graphics
     if graphics.cell_size_known:
         return graphics.cell_width, graphics.cell_height
     return pymux.terminals.cell_size()

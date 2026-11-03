@@ -13,7 +13,7 @@ SIZE = Size(rows=24, columns=80)
 
 
 def _knows(state, cell) -> None:
-    graphics = state.connection.graphics
+    graphics = state.client.graphics
     graphics.cell_width, graphics.cell_height = cell
     graphics.cell_size_known = True
 

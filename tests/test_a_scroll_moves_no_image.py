@@ -44,7 +44,7 @@ async def test_an_image_beside_a_scrolling_pane_is_put_back():
 
             await once(asked, 10.0, complaint)
 
-        graphics = state.connection.graphics
+        graphics = state.client.graphics
         graphics.kitty_supported = True
         graphics.detected = True
         pymux = session.pymux

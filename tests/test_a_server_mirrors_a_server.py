@@ -32,7 +32,7 @@ from pyte.mouse import MouseAction, MouseBits, MouseButton, MouseInput
 from pyte.osc import ColorBase
 from pyte.sequences.file_transfer import Action, TransferCommand
 from pyte.sequences.kitty_clipboard import ClipboardPacket
-from session import Connection
+from session import Client
 from test_drag_a_border import DRAG, PRESS, _drawn, _mouse
 from test_kittys_clipboard import PNG as KITTY_PNG
 from test_kittys_clipboard import WRITE as KITTY_WRITE
@@ -112,7 +112,7 @@ async def two_servers(tmp_path):
                 output=output,
                 input=pipe,
                 color_depth=ColorDepth.DEPTH_8_BIT,
-                connection=Connection("here", None, peer, "/dev/pts/8"),
+                client=Client("here", None, peer, "/dev/pts/8"),
             )
             try:
                 yield owner, peer, client
@@ -210,9 +210,9 @@ async def test_a_kitty_read_in_a_pane_there_asks_the_terminal_here(two_servers, 
     owner.options.set_clipboard = Clipboard.ON
     peer.options.set_clipboard = Clipboard.ON
     there, _ = await shown_here(owner, peer, client)
-    monkeypatch.setattr(client.connection.replies, "kitty_clipboard", True, raising=False)
+    monkeypatch.setattr(client.client.replies, "kitty_clipboard", True, raising=False)
     told: list[str] = []
-    monkeypatch.setattr(client.connection, "forward_osc", told.append)
+    monkeypatch.setattr(client.client, "forward_osc", told.append)
     heard = hear_the_pane(there)
 
     there.terminal.terminal_control.feed_output(kitty_osc("type=read:id=nvim;%s" % (kitty_b64("text/plain"),)))
@@ -222,7 +222,7 @@ async def test_a_kitty_read_in_a_pane_there_asks_the_terminal_here(two_servers, 
 
     data = "type=read:status=DATA:id=%s:mime=%s;%s" % (our_id, kitty_b64("text/plain"), kitty_b64("copied here"))
     for packet in ("type=read:status=OK:id=" + our_id, data, "type=read:status=DONE:id=" + our_id):
-        peer.rich_clipboard.terminal_said(client.connection, packet)
+        peer.rich_clipboard.terminal_said(client.client, packet)
     await until(lambda: len(heard) == 3, "the answer reaches the pane there", lambda: heard)
     assert heard == [
         kitty_osc("type=read:status=OK:id=nvim"),
@@ -244,8 +244,7 @@ async def test_kitty_paste_events_reach_a_pane_there_and_its_read_comes_back_her
     there, _ = await shown_here(owner, peer, client)
     typed: list[str] = []
     monkeypatch.setattr(there.terminal.terminal_control.process, "write_input", typed.append)
-    connection = client.connection
-    monkeypatch.setattr(connection, "client_state", client, raising=False)
+    connection = client.client
     monkeypatch.setattr(connection.replies, "kitty_clipboard", True, raising=False)
     told: list[str] = []
     monkeypatch.setattr(connection, "forward_osc", told.append)
@@ -278,11 +277,11 @@ async def test_kitty_paste_events_reach_a_pane_there_and_its_read_comes_back_her
             output=output,
             input=pipe,
             color_depth=ColorDepth.DEPTH_8_BIT,
-            connection=Connection("there", None, owner, "/dev/pts/9"),
+            client=Client("there", None, owner, "/dev/pts/9"),
         )
-        monkeypatch.setattr(theirs.connection.replies, "kitty_clipboard", True, raising=False)
+        monkeypatch.setattr(theirs.client.replies, "kitty_clipboard", True, raising=False)
         asked_there: list[str] = []
-        monkeypatch.setattr(theirs.connection, "forward_osc", asked_there.append)
+        monkeypatch.setattr(theirs.client, "forward_osc", asked_there.append)
         owner.client_was_used(theirs)
 
         read = "type=read:id=p:pw=%s;%s" % (kitty_b64("once"), kitty_b64("text/plain"))
@@ -313,12 +312,11 @@ async def kitty_here(owner, peer, client, monkeypatch):
     there, here = await shown_here(owner, peer, client)
     heard: list[str] = []
     monkeypatch.setattr(there.terminal.screen, "write_process_input", heard.append)
-    connection = client.connection
-    monkeypatch.setattr(connection, "client_state", client, raising=False)
+    role = client.client
     raw: list[str] = []
-    monkeypatch.setattr(connection, "write_output_raw", raw.append, raising=False)
-    monkeypatch.setattr(connection, "flush_output", lambda: None, raising=False)
-    peer.drag_and_drop.terminal_said(connection, "t=q")
+    monkeypatch.setattr(role, "write_output_raw", raw.append, raising=False)
+    monkeypatch.setattr(role, "flush_output", lambda: None, raising=False)
+    peer.drag_and_drop.terminal_said(role, "t=q")
     await until(lambda: here in _drawn(client), "the mirror is drawn")
     return there, here, client.layout_manager.pane_write_positions[here], heard, raw
 
@@ -327,7 +325,7 @@ async def test_a_drop_here_reaches_the_registered_program_there(two_servers, mon
     "Its moves, its drop and its data reach the program, and the program's answers this terminal. Lillecarl/pymux#903."
     owner, peer, client = two_servers
     there, here, at, heard, raw = await kitty_here(owner, peer, client, monkeypatch)
-    connection = client.connection
+    connection = client.client
     program = there.terminal.terminal_control
 
     program.feed_output(dnd("t=a:i=7;text/x-mine"))
@@ -374,11 +372,10 @@ async def terminal_here(owner, peer, client, monkeypatch):
     there, _here = await shown_here(owner, peer, client)
     heard: list[str] = []
     monkeypatch.setattr(there.terminal.screen, "write_process_input", heard.append)
-    connection = client.connection
-    monkeypatch.setattr(connection, "client_state", client, raising=False)
+    connection = client.client.connection
     raw: list[str] = []
-    monkeypatch.setattr(connection, "write_output_raw", raw.append, raising=False)
-    monkeypatch.setattr(connection, "flush_output", lambda: None, raising=False)
+    monkeypatch.setattr(client.client, "write_output_raw", raw.append, raising=False)
+    monkeypatch.setattr(client.client, "flush_output", lambda: None, raising=False)
     packets: list[dict] = []
     monkeypatch.setattr(connection, "send_packet", packets.append, raising=False)
     ALL_CLIENT_OPTIONS["file-transfer"].set_value(peer, "passthrough", target=client)
@@ -394,7 +391,7 @@ async def test_a_file_transfer_there_is_answered_by_the_terminal_here(two_server
     await until(lambda: str(send) in raw, "the session reaches the terminal here", lambda: raw)
 
     ok = TransferCommand(Action.STATUS, id="s1", status="OK")
-    peer.kitty_transfers.terminal_said(client.connection, ok.param())
+    peer.kitty_transfers.terminal_said(client.client.connection, ok.param())
     await until(lambda: heard, "the terminal's answer reaches the program there", lambda: heard)
     assert heard == [str(ok)]
 
@@ -406,7 +403,7 @@ async def test_the_pace_of_a_transfer_there_is_the_owners_to_say(two_servers, mo
     there.terminal.terminal_control.feed_output(str(TransferCommand(Action.SEND, id="s1")))
     await until(lambda: raw, "the session reaches the terminal here", lambda: raw)
     with anyio.fail_after(5):
-        await peer.kitty_transfers.taken(client.connection, "s1")
+        await peer.kitty_transfers.taken(client.client.connection, "s1")
     assert {Field.CMD: Packet.KITTY_TRANSFER_TAKEN, Field.DATA: "s1"} in packets
 
 
@@ -420,8 +417,10 @@ async def test_a_terminal_here_waits_while_the_program_there_reads(two_servers, 
     held = {Field.CMD: Packet.HOLD_INPUT}
     released = {Field.CMD: Packet.RELEASE_INPUT}
     async with anyio.create_task_group() as tasks:
-        monkeypatch.setattr(client.connection, "spawn", lambda work: tasks.start_soon(lambda: work), raising=False)
-        peer.kitty_transfers.terminal_said(client.connection, data.param())
+        monkeypatch.setattr(
+            client.client.connection, "spawn", lambda work: tasks.start_soon(lambda: work), raising=False
+        )
+        peer.kitty_transfers.terminal_said(client.client.connection, data.param())
         await until(lambda: released in packets, "the owner's answer lets the terminal go on", lambda: packets)
     assert packets.index(held) < packets.index(released)
     assert heard == [str(data)]
@@ -432,7 +431,7 @@ async def test_a_drag_a_program_there_offers_goes_through_the_terminal_here(two_
     "Lillecarl/pymux#903."
     owner, peer, client = two_servers
     there, here, at, heard, raw = await kitty_here(owner, peer, client, monkeypatch)
-    connection = client.connection
+    connection = client.client
     program = there.terminal.terminal_control
 
     program.feed_output(dnd("t=o:x=1:i=3"))
@@ -463,7 +462,7 @@ async def test_a_drop_over_a_mirror_ends_here_when_the_link_goes(two_servers, mo
         lambda: "text/x-mine" in "".join(raw), "the terminal here registers for the program's type", lambda: raw
     )
     peer.drag_and_drop.terminal_said(
-        client.connection, "t=m:x=%d:y=%d:X=0:Y=0:o=1;text/x-mine" % (at.xpos + 1, at.ypos + 1)
+        client.client, "t=m:x=%d:y=%d:X=0:Y=0:o=1;text/x-mine" % (at.xpos + 1, at.ypos + 1)
     )
     await until(lambda: heard, "the move reaches the program there")
     raw.clear()
@@ -485,7 +484,7 @@ async def test_a_drop_over_a_mirror_ends_here_when_the_link_goes(two_servers, mo
 async def test_a_drop_on_a_pane_there_that_did_not_register_is_pasted(two_servers, monkeypatch):
     owner, peer, client = two_servers
     there, here, at, heard, raw = await kitty_here(owner, peer, client, monkeypatch)
-    connection = client.connection
+    connection = client.client
     typed: list[str] = []
     monkeypatch.setattr(there.terminal.terminal_control.process, "write_input", typed.append)
 
@@ -1236,7 +1235,7 @@ async def test_a_client_on_a_mirrored_window_is_back_there_after_an_upgrade(two_
     (link,) = peer.peers.by_address.values()
     left_on = link.tree.id_of_window(session.arrangement.get_active_window_for(client.app))
     assert left_on is not None and left_on != link.tree.id_of_window(session.arrangement.windows[0])
-    client.connection.client_id = "macbook"
+    client.client.client_id = "macbook"
     path = tmp_path / "peer.sqlite"
     save(peer, path)
 
@@ -1252,9 +1251,9 @@ async def test_a_client_on_a_mirrored_window_is_back_there_after_an_upgrade(two_
                     output=output,
                     input=pipe,
                     color_depth=ColorDepth.DEPTH_8_BIT,
-                    connection=Connection("here", None, fresh),
+                    client=Client("here", None, fresh),
                 )
-                back.connection.client_id = "macbook"
+                back.client.client_id = "macbook"
                 welcome_back(fresh, back, "macbook")
                 (relinked,) = fresh.peers.by_address.values()
 
@@ -1281,7 +1280,7 @@ async def test_a_loopback_url_there_opens_through_a_port_here(two_servers, monke
     listener = await anyio.create_tcp_listener(local_host="127.0.0.1", local_port=0)
     port = listener.extra(anyio.abc.SocketAttribute.local_port)
     packets: list[dict] = []
-    monkeypatch.setattr(client.connection, "send_packet", packets.append)
+    monkeypatch.setattr(client.client.connection, "send_packet", packets.append)
 
     def opened():
         return [packet[Field.DATA] for packet in packets if packet.get(Field.CMD) == Packet.OPEN]
@@ -1365,7 +1364,7 @@ async def test_a_url_of_a_mirrored_pane_opens_once_where_a_person_was_last(two_s
             output=output,
             input=pipe,
             color_depth=ColorDepth.DEPTH_8_BIT,
-            connection=Connection("there", None, owner, "/dev/pts/9"),
+            client=Client("there", None, owner, "/dev/pts/9"),
         )
         opened: dict[str, list[str]] = {"here": [], "there": []}
         for name, state in (("here", client), ("there", theirs)):
@@ -1374,7 +1373,7 @@ async def test_a_url_of_a_mirrored_pane_opens_once_where_a_person_was_last(two_s
                 if packet.get(Field.CMD) == Packet.OPEN:
                     opened[name].append(packet[Field.DATA])
 
-            monkeypatch.setattr(state.connection, "send_packet", send)
+            monkeypatch.setattr(state.client.connection, "send_packet", send)
         if used_last == "here":
             owner.client_was_used(theirs)
             owner.peer_was_used(link)

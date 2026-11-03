@@ -169,7 +169,8 @@ WRITES: dict[str, frozenset[str]] = {
         {"session", "previous_session", "options", *CLIENT_SETTINGS, *CLIENT_MODES}
     ),
     # The record goes by the client's id, in `clients`.
-    "pymux.connection.server.ServerConnection": frozenset({"client_state", "created"}),
+    "pymux.connection.server.ServerConnection": frozenset({"client"}),
+    "pymux.connection.client.ClientRole": frozenset({"state", "created"}),
     # In `hooks`, one row per command.
     "pymux.core.hooks.Hooks": frozenset({"commands"}),
     "pymux.jobs.table.JobTable": frozenset({"_jobs", "last_id", "saved_queries", "forgotten_seeds"}),

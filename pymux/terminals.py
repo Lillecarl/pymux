@@ -34,8 +34,8 @@ from .wayland.portal import color_scheme_of, theme_background
 if TYPE_CHECKING:
     from pyte.osc import ColorBase
 
+    from .connection.client import ClientRole
     from .connection.client_state import ClientState
-    from .connection.server import ServerConnection
     from .core.main import Pymux
     from .core.pane import Pane
     from .core.session import Session
@@ -123,48 +123,42 @@ class Terminals:
         user left.
         """
         try:
-            for connection, client_state in self.pymux._client_states.items():
-                # A socket command runs under a temporary client with
-                # no connection: no terminal to send to, and stopping
-                # here would starve every client after it.
-                # Lillecarl/pymux#493.
-                if connection is None:
-                    continue
-                connection.set_pointer_shape(self._pointer_shape_for(connection, client_state))
+            for client, client_state in self.pymux._client_states.items():
+                client.set_pointer_shape(self._pointer_shape_for(client, client_state))
         except Exception:
             logger.exception("Sending the shape of the pointer failed.")
 
-    def pointer_moved(self, connection: ServerConnection) -> None:
+    def pointer_moved(self, client: ClientRole) -> None:
         """
         One client's pointer moved, or left the window of its terminal.
         What it was over is told that it left, when it asked to be told,
         and the pointer takes the shape of what it is over now.
         Lillecarl/pymux#899.
         """
-        client_state = self.pymux._client_states.get(connection)
+        client_state = self.pymux._client_states.get(client)
         if client_state is not None:
-            left = getattr(self._handler_under(connection, client_state), "pointer_left", None)
+            left = getattr(self._handler_under(client, client_state), "pointer_left", None)
             previous, client_state.pointer_left = client_state.pointer_left, left
             if previous is not None and previous != left:
                 try:
                     previous()
                 except Exception:
                     logger.exception("Telling a pane that the pointer left it failed.")
-        self.sync_pointer_shape_of(connection)
+        self.sync_pointer_shape_of(client)
 
-    def sync_pointer_shape_of(self, connection: ServerConnection) -> None:
+    def sync_pointer_shape_of(self, client: ClientRole) -> None:
         "The same for one client, whose pointer moved."
-        client_state = self.pymux._client_states.get(connection)
+        client_state = self.pymux._client_states.get(client)
         if client_state is None:
             return
         try:
             # A move draws nothing, so a frame is asked for to carry the shape.
-            if connection.set_pointer_shape(self._pointer_shape_for(connection, client_state)):
+            if client.set_pointer_shape(self._pointer_shape_for(client, client_state)):
                 client_state.app.invalidate()
         except Exception:
             logger.exception("Sending the shape of the pointer failed.")
 
-    def _pointer_shape_for(self, connection: ServerConnection, client_state: ClientState) -> str:
+    def _pointer_shape_for(self, client: ClientRole, client_state: ClientState) -> str:
         """
         A line's resize shape while the client drags it or the pointer is
         over it, else the shape the pane asks for. The mouse handler
@@ -174,14 +168,14 @@ class Terminals:
         drag = client_state.border_drag
         if drag is not None:
             return drag.seam.pointer_shape
-        shape = getattr(self._handler_under(connection, client_state), "pointer_shape", None)
+        shape = getattr(self._handler_under(client, client_state), "pointer_shape", None)
         if shape:
             return shape
         return pointer_shape_of(self.pymux.focus.pane_of(client_state))
 
-    def _handler_under(self, connection: ServerConnection, client_state: ClientState) -> object | None:
+    def _handler_under(self, client: ClientRole, client_state: ClientState) -> object | None:
         "The mouse handler under the client's pointer, or None outside its window."
-        cell = connection.pointer_cell
+        cell = client.pointer_cell
         if cell is None:
             return None
         column, row = cell
@@ -194,11 +188,9 @@ class Terminals:
         pointer's shape above. Lillecarl/pymux#788.
         """
         try:
-            for connection, client_state in self.pymux._client_states.items():
-                if connection is None:
-                    continue
+            for client, client_state in self.pymux._client_states.items():
                 pane = self.pymux.focus.pane_of(client_state)
-                connection.set_progress(pane.progress if pane is not None else NO_PROGRESS)
+                client.set_progress(pane.progress if pane is not None else NO_PROGRESS)
         except Exception:
             logger.exception("Sending the progress failed.")
 
@@ -215,18 +207,13 @@ class Terminals:
         command and leaves has no terminal of the user behind it, and
         it never asked one what it does.
         """
-        # A client that runs in the process that started pymux has no
-        # connection, so nothing ever asked its terminal what it can
-        # report. It counts as reporting nothing, which is what it
-        # already did.
-        #
         # **The temporary client of a socket command is not here.** It
         # never asked a terminal anything, so its report of nothing
         # would drag the mask of every real client down with it for as
         # long as the command runs. Lillecarl/pymux#420.
         masks = [
-            0 if connection is None else connection.replies.kitty_source_flags
-            for connection, client_state in self.pymux._client_states.items()
+            client.replies.kitty_source_flags
+            for client, client_state in self.pymux._client_states.items()
             if not client_state.temporary
         ]
         masks += [terminal.keyboard_source_flags for _link, terminal in self.viewing_peers()]
@@ -319,11 +306,11 @@ class Terminals:
         known: list[tuple[int, tuple[int, int], bool]] = [
             (
                 client_state.last_used,
-                (connection.graphics.cell_width, connection.graphics.cell_height),
+                (client.graphics.cell_width, client.graphics.cell_height),
                 client_state.session is session,
             )
-            for connection, client_state in self.pymux._client_states.items()
-            if connection is not None and not client_state.temporary and connection.graphics.cell_size_known
+            for client, client_state in self.pymux._client_states.items()
+            if not client_state.temporary and client.graphics.cell_size_known
         ]
         for link, terminal in self.viewing_peers():
             if terminal.cell_size is not None:

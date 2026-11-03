@@ -51,7 +51,7 @@ async def test_a_message_reads_the_client_it_is_shown_to():
     whoever happened to ask. Lillecarl/pymux#323.
     """
     async with create_session() as (pymux, state):
-        state.connection.hostname = "buildbox-3"
+        state.client.hostname = "buildbox-3"
 
         await _run(pymux, state, "display-message 'from #{client_hostname}'")
 
@@ -88,11 +88,11 @@ async def test_a_named_client_answers_for_itself():
         pymux.answer = Answer()
         try:
             for client in (desk, phone):
-                await _run(pymux, desk, "display-message -c %s -p '%s'" % (client.connection.name, by_width))
+                await _run(pymux, desk, "display-message -c %s -p '%s'" % (client.client.connection.name, by_width))
             said = list(pymux.answer.output)
         finally:
             pymux.answer = None
         assert said == ["desk 342", "phone 60"]
 
-        await _run(pymux, desk, "display-message -c %s 'for #{client_width}'" % phone.connection.name)
+        await _run(pymux, desk, "display-message -c %s 'for #{client_width}'" % phone.client.connection.name)
         assert (desk.message, phone.message) == (None, "for 60")

@@ -65,7 +65,7 @@ def feed(state, pane, text: str) -> None:
 
 def say(state, text: str) -> None:
     "The terminal sends `text`."
-    state.connection._process({"cmd": "in", "data": text})
+    state.client.connection._process({"cmd": "in", "data": text})
 
 
 async def attached_to_kitty(pymux, session, recorder: Recorder, *, split: bool = False):
@@ -73,7 +73,7 @@ async def attached_to_kitty(pymux, session, recorder: Recorder, *, split: bool =
     state, _ = await session.attach("one", SIZE)
     if split:
         await run_as(pymux, state, "split-window -h")
-    state.connection._process({Field.CMD: Packet.DETECT})
+    state.client.connection._process({Field.CMD: Packet.DETECT})
     await once(lambda: QUERY in recorder.out, 10.0, "the terminal was never asked")
     say(state, QUERY)
     state.app.invalidate()
@@ -232,7 +232,7 @@ async def test_a_terminal_that_never_answers_gets_no_registration():
     pymux = Pymux(startup_command="sleep 30")
     async with over_connection(pymux=pymux, read_packet=recorder) as session:
         state, _ = await session.attach("one", SIZE)
-        state.connection._process({Field.CMD: Packet.DETECT})
+        state.client.connection._process({Field.CMD: Packet.DETECT})
         await once(lambda: QUERY in recorder.out, 10.0, "the terminal was never asked")
         await run_as(pymux, state, "display-message -p done")
         assert "\x1b]72;t=a" not in recorder.out

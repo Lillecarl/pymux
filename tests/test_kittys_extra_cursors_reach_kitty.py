@@ -37,9 +37,9 @@ async def test_the_focused_panes_cursors_go_to_kitty_where_the_pane_is():
     async with over_connection(pymux=pymux, read_packet=recorder) as session:
         state, _ = await session.attach("one", SIZE)
         await once(lambda: "ready" in recorder.out, 10.0, "the pane never drew")
-        state.connection._process({Field.CMD: Packet.DETECT})
-        state.connection._process({"cmd": "in", "data": SUPPORT})
-        await once(lambda: state.connection.replies.extra_cursors, 10.0, "the answer was never read")
+        state.client.connection._process({Field.CMD: Packet.DETECT})
+        state.client.connection._process({"cmd": "in", "data": SUPPORT})
+        await once(lambda: state.client.replies.extra_cursors, 10.0, "the answer was never read")
 
         pane = state.session.arrangement.get_active_window().active_pane
         where = state.layout_manager.pane_write_positions[pane]

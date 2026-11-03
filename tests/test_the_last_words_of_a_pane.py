@@ -21,7 +21,7 @@ COPIED = "]52;c;aGVsbG8="
 async def test_a_clipboard_write_a_program_ends_on_reaches_the_client(pymux):
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
-        client_state = pymux.connections[-1].client_state
+        client_state = pymux.connections[-1].client.state
 
         sent: list[str] = []
         take = session.take_packet

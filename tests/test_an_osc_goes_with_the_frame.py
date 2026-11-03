@@ -26,6 +26,7 @@ from libpymux.protocol import Packet
 from session import once
 from test_a_session_on_a_pyte_screen import attached, shows
 
+from pymux.connection.client import ClientRole
 from pymux.connection.client_io import FrameOutput, SocketStdout
 from pymux.connection.server import ServerConnection
 from pymux.core.main import Pymux
@@ -47,7 +48,7 @@ class _ClientState:
 @pytest.fixture
 def wire():
     """
-    A connection whose output is the real one, and the packets it sends.
+    A client whose output is the real one, and the packets it sends.
 
     `SocketStdout` is where a frame is counted, and `FrameOutput` is
     what the renderer writes through, so the buffering under test is
@@ -57,9 +58,11 @@ def wire():
     stdout = SocketStdout(sent.append)
     output = FrameOutput(stdout, lambda: None, term="xterm")
 
-    connection = ServerConnection.__new__(ServerConnection)
-    connection.client_state = _ClientState(output)
-    return connection, output, sent
+    client = ClientRole.__new__(ClientRole)
+    client.state = _ClientState(output)
+    client.connection = ServerConnection.__new__(ServerConnection)
+    client.connection.closed = False
+    return client, output, sent
 
 
 def written(sent) -> str:
@@ -77,9 +80,9 @@ def a_frame(output, drawn: str = "") -> None:
 
 def test_nothing_goes_out_before_the_frame(wire):
     "A flush of its own is what put the clipboard ahead of the screen."
-    connection, _output, sent = wire
+    client, _output, sent = wire
 
-    connection.forward_osc(COPIED)
+    client.forward_osc(COPIED)
 
     assert sent == []
 
@@ -91,9 +94,9 @@ def test_a_flush_that_is_not_a_frame_carries_nothing(wire):
     that drew the payload, and libvterm read an empty screen.
     Lillecarl/pymux#611.
     """
-    connection, output, sent = wire
+    client, output, sent = wire
 
-    connection.forward_osc(COPIED)
+    client.forward_osc(COPIED)
     output.write_raw("a terminal mode")
     output.flush()
     assert COPIED not in written(sent)
@@ -109,9 +112,9 @@ def test_a_skipped_frame_leaves_it_for_the_next(wire):
     flushes, between `before_render` and `after_render`. A flush after
     it is not a frame either.
     """
-    connection, output, sent = wire
+    client, output, sent = wire
 
-    connection.forward_osc(COPIED)
+    client.forward_osc(COPIED)
     output.frame_begins()
     output.frame_ends()
     output.flush()
@@ -122,9 +125,9 @@ def test_a_skipped_frame_leaves_it_for_the_next(wire):
 
 
 def test_the_frame_carries_it(wire):
-    connection, output, sent = wire
+    client, output, sent = wire
 
-    connection.forward_osc(COPIED)
+    client.forward_osc(COPIED)
     a_frame(output, "the frame")
 
     assert COPIED in written(sent)
@@ -136,9 +139,9 @@ def test_it_comes_behind_what_the_frame_draws(wire):
     carries the escape draws that text. Behind the frame, the terminal
     shows the text before it hears of the copy.
     """
-    connection, output, sent = wire
+    client, output, sent = wire
 
-    connection.forward_osc(COPIED)
+    client.forward_osc(COPIED)
     a_frame(output, "the frame")
 
     whole = written(sent)
@@ -147,9 +150,9 @@ def test_it_comes_behind_what_the_frame_draws(wire):
 
 def test_a_frame_that_draws_nothing_still_carries_it(wire):
     "A pane out of sight draws nothing, and its notification still goes."
-    connection, output, sent = wire
+    client, output, sent = wire
 
-    connection.forward_osc(COPIED)
+    client.forward_osc(COPIED)
     a_frame(output)
 
     assert written(sent) == COPIED
@@ -157,11 +160,11 @@ def test_a_frame_that_draws_nothing_still_carries_it(wire):
 
 def test_a_client_with_no_terminal_is_written_nothing(wire):
     "The temporary client of a socket command reads the answer, not this."
-    connection, _output, sent = wire
-    connection.client_state.temporary = True
+    client, _output, sent = wire
+    client.state.temporary = True
 
-    connection.forward_osc(COPIED)
-    a_frame(connection.client_state.output)
+    client.forward_osc(COPIED)
+    a_frame(client.state.output)
 
     assert written(sent) == ""
 
@@ -182,15 +185,15 @@ async def test_a_real_client_holds_it_through_a_flush_between_frames():
             (pane,) = mux.panes_by_id.values()
             # A notification of a window in sight stays inside.
             # Lillecarl/pymux#799.
-            connection.client_state.terminal_focused = False
+            connection.client.state.terminal_focused = False
             # A kitty, so the fence goes as it came. Lillecarl/pymux#497.
-            connection.replies.answered_notification_query = True
+            connection.client.replies.answered_notification_query = True
 
             # The fence is a notification, and its box would cover the line.
-            connection.client_state.options.notification_popups = NotificationPopups.OFF
+            connection.client.state.options.notification_popups = NotificationPopups.OFF
             fence = "\x1b]99;;fence-611\x1b\\"
             pane.terminal.terminal_control.feed_output("drawn-before-the-fence" + fence)
-            connection.flush_output()
+            connection.client.flush_output()
             await once(lambda: "fence-611" in written(session.packets), 10.0, "no fence")
 
             wire = written(session.packets)

@@ -181,8 +181,7 @@ class Waking:
         gets only its damage, on an image nothing shows, and its pane
         shows the background.
         """
-        if client_state.connection is not None:
-            client_state.connection.graphics.reset()
+        client_state.client.graphics.reset()
         renderer = client_state.app.renderer
         renderer.reset(leave_alternate_screen=False)
         if renderer.full_screen:

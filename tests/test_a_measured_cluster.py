@@ -34,31 +34,31 @@ async def test_a_flag_the_terminal_draws_one_column_wide_is_padded():
     async with over_connection(pymux=Pymux(startup_command=command), read_packet=recorder) as session:
         state, _ = await session.attach("one", SIZE)
         await once(lambda: "X" in recorder.out, 10.0, "the pane never drew")
-        state.connection._process({Field.CMD: Packet.DETECT})
+        state.client.connection._process({Field.CMD: Packet.DETECT})
         await once(lambda: CLUSTER_WIDTH_PROBE in recorder.out, 10.0, "the terminal was never asked")
         before = len(recorder.out)
-        state.connection._process({"cmd": "in", "data": "\x1b[4;2R"})
+        state.client.connection._process({"cmd": "in", "data": "\x1b[4;2R"})
         # The renderer puts the cursor back after the cell itself, so
         # the blank is all that tells.
         await once(lambda: FLAG + " " in recorder.out[before:], 10.0, lambda: "never drawn: %r" % recorder.out[before:])
-        assert state.connection.replies.clusters_drawn == Drawn(flag=1)
+        assert state.client.replies.clusters_drawn == Drawn(flag=1)
 
 
 async def test_the_answers_outrank_the_table_of_the_terminal():
     "wcwidth's table says WezTerm draws a flag one column wide; 20240203 draws it two."
     async with over_connection(pymux=Pymux(startup_command="sleep 30")) as session:
         state, _ = await session.attach("one", SIZE)
-        connection = state.connection
+        connection = state.client.connection
         connection._process({Field.CMD: Packet.DETECT})
         connection._process({"cmd": "in", "data": "\x1bP>|WezTerm 20240203-110809-5046fc22\x1b\\"})
         await once(
-            lambda: connection.replies.cluster_fit() == "wezterm",
+            lambda: connection.client.replies.cluster_fit() == "wezterm",
             10.0,
-            lambda: "fitted by %r" % connection.replies.cluster_fit(),
+            lambda: "fitted by %r" % connection.client.replies.cluster_fit(),
         )
         connection._process({"cmd": "in", "data": "\x1b[3;3R\x1b[4;3R\x1b[5;3R"})
-        await once(lambda: connection.replies.clusters_drawn.heard(), 10.0, "the answers never arrived")
-        assert connection.replies.cluster_fit() is None
+        await once(lambda: connection.client.replies.clusters_drawn.heard(), 10.0, "the answers never arrived")
+        assert connection.client.replies.cluster_fit() is None
 
 
 async def test_what_the_probes_erase_is_drawn_again():
@@ -68,10 +68,10 @@ async def test_what_the_probes_erase_is_drawn_again():
     async with over_connection(pymux=Pymux(startup_command=command), read_packet=recorder) as session:
         state, _ = await session.attach("one", SIZE)
         await once(lambda: "row5" in recorder.out, 10.0, "the pane never drew")
-        state.connection._process({Field.CMD: Packet.DETECT})
+        state.client.connection._process({Field.CMD: Packet.DETECT})
         await once(lambda: CLUSTER_WIDTH_PROBE in recorder.out, 10.0, "the terminal was never asked")
         after = recorder.out.index(CLUSTER_WIDTH_PROBE) + len(CLUSTER_WIDTH_PROBE)
-        state.connection._process({"cmd": "in", "data": "\x1b[?62c"})
+        state.client.connection._process({"cmd": "in", "data": "\x1b[?62c"})
         for row in ("row2", "row3", "row4", "row5"):
             await once(lambda row=row: row in recorder.out[after:], 10.0, lambda row=row: "%s never drawn again" % row)
 
@@ -80,6 +80,6 @@ async def test_a_terminal_too_short_for_the_probe_is_not_asked():
     recorder = Recorder()
     async with over_connection(pymux=Pymux(startup_command="sleep 30"), read_packet=recorder) as session:
         state, _ = await session.attach("one", Size(rows=4, columns=40))
-        state.connection._process({Field.CMD: Packet.DETECT})
+        state.client.connection._process({Field.CMD: Packet.DETECT})
         await once(lambda: "\x1b]99;" in recorder.out, 10.0, "the survey never went out")
         assert CLUSTER_WIDTH_PROBE not in recorder.out

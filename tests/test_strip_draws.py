@@ -35,7 +35,7 @@ from prompt_toolkit.layout.mouse_handlers import MouseHandlers
 from prompt_toolkit.layout.screen import Screen, WritePosition
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
-from session import Connection
+from session import Client
 
 from pymux.commands import handle_command
 from pymux.core.main import Pymux
@@ -63,7 +63,7 @@ async def create_client(commands=(), rows=ROWS, columns=COLUMNS):
                 output=output,
                 input=pipe,
                 color_depth=ColorDepth.DEPTH_8_BIT,
-                connection=Connection(),
+                client=Client(),
             )
             try:
                 with set_app(state.app):

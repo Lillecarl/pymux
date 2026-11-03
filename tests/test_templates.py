@@ -102,11 +102,11 @@ async def test_a_tmux_format_can_be_asked_for_as_a_template(pymux):
 async def test_a_template_reads_the_client(pymux):
     "The context carries it, so `client_hostname` works here too."
 
-    class Connection:
+    class Role:
         hostname = "buildbox-3"
 
     class Client:
-        connection = Connection()
+        client = Role()
         session = pymux.current_session
 
     drawn = format_pymux_string(

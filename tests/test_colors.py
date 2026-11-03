@@ -25,6 +25,7 @@ from test_server_tasks import FakePipe, FakePymux
 from test_theme import create_client as a_client
 
 from pymux.client.terminal import DETECTION_QUERIES
+from pymux.connection.client import ClientRole
 from pymux.connection.server import ServerConnection
 from pymux.core.main import Pymux
 from pymux.options.options import ALL_OPTIONS
@@ -38,6 +39,14 @@ from pymux.style.colors import (
     theme_color_base,
 )
 from pymux.style.style import DEFAULT_THEME
+
+
+def _client(pymux) -> ClientRole:
+    "A client on a connection of its own, with as much of a client state as the replies read."
+    connection = ServerConnection(pymux, FakePipe())
+    client = connection.client = connection.role = ClientRole(connection)
+    client.state = SimpleNamespace(options=SimpleNamespace(theme=""), output=None)
+    return client
 
 
 def detection(term="", colorterm="", forced=None):
@@ -389,14 +398,14 @@ def test_theme_report_asks_for_colours_again(report):
             pass
 
     async def check():
-        connection = ServerConnection(FakePymux(), FakePipe())
+        client = _client(FakePymux())
         output = Output()
-        connection.client_state = SimpleNamespace(output=output)
+        client.state = SimpleNamespace(output=output)
 
-        connection.replies.arrived(report)
+        client.replies.arrived(report)
 
         assert output.written == [COLOR_QUERIES]
-        connection.close_connection()
+        client.connection.close_connection()
 
     anyio.run(check)
 
@@ -420,17 +429,17 @@ def test_in_band_size_report_sets_size_and_cell():
     async def check():
         pymux = FakePymux()
         pymux.invalidate = lambda reason: None
-        connection = ServerConnection(pymux, FakePipe())
+        client = _client(pymux)
         output = Output()
-        connection.client_state = SimpleNamespace(output=output)
+        client.state = SimpleNamespace(output=output)
 
-        connection.replies.arrived("\x1b[48;30;100;600;800t")
+        client.replies.arrived("\x1b[48;30;100;600;800t")
 
-        assert (connection.size.rows, connection.size.columns) == (30, 100)
-        assert (connection.graphics.cell_width, connection.graphics.cell_height) == (8, 20)
-        connection._on_size({Field.CMD: Packet.SIZE, Field.DATA: [31, 100]})
+        assert (client.connection.size.rows, client.connection.size.columns) == (30, 100)
+        assert (client.graphics.cell_width, client.graphics.cell_height) == (8, 20)
+        client.connection._on_size({Field.CMD: Packet.SIZE, Field.DATA: [31, 100]})
         assert output.written == []
-        connection.close_connection()
+        client.connection.close_connection()
 
     anyio.run(check)
 
@@ -442,8 +451,8 @@ def test_reply_lands_on_connection_that_carried_it():
     """
 
     async def check():
-        one = ServerConnection(FakePymux(), FakePipe())
-        other = ServerConnection(FakePymux(), FakePipe())
+        one = _client(FakePymux())
+        other = _client(FakePymux())
 
         one.replies.arrived(osc("11", "rgb:1e1e/1e1e/2e2e"))
         other.replies.arrived(osc("11", "rgb:ffff/ffff/ffff"))
@@ -451,8 +460,8 @@ def test_reply_lands_on_connection_that_carried_it():
         assert one.default_colors.background == Color(0x1E, 0x1E, 0x2E)
         assert other.default_colors.background == Color(0xFF, 0xFF, 0xFF)
 
-        one.close_connection()
-        other.close_connection()
+        one.connection.close_connection()
+        other.connection.close_connection()
 
     anyio.run(check)
 
@@ -461,13 +470,13 @@ def test_colour_arriving_after_detection_is_still_read():
     "A terminal whose theme changes while a person is attached says so."
 
     async def check():
-        connection = ServerConnection(FakePymux(), FakePipe())
-        assert not connection.replies.detection_pending
+        client = _client(FakePymux())
+        assert not client.replies.detection_pending
 
-        connection.replies.arrived(osc("11", "rgb:0000/0000/0000"))
+        client.replies.arrived(osc("11", "rgb:0000/0000/0000"))
 
-        assert connection.default_colors.background == Color(0, 0, 0)
-        connection.close_connection()
+        assert client.default_colors.background == Color(0, 0, 0)
+        client.connection.close_connection()
 
     anyio.run(check)
 
@@ -481,13 +490,13 @@ def test_learned_colour_tells_panes_again():
 
     async def check():
         pymux = FakePymux()
-        connection = ServerConnection(pymux, FakePipe())
+        client = _client(pymux)
 
-        connection.replies.arrived(osc("4", "1;rgb:ffff/0000/0000"))
-        connection.replies.arrived(osc("11", "rgb:0000/0000/0000"))
+        client.replies.arrived(osc("4", "1;rgb:ffff/0000/0000"))
+        client.replies.arrived(osc("11", "rgb:0000/0000/0000"))
 
         assert pymux.terminals.color_base_syncs == 2
-        connection.close_connection()
+        client.connection.close_connection()
 
     anyio.run(check)
 
@@ -497,14 +506,14 @@ def test_reply_that_learns_nothing_tells_panes_nothing():
 
     async def check():
         pymux = FakePymux()
-        connection = ServerConnection(pymux, FakePipe())
+        client = _client(pymux)
 
-        connection.replies.arrived(osc("4", "20;rgb:ffff/0000/0000"))
+        client.replies.arrived(osc("4", "20;rgb:ffff/0000/0000"))
         # The cursor is a colour pymux does not draw with, and an
         # index beyond the sixteen is one nobody asked for.
-        connection.replies.arrived(osc("12", "rgb:ffff/0000/0000"))
+        client.replies.arrived(osc("12", "rgb:ffff/0000/0000"))
 
         assert pymux.terminals.color_base_syncs == 0
-        connection.close_connection()
+        client.connection.close_connection()
 
     anyio.run(check)

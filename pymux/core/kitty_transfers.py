@@ -145,15 +145,14 @@ class KittyTransfers:
 
     def route_for(self, client: ClientState) -> Route | None:
         "Who answers a session that goes to this client, or `None` for nobody."
-        connection = client.connection
-        if connection is None or client.temporary:
+        if client.temporary:
             return None
         chosen = client.options.file_transfer
         if chosen is FileTransfer.PASSTHROUGH or (
-            chosen is FileTransfer.AUTO and connection.replies.identity.transfers_files()
+            chosen is FileTransfer.AUTO and client.client.replies.identity.transfers_files()
         ):
             return Route.TERMINAL
-        return Route.PYMUX_CLIENT if connection.answers_transfers else None
+        return Route.PYMUX_CLIENT if client.client.answers_transfers else None
 
     # The panes.
 
@@ -176,13 +175,13 @@ class KittyTransfers:
                 self._send(session, self._bypass_for(session, command))
                 return
             route = None if client is None else self.route_for(client)
-            if client is None or client.connection is None or route is None:
+            if client is None or route is None:
                 if command.quiet < _SILENT:
                     self._tell(pane, TransferCommand(Action.STATUS, id=command.id, status=_REFUSED))
                 return
-            session = _Session(pane, client.connection, route, now)
+            session = _Session(pane, client.client.connection, route, now)
             command = self._bypass_for(session, command)
-            self._sessions[(client.connection, command.id)] = session
+            self._sessions[(client.client.connection, command.id)] = session
             self._send(session, command)
             return
         session = next(
@@ -245,7 +244,7 @@ class KittyTransfers:
                 else:
                     self._pace(key, session)
         except Exception:
-            logger.exception("Serving a file transfer command of client %s failed.", connection.client_id)
+            logger.exception("Serving a file transfer command of client %s failed.", connection.name)
 
     async def taken(self, connection: ServerConnection, session_id: str) -> None:
         "Answer the pymux client once the session's program holds every part it sent."
@@ -361,8 +360,9 @@ class KittyTransfers:
                 connection.peer.pane_transfer(session.pane, command.param())
             return
         if session.route is Route.TERMINAL:
-            connection.write_output_raw(str(command))
-            connection.flush_output()
+            if connection.client is not None:
+                connection.client.write_output_raw(str(command))
+                connection.client.flush_output()
             return
         with suppress(BrokenPipeError):
             connection.send_packet(

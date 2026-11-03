@@ -38,6 +38,6 @@ async def test_no_report_reaches_a_program_that_did_not_ask(tmp_path, packets):
         state, _ = await session.attach("one", SIZE)
         await once(lambda: heard.exists(), 10.0, "the pane never started")
         for data in packets:
-            state.connection._process({"cmd": "in", "data": data})
+            state.client.connection._process({"cmd": "in", "data": data})
         await once(lambda: heard.read_bytes().endswith(b"z"), 10.0, lambda: "heard %r" % heard.read_bytes())
         assert heard.read_bytes() == b"hiz"

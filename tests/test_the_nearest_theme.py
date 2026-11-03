@@ -155,7 +155,7 @@ def test_the_background_weighs_more_than_one_accent():
 
 def _reply(connection, code: str, payload: str) -> None:
     "One OSC reply from the outer terminal, as the client forwards it."
-    connection.replies.arrived("\x1b]%s;%s\x07" % (code, payload))
+    connection.client.replies.arrived("\x1b]%s;%s\x07" % (code, payload))
 
 
 async def test_a_client_takes_the_theme_of_its_terminal():
@@ -166,9 +166,9 @@ async def test_a_client_takes_the_theme_of_its_terminal():
         assert state.theme_in_use == DEFAULT_THEME
 
         for index, colour in enumerate(_palette_of("base16:gruvbox-dark-hard")):
-            _reply(state.connection, "4", "%i;%s" % (index, colour))
-        _reply(state.connection, "11", roles_of("base16:gruvbox-dark-hard")["pane"])
-        _reply(state.connection, "10", roles_of("base16:gruvbox-dark-hard")["text"])
+            _reply(state.client.connection, "4", "%i;%s" % (index, colour))
+        _reply(state.client.connection, "11", roles_of("base16:gruvbox-dark-hard")["pane"])
+        _reply(state.client.connection, "10", roles_of("base16:gruvbox-dark-hard")["text"])
 
         assert state.matched == "base16:gruvbox-dark-hard"
         assert state.theme_in_use == "base16:gruvbox-dark-hard"
@@ -178,7 +178,7 @@ async def test_a_client_that_named_a_theme_is_left_alone():
     async with over_connection() as session:
         state, _ = await session.attach("here", SIZE, client_options=[["theme", "grey"]])
 
-        _reply(state.connection, "11", roles_of("base16:gruvbox-dark-hard")["pane"])
+        _reply(state.client.connection, "11", roles_of("base16:gruvbox-dark-hard")["pane"])
 
         assert state.options.theme == "grey"
         assert state.theme_in_use == "grey"
@@ -193,11 +193,11 @@ async def test_the_match_is_made_again_as_answers_arrive():
     async with over_connection() as session:
         state, _ = await session.attach("here", SIZE)
 
-        _reply(state.connection, "11", "#ffffff")
+        _reply(state.client.connection, "11", "#ffffff")
         first = state.matched
         assert first is not None
 
-        _reply(state.connection, "11", roles_of("base16:gruvbox-dark-hard")["pane"])
+        _reply(state.client.connection, "11", roles_of("base16:gruvbox-dark-hard")["pane"])
 
         assert state.matched != first
 
@@ -205,7 +205,7 @@ async def test_the_match_is_made_again_as_answers_arrive():
 async def test_show_client_options_names_what_it_matched():
     async with over_connection() as session:
         state, _ = await session.attach("here", SIZE)
-        _reply(state.connection, "11", roles_of("base16:gruvbox-dark-hard")["pane"])
+        _reply(state.client.connection, "11", roles_of("base16:gruvbox-dark-hard")["pane"])
 
         session.pymux.answer = Answer()
         try:

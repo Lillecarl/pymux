@@ -49,7 +49,7 @@ class Client:
 
     def __init__(self, forwards=()) -> None:
         self.asked: list[tuple[str, str]] = []
-        self.connection = SimpleNamespace(can_forward=True, forwards=list(forwards))
+        self.client = SimpleNamespace(can_forward=True, forwards=list(forwards))
         self.last_used = 0
 
     def ask(self, text: str, command: str) -> None:

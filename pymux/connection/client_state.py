@@ -64,7 +64,7 @@ if TYPE_CHECKING:
     from ..graphics.window_frames import WindowView
     from ..layout.border_drag import BorderDrag
     from ..url_mode import UrlMode
-    from .server import ServerConnection
+    from .client import ClientRole
 
 __all__ = ["BEHIND_INTERVAL", "ClientState", "PaneCursor"]
 
@@ -179,7 +179,7 @@ class ClientState:
         "popups": Keep.DROPPED,  # a few seconds each
         # The application and what it is made of.
         "pymux": Keep.REBUILT,
-        "connection": Keep.REBUILT,
+        "client": Keep.REBUILT,
         "app": Keep.REBUILT,
         "input": Keep.REBUILT,
         "output": Keep.REBUILT,
@@ -208,17 +208,17 @@ class ClientState:
         input: Input,
         output: Output,
         color_depth: ColorDepth,
-        connection: ServerConnection,
+        client: ClientRole,
         session: Session,
     ) -> None:
         self.pymux = pymux
         self.input = input
         self.output = output
         self.color_depth = color_depth
-        #: Every route builds a `ServerConnection`, so its attributes
-        #: are read plainly. A test's stand-in carries them too.
-        #: Lillecarl/pymux#726.
-        self.connection = connection
+        #: Every route builds a `ClientRole`, so its attributes are
+        #: read plainly. A test's stand-in carries them too.
+        #: Lillecarl/pymux#726, Lillecarl/pymux#886.
+        self.client = client
 
         #: The session this client looks at. `attach-session` and
         #: `switch-client` move it to another one. Every render path
@@ -472,22 +472,22 @@ class ClientState:
 
             # A client that runs in the process that started pymux has
             # no connection, and there is nothing to draw images on.
-            if self.connection is None:
+            if self.client is None:
                 return
 
             # A line that moved away from a still pointer leaves its shape.
-            if self.connection.pointer_shape_sent in RESIZE_SHAPES:
-                self.pymux.terminals.sync_pointer_shape_of(self.connection)
+            if self.client.pointer_shape_sent in RESIZE_SHAPES:
+                self.pymux.terminals.sync_pointer_shape_of(self.client)
 
-            if self.connection.replies.extra_cursors:
+            if self.client.replies.extra_cursors:
                 self._send_extra_cursors()
 
-            if self.connection.replies.kitty_clipboard:
+            if self.client.replies.kitty_clipboard:
                 self.pymux.rich_clipboard.sync_paste_events(self)
 
             self.pymux.drag_and_drop.sync(self)
 
-            graphics = self.connection.graphics
+            graphics = self.client.graphics
             if not graphics.supported and not graphics.text_sizes.speaks:
                 return
             views = self.graphics_views()
@@ -506,7 +506,7 @@ class ClientState:
                 graphics.render(views)
             except Exception:
                 logger.exception("Drawing the pane images failed.")
-            if self.connection.pipe_connection.outstanding:
+            if self.client.connection.pipe_connection.outstanding:
                 self._windows_after_drain()
                 return
             try:
@@ -515,10 +515,10 @@ class ClientState:
                 logger.exception("Drawing the window panes failed.")
 
         def before_output(_):
-            if self.connection is None:
+            if self.client is None:
                 return
             renderer = self.app.renderer
-            sizes = self.connection.graphics.text_sizes
+            sizes = self.client.graphics.text_sizes
             # A frame with no screen before it erases the terminal first.
             if renderer.last_rendered_screen is None:
                 sizes.frame_erases()
@@ -570,10 +570,10 @@ class ClientState:
             # The result that is in asks again, and so does the end of
             # the hold.
             return True
-        if self.connection.pacing.waits_for_terminal:
-            self.connection.pacing.frame_held = True
+        if self.client.pacing.waits_for_terminal:
+            self.client.pacing.frame_held = True
             return True
-        pipe = self.connection.pipe_connection
+        pipe = self.client.connection.pipe_connection
         if pipe.holds_frames_while_behind and pipe.outstanding:
             if not self._paced_while_behind:
                 self._paced_while_behind = True
@@ -631,9 +631,9 @@ class ClientState:
         can be on a light terminal and a dark one.
         Lillecarl/pymux#223.
         """
-        if self.connection is None:
+        if self.client is None:
             return DefaultColors()
-        return self.connection.default_colors
+        return self.client.default_colors
 
     def native_extra_cursors_of(self, pane: Pane) -> bool:
         """
@@ -641,15 +641,11 @@ class ClientState:
         itself: it can, and the pane is the one this client works in.
         Lillecarl/pymux#891.
         """
-        return (
-            self.connection is not None
-            and self.connection.replies.extra_cursors
-            and self.pymux.focus.pane_of(self) is pane
-        )
+        return self.client is not None and self.client.replies.extra_cursors and self.pymux.focus.pane_of(self) is pane
 
     def _send_extra_cursors(self) -> None:
         "Tell this client's terminal the focused pane's extra cursors, where this frame drew them."
-        assert self.connection is not None
+        assert self.client is not None
         pane = self.pymux.focus.pane_of(self)
         cursors: frozenset[Placed] = frozenset()
         extra = None
@@ -667,10 +663,10 @@ class ClientState:
                     view.horizontal_scroll,
                     view.covered,
                 )
-        data = self.connection.extra_cursors_sent.update(cursors, extra)
+        data = self.client.extra_cursors_sent.update(cursors, extra)
         if data:
-            self.connection.write_output_raw(data)
-            self.connection.flush_output()
+            self.client.write_output_raw(data)
+            self.client.flush_output()
 
     def graphics_views(self, screen: Screen | None = None) -> list[PaneView]:
         """
@@ -719,16 +715,16 @@ class ClientState:
         draw nothing else: the window drew, and the cells around it did
         not move. Lillecarl/pymux#636.
         """
-        if self.connection is None or self.display_popup:
+        if self.client is None or self.display_popup:
             return
-        if self.connection.pipe_connection.outstanding:
+        if self.client.connection.pipe_connection.outstanding:
             self._windows_after_drain()
             return
         write_position = self.layout_manager.pane_write_positions.get(pane)
         if write_position is None or not isinstance(pane.terminal, WindowWidget):
             return
-        drained = self.connection.pacing.drained
-        self.connection.graphics.windows.refresh(
+        drained = self.client.pacing.drained
+        self.client.graphics.windows.refresh(
             pane.terminal.host.view_of(pane.pane_id, pane.terminal, write_position, drained)
         )
 
@@ -738,10 +734,10 @@ class ClientState:
         taken what it holds. A window frame can be megabytes, and frames
         that queue behind each other only arrive late. Lillecarl/pymux#629.
         """
-        if self._waiting_for_drain or self.connection is None:
+        if self._waiting_for_drain or self.client is None:
             return
         self._waiting_for_drain = True
-        connection = self.connection
+        connection = self.client.connection
 
         async def wait() -> None:
             try:
@@ -778,9 +774,9 @@ class ClientState:
 
     def _window_views(self) -> list[WindowView]:
         "One `WindowView` per window pane this client can see."
-        if self.connection is None:
+        if self.client is None:
             return []
-        drained = self.connection.pacing.drained
+        drained = self.client.pacing.drained
         return [
             widget.host.view_of(pane.pane_id, widget, write_position, drained)
             for pane, widget, write_position in self.window_panes()

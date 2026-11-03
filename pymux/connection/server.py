@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import socket
-import time
 from collections.abc import Coroutine
 from contextlib import suppress
 from typing import (
@@ -17,36 +16,25 @@ from libpymux.wire import encode_json
 from prompt_toolkit.application.current import create_app_session
 from prompt_toolkit.data_structures import Size
 from pyte.keep import Keep
-from pyte.osc import Osc
-from pyte.sequences.strings import osc
 
-from ..audio import AudioLink
 from ..enums import Woke
-from ..graphics.graphics import CELL_SIZE_QUERY, ClientGraphics
+from ..graphics.graphics import CELL_SIZE_QUERY
 from ..log import logger
 from ..mirror.link import PeerLink
 from ..mirror.tunnel import OwnerTunnel
-from ..notify.osc import NO_PROGRESS, Progress
 from ..pipes.base import BrokenPipeError
-from ..style.colors import ColorDetection, DefaultColors
 from .attach import start_gui
-from .client_io import ClientInput, FrameOutput
-from .clipboard_reads import ClipboardReader
-from .extra_cursors import ExtraCursorsSent
-from .files import Files
-from .pacing import FramePacing
 from .packet_table import PacketTable
 from .rate import Rate
-from .replies import TerminalReplies
 from .requests import Requests
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from pymux.connection.client_state import ClientState
-    from pymux.connection.recording import Recording
     from pymux.core.main import Pymux
     from pymux.pipes.base import PipeConnection
+
+    from .client import ClientRole
 
 __all__ = ["Role", "ServerConnection"]
 
@@ -74,18 +62,14 @@ _TRANSPORT_PACKETS = frozenset({Packet.WIRE, Packet.PONG})
 
 class Role(Protocol):
     """
-    What a connection is for when it is not an attached client: a peer
-    link (`PeerLink`) or a tunnel (`OwnerTunnel`). The first packet
-    chooses it, and from then on every packet but the transport's own
-    goes to it. Lillecarl/pymux#882.
+    What a connection is for: an attached client (`ClientRole`), a peer
+    link (`PeerLink`) or a tunnel (`OwnerTunnel`). The first packet that
+    chooses it is `start-gui`, `run-command`, `peer` or `tunnel`, and
+    from then on every packet but the transport's own goes to it.
+    Lillecarl/pymux#882, Lillecarl/pymux#886.
     """
 
     def handle(self, packet: Message) -> None: ...
-
-
-def _without_left(forwards: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    "A forwarding table without the time each forward has left."
-    return [{key: value for key, value in one.items() if key != "left"} for one in forwards]
 
 
 #: The method of `ServerConnection` that handles each kind of packet.
@@ -102,47 +86,17 @@ class ServerConnection:
     #: (Lillecarl/pymux#409), so the attach handshake rebuilds most of
     #: this. Saved: the client's own record and when it came.
     KEEP: ClassVar[dict[str, Keep]] = {
-        "client_state": Keep.SAVED,
-        "created": Keep.SAVED,
-        # A restarting client takes the old server's images off its
-        # terminal, and the next frame places them again.
-        "graphics": Keep.DROPPED,
+        # `ClientRole.KEEP` says what of it.
+        "client": Keep.SAVED,
         "pymux": Keep.REBUILT,
-        "replies": Keep.REBUILT,
-        "pacing": Keep.REBUILT,
-        "clipboard": Keep.REBUILT,
-        "files": Keep.REBUILT,
         "requests": Keep.REBUILT,
         "size": Keep.REBUILT,
-        "hostname": Keep.REBUILT,
-        "ttyname": Keep.REBUILT,
-        "pid": Keep.REBUILT,
-        "client_id": Keep.REBUILT,
-        "environment": Keep.REBUILT,
-        "colors": Keep.REBUILT,
-        "default_colors": Keep.REBUILT,
-        # Asked again of the terminal the client reattaches from.
-        "_pointer_shape_sent": Keep.REBUILT,
-        # A new server clears them with its first frame.
-        "extra_cursors_sent": Keep.REBUILT,
-        "_progress_sent": Keep.REBUILT,
         "answers_ping": Keep.REBUILT,
-        "can_forward": Keep.REBUILT,
-        "answers_forwards": Keep.REBUILT,
-        "_next_forwards": Keep.DROPPED,
-        "starts_browsers": Keep.REBUILT,
-        "saves_files": Keep.REBUILT,
-        "sends_files": Keep.REBUILT,
-        "answers_transfers": Keep.REBUILT,
         "may_attach": Keep.REBUILT,
-        "forwards": Keep.DROPPED,
         "pipe_connection": Keep.DROPPED,
         # The client offers msgpack again on the connection it opens to
         # the next server.
         "encode": Keep.DROPPED,
-        "pipeinput": Keep.DROPPED,
-        # The next server measures the client's round trip again.
-        "audio": Keep.DROPPED,
         # A peer reconnects to the next server and mirrors again; a
         # tunnel's connections end with the server, and a browser
         # connects again.
@@ -150,9 +104,6 @@ class ServerConnection:
         "_tasks": Keep.DROPPED,
         "closed": Keep.DROPPED,
         "_unanswered": Keep.DROPPED,
-        # A recording holds Python objects of this build, so it ends
-        # with it. `upgrade.py` writes it out first.
-        "recording": Keep.DROPPED,
         # The pipe's counts start again on the next server's connection.
         "rate_down": Keep.DROPPED,
         "rate_up": Keep.DROPPED,
@@ -176,14 +127,6 @@ class ServerConnection:
         self.size = Size(rows=20, columns=80)
         self.closed = False
 
-        self.replies = TerminalReplies(self)
-
-        self.pacing = FramePacing(self)
-
-        #: What `record-client` is recording of this client, or None.
-        #: Lillecarl/pymux#612.
-        self.recording: Recording | None = None
-
         #: What `#{client_rate_down}` and `#{client_rate_up}` read, off
         #: the pipe's counts. Lillecarl/pymux#678.
         self.rate_down = Rate()
@@ -194,88 +137,15 @@ class ServerConnection:
         #: group is a child of `Pymux.running`'s. Lillecarl/pymux#87.
         self._tasks: anyio.abc.TaskGroup | None = None
 
-        self.client_state: ClientState | None = None
-
         self.requests = Requests(self)
 
-        # Kitty graphics protocol state of the outer terminal. The same
-        # query answers this one: the reply of the graphics query
-        # arrives before the device attributes reply that closes the
-        # detection.
-        self.graphics = ClientGraphics(
-            self.write_output_raw,
-            self.flush_output,
-            self.request_repaint,
-            # Read when it is needed, not now: the colour detection
-            # below has not run yet, and the half blocks only ask once
-            # a frame carries an image.
-            color_depth=lambda: self.colors.depth,
-            spawn=self.spawn,
-            image_ids=pymux.outer_image_ids,
-            reads_placeholders=lambda: self.replies.identity.draws_placeholders(),
-        )
-        # The client sent the shared memory probe with its detection,
-        # and only the server reads the terminal's replies.
-        # Lillecarl/pymux#634.
-        self.graphics.on_shm = self._terminal_reads_shm
-
-        # Colour depth of the outer terminal. The same handshake
-        # answers it: the probe reply arrives before the device
-        # attributes reply that closes the detection.
-        self.colors = ColorDetection()
-
-        #: The machine the client of this connection runs on, as the
-        #: client reported it. Empty until it attaches. **Only a client
-        #: can say it**: `socket.gethostname()` here answers the
-        #: server's own machine, and over ssh that is not the one the
-        #: person sits at. Lillecarl/pymux#287.
-        self.hostname = ""
-
-        #: The environment of the machine this client runs on, as the
-        #: client reported it when it attached. The session keeps the
-        #: names "update-environment" lists, and nothing keeps the rest.
-        #: Lillecarl/pymux#271.
-        self.environment: dict[str, str] = {}
-
-        #: The terminal this client draws on, as the client named it,
-        #: and the process it runs as. Both are of the client's own
-        #: machine, so neither means anything here on its own: `name`
-        #: puts the hostname in front. Lillecarl/pymux#335.
-        self.ttyname = ""
-        self.pid = 0
-
-        #: Who the client says it is, the same on every attach of one
-        #: client process, or "" from a client that did not say. A
-        #: snapshot keys what belongs to a client by this, not by the
-        #: connection, which an upgrade replaces. Lillecarl/pymux#399.
-        self.client_id = ""
-
-        #: Whether this client can forward a port, and what it is
-        #: forwarding. Both come from the client: it holds the SSH
-        #: connection, so the list here is a copy to draw and never the
-        #: truth. Lillecarl/pymux#436.
-        self.can_forward = False
-        self.forwards: list[dict[str, Any]] = []
-        #: Whether it sends its table again when asked, and what the
-        #: next table that arrives sets. Lillecarl/pymux#487.
-        self.answers_forwards = False
-        self._next_forwards: anyio.Event | None = None
-        #: Whether this client starts browsers. Lillecarl/pymux#653.
-        self.starts_browsers = False
-        #: Whether this client saves a download. Lillecarl/pymux#745.
-        self.saves_files = False
-        #: Whether this client sends files for `pymux receive`, and the
-        #: requests that wait for its answer. Lillecarl/pymux#743.
-        self.sends_files = False
-        self.files = Files(self)
-        #: Whether this client answers kitty's file transfer as the
-        #: terminal. Lillecarl/pymux#912.
-        self.answers_transfers = False
-        #: This client's sound, when it plays it. Lillecarl/pymux#657.
-        self.audio: AudioLink | None = None
-        #: What this connection is for, when it is not an attached
-        #: client: the link of a server that mirrors panes of this one
-        #: (Lillecarl/pymux#759), or a tunnel (Lillecarl/pymux#853).
+        #: The client attached on this connection, from `create_app` on
+        #: until the connection closes. A socket command makes a
+        #: temporary one. Lillecarl/pymux#886.
+        self.client: ClientRole | None = None
+        #: What this connection is for: its client, the link of a server
+        #: that mirrors panes of this one (Lillecarl/pymux#759), or a
+        #: tunnel (Lillecarl/pymux#853).
         self.role: Role | None = None
 
         #: Whether this client answers a ping, and how many pings to
@@ -284,48 +154,6 @@ class ServerConnection:
         #: Lillecarl/pymux#446.
         self.answers_ping = False
         self._unanswered = 0
-
-        #: When this connection attached. A client that reattaches from
-        #: the same terminal takes the same name and a later time, so
-        #: this is what tells two runs of one terminal apart, and what
-        #: `#{client_created}` reads.
-        self.created = time.time()
-
-        #: The two colours the outer terminal draws with by itself.
-        #: The same handshake asks for them, and either one stays
-        #: `None` when the terminal does not say. **Only a client can
-        #: find this out**, which is why it is here and not on the
-        #: session. Lillecarl/pymux#223.
-        self.default_colors = DefaultColors()
-
-        self.clipboard = ClipboardReader(self)
-
-        # The client input is parsed by the application that reads from
-        # the pipe input (see `ClientInput`). Give that input a parser
-        # that also understands the kitty keyboard protocol, and route
-        # terminal replies to `TerminalReplies.arrived`.
-        self.pipeinput = ClientInput(
-            self.send_packet,
-            reply_callback=self.replies.arrived,
-            # Whether this client's terminal counts the modifiers the
-            # way the protocol does. It is asked when a key arrives and
-            # not now, because the detection has not answered yet.
-            # Lillecarl/pymux#182.
-            speaks_protocol=self.replies.keyboard_is_supported,
-            pixel_cell=self.replies.pixel_cell,
-            pointer_moved=lambda: self.pymux.terminals.pointer_moved(self),
-        )
-
-        # The shape of the pointer that this client was told about. A
-        # client that never saw one is not told to reset it.
-        self._pointer_shape_sent = ""
-
-        # The progress this client's terminal was told, the same way.
-        self._progress_sent = NO_PROGRESS
-
-        # The extra cursors this client's terminal draws itself.
-        # Lillecarl/pymux#891.
-        self.extra_cursors_sent = ExtraCursorsSent()
 
         self.pymux.serving.serve_connection(self)
 
@@ -398,102 +226,6 @@ class ServerConnection:
             finally:
                 await self.pipe_connection.linger()
 
-    def write_output_raw(self, data: str) -> None:
-        "Write to the outer terminal, without escaping. (For graphics.)"
-        if self.client_state is not None:
-            self.client_state.output.write_raw(data)
-
-    def flush_output(self) -> None:
-        if self.client_state is not None:
-            self.client_state.output.flush()
-
-    def forward_osc(self, sequence: str) -> None:
-        """
-        Write an OSC sequence of a pane to the outer terminal of this
-        client. (The clipboard, a notification, the shape of the
-        pointer: pymux cannot serve those, the terminal of the user
-        can.)
-
-        **It goes after the next frame, and not the moment it
-        arrives.** `FrameOutput` holds it until the renderer's flush
-        and puts it behind the frame. A flush here made the clipboard
-        change before the screen that showed the copy, and anything
-        that reads the clipboard as a marker for what is drawn saw the
-        two the wrong way round -- which is how `checks.pymux-pictures`
-        photographed a pane that was still catching up. Behind the
-        frame, its arrival says the frame has arrived too.
-
-        tmux orders it the same way and for the same reason: a pane's
-        "OSC 52" goes through `screen_write_setselection`
-        (`input.c:3414-3440`), so it is dispatched as
-        `tty_cmd_setselection` among the drawing commands
-        (`tty.c:2140`). Only its popup case, which has no pane, writes
-        straight to the terminal. Lillecarl/pymux#478.
-
-        An OSC sequence moves no cursor and paints no cell, so it is
-        safe anywhere between two frames. `pymux.notify.osc.build_osc` has
-        already checked the payload of the pane.
-
-        **The temporary client of a socket command has no terminal.**
-        It holds a client state like a real one, and its focused pane
-        is the pane a person is looking at, so a sync that walks every
-        client would hand it the shape of that pointer and the OSC of
-        that pane -- read back as garbage after the answer of the
-        command. Lillecarl/pymux#420.
-        """
-        if self.client_state is None or self.client_state.temporary:
-            return
-        output = self.client_state.output
-        assert isinstance(output, FrameOutput)
-        output.write_after_frame(sequence)
-
-    def set_pointer_shape(self, shape: str) -> bool:
-        """
-        Put the shape that the focused pane asks for on the pointer of
-        this client. An empty shape gives the pointer back to the
-        terminal of the user.
-
-        Only a change goes out. The shape belongs to the pane that the
-        client looks at, so it has to be written again when the focus
-        moves to a pane that wants a different one, or none.
-
-        Says whether the shape changed: it goes out behind the next frame.
-        """
-        if shape == self._pointer_shape_sent:
-            return False
-        self._pointer_shape_sent = shape
-        self.forward_osc(osc(Osc.POINTER_SHAPE, shape))
-        return True
-
-    def set_progress(self, progress: Progress) -> None:
-        """
-        Show this client's terminal the progress of the pane it looks
-        at, when it draws one: some terminals take any OSC 9 for a
-        notification. Only a change goes out. Lillecarl/pymux#788.
-        """
-        if progress == self._progress_sent or not self.replies.identity.draws_progress():
-            return
-        self._progress_sent = progress
-        self.forward_osc(osc(Osc.MESSAGE, progress.sequence))
-
-    def request_repaint(self) -> None:
-        """
-        Ask the renderer to paint the whole screen again.
-
-        The sixel output needs this: those pixels sit in the cells, so
-        the text under an image that moved has to be written once more.
-        Not `Renderer.reset`, which switches the mouse and bracketed
-        paste off and on again around every such frame.
-        """
-        if self.client_state is None:
-            return
-        app = self.client_state.app
-        app.renderer.request_full_redraw()
-        # Named here and not through `Pymux.invalidate`, because this
-        # wakes the one client that asked and not all of them.
-        logger.debug("Drawing 1 of the clients: it asked for a full repaint")
-        app.invalidate()
-
     async def _read_until_it_ends(self) -> None:
         failures = 0
 
@@ -536,6 +268,10 @@ class ServerConnection:
         if self.role is not None and packet.get(Field.CMD) not in _TRANSPORT_PACKETS:
             self.role.handle(packet)
             return
+        self.handle_own(packet)
+
+    def handle_own(self, packet: Message) -> None:
+        "Hand a packet to the method of this connection for its kind: a client's role has none for it."
         _PACKETS.handle(self, packet)
 
     @property
@@ -562,7 +298,7 @@ class ServerConnection:
     @_PACKETS.handles(Packet.PEER)
     def _on_peer(self, packet: Message) -> None:
         "Another server mirrors panes of this one over this connection, if the two speak a version in common."
-        if self.client_state is not None:
+        if self.client is not None:
             return
         upgrade = peer_upgrade(packet.get(Field.VERSION), packet.get(Field.OLDEST))
         if upgrade is not None:
@@ -590,16 +326,10 @@ class ServerConnection:
     @_PACKETS.handles(Packet.TUNNEL)
     def _on_tunnel(self, packet: Message) -> None:
         "A peer asks for a port on the machine a pane runs on."
-        if self.client_state is None:
+        if self.client is None:
             tunnel = OwnerTunnel(self)
             self.role = tunnel
             self.spawn(tunnel.run(packet[Field.PANE_ID], packet[Field.DEST_HOST], packet[Field.DEST_PORT]))
-
-    @_PACKETS.handles(Packet.SOUND, Packet.ECHO, Packet.MICROPHONE, Packet.BEHIND)
-    def _on_sound(self, packet: Message) -> None:
-        # Sound from a client that plays it. Lillecarl/pymux#657.
-        if self.audio is not None:
-            self.audio.heard(packet)
 
     @_PACKETS.handles(Packet.STREAM_IN)
     def _on_stream_in(self, packet: Message) -> None:
@@ -610,21 +340,6 @@ class ServerConnection:
         else:
             self.requests.stream.take(packet.get(Field.DATA, ""))
 
-    @_PACKETS.handles(Packet.IN)
-    def _on_input(self, packet: Message) -> None:
-        if self.recording is not None:
-            self.recording.hear("in", packet[Field.DATA])
-        self.pipeinput.send_text(self.clipboard.take_answer(packet[Field.DATA]))
-        # Input newer than a scheduled redraw makes that frame
-        # stale: the renderer skips it and asks for another one
-        # instead, so this is handled first. Lillecarl/pymux#524.
-        if self.client_state is not None:
-            self.client_state.input_tick += 1
-
-    @_PACKETS.handles(Packet.DETECT)
-    def _on_detect(self, packet: Message) -> None:
-        self.replies.start_detection()
-
     @_PACKETS.handles(Packet.SIZE)
     def _on_size(self, packet: Message) -> None:
         rows, columns = packet[Field.DATA]
@@ -632,13 +347,15 @@ class ServerConnection:
         # A SIGWINCH comes for pixels alone too: the terminal moved
         # to a display of another density. Lillecarl/pymux#774. A
         # terminal that reports its size in band says the pixels too.
-        if self.graphics.cell_size_known and not self.replies.sizes_in_band:
-            self.write_output_raw(CELL_SIZE_QUERY)
-            self.flush_output()
+        client = self.client
+        if client is not None and client.graphics.cell_size_known and not client.replies.sizes_in_band:
+            client.write_output_raw(CELL_SIZE_QUERY)
+            client.flush_output()
 
     def resized(self, size: Size) -> None:
-        if self.recording is not None and size != self.size:
-            self.recording.hear("size", "%dx%d" % (size.columns, size.rows))
+        client = self.client
+        if client is not None and client.recording is not None and size != self.size:
+            client.recording.hear("size", "%dx%d" % (size.columns, size.rows))
         self.size = size
         self.pymux.invalidate(Woke.CLIENT_RESIZED)
 
@@ -646,97 +363,11 @@ class ServerConnection:
     def _on_start_gui(self, packet: Message) -> None:
         start_gui(self, packet)
 
-    @_PACKETS.handles(Packet.BROWSER_STARTED)
-    def _on_browser_started(self, packet: Message) -> None:
-        # A URL that the client of this connection could not open. The
-        # request went out as a status line here, so the answer goes
-        # there too, and it names the URL to copy.
-        self.pymux.browsers.started(packet)
-
-    @_PACKETS.handles(Packet.BROWSER_ENDED)
-    def _on_browser_ended(self, packet: Message) -> None:
-        self.pymux.browsers.ended(packet[Field.BROWSER])
-
-    @_PACKETS.handles(Packet.FILE_SAVED)
-    def _on_file_saved(self, packet: Message) -> None:
-        self.files.saved(packet)
-
-    @_PACKETS.handles(Packet.UPLOAD, Packet.UPLOAD_DONE)
-    def _on_upload(self, packet: Message) -> None:
-        self.files.took_part(packet)
-
-    @_PACKETS.handles(Packet.FILES_LISTED)
-    def _on_files_listed(self, packet: Message) -> None:
-        self.files.listed(packet)
-
-    @_PACKETS.handles(Packet.KITTY_TRANSFER)
-    def _on_kitty_transfer(self, packet: Message) -> None:
-        self.pymux.kitty_transfers.terminal_said(self, str(packet.get(Field.DATA) or ""))
-
-    @_PACKETS.handles(Packet.KITTY_TRANSFER_TAKEN)
-    def _on_kitty_transfer_taken(self, packet: Message) -> None:
-        self.spawn(self.pymux.kitty_transfers.taken(self, str(packet.get(Field.DATA) or "")))
-
-    @_PACKETS.handles(Packet.REDRAW)
-    def _on_redraw(self, packet: Message) -> None:
-        # The client drew a question over the frame, and it is gone.
-        if self.client_state is not None:
-            self.pymux.waking.redraw(self.client_state)
-
-    @_PACKETS.handles(Packet.OPEN_FAILED)
-    def _on_open_failed(self, packet: Message) -> None:
-        if self.client_state is not None:
-            self.client_state.message = "Could not open %s in a browser on this machine." % (packet[Field.DATA],)
-
     @_PACKETS.handles(Packet.PONG)
     def _on_pong(self, packet: Message) -> None:
         # The client is still there. Any answer clears the count, so a
         # client that is merely slow keeps its place.
         self._unanswered = 0
-
-    @_PACKETS.handles(Packet.FRAME_SHOWN)
-    def _on_frame_shown(self, packet: Message) -> None:
-        self.pacing.frame_answered()
-
-    @_PACKETS.handles(Packet.FORWARDS)
-    def _on_forwards(self, packet: Message) -> None:
-        # What this client is forwarding, after it changed or after the
-        # link came back. The server keeps a copy and never the truth:
-        # it holds no SSH connection, so only the client can say whether
-        # a listener is really open. Lillecarl/pymux#436.
-        reported = packet.get(Field.DATA) or []
-        said = packet.get(Field.MESSAGE)
-        arrived, self._next_forwards = self._next_forwards, None
-
-        if said and self.client_state is not None:
-            self.client_state.message = said
-
-        # Every SSH client reports once as it attaches, nearly
-        # always with nothing forwarded. A frame that draws the
-        # same screen again is a fault of its own
-        # (Lillecarl/pymux#117), so the unchanged case asks for
-        # none. The time left moves on every report and only a
-        # listing reads it, so it is no change.
-        changed = _without_left(reported) != _without_left(self.forwards)
-        self.forwards = reported
-        if changed or said:
-            self.pymux.invalidate(Woke.FORWARDS_CHANGED)
-        if arrived is not None:
-            arrived.set()
-
-    async def fresh_forwards(self) -> None:
-        """
-        Ask the client for its table now, and wait until it arrives.
-
-        **Every call asks.** A request the client never answered leaves
-        its event unset, and a caller that only waited on it would wait
-        out every listing after it.
-        """
-        if self._next_forwards is None:
-            self._next_forwards = anyio.Event()
-        arrived = self._next_forwards
-        self.send_packet({Field.CMD: Packet.REPORT_FORWARDS})
-        await arrived.wait()
 
     def send_packet(self, data: object, compress_after: bool = False) -> None:
         """
@@ -747,8 +378,9 @@ class ServerConnection:
             return
         # Every byte for the client's terminal passes here, the frames
         # and what follows them alike.
-        if self.recording is not None and isinstance(data, dict) and data.get(Field.CMD) == Packet.OUT:
-            self.recording.hear("out", data[Field.DATA])
+        recording = self.client.recording if self.client is not None else None
+        if recording is not None and isinstance(data, dict) and data.get(Field.CMD) == Packet.OUT:
+            recording.hear("out", data[Field.DATA])
         # Serialised now: the write runs later, and the packet is what
         # was true when it was sent, in the format of the moment.
         self.spawn(self.write_encoded(self.encode(data), compress_after))
@@ -765,24 +397,10 @@ class ServerConnection:
             # `_write` lets a client go on a broken pipe or a full
             # buffer, and that client leaves for good instead of
             # waiting. Lillecarl/pymux#766.
-            logger.warning("Client %s went before the restart notice reached it.", self.client_id or "?")
-
-    async def carry_audio(self) -> None:
-        """
-        Carry this client's sound, until the connection goes. Only in
-        msgpack, which carries bytes. `AudioLink` says why on this
-        connection and not one of its own. Lillecarl/pymux#657.
-        """
-        link = AudioLink(self)
-        self.audio = link
-        self.pymux.audio.link_opened(link)
-        try:
-            await link.run()
-        except BrokenPipeError:
-            pass
-        finally:
-            self.audio = None
-            self.pymux.audio.link_closed(link)
+            logger.warning(
+                "Client %s went before the restart notice reached it.",
+                (self.client.client_id if self.client is not None else "") or "?",
+            )
 
     async def _write_urgent(self, data_obj: object) -> None:
         "Write a packet ahead of every write that waits for the connection: sound."
@@ -801,52 +419,6 @@ class ServerConnection:
             return
         await self.write_encoded(self.encode(data_obj))
 
-    def _terminal_reads_shm(self) -> None:
-        logger.info("The terminal of client %s reads window frames from shared memory.", self.client_id or "?")
-        self.send_packet({Field.CMD: Packet.SHM})
-
-    async def send_frame(self, parts: list[Message]) -> None:
-        """
-        Write a window pane's frame, one part at a time.
-
-        **Each part is awaited before the next is encoded**, so a packet
-        sent meanwhile -- a key's echo, a line of text -- takes the write
-        lock between two parts, and never waits behind the whole frame.
-        What the terminal was sent before goes first. Lillecarl/pymux#634.
-
-        **The checkpoint is what makes that true.** A write to a socket
-        with room never suspends, so without it the parts of a frame go
-        out in one turn of the loop: on a zstd stream, about 7 ms of
-        compression for a 1600x880 frame, and every other task waits.
-        Lillecarl/pymux#632.
-        """
-        self.flush_output()
-        self.pacing.window_frame_went_out()
-        for part in parts:
-            if self.closed:
-                return
-            await self.write_encoded(self.encode(part))
-            await anyio.lowlevel.checkpoint()
-
-    @property
-    def pointer_fraction(self) -> tuple[float, float]:
-        "Where in its cell the client's last mouse report was. Lillecarl/pymux#648."
-        return self.pipeinput.pointer_fraction
-
-    @property
-    def pointer_cell(self) -> tuple[int, int] | None:
-        "The cell of the client's last mouse report, column and row from 0."
-        return self.pipeinput.pointer_cell
-
-    @property
-    def activity(self) -> float:
-        "When a person last pressed a key or used the mouse at this client."
-        return self.pipeinput.activity
-
-    @property
-    def pointer_shape_sent(self) -> str:
-        return self._pointer_shape_sent
-
     async def write_encoded(self, frame: bytes, compress_after: bool = False) -> None:
         "Write one encoded packet; a client that is gone is let go."
         try:
@@ -859,42 +431,24 @@ class ServerConnection:
         # that is no longer connected.
         if self.closed:
             return
-        if self.recording is not None:
-            self.pymux.finish_recordings([self])
-        # Remove the images that this client put on its terminal.
-        try:
-            self.graphics.reset()
-        except Exception:
-            logger.exception("Removing the graphics of the client failed.")
-
-        # Try to exit the application if it's still running.
-        if self.client_state is not None:
-            try:
-                if not self.client_state.app.is_done:
-                    self.client_state.app.exit()
-            except Exception:
-                pass
+        client = self.client
+        if client is not None:
+            client.close()
         self.pymux.remove_client(self)
-        self.client_state = None
+        self.client = None
+        if self.role is client:
+            self.role = None
         self.closed = True
-        self.pacing.frames_shown.set()
-        self.files.client_went()
+        if client is not None:
+            client.went()
 
         # The background work of this connection ends with the read
         # loop that `serve` runs: leaving that scope cancels the group.
         # This is called from inside those tasks, so cancelling here
         # would cancel the caller before it finished closing.
 
-        # Close input pipe and remove connection from eventloop.
-        self.pipeinput.close()
         with suppress(Exception):
             self.pipe_connection.close()
-
-    def suspend_client_to_background(self) -> None:
-        """
-        Ask the client to suspend itself. (Like, when Ctrl-Z is pressed.)
-        """
-        self.send_packet({Field.CMD: Packet.SUSPEND})
 
     @property
     def name(self) -> str:
@@ -913,15 +467,19 @@ class ServerConnection:
         same name. That is the property this is chosen for: a name that
         moves to another client is worse than no name.
         """
-        if self.ttyname:
-            what = self.ttyname
-        elif self.pid:
-            what = "client-%d" % (self.pid,)
-        else:
-            # Nothing said. A connection that never sent `start-gui`
-            # is the temporary client of a command, which nobody selects.
+        client = self.client
+        # Nothing said: a connection that never sent `start-gui` is the
+        # temporary client of a command, which nobody selects, or a peer
+        # link or a tunnel.
+        if client is None:
             return ""
-        return "%s:%s" % (self.hostname or "?", what)
+        if client.ttyname:
+            what = client.ttyname
+        elif client.pid:
+            what = "client-%d" % (client.pid,)
+        else:
+            return ""
+        return "%s:%s" % (client.hostname or "?", what)
 
     async def watch_liveness(self, ping: Callable[[], Awaitable[None]] | None = None) -> None:
         """

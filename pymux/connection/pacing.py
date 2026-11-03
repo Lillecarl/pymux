@@ -22,7 +22,7 @@ from ..options.client_options import ClientOptions
 from .rate import Rate
 
 if TYPE_CHECKING:
-    from .server import ServerConnection
+    from .client import ClientRole
 
 __all__ = ["FramePacing"]
 
@@ -42,7 +42,7 @@ class FramePacing:
     """
 
     KEEP: ClassVar[dict[str, Keep]] = {
-        "connection": Keep.REBUILT,
+        "client": Keep.REBUILT,
         "paced": Keep.REBUILT,
         # A frame in flight belongs to the connection it went out on.
         "frames_out": Keep.DROPPED,
@@ -58,8 +58,8 @@ class FramePacing:
         "rate_window_frames": Keep.DROPPED,
     }
 
-    def __init__(self, connection: ServerConnection) -> None:
-        self.connection = connection
+    def __init__(self, client: ClientRole) -> None:
+        self.client = client
 
         #: Window frames sent and not yet answered with `frame-shown`,
         #: for a client that answers; set while there are none.
@@ -97,12 +97,10 @@ class FramePacing:
         `FRAME_ANSWER_SECONDS`, so it costs frames and never the window.
         """
         with anyio.move_on_after(FRAME_ANSWER_SECONDS) as waited:
-            while self.frames_out and not self.connection.closed:
+            while self.frames_out and not self.client.connection.closed:
                 await self.frames_shown.wait()
         if waited.cancelled_caught:
-            logger.warning(
-                "Client %s did not answer %d window frames.", self.connection.client_id or "?", self.frames_out
-            )
+            logger.warning("Client %s did not answer %d window frames.", self.client.client_id or "?", self.frames_out)
             self.frames_out = 0
             self.frames_shown.set()
 
@@ -112,8 +110,8 @@ class FramePacing:
         window frame answered, for a client that answers, and the
         socket empty. Lillecarl/pymux#641.
         """
-        await self.connection.pipe_connection.drained()
-        if self.connection.graphics.windows.frame_room is not None:
+        await self.client.connection.pipe_connection.drained()
+        if self.client.graphics.windows.frame_room is not None:
             await self.frames_all_shown()
 
     def frame_went_out(self) -> None:
@@ -121,7 +119,7 @@ class FramePacing:
 
     def window_frame_went_out(self) -> None:
         self.window_frames_sent += 1
-        if self.connection.graphics.windows.frame_room is not None:
+        if self.client.graphics.windows.frame_room is not None:
             self.frames_out += 1
             if self.frames_shown.is_set():
                 self.frames_shown = anyio.Event()
@@ -145,9 +143,9 @@ class FramePacing:
         if self.unread:
             self.unread.popleft()
         self.answers_reports = True
-        if self.frame_held and not self.waits_for_terminal and self.connection.client_state is not None:
+        if self.frame_held and not self.waits_for_terminal and self.client.state is not None:
             self.frame_held = False
-            self.connection.client_state.app.invalidate()
+            self.client.state.app.invalidate()
 
     @property
     def waits_for_terminal(self) -> bool:
@@ -164,6 +162,6 @@ class FramePacing:
         """
         if not self.answers_reports or not self.unread:
             return False
-        options = self.connection.client_state.options if self.connection.client_state is not None else ClientOptions()
+        options = self.client.state.options if self.client.state is not None else ClientOptions()
         frames, size = options.frames_in_flight, options.bytes_in_flight
         return bool(frames and len(self.unread) >= frames) or bool(size and sum(self.unread) >= size)

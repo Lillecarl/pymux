@@ -100,7 +100,7 @@ class PortOffers:
         options = self.pymux.options
         if not options.forward_offers or options.forward_mode == ForwardMode.OFF:
             return
-        if not any(client.connection.can_forward for client in self.pymux.clients):
+        if not any(client.client.can_forward for client in self.pymux.clients):
             return
 
         pids = {
@@ -138,7 +138,7 @@ class PortOffers:
         session = self.pymux.session_holding(pane) if pane is not None else None
         if session is None:
             return None
-        able = [client for client in self.pymux.clients_on(session) if client.connection.can_forward]
+        able = [client for client in self.pymux.clients_on(session) if client.client.can_forward]
         if not able:
             return None
         return max(able, key=lambda client: client.last_used)
@@ -148,5 +148,5 @@ def _forwards(client: ClientState, port: int) -> bool:
     "Whether this client forwards a port here to `port` on the server's machine already."
     return any(
         row.get("direction") == str(Direction.LOCAL) and str(row.get("dest", "")).rpartition(":")[2] == str(port)
-        for row in client.connection.forwards
+        for row in client.client.forwards
     )

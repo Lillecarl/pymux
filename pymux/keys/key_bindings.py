@@ -157,7 +157,7 @@ def _tell_the_terminal(pymux: Pymux, value: str | None) -> None:
     client clears it again when it leaves the terminal, whatever mode
     it was in.
     """
-    pymux.get_client_state().connection.forward_osc(set_user_var(PASSTHROUGH_VARIABLE, value))
+    pymux.get_client_state().client.forward_osc(set_user_var(PASSTHROUGH_VARIABLE, value))
 
 
 def _register_builtin_mode_tables(manager: PymuxKeyBindings) -> None:

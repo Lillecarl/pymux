@@ -22,7 +22,7 @@ async def test_the_example_plugin_runs_as_a_command(pymux):
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
 
-        with set_app(pymux.connections[-1].client_state.app):
+        with set_app(pymux.connections[-1].client.state.app):
             for command in ("split-window", "new-window"):
                 if (rest := handle_command(pymux, command)) is not None:
                     await rest
