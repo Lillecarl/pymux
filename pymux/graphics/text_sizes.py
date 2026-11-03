@@ -6,13 +6,14 @@ A pane's cells hold each block at scale one (`pyte.text_sizes`), so
 prompt_toolkit draws that on every terminal. For a terminal that said it
 draws OSC 66, each block goes over its cells after the frame.
 
-**A block that goes away asks for a full repaint.** The terminal holds a
+**A frame that loses a block is a full repaint.** The terminal holds a
 block as one thing, and text that lands on a lower row of it moves past
-it, so a frame that writes there puts the text in the wrong place. A
-full repaint erases the screen first, which erases every block, and the
-frame after it sends them all again. A float drawn over a block is one
-such frame: it draws past the block, and the repaint after it puts the
-float back.
+it, so a frame that writes there puts the text in the wrong place. So
+the check runs when the frame is laid out and before it is written
+(`will_lose_a_block`): a float over a block, or a block the program
+took away, makes that frame a full repaint. It erases the screen first,
+and every block with it, and the blocks go again after it.
+Lillecarl/pymux#911.
 """
 
 from __future__ import annotations
@@ -58,19 +59,22 @@ class ClientTextSizes:
             return self.scales
         return self.widths
 
-    def frame_starts(self, full: bool) -> None:
+    def frame_erases(self) -> None:
         "A full frame erases the screen first, and every block with it."
-        if full:
+        self._sent = {}
+
+    def will_lose_a_block(self, views: Iterable[PaneView]) -> bool:
+        "Whether the frame laid out as `views` loses a block the terminal shows, which only a full frame can take away."
+        desired = self._collect(views)
+        if any(desired.get(key) != sent for key, sent in self._sent.items()):
             self._sent = {}
+            return True
+        return False
 
     def render(self, views: Iterable[PaneView]) -> None:
         if not self.speaks:
             return
         desired = self._collect(views)
-        if any(desired.get(key) != sent for key, sent in self._sent.items()) and self.graphics.repaint is not None:
-            self._sent = {}
-            self.graphics.repaint()
-            return
         new = [command for key, command in desired.items() if key not in self._sent]
         self._sent = desired
         if new:

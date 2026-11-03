@@ -39,7 +39,7 @@ from ..enums import CHOOSE, COMMAND, PROMPT, Chooser, EditingKeys, Woke
 from ..graphics.graphics import PaneView
 from ..ids import PaneId
 from ..keys.actions import Origin, started_by
-from ..layout.layout import LayoutManager
+from ..layout.layout import LayoutManager, pane_covers, pane_write_positions
 from ..layout.plane import RESIZE_SHAPES
 from ..log import logger
 from ..notify.notifications import Notification
@@ -57,7 +57,7 @@ if TYPE_CHECKING:
 
     from prompt_toolkit.input import Input
     from prompt_toolkit.layout.containers import AnyContainer
-    from prompt_toolkit.layout.screen import WritePosition
+    from prompt_toolkit.layout.screen import Screen, WritePosition
     from prompt_toolkit.output import ColorDepth, Output
 
     from ..core.main import Pymux
@@ -514,13 +514,23 @@ class ClientState:
             except Exception:
                 logger.exception("Drawing the window panes failed.")
 
-        def before_render(_):
+        def before_output(_):
+            if self.connection is None:
+                return
+            renderer = self.app.renderer
+            sizes = self.connection.graphics.text_sizes
             # A frame with no screen before it erases the terminal first.
-            if self.connection is not None:
-                self.connection.graphics.text_sizes.frame_starts(self.app.renderer.last_rendered_screen is None)
+            if renderer.last_rendered_screen is None:
+                sizes.frame_erases()
+            elif sizes.speaks and renderer.pending_screen is not None:
+                try:
+                    if sizes.will_lose_a_block(self.graphics_views(renderer.pending_screen)):
+                        renderer.request_full_redraw()
+                except Exception:
+                    logger.exception("Checking the text at another size failed.")
 
         self.app.before_render += self.layout_manager.frame_started
-        self.app.before_render += before_render
+        self.app.before_output += before_output
         self.app.after_render += after_render
         # Last, so the images above still read the frame's arrangement.
         self.app.after_render += self.layout_manager.frame_ended
@@ -662,10 +672,10 @@ class ClientState:
             self.connection.write_output_raw(data)
             self.connection.flush_output()
 
-    def graphics_views(self) -> list[PaneView]:
+    def graphics_views(self, screen: Screen | None = None) -> list[PaneView]:
         """
         One `PaneView` per pane whose images the outer terminal should
-        show.
+        show, as the last render drew them, or as `screen` lays them out.
 
         A pane in clock mode or copy mode shows something else than its
         terminal content, and a popup covers the panes. Those show no
@@ -676,9 +686,12 @@ class ClientState:
         if self.display_popup:
             return []
 
-        covers = self.layout_manager.pane_covers
+        if screen is None:
+            covers, positions = self.layout_manager.pane_covers, self.layout_manager.pane_write_positions
+        else:
+            covers, positions = pane_covers(screen), pane_write_positions(screen)
         result = []
-        for pane, write_position in self.layout_manager.pane_write_positions.items():
+        for pane, write_position in positions.items():
             terminal = pane.terminal
             # A window pane's picture goes through `_window_views`.
             if pane.clock_mode or not isinstance(terminal, Terminal) or pane.is_copying_for(self.app):
