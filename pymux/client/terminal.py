@@ -45,7 +45,7 @@ from pymux.notify.osc import PASSTHROUGH_VARIABLE, set_user_var
 from pymux.style.colors import COLOR_QUERIES, TRUECOLOR_PROBE
 from pymux.utils import nonblocking
 
-from ..connection.client_io import PIXEL_MOUSE_OFF, REPORTS_OFF
+from ..connection.client_io import PASTE_EVENTS_OFF, PIXEL_MOUSE_OFF, REPORTS_OFF
 from ..connection.packet_table import PacketTable
 from .base import Client
 from .browsers import Browsers
@@ -465,6 +465,9 @@ class TerminalClient(Client):
         # Focus, theme and size reports, which the server turns on.
         # Lillecarl/pymux#794, Lillecarl/pymux#796, Lillecarl/pymux#797.
         output.write_raw(REPORTS_OFF)
+        # kitty's paste events: the next program would get no paste.
+        # Lillecarl/pymux#893.
+        output.write_raw(PASTE_EVENTS_OFF)
         # The user variable passthrough sets, which a terminal may hold
         # its own shortcuts back on. Cleared whatever mode the client
         # was in, because a detach in passthrough leaves no leave-mode.

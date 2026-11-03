@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from libpymux.protocol import Field, Packet
 from profile_frame import server
+from session import _NoReplies
 
 from pymux.connection.clipboard_reads import ClipboardReader
 from pymux.connection.server import ServerConnection
@@ -51,6 +52,7 @@ async def test_input_from_the_client_moves_the_tick() -> None:
         connection.client_state = state
         connection.recording = None
         connection.role = None
+        connection.replies = _NoReplies(connection)
         connection.clipboard = ClipboardReader(connection)
         connection._process({Field.CMD: Packet.IN, Field.DATA: "x"})
         assert newcomer.sent == ["x"]

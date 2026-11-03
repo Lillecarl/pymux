@@ -7,6 +7,17 @@ the session with all of them, and to every client's terminal: as OSC
 5522 to one that speaks it, and as OSC 52 with the text to one that
 does not. `set-clipboard` gates it as it gates OSC 52.
 
+A pane's read goes to one terminal: the one whose paste event gave the
+pane its password, or else the one a person on the pane's session used
+last. That terminal asks the person; kitty does by default. One pane
+read is in flight at a time, and another pane hears EBUSY, as the spec
+asks of a multiplexer.
+
+A pane that sets mode ?5522 gets paste events. The terminal of a client
+whose focused pane set it has the mode set too, and then sends no
+bracketed paste: an event that finds the focus moved on to a pane
+without the mode is read as text by pymux and pasted.
+
 Every packet pymux sends a terminal carries an id of pymux's own, so
 that an answer is known for pymux's and never reaches a pane as keys.
 """
@@ -14,24 +25,55 @@ that an answer is known for pymux's and never reaches a pane as keys.
 from __future__ import annotations
 
 import itertools
+import time
+import weakref
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, ClassVar, Final
 
+from prompt_toolkit.application.current import set_app
 from prompt_toolkit.clipboard import ClipboardData
+from ptterm import Terminal
 from pyte.keep import Keep
 from pyte.kitty_clipboard import ClipboardRead, ClipboardRequest, ClipboardWrite, answer_to
+from pyte.modes import PrivateMode, flag_of
 from pyte.osc import Osc
-from pyte.sequences.kitty_clipboard import ClipboardPacket, PacketType, Status, b64, data_packets
+from pyte.screen import Screen
+from pyte.sequences.kitty_clipboard import (
+    LIST_TYPES,
+    ClipboardPacket,
+    PacketType,
+    Status,
+    b64,
+    data_packets,
+    strict_b64decode,
+)
 
+from ..connection.client_io import PASTE_EVENTS_OFF, PASTE_EVENTS_ON
 from ..enums import Clipboard, Woke
 from ..log import logger
 from ..notify.osc import build_osc
 
 if TYPE_CHECKING:
+    from ..connection.client_state import ClientState
     from ..connection.server import ServerConnection
     from .main import Pymux
     from .pane import Pane
 
-__all__ = ["TEXT_TYPES", "RichClipboard", "RichClipboardData", "text_of"]
+__all__ = ["TEXT_TYPES", "RichClipboard", "RichClipboardData", "text_of", "wants_paste_events"]
+
+#: How long, in seconds, a pane's read may hold the one place. kitty
+#: asks the person, who may take a while; a read after this takes the
+#: place, and the old one hears EBUSY.
+READ_PATIENCE: Final = 120.0
+
+#: The name a read under a paste event's password gives, as the spec asks.
+PASTE_EVENT_NAME: Final = "Paste event"
+
+#: How many paste event passwords are remembered, each with its terminal.
+_PASSWORDS_KEPT: Final = 16
+
+#: The statuses after which more packets of a read follow.
+_GOING_ON: Final = frozenset([Status.OK, Status.DATA])
 
 #: The MIME types that hold the text of a copy, best first. The X11
 #: names are what kitty and Wayland offer beside "text/plain".
@@ -55,6 +97,40 @@ class RichClipboardData(ClipboardData):
         self.types = types
 
 
+def wants_paste_events(pane: Pane | None) -> bool:
+    "Whether the program in `pane` set kitty's paste events mode."
+    screen = None if pane is None else pane.screen
+    return isinstance(screen, Screen) and flag_of(PrivateMode.PASTE_EVENTS) in screen.mode
+
+
+@dataclass
+class _Reading:
+    "A read pymux sent a terminal under its own id."
+
+    connection: ServerConnection
+    started: float
+    #: The pane whose read this is, and its id; None for pymux's own
+    #: read of a paste event's text.
+    pane: Pane | None = None
+    pane_id: str = ""
+    #: pymux's own read: the type it asked for, the pane the text goes
+    #: to, and the text so far.
+    mime: str = ""
+    paste_into: Pane | None = None
+    parts: list[bytes] = field(default_factory=list)
+
+
+@dataclass
+class _PasteEvent:
+    "A paste event arriving from a terminal, for the pane focused when it began."
+
+    pane: Pane | None
+    relayed: bool
+    primary: bool
+    password: str
+    types: tuple[str, ...] = ()
+
+
 def text_of(types: dict[str, bytes]) -> str | None:
     "The text among `types`, or None."
     for mime in TEXT_TYPES:
@@ -68,12 +144,35 @@ class RichClipboard:
 
     KEEP: ClassVar[dict[str, Keep]] = {
         "pymux": Keep.REBUILT,
+        # A read in flight is lost with its connection: the client
+        # reconnects, and the pane may ask again.
         "_ids": Keep.DROPPED,
+        "_reads": Keep.DROPPED,
+        "_events": Keep.DROPPED,
+        "_passwords": Keep.DROPPED,
+        # A terminal left with the mode set sends paste events nobody
+        # asked for; each becomes a text paste.
+        "_events_on": Keep.DROPPED,
     }
 
     def __init__(self, pymux: Pymux) -> None:
         self.pymux = pymux
         self._ids = itertools.count(1)
+        #: The reads sent to terminals, by pymux's id.
+        self._reads: dict[str, _Reading] = {}
+        #: The paste event each terminal is in the middle of.
+        self._events: weakref.WeakKeyDictionary[ServerConnection, _PasteEvent] = weakref.WeakKeyDictionary()
+        #: The terminal each recent paste event password came from.
+        self._passwords: dict[str, ServerConnection] = {}
+        #: The terminals told to send paste events.
+        self._events_on: weakref.WeakSet[ServerConnection] = weakref.WeakSet()
+
+    def _new_id(self) -> str:
+        return _OUR_IDS + str(next(self._ids))
+
+    def _send(self, connection: ServerConnection, packet: ClipboardPacket) -> None:
+        connection.forward_osc(str(packet))
+        self.pymux.invalidate(Woke.CLIPBOARD_ASKED)
 
     def asked(self, pane: Pane, request: ClipboardRequest) -> None:
         "A pane's finished write or its read. Never raises: this runs on the pane's read path."
@@ -86,7 +185,14 @@ class RichClipboard:
             logger.exception("Serving a clipboard request of pane %s failed.", pane.pane_id)
 
     def _answer(self, pane: Pane, packet: ClipboardPacket) -> None:
-        pane.terminal.screen.reply(packet)
+        "Tell `pane`'s program. A pane whose program has gone hears nothing."
+        screen = pane.terminal.screen
+        if not isinstance(screen, Screen):
+            return
+        try:
+            screen.reply(packet)
+        except OSError:
+            logger.debug("Pane %s went before its clipboard answer.", pane.pane_id)
 
     def _write(self, pane: Pane, write: ClipboardWrite) -> None:
         if self.pymux.options.set_clipboard is not Clipboard.ON:
@@ -122,7 +228,7 @@ class RichClipboard:
         "The write, spelled again for a terminal under an id of pymux's."
         head = ClipboardPacket(
             PacketType.WRITE,
-            id=_OUR_IDS + str(next(self._ids)),
+            id=self._new_id(),
             primary=write.primary,
             password=write.password,
             name=write.name,
@@ -143,7 +249,41 @@ class RichClipboard:
         return packets
 
     def _read(self, pane: Pane, read: ClipboardRead) -> None:
-        self._answer(pane, answer_to(read, Status.EPERM))
+        "Send a pane's read to one terminal, which asks the person."
+        if self.pymux.options.set_clipboard is Clipboard.OFF:
+            self._answer(pane, answer_to(read, Status.EPERM))
+            return
+        connection = self._passwords.get(read.password) if read.password else None
+        if connection is None:
+            client = self.pymux.outward.download_client(pane)
+            connection = None if client is None else client.connection
+        if connection is None or connection not in self.pymux._client_states or not connection.replies.kitty_clipboard:
+            self._answer(pane, answer_to(read, Status.EPERM))
+            return
+        now = time.monotonic()
+        for our_id, reading in list(self._reads.items()):
+            stale = now - reading.started > READ_PATIENCE or reading.connection not in self.pymux._client_states
+            if stale:
+                del self._reads[our_id]
+                if reading.pane is not None:
+                    self._answer(reading.pane, ClipboardPacket(PacketType.READ, Status.EBUSY, id=reading.pane_id))
+        if any(reading.pane is not None for reading in self._reads.values()):
+            self._answer(pane, answer_to(read, Status.EBUSY))
+            return
+        our_id = self._new_id()
+        self._reads[our_id] = _Reading(connection, now, pane=pane, pane_id=read.id)
+        payload = b64(" ".join(read.mimes))
+        self._send(
+            connection,
+            ClipboardPacket(
+                PacketType.READ,
+                id=our_id,
+                primary=read.primary,
+                password=read.password,
+                name=read.name,
+                payload=payload,
+            ),
+        )
 
     def terminal_said(self, connection: ServerConnection, param: str) -> None:
         "One OSC 5522 packet from a client's terminal, after its code."
@@ -156,4 +296,111 @@ class RichClipboard:
             if packet.status != Status.DONE:
                 logger.warning("The terminal of client %s refused a copy: %s.", connection.client_id, packet.status)
             return
-        logger.debug("Dropped an OSC 5522 packet nobody waits for: %s.", packet.type)
+        if packet.type != PacketType.READ:
+            logger.debug("Dropped an OSC 5522 packet nobody waits for: %s.", packet.type)
+        elif packet.id:
+            reading = self._reads.get(packet.id)
+            if reading is not None:
+                self._read_answered(packet.id, reading, packet)
+        else:
+            self._paste_event(connection, packet)
+
+    def _read_answered(self, our_id: str, reading: _Reading, packet: ClipboardPacket) -> None:
+        "One packet of a terminal's answer to a read pymux sent."
+        if packet.status not in _GOING_ON:
+            del self._reads[our_id]
+        if reading.pane is not None:
+            self._answer(reading.pane, replace(packet, id=reading.pane_id))
+            return
+        if packet.status == Status.DATA and packet.mime == reading.mime:
+            try:
+                reading.parts.append(strict_b64decode(packet.payload))
+            except ValueError:
+                logger.warning("Dropped a paste whose data is not base64.")
+                reading.paste_into = None
+        elif packet.status == Status.DONE and reading.paste_into is not None:
+            text = b"".join(reading.parts).decode("utf-8", "replace")
+            self._paste(reading.connection, reading.paste_into, text)
+
+    def _paste_event(self, connection: ServerConnection, packet: ClipboardPacket) -> None:
+        """
+        One packet of a paste event: the terminal lists what its
+        clipboard holds, unasked, under a one-time password.
+        """
+        client = connection.client_state
+        if client is None:
+            return
+        if packet.status == Status.OK:
+            pane = self.pymux.focus.pane_of(client)
+            relayed = self._serves_paste_events(pane)
+            self._events[connection] = _PasteEvent(pane, relayed, packet.primary, packet.password)
+            if packet.password:
+                self._passwords[packet.password] = connection
+                while len(self._passwords) > _PASSWORDS_KEPT:
+                    del self._passwords[next(iter(self._passwords))]
+        event = self._events.get(connection)
+        if event is None:
+            return
+        if packet.status not in _GOING_ON:
+            del self._events[connection]
+        if event.relayed and event.pane is not None:
+            self._answer(event.pane, packet)
+            return
+        if packet.status == Status.DATA and packet.mime == LIST_TYPES:
+            try:
+                event.types = packet.words()
+            except ValueError:
+                event.types = ()
+        elif packet.status == Status.DONE:
+            self._read_for_a_paste(connection, event)
+
+    def _read_for_a_paste(self, connection: ServerConnection, event: _PasteEvent) -> None:
+        "A paste event the pane in focus did not ask for: read the text, to paste it."
+        mime = next((mime for mime in TEXT_TYPES if mime in event.types), None)
+        if mime is None or event.pane is None:
+            return
+        our_id = self._new_id()
+        self._reads[our_id] = _Reading(connection, time.monotonic(), mime=mime, paste_into=event.pane)
+        self._send(
+            connection,
+            ClipboardPacket(
+                PacketType.READ,
+                id=our_id,
+                primary=event.primary,
+                password=event.password,
+                name=PASTE_EVENT_NAME,
+                payload=b64(mime),
+            ),
+        )
+
+    def _paste(self, connection: ServerConnection, pane: Pane, text: str) -> None:
+        "Paste `text` into `pane`, as the terminal's bracketed paste would have."
+        client = connection.client_state
+        terminal = pane.terminal
+        if not text or client is None or not isinstance(terminal, Terminal):
+            return
+        with set_app(client.app):
+            terminal.terminal_control.paste(text)
+
+    def _serves_paste_events(self, pane: Pane | None) -> bool:
+        """
+        Whether `pane` gets paste events. Not under `set-clipboard off`:
+        the pane could not read what an event lists, and the paste would
+        be lost.
+        """
+        return self.pymux.options.set_clipboard is not Clipboard.OFF and wants_paste_events(pane)
+
+    def sync_paste_events(self, client: ClientState) -> None:
+        "Set the paste events mode on a client's terminal while its focused pane has it set."
+        connection = client.connection
+        if connection is None:
+            return
+        wanted = self._serves_paste_events(self.pymux.focus.pane_of(client))
+        if wanted == (connection in self._events_on):
+            return
+        if wanted:
+            self._events_on.add(connection)
+        else:
+            self._events_on.discard(connection)
+        connection.write_output_raw(PASTE_EVENTS_ON if wanted else PASTE_EVENTS_OFF)
+        connection.flush_output()

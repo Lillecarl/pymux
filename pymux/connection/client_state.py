@@ -482,6 +482,9 @@ class ClientState:
             if self.connection.replies.extra_cursors:
                 self._send_extra_cursors()
 
+            if self.connection.replies.kitty_clipboard:
+                self.pymux.rich_clipboard.sync_paste_events(self)
+
             graphics = self.connection.graphics
             if not graphics.supported:
                 return

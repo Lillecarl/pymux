@@ -128,3 +128,132 @@ async def test_a_pane_answers_decrqm_for_paste_events():
         with set_app(state.app):
             pane.terminal.terminal_control.stream.feed("\x1b[?5522$p")
         assert heard == ["\x1b[?5522;2$y"]
+
+
+def osc(packet: str) -> str:
+    return "\x1b]5522;%s\x1b\\" % packet
+
+
+async def attached_to_kitty(session, recorder: Recorder):
+    "A client whose terminal said it speaks OSC 5522."
+    state, _ = await session.attach("one", SIZE)
+    state.connection._process({Field.CMD: Packet.DETECT})
+    state.connection._process({"cmd": "in", "data": SPEAKS_5522})
+    await once(lambda: state.connection.replies.kitty_clipboard, 10.0, "the answer was never read")
+    return state
+
+
+async def test_a_pane_read_goes_to_the_terminal_and_its_answer_comes_back():
+    recorder = Recorder()
+    pymux = Pymux(startup_command="sleep 30")
+    async with over_connection(pymux=pymux, read_packet=recorder) as session:
+        state = await attached_to_kitty(session, recorder)
+        pane = pane_of(state)
+        heard = hear_the_pane(pane)
+        with set_app(state.app):
+            pane.terminal.terminal_control.stream.feed(
+                osc("type=read:id=nvim:pw=%s:name=%s;%s" % (b64("secret"), b64("nvim"), b64("text/plain")))
+            )
+        asked = osc("type=read:id=pymux-1:name=%s:pw=%s;%s" % (b64("nvim"), b64("secret"), b64("text/plain")))
+        await once(lambda: asked in recorder.out, 10.0, lambda: "never asked: %r" % recorder.out[-300:])
+
+        # A second read, from any pane, waits for nobody: one is in flight.
+        with set_app(state.app):
+            pane.terminal.terminal_control.stream.feed(osc("type=read:id=two;%s" % b64("text/plain")))
+        assert heard == [osc("type=read:status=EBUSY:id=two")]
+        heard.clear()
+
+        data = "type=read:status=DATA:id=pymux-1:mime=%s;%s" % (b64("text/plain"), b64("copied"))
+        state.connection._process(
+            {
+                "cmd": "in",
+                "data": osc("type=read:status=OK:id=pymux-1") + osc(data) + osc("type=read:status=DONE:id=pymux-1"),
+            }
+        )
+        assert heard == [
+            osc("type=read:status=OK:id=nvim"),
+            osc("type=read:status=DATA:id=nvim:mime=%s;%s" % (b64("text/plain"), b64("copied"))),
+            osc("type=read:status=DONE:id=nvim"),
+        ]
+
+
+async def test_a_pane_with_paste_events_gets_them_from_kitty():
+    recorder = Recorder()
+    pymux = Pymux(startup_command="sleep 30")
+    async with over_connection(pymux=pymux, read_packet=recorder) as session:
+        state = await attached_to_kitty(session, recorder)
+        pane = pane_of(state)
+        heard = hear_the_pane(pane)
+        with set_app(state.app):
+            pane.terminal.terminal_control.stream.feed("\x1b[?5522h")
+        state.app.invalidate()
+        await once(lambda: "\x1b[?5522h" in recorder.out, 10.0, "the terminal was never told")
+
+        event = [
+            osc("type=read:status=OK:pw=%s" % b64("once")),
+            osc("type=read:status=DATA:mime=%s:pw=%s;%s" % (b64("."), b64("once"), b64("text/plain image/png"))),
+            osc("type=read:status=DONE:pw=%s" % b64("once")),
+        ]
+        state.connection._process({"cmd": "in", "data": "".join(event)})
+        assert heard == event
+
+        # The pane's read under that password goes to that terminal.
+        with set_app(state.app):
+            pane.terminal.terminal_control.stream.feed(
+                osc("type=read:id=p:pw=%s:name=%s;%s" % (b64("once"), b64("Paste event"), b64("image/png")))
+            )
+        await once(
+            lambda: "type=read:id=pymux-1:name=%s:pw=%s" % (b64("Paste event"), b64("once")) in recorder.out,
+            10.0,
+            "never asked",
+        )
+
+        # The program leaves the mode, and so does the terminal.
+        with set_app(state.app):
+            pane.terminal.terminal_control.stream.feed("\x1b[?5522l")
+        state.app.invalidate()
+        await once(lambda: "\x1b[?5522l" in recorder.out, 10.0, "the terminal kept the mode")
+
+
+async def test_set_clipboard_off_sends_no_paste_events():
+    "The pane could not read what an event lists, so the terminal keeps its bracketed paste."
+    recorder = Recorder()
+    pymux = Pymux(startup_command="sleep 30")
+    async with over_connection(pymux=pymux, read_packet=recorder) as session:
+        state = await attached_to_kitty(session, recorder)
+        await run_as(pymux, state, "set-option set-clipboard off")
+        pane = pane_of(state)
+        with set_app(state.app):
+            pane.terminal.terminal_control.stream.feed("\x1b[?5522hdrawn-it")
+        # A pane's draw is a frame the mode would have gone out with.
+        await once(lambda: "drawn-it" in recorder.out, 10.0, "the pane never drew")
+        state.app.invalidate()
+        await run_as(pymux, state, "display-message -p done")
+        assert "\x1b[?5522h" not in recorder.out
+
+
+async def test_a_paste_event_for_a_pane_without_the_mode_is_pasted_as_text():
+    recorder = Recorder()
+    pymux = Pymux(startup_command="sleep 30")
+    async with over_connection(pymux=pymux, read_packet=recorder) as session:
+        state = await attached_to_kitty(session, recorder)
+        pane = pane_of(state)
+        typed: list[str] = []
+        pane.terminal.terminal_control.process.write_input = typed.append
+
+        state.connection._process(
+            {
+                "cmd": "in",
+                "data": osc("type=read:status=OK:pw=%s" % b64("once"))
+                + osc("type=read:status=DATA:mime=%s;%s" % (b64("."), b64("image/png text/plain")))
+                + osc("type=read:status=DONE"),
+            }
+        )
+        asked = osc("type=read:id=pymux-1:name=%s:pw=%s;%s" % (b64("Paste event"), b64("once"), b64("text/plain")))
+        await once(lambda: asked in recorder.out, 10.0, lambda: "never asked: %r" % recorder.out[-300:])
+
+        text = osc("type=read:status=DATA:id=pymux-1:mime=%s;%s" % (b64("text/plain"), b64("pasted")))
+        state.connection._process({"cmd": "in", "data": osc("type=read:status=OK:id=pymux-1") + text})
+        assert typed == []
+        state.connection._process({"cmd": "in", "data": osc("type=read:status=DONE:id=pymux-1")})
+        assert typed == ["pasted"]

@@ -40,6 +40,13 @@ REPORTS = (PrivateMode.FOCUS_EVENTS, PrivateMode.COLOR_SCHEME_UPDATES, PrivateMo
 REPORTS_ON = "".join(set_mode(mode) for mode in REPORTS)
 REPORTS_OFF = "".join(reset_mode(mode) for mode in REPORTS)
 
+#: kitty's paste events, which the server sets while the focused pane
+#: has them set, and which a detach turns off: a shell does not read
+#: them, and the terminal sends no paste while they are on.
+#: Lillecarl/pymux#893.
+PASTE_EVENTS_ON = set_mode(PrivateMode.PASTE_EVENTS)
+PASTE_EVENTS_OFF = reset_mode(PrivateMode.PASTE_EVENTS)
+
 
 class SocketStdout:
     """
@@ -152,7 +159,7 @@ class FrameOutput(Vt100_Output):
 
     @override
     def quit_alternate_screen(self) -> None:
-        self.write_raw(REPORTS_OFF)
+        self.write_raw(REPORTS_OFF + PASTE_EVENTS_OFF)
         super().quit_alternate_screen()
 
     def write_after_frame(self, data: str) -> None:
