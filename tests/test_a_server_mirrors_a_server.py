@@ -47,6 +47,7 @@ from pymux.client import reconnect as reconnect_module
 from pymux.client import relink
 from pymux.commands import handle_command
 from pymux.connection import server as server_module
+from pymux.core import kitty_transfers
 from pymux.core.forwarding import with_port
 from pymux.core.main import Pymux
 from pymux.core.rich_clipboard import RichClipboardData
@@ -407,6 +408,24 @@ async def test_the_pace_of_a_transfer_there_is_the_owners_to_say(two_servers, mo
     with anyio.fail_after(5):
         await peer.kitty_transfers.taken(client.connection, "s1")
     assert {Field.CMD: Packet.KITTY_TRANSFER_TAKEN, Field.DATA: "s1"} in packets
+
+
+async def test_a_terminal_here_waits_while_the_program_there_reads(two_servers, monkeypatch):
+    "Past `HOLD_BYTES` the peer holds its terminal until the owner says the program took it. Lillecarl/pymux#918."
+    owner, peer, client = two_servers
+    there, heard, raw, packets = await terminal_here(owner, peer, client, monkeypatch)
+    there.terminal.terminal_control.feed_output(str(TransferCommand(Action.SEND, id="s1")))
+    await until(lambda: raw, "the session reaches the terminal here", lambda: raw)
+    data = TransferCommand(Action.DATA, id="s1", file_id="f1", data=b"x" * (2 * kitty_transfers.HOLD_BYTES))
+    held = {Field.CMD: Packet.HOLD_INPUT}
+    released = {Field.CMD: Packet.RELEASE_INPUT}
+    async with anyio.create_task_group() as tasks:
+        monkeypatch.setattr(client.connection, "spawn", lambda work: tasks.start_soon(lambda: work), raising=False)
+        peer.kitty_transfers.terminal_said(client.connection, data.param())
+        await until(lambda: released in packets, "the owner's answer lets the terminal go on", lambda: packets)
+    assert packets.index(held) < packets.index(released)
+    assert heard == [str(data)]
+    assert peer.kitty_transfers._sessions, "a program that read keeps its session"
 
 
 async def test_a_drag_a_program_there_offers_goes_through_the_terminal_here(two_servers, monkeypatch):

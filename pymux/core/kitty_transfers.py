@@ -32,7 +32,8 @@ that the pane's program has not read, the server tells the client to
 stop reading its terminal (`Packet.HOLD_INPUT`), and kitty, whose child
 the client is, stops writing. The person's keys wait with it, so a
 program that reads nothing for `STALL_SECONDS` loses its session and
-the keys go again.
+the keys go again. A mirrored pane's backlog is on its owner, so a peer
+counts what it passed on and asks the owner, as it asks "taken".
 """
 
 from __future__ import annotations
@@ -102,6 +103,8 @@ class _Session:
     route: Route
     #: When the program or the terminal last said something of it.
     used: float
+    #: For a mirrored pane: what the terminal sent since the owner last said its program took all.
+    unanswered: int = 0
 
 
 class KittyTransfers:
@@ -236,7 +239,11 @@ class KittyTransfers:
             # As the terminal wrote it, and not written again.
             self._tell(session.pane, OscString(Osc.FILE_TRANSFER, param))
             if session.route is Route.TERMINAL:
-                self._pace(key, session)
+                if isinstance(session.pane.process, RemoteProgram):
+                    session.unanswered += len(param)
+                    self._pace_mirror(key, session)
+                else:
+                    self._pace(key, session)
         except Exception:
             logger.exception("Serving a file transfer command of client %s failed.", connection.client_id)
 
@@ -290,14 +297,48 @@ class KittyTransfers:
                     return
                 if process.input_unwritten < before:
                     continue
-                if self._sessions.pop(key, None) is not None:
-                    self._send(session, TransferCommand(Action.CANCEL, id=key[1]))
-                    self._tell(session.pane, TransferCommand(Action.STATUS, id=key[1], status=_STALLED % STALL_SECONDS))
+                self._stalled(key, session)
                 return
         finally:
-            self._held.discard(connection)
-            with suppress(BrokenPipeError):
-                connection.send_packet({Field.CMD: Packet.RELEASE_INPUT})
+            self._release(connection)
+
+    def _pace_mirror(self, key: tuple[ServerConnection, str], session: _Session) -> None:
+        "`_pace` for a pane mirrored here: the backlog is the owner's, so the owner says when it is read."
+        connection = session.connection
+        if connection in self._held or session.unanswered <= HOLD_BYTES:
+            return
+        self._held.add(connection)
+        with suppress(BrokenPipeError):
+            connection.send_packet({Field.CMD: Packet.HOLD_INPUT})
+        connection.spawn(self._release_when_owner_took(key, session))
+
+    async def _release_when_owner_took(self, key: tuple[ServerConnection, str], session: _Session) -> None:
+        """
+        Let the terminal go on once the owner says its program took all, or
+        stall after `STALL_SECONDS`. The owner says nothing of a program
+        that reads slowly, so a slow one stalls as one that reads nothing.
+        """
+        asked = session.unanswered
+        try:
+            with anyio.move_on_after(STALL_SECONDS) as waited:
+                await self._program_took(session.pane, key[1])
+            if waited.cancelled_caught:
+                self._owner_takes.pop((session.pane, key[1]), None)
+                self._stalled(key, session)
+            else:
+                session.unanswered -= asked
+        finally:
+            self._release(session.connection)
+
+    def _stalled(self, key: tuple[ServerConnection, str], session: _Session) -> None:
+        if self._sessions.pop(key, None) is not None:
+            self._send(session, TransferCommand(Action.CANCEL, id=key[1]))
+            self._tell(session.pane, TransferCommand(Action.STATUS, id=key[1], status=_STALLED % STALL_SECONDS))
+
+    def _release(self, connection: ServerConnection) -> None:
+        self._held.discard(connection)
+        with suppress(BrokenPipeError):
+            connection.send_packet({Field.CMD: Packet.RELEASE_INPUT})
 
     def client_gone(self, connection: ServerConnection) -> None:
         "A client went: each program whose session its terminal carried hears so."
