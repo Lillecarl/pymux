@@ -19,13 +19,15 @@ from libpymux.wire import MSGPACK, MSGPACK_ZSTD, PacketReader, encode_json
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.clipboard import ClipboardData
 from pyte.keep import Keep
+from pyte.kitty_clipboard import ClipboardWrite
 from pyte.osc import color_base_data
+from pyte.sequences.kitty_clipboard import strict_b64decode
 
 from ..client.defaults import is_ssh_url
 from ..client.reconnect import link_ended_notice, link_notice, why
 from ..client.relink import Relink, Restarting, Wait
 from ..commands import CommandException
-from ..enums import Woke
+from ..enums import Clipboard, Woke
 from ..graphics.kitty_frames import decoders
 from ..log import logger
 from ..options.tables import PeerCopyRow, PeerPlaceRow
@@ -55,6 +57,25 @@ if TYPE_CHECKING:
     from .window import RemoteWindow
 
 __all__ = ["Peer", "Peers", "Told"]
+
+
+def _clipboard_write_of(packet: Message) -> ClipboardWrite | None:
+    "The write a `mirror-clipboard-write` carries, or None for one that does not decode."
+    data, aliases = packet.get(Field.DATA), packet.get(Field.ALIASES) or {}
+    if not isinstance(data, dict) or not isinstance(aliases, dict):
+        return None
+    try:
+        decoded = {str(mime): strict_b64decode(str(content)) for mime, content in data.items()}
+    except ValueError:
+        logger.warning("Dropped a mirrored clipboard write whose data is not base64.")
+        return None
+    return ClipboardWrite(
+        decoded,
+        {str(alias): str(target) for alias, target in aliases.items()},
+        primary=bool(packet.get(Field.PRIMARY)),
+        password=str(packet.get(Field.PASSWORD) or ""),
+        name=str(packet.get(Field.NAME) or ""),
+    )
 
 
 class Peers:
@@ -713,6 +734,14 @@ class Peer:
                     str(packet.get(Field.DATA, "")),
                     acts=bool(packet.get(Field.ACTS, True)),
                 )
+            return
+        if packet.get(Field.CMD) == Packet.MIRROR_CLIPBOARD_WRITE:
+            pane = self.tree.panes.get(pane_id) if isinstance(pane_id, int) else None
+            write = _clipboard_write_of(packet)
+            # Served under this server's own `set-clipboard`, as a
+            # pane's OSC 52 is.
+            if pane is not None and write is not None and self.tree.pymux.options.set_clipboard is Clipboard.ON:
+                self.tree.pymux.rich_clipboard.serve_write(pane, write)
             return
         if packet.get(Field.CMD) == Packet.MIRROR_COPIED:
             # A person's copy: the paste buffer of the sessions here, as a

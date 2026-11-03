@@ -5,7 +5,8 @@ terminals of the clients. Lillecarl/pymux#893.
 A pane's write holds any MIME type. It goes into the paste buffer of
 the session with all of them, and to every client's terminal: as OSC
 5522 to one that speaks it, and as OSC 52 with the text to one that
-does not. `set-clipboard` gates it as it gates OSC 52.
+does not. `set-clipboard` gates it as it gates OSC 52. A peer that
+mirrors the pane gets the whole write, and serves it the same way.
 
 A pane's read goes to one terminal: the one whose paste event gave the
 pane its password, or else the one a person on the pane's session used
@@ -198,6 +199,15 @@ class RichClipboard:
         if self.pymux.options.set_clipboard is not Clipboard.ON:
             self._answer(pane, answer_to(write, Status.EPERM))
             return
+        self.serve_write(pane, write)
+        self._answer(pane, answer_to(write, Status.DONE))
+
+    def serve_write(self, pane: Pane, write: ClipboardWrite) -> None:
+        """
+        Give a write of `pane` to the paste buffer, the terminal of each
+        client, and each peer that hears the pane. A peer serves it the
+        same way, under its own `set-clipboard` (`PeerLink.pane_wrote`).
+        """
         types = write.types()
         text = text_of(types)
         if not write.primary:
@@ -205,13 +215,12 @@ class RichClipboard:
 
         five = self._packets(write)
         fifty_two = None
+        param = None
         if text:
             param = ("p" if write.primary else "c") + ";" + b64(text)
             fifty_two = build_osc(Osc.CLIPBOARD, param)
-            # A peer that watches this server serves the text under its
-            # own options, as it does a pane's OSC 52.
-            for link in self.pymux.peer_links():
-                link.pane_said(pane, Osc.CLIPBOARD, param, acts=False)
+        for link in self.pymux.peer_links():
+            link.pane_wrote(pane, write, param)
         for connection in self.pymux._client_states:
             # No connection is a socket command's temporary client.
             if connection is None:
@@ -221,7 +230,6 @@ class RichClipboard:
                     connection.forward_osc(packet)
             elif fifty_two is not None:
                 connection.forward_osc(fifty_two)
-        self._answer(pane, answer_to(write, Status.DONE))
         self.pymux.invalidate(Woke.CLIPBOARD_WRITTEN)
 
     def _packets(self, write: ClipboardWrite) -> list[str]:

@@ -21,6 +21,7 @@ from libpymux.protocol import (
     OLDEST_PEER_VERSION,
     PEER_ACTS,
     PEER_PINGS,
+    PEER_RICH_CLIPBOARD,
     PEER_VERSION,
     PEER_WINDOWS,
     Field,
@@ -34,6 +35,7 @@ from pyte.keep import Keep
 from pyte.keys.events import DEFAULT_KEY_PROFILE, KeyProfile
 from pyte.mouse import MODIFIERS, MouseAction, MouseBits, MouseButton, MouseInput
 from pyte.osc import Osc, color_base_of
+from pyte.sequences.kitty_clipboard import b64
 
 from ..connection.packet_table import PacketTable
 from ..enums import Woke
@@ -50,6 +52,8 @@ from .tree import Tree, tree_of
 from .window_source import MirrorWindowSource
 
 if TYPE_CHECKING:
+    from pyte.kitty_clipboard import ClipboardWrite
+
     from pymux.connection.server import ServerConnection
     from pymux.core.pane import Pane
 
@@ -203,6 +207,30 @@ class PeerLink:
         if code == Osc.TERMINAL_EXTENSION and self.version >= PEER_ACTS:
             packet[Field.ACTS] = acts
         self.queue(packet)
+
+    def pane_wrote(self, pane: Pane, write: ClipboardWrite, text: str | None) -> None:
+        """
+        Pass a pane's kitty clipboard write on to the peer
+        (`RichClipboard.serve_write`). A peer older than
+        `PEER_RICH_CLIPBOARD` gets `text`, the OSC 52 of its text, if any.
+        """
+        if self.version < PEER_RICH_CLIPBOARD:
+            if text is not None:
+                self.pane_said(pane, Osc.CLIPBOARD, text, acts=False)
+            return
+        if not self.hears(pane):
+            return
+        self.queue(
+            {
+                Field.CMD: Packet.MIRROR_CLIPBOARD_WRITE,
+                Field.PANE_ID: int(pane.pane_id),
+                Field.DATA: {mime: b64(content) for mime, content in write.data.items()},
+                Field.ALIASES: dict(write.aliases),
+                Field.PRIMARY: write.primary,
+                Field.NAME: write.name,
+                Field.PASSWORD: write.password,
+            }
+        )
 
     def tree_changed(self) -> None:
         "Something the tree holds may have changed (`Pymux.invalidate`)."

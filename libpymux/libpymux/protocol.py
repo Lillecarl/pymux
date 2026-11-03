@@ -37,6 +37,7 @@ __all__ = [
     "OLDEST_PEER_VERSION",
     "PEER_ACTS",
     "PEER_PINGS",
+    "PEER_RICH_CLIPBOARD",
     "PEER_VERSION",
     "PEER_WINDOWS",
     "READ_SIZE",
@@ -66,7 +67,7 @@ READ_SIZE = 1 << 20
 #: one misreads it raises `PEER_VERSION`; one that stops speaking the
 #: older form raises `OLDEST_PEER_VERSION` too. Every field is named
 #: and has a default, so most changes need neither. Lillecarl/pymux#759.
-PEER_VERSION = 5
+PEER_VERSION = 6
 OLDEST_PEER_VERSION = 1
 
 #: From this version a frame may name an image the peer stored by its
@@ -86,6 +87,11 @@ PEER_WINDOWS = 4
 #: says under `acts` whether this peer is the one server that does it.
 #: Lillecarl/pymux#854.
 PEER_ACTS = 5
+
+#: From this version a pane's kitty clipboard write reaches a peer whole,
+#: as `mirror-clipboard-write`, and not only its text as OSC 52.
+#: Lillecarl/pymux#902.
+PEER_RICH_CLIPBOARD = 6
 
 
 def peer_upgrade(version: object, oldest: object) -> str | None:
@@ -357,6 +363,10 @@ class Packet(StrEnum):
     # it goes to their own clipboard, as a person's copy and not as a
     # program's OSC 52.
     MIRROR_COPIED = "mirror-copied"
+    # A pane's kitty clipboard write: `data` maps each MIME type to its
+    # base64, `aliases` each alias to the type it shares, with
+    # `primary`, `name` and `password` as the pane gave them.
+    MIRROR_CLIPBOARD_WRITE = "mirror-clipboard-write"
     # "That pane is not mirrored": there is none, under `error`.
     MIRROR_REFUSED = "mirror-refused"
 
@@ -386,6 +396,10 @@ class Field(StrEnum):
     #: download. A packet without it is from an owner that lets every
     #: server act.
     ACTS = "acts"
+    #: In a `mirror-clipboard-write` (`Packet`).
+    ALIASES = "aliases"
+    PRIMARY = "primary"
+    PASSWORD = "password"
     PANE = "pane"
     PANE_ID = "pane_id"
     WRITABLE = "writable"

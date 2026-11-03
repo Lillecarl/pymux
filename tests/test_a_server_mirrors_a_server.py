@@ -32,6 +32,8 @@ from pyte.mouse import MouseAction, MouseBits, MouseButton, MouseInput
 from pyte.osc import ColorBase
 from session import Connection
 from test_drag_a_border import DRAG, PRESS, _drawn, _mouse
+from test_kittys_clipboard import PNG as KITTY_PNG
+from test_kittys_clipboard import WRITE as KITTY_WRITE
 from test_snapshot import _Copied
 from test_ssh_client import create_ssh_server
 
@@ -42,6 +44,7 @@ from pymux.commands import handle_command
 from pymux.connection import server as server_module
 from pymux.core.forwarding import with_port
 from pymux.core.main import Pymux
+from pymux.core.rich_clipboard import RichClipboardData
 from pymux.core.snapshot.read import load, start
 from pymux.core.snapshot.write import save
 from pymux.core.upgrade import welcome_back
@@ -174,6 +177,24 @@ async def test_a_copy_in_a_pane_there_reaches_the_clipboard_here(two_servers):
         "the copy reaches the paste buffer here",
         lambda: peer.clipboard.get_data().text,
     )
+
+
+async def test_a_kitty_copy_in_a_pane_there_reaches_the_paste_buffer_here_whole(two_servers):
+    "Every MIME type of an OSC 5522 write, not only its text. Lillecarl/pymux#902."
+    owner, peer, client = two_servers
+    owner.options.set_clipboard = Clipboard.ON
+    peer.options.set_clipboard = Clipboard.ON
+    there, _ = await shown_here(owner, peer, client)
+
+    there.terminal.terminal_control.feed_output(KITTY_WRITE)
+    await until(
+        lambda: isinstance(peer.clipboard.get_data(), RichClipboardData),
+        "the write reaches the paste buffer here",
+        lambda: peer.clipboard.get_data().text,
+    )
+    data = peer.clipboard.get_data()
+    assert data.text == "hello"
+    assert data.types == {"text/plain": b"hello", "UTF8_STRING": b"hello", "image/png": KITTY_PNG}
 
 
 async def test_a_pane_streams_only_while_seen(two_servers):
