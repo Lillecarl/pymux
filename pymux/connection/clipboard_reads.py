@@ -26,6 +26,7 @@ __all__ = ["ClipboardReader"]
 #: The start of a terminal's answer to a clipboard query.
 _CLIPBOARD_REPLY = OSC + Osc.CLIPBOARD + ";"
 _KITTY_CLIPBOARD_REPLY = OSC + Osc.KITTY_CLIPBOARD + ";"
+_KITTY_DND_REPLY = OSC + Osc.KITTY_DND + ";"
 
 #: How long a terminal has to answer a clipboard query, in seconds. A
 #: paste waits this long once; a terminal that lets it pass is not asked
@@ -106,7 +107,8 @@ class ClipboardReader:
         as keys, after quadratic work. This sees the bytes first, and
         only once a query went out: nothing typed begins "ESC ] 52 ;".
         kitty's OSC 5522 packets are cut the same way, from a terminal
-        that speaks it, and go to `RichClipboard.terminal_said`.
+        that speaks it, and go to `RichClipboard.terminal_said`; its OSC
+        72 packets, once asked, to `DragAndDrop.terminal_said`.
         """
         prefixes = []
         if self._asked:
@@ -115,6 +117,9 @@ class ClipboardReader:
         # comes unasked. Lillecarl/pymux#893.
         if self.connection.replies.kitty_clipboard:
             prefixes.append(_KITTY_CLIPBOARD_REPLY)
+        # kitty's drag and drop, once asked. Lillecarl/pymux#892.
+        if self.connection.pymux.drag_and_drop.is_asked(self.connection):
+            prefixes.append(_KITTY_DND_REPLY)
         if not prefixes and not self._partial:
             return data
         data = self._partial + data
@@ -132,6 +137,8 @@ class ClipboardReader:
         end, length = min(ends)
         if prefix == _KITTY_CLIPBOARD_REPLY:
             self.connection.pymux.rich_clipboard.terminal_said(self.connection, data[body:end])
+        elif prefix == _KITTY_DND_REPLY:
+            self.connection.pymux.drag_and_drop.terminal_said(self.connection, data[body:end])
         else:
             self._answered(data[body:end])
         return data[:start] + self.take_answer(data[end + length :])

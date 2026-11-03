@@ -44,7 +44,7 @@ from ..notify.notifications import QUERY as NOTIFICATION_QUERY
 from ..notify.notifications import QUERY_IDENTIFIER, can_close, is_click, read_identifier, split_payload
 from ..style.colors import COLOR_QUERIES
 from ..style.nearest import NEAREST, nearest_theme, wanted_from
-from .client_io import PIXEL_MOUSE_ON
+from .client_io import DND_QUERY, PIXEL_MOUSE_ON
 from .known_terminals import Identity, identify, wcwidth_name
 from .terminal_answers import SURVEY, TerminalAnswers
 
@@ -155,12 +155,17 @@ class TerminalReplies:
         OSC 99 `p=?` (Lillecarl/pymux#779).
         """
         self.detection_pending = True
+        # kitty's drag and drop: a terminal that speaks it answers, and
+        # its packets are cut out of the keys from here on.
+        # Lillecarl/pymux#892.
+        self.connection.pymux.drag_and_drop.asked(self.connection)
         self.connection.write_output_raw(
             PIXEL_MOUSE_QUERY
             + EMOJI_WIDTH_PROBE
             + (CLUSTER_WIDTH_PROBE if self.connection.size.rows >= PROBE_ROWS else "")
             + SURVEY
             + osc(Osc.NOTIFICATION, NOTIFICATION_QUERY)
+            + DND_QUERY
         )
         self.connection.flush_output()
 

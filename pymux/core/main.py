@@ -53,6 +53,7 @@ from ..wayland.portal import Portal
 from ..wayland.wayland import WaylandServer
 from .arrangement import Arrangement
 from .chores import sweep, watch_window_output
+from .drag_and_drop import DragAndDrop
 from .environment import take_environment_from
 from .focus import Focus
 from .forward_requests import ForwardRequests
@@ -164,6 +165,7 @@ class Pymux:
         "terminals": Keep.REBUILT,
         "outward": Keep.REBUILT,
         "rich_clipboard": Keep.REBUILT,
+        "drag_and_drop": Keep.REBUILT,
         "notifier": Keep.REBUILT,
         "panes": Keep.REBUILT,
         "serving": Keep.REBUILT,
@@ -289,6 +291,7 @@ class Pymux:
         self.panes = PaneMaker(self)
         self.outward = Outward(self)
         self.rich_clipboard = RichClipboard(self)
+        self.drag_and_drop = DragAndDrop(self)
         #: The links to other servers whose panes this one mirrors.
         #: Lillecarl/pymux#759.
         self.peers = Peers(self)

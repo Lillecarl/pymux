@@ -485,6 +485,8 @@ class ClientState:
             if self.connection.replies.kitty_clipboard:
                 self.pymux.rich_clipboard.sync_paste_events(self)
 
+            self.pymux.drag_and_drop.sync(self)
+
             graphics = self.connection.graphics
             if not graphics.supported:
                 return

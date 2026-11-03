@@ -50,6 +50,7 @@ async def test_input_from_the_client_moves_the_tick() -> None:
         connection = ServerConnection.__new__(ServerConnection)
         connection.pipeinput = newcomer
         connection.client_state = state
+        connection.pymux = pymux
         connection.recording = None
         connection.role = None
         connection.replies = _NoReplies(connection)

@@ -19,6 +19,7 @@ from pyte.cells import VS16, without_widening_selectors
 from pyte.modes import PrivateMode
 from pyte.placeholders import PLACEHOLDER, blanked
 from pyte.sequences.csi import reset_mode, set_mode
+from pyte.sequences.kitty_dnd import STOP_OFFERING, DndPacket, DndType
 
 from ..clusters import Drawn, fitted
 from ..keys.keys import KittyVt100Parser
@@ -46,6 +47,12 @@ REPORTS_OFF = "".join(reset_mode(mode) for mode in REPORTS)
 #: Lillecarl/pymux#893.
 PASTE_EVENTS_ON = set_mode(PrivateMode.PASTE_EVENTS)
 PASTE_EVENTS_OFF = reset_mode(PrivateMode.PASTE_EVENTS)
+
+#: kitty's drag and drop: what a terminal is asked at the detection, and
+#: what a detach says, so that the shell after it gets no drops and
+#: starts no drags it cannot read. Lillecarl/pymux#892.
+DND_QUERY = str(DndPacket(DndType.QUERY))
+DND_OFF = str(DndPacket(DndType.STOP_ACCEPTING)) + str(DndPacket(DndType.OFFER, cell_x=STOP_OFFERING))
 
 
 class SocketStdout:
@@ -159,7 +166,7 @@ class FrameOutput(Vt100_Output):
 
     @override
     def quit_alternate_screen(self) -> None:
-        self.write_raw(REPORTS_OFF + PASTE_EVENTS_OFF)
+        self.write_raw(REPORTS_OFF + PASTE_EVENTS_OFF + DND_OFF)
         super().quit_alternate_screen()
 
     def write_after_frame(self, data: str) -> None:

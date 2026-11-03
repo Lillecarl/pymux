@@ -272,6 +272,7 @@ class PaneMaker:
                 on_done()
 
             self.pymux.finish_recordings([pane])
+            self.pymux.drag_and_drop.forget(pane)
 
             if not self.pymux.options_of_pane(pane).remain_on_exit:
                 self.take_ended_pane(pane)
@@ -418,6 +419,7 @@ class PaneMaker:
 
         terminal_control.draws_extra_cursors = draws_extra_cursors
         terminal.screen.clipboard_func = lambda request: self.pymux.rich_clipboard.asked(pane, request)
+        terminal.screen.dnd_func = lambda packet: self.pymux.drag_and_drop.pane_said(pane, packet)
 
         return pane
 
