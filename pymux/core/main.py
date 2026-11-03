@@ -63,6 +63,7 @@ from .pane import Pane
 from .panes import PaneMaker
 from .planes import Planes
 from .port_offers import PortOffers
+from .rich_clipboard import RichClipboard
 from .serving import Serving
 from .session import OwnOptions, Session
 from .waking import Waking
@@ -162,6 +163,7 @@ class Pymux:
         "session_defaults": Keep.SAVED,
         "terminals": Keep.REBUILT,
         "outward": Keep.REBUILT,
+        "rich_clipboard": Keep.REBUILT,
         "notifier": Keep.REBUILT,
         "panes": Keep.REBUILT,
         "serving": Keep.REBUILT,
@@ -286,6 +288,7 @@ class Pymux:
         self.serving = Serving(self)
         self.panes = PaneMaker(self)
         self.outward = Outward(self)
+        self.rich_clipboard = RichClipboard(self)
         #: The links to other servers whose panes this one mirrors.
         #: Lillecarl/pymux#759.
         self.peers = Peers(self)

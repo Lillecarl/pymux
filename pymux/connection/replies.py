@@ -97,6 +97,7 @@ class TerminalReplies:
         # The next server asks the terminal again.
         "pixel_mouse": Keep.DROPPED,
         "extra_cursors": Keep.DROPPED,
+        "kitty_clipboard": Keep.DROPPED,
         "sizes_in_band": Keep.DROPPED,  # the terminal reports again when the mode is set
         "widens_text_emoji": Keep.DROPPED,
         "clusters_drawn": Keep.DROPPED,
@@ -111,6 +112,10 @@ class TerminalReplies:
         #: Whether this client's terminal draws kitty's extra cursors
         #: itself, as it answered "CSI > SP q". Lillecarl/pymux#891.
         self.extra_cursors = False
+        #: Whether this client's terminal speaks kitty's clipboard
+        #: protocol, OSC 5522, as DECRQM for its paste events mode said.
+        #: Lillecarl/pymux#893.
+        self.kitty_clipboard = False
         #: Whether this client's terminal reports its size in band, DEC
         #: 2048, pixels and all. Lillecarl/pymux#797.
         self.sizes_in_band = False
@@ -230,6 +235,9 @@ class TerminalReplies:
                 # answers.
                 if state in _PIXEL_MOUSE_STATES and self.connection.graphics.cell_size_known:
                     self._turn_on_pixel_mouse()
+            # 0 and 4 mean no, as the spec says. Lillecarl/pymux#893.
+            case ModeReport(mode=PrivateMode.PASTE_EVENTS, state=state):
+                self.kitty_clipboard = state not in (ModeState.UNKNOWN, ModeState.PERMANENTLY_RESET)
             case ExtraCursorsSupport(supported=supported) if ExtraShape.MAIN in supported:
                 self.extra_cursors = True
                 if self.connection.client_state is not None:

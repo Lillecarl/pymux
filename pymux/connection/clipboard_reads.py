@@ -25,6 +25,7 @@ __all__ = ["ClipboardReader"]
 
 #: The start of a terminal's answer to a clipboard query.
 _CLIPBOARD_REPLY = OSC + Osc.CLIPBOARD + ";"
+_KITTY_CLIPBOARD_REPLY = OSC + Osc.KITTY_CLIPBOARD + ";"
 
 #: How long a terminal has to answer a clipboard query, in seconds. A
 #: paste waits this long once; a terminal that lets it pass is not asked
@@ -104,22 +105,35 @@ class ClipboardReader:
         character, so a clipboard of a few kilobytes would reach the pane
         as keys, after quadratic work. This sees the bytes first, and
         only once a query went out: nothing typed begins "ESC ] 52 ;".
+        kitty's OSC 5522 packets are cut the same way, from a terminal
+        that speaks it, and go to `RichClipboard.terminal_said`.
         """
-        if not self._asked and not self._partial:
+        prefixes = []
+        if self._asked:
+            prefixes.append(_CLIPBOARD_REPLY)
+        # kitty's clipboard answers whenever it likes: a paste event
+        # comes unasked. Lillecarl/pymux#893.
+        if self.connection.replies.kitty_clipboard:
+            prefixes.append(_KITTY_CLIPBOARD_REPLY)
+        if not prefixes and not self._partial:
             return data
         data = self._partial + data
         self._partial = ""
-        start = data.find(_CLIPBOARD_REPLY)
-        if start < 0:
+        found = [(at, prefix) for prefix in prefixes if (at := data.find(prefix)) >= 0]
+        if not found:
             return data
-        body = start + len(_CLIPBOARD_REPLY)
+        start, prefix = min(found)
+        body = start + len(prefix)
         ends = [(at, len(end)) for end in (Terminator.BEL, Terminator.ST) if (at := data.find(end, body)) >= 0]
         if not ends:
             if len(data) - start <= CLIPBOARD_REPLY_LIMIT:
                 self._partial = data[start:]
             return data[:start]
         end, length = min(ends)
-        self._answered(data[body:end])
+        if prefix == _KITTY_CLIPBOARD_REPLY:
+            self.connection.pymux.rich_clipboard.terminal_said(self.connection, data[body:end])
+        else:
+            self._answered(data[body:end])
         return data[:start] + self.take_answer(data[end + length :])
 
     def _answered(self, payload: str) -> None:

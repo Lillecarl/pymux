@@ -28,7 +28,8 @@ __all__ = ["SURVEY", "Answer", "TerminalAnswers", "readable"]
 #: Asked once, when a client's terminal has been detected, for nothing
 #: but to know the answer. Secondary device attributes, and DECRQM for
 #: the mouse modes, focus events, alternate scroll, bracketed paste,
-#: grapheme clustering, theme reports and in-band resize. The text area
+#: grapheme clustering, theme reports, in-band resize and kitty's
+#: paste events, which say it speaks OSC 5522. The text area
 #: and the window in pixels, against the cell size: a terminal whose
 #: mouse pixels are not its cell's pixels shows here. pymux asks the
 #: version, the colours, the keyboard and the graphics already.
@@ -52,6 +53,7 @@ SURVEY = (
             PrivateMode.GRAPHEME_CLUSTERS,
             PrivateMode.COLOR_SCHEME_UPDATES,
             PrivateMode.INBAND_RESIZE,
+            PrivateMode.PASTE_EVENTS,
         )
     )
 )

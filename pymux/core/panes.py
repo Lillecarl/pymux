@@ -417,6 +417,7 @@ class PaneMaker:
             return client is None or not client.native_extra_cursors_of(pane)
 
         terminal_control.draws_extra_cursors = draws_extra_cursors
+        terminal.screen.clipboard_func = lambda request: self.pymux.rich_clipboard.asked(pane, request)
 
         return pane
 

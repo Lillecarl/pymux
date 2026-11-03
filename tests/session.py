@@ -83,6 +83,7 @@ class _NoReplies:
 
     kitty_source_flags = 0
     extra_cursors = False
+    kitty_clipboard = False
 
     def __init__(self, connection: Connection) -> None:
         self.connection = connection
