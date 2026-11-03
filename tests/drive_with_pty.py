@@ -701,11 +701,10 @@ class SecondClient(Attached):
     joins a server that is already there, so a check can put two
     terminals of different abilities in front of one session.
 
-    This client always uses the socket, on both routes. A server has
-    one in-process client at most, so under `PYMUX_ROUTE=integrated`
-    the run is a mixed one: the first client reads a queue and this one
-    reads a socket. That is what a person does who attaches a second
-    terminal to a session they started with `pymux integrated`.
+    It attaches over the socket, so it runs on the socket route only.
+    An integrated server refuses an attach over its socket with
+    `CANNOT_ATTACH` (Lillecarl/pymux#159), so a check with two
+    terminals returns early under `PYMUX_ROUTE=integrated`.
     """
 
     def __init__(self, tmp, sock_path, name, colorterm="", bare=False):
