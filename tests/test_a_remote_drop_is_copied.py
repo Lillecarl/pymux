@@ -18,7 +18,7 @@ from prompt_toolkit.data_structures import Size
 from pyte.sequences.kitty_dnd import DndPacket, DndType
 from session import once, over_connection
 
-from pymux.core.drop_files import MAX_COPY_BYTES, RemoteCopy
+from pymux.core.drop_files import MAX_COPY_BYTES, RemoteCopy, remove_old_drops
 from pymux.core.main import Pymux
 
 URIS = "file:///Users/carl/notes.txt\r\n# a comment\r\nhttps://x.org/\r\nfile:///Users/carl/My%20Dir/\r\n"
@@ -169,3 +169,38 @@ async def test_a_drop_from_another_machine_pastes_the_copy(tmp_path: Path):
         assert typed == ["'%s'" % (root / "a b.txt")]
         assert (root / "a b.txt").read_bytes() == b"from the mac"
         await sent(osc("t=r:o=1"))
+
+
+def old_and_new_drops(base: Path) -> tuple[Path, Path]:
+    "A drop's copy from ten days ago, with a tree in it, and one from now."
+    old, new = base / "20261001-120000-1", base / "20261103-120000-1"
+    (old / "dir").mkdir(parents=True)
+    (old / "dir" / "file").write_text("old")
+    new.mkdir()
+    (new / "file").write_text("new")
+    ten_days_ago = os.stat(new).st_mtime - 10 * 86400
+    os.utime(old, (ten_days_ago, ten_days_ago))
+    return old, new
+
+
+def test_copies_older_than_the_days_kept_go(tmp_path: Path):
+    "Lillecarl/pymux#904."
+    old, new = old_and_new_drops(tmp_path)
+    assert remove_old_drops(tmp_path, 7) == [old]
+    assert not old.exists()
+    assert (new / "file").read_text() == "new"
+
+
+def test_zero_days_keeps_every_copy(tmp_path: Path):
+    old, new = old_and_new_drops(tmp_path)
+    assert remove_old_drops(tmp_path, 0) == []
+    assert old.exists() and new.exists()
+
+
+async def test_the_server_removes_old_copies_at_its_start(tmp_path: Path):
+    old, new = old_and_new_drops(tmp_path)
+    pymux = Pymux(startup_command="sleep 30")
+    pymux.drag_and_drop.drops = tmp_path
+    async with over_connection(pymux=pymux):
+        await once(lambda: not old.exists(), 10.0, "the old copy stays")
+    assert new.exists()

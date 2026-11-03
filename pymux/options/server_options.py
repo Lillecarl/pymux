@@ -160,6 +160,15 @@ class ServerOptions(Options):
         doc="The most rows `actions.db` keeps; the oldest go first. Zero keeps all.",
         choices=[0, 100_000, 500_000, 1_000_000],
     )
+    drop_keep_days: int = option(
+        7,
+        doc=(
+            "How many days pymux keeps its copy of files dropped from another machine, under the "
+            "user's cache. Older copies go at the server's start and at each new drop. Zero keeps "
+            "every one. Lillecarl/pymux#904."
+        ),
+        choices=[0, 1, 7, 30],
+    )
     default_terminal: str = option(
         factory=terminal_name,
         doc="The TERM a new pane starts with.",

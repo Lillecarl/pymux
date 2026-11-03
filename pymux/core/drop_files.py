@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import base64
 import os
+import shutil
 import time
 from collections import deque
 from dataclasses import dataclass, field
@@ -36,6 +37,7 @@ __all__ = [
     "entries_of",
     "new_drop_root",
     "paths_of",
+    "remove_old_drops",
 ]
 
 #: The most a copy takes, in bytes and in entries. Past either the copy
@@ -296,6 +298,32 @@ class RemoteCopy:
 
 class _TooMuch(Exception):
     "A copy past MAX_COPY_BYTES or MAX_COPY_ENTRIES."
+
+
+def remove_old_drops(base: Path, keep_days: int, now: float | None = None) -> list[Path]:
+    """
+    Remove each drop's copy under `base` older than `keep_days`, by the
+    time of its directory, and answer what went. Zero keeps every one.
+    It blocks: a copy may be a large tree. Lillecarl/pymux#904.
+    """
+    if keep_days <= 0:
+        return []
+    cutoff = (time.time() if now is None else now) - keep_days * 86400
+    try:
+        roots = list(base.iterdir())
+    except OSError:
+        return []
+    gone = []
+    for root in roots:
+        try:
+            if root.is_symlink() or not root.is_dir() or root.stat().st_mtime >= cutoff:
+                continue
+            shutil.rmtree(root)
+        except OSError as error:
+            logger.warning("Could not remove the old drop %s: %s.", root, error)
+            continue
+        gone.append(root)
+    return gone
 
 
 def new_drop_root(base: Path) -> Path:

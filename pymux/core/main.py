@@ -660,6 +660,7 @@ class Pymux:
             tasks.start_soon(self.wayland.keep)
             tasks.start_soon(self.portal.keep)
             tasks.start_soon(self.audio.keep)
+            tasks.start_soon(self.drag_and_drop.prune_drops)
             if self.listener is not None:
                 self.serving.serve_listener()
             try:

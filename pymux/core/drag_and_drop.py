@@ -42,6 +42,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, Final
 
+import anyio
 from prompt_toolkit.application.current import set_app
 from ptterm import Terminal
 from pyte.keep import Keep
@@ -51,7 +52,7 @@ from pyte.sequences.kitty_dnd import MACHINE_ID, START_OFFERING, STOP_OFFERING, 
 
 from ..log import logger
 from ..mirror.program import RemoteProgram
-from .drop_files import RemoteCopy, decoded, drops_directory, new_drop_root, paths_of
+from .drop_files import RemoteCopy, decoded, drops_directory, new_drop_root, paths_of, remove_old_drops
 
 if TYPE_CHECKING:
     from ..connection.client_state import ClientState
@@ -247,6 +248,12 @@ class DragAndDrop:
         #: here it mirrors.
         self._peer_drops: dict[Pane, PeerLink] = {}
         self._peer_drags: dict[Pane, PeerLink] = {}
+
+    async def prune_drops(self) -> None:
+        "Remove the copies of drops older than `drop-keep-days`, off the loop: one may be a large tree."
+        gone = await anyio.to_thread.run_sync(remove_old_drops, self.drops, self.pymux.options.drop_keep_days)
+        if gone:
+            logger.info("Removed %d copies of old drops.", len(gone))
 
     def _terminal(self, connection: ServerConnection) -> _Terminal:
         state = self._terminals.get(connection)
@@ -526,6 +533,8 @@ class DragAndDrop:
             return
         for request in requests:
             self._send(connection, request)
+        if self.pymux.tasks is not None:
+            self.pymux.tasks.start_soon(self.prune_drops)
         self._copied(connection, drop)
 
     def _copied(self, connection: ServerConnection, drop: _Drop) -> None:
