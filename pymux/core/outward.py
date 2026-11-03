@@ -13,14 +13,14 @@ import base64
 import shlex
 from typing import TYPE_CHECKING, Any
 
-from libpymux.protocol import Field, Message, Packet
+from libpymux.protocol import PEER_ACTS, Field, Message, Packet
 from prompt_toolkit.application.current import get_app_or_none
 from prompt_toolkit.clipboard import ClipboardData
 from pyte.osc import CLEAR_SCROLLBACK, Osc
 from pyte.page import RowMark
 
 from ..downloads import FILE_KEYS, DownloadRefused, FinishedDownload, file_packets, route_of, sequences_of
-from ..enums import Clipboard, FileTransfer, ForwardMode, OpenUrlMode, Woke
+from ..enums import Clipboard, FileTransfer, ForwardMode, OpenUrlMode, OpenUrlTarget, Woke
 from ..graphics.inline_images import as_png, cells_of
 from ..log import logger
 from ..mirror.program import RemoteProgram
@@ -46,6 +46,7 @@ from .forwarding import loopback_port
 
 if TYPE_CHECKING:
     from ..connection.client_state import ClientState
+    from ..mirror.link import PeerLink
     from .main import Pymux
     from .pane import Pane
 
@@ -199,7 +200,29 @@ class Outward:
         host, port = found
         return {"host": host, "port": port, "idle": options.open_url_forward_idle}
 
-    def forward_osc(self, pane: Pane, code: str, param: str) -> None:
+    def who_acts(self, pane: Pane, param: str) -> tuple[bool, list[PeerLink]]:
+        """
+        Who opens the URL, or saves the download, of an "OSC 1337" of
+        `pane`: whether this server does, and the peers that do.
+
+        **One server, as one client on a server.** Each peer hears the
+        sequence and would act on it for its own clients, so a person at
+        two servers got the URL twice. The one used last acts: this
+        server, or the peer whose person used a mirror after every
+        client here. `open-url-target broadcast` lets every server open
+        a URL. A peer older than `PEER_ACTS` acts anyway. Lillecarl/pymux#854.
+        """
+        links = [link for link in self.pymux.peer_links() if link.hears(pane)]
+        is_url = open_url_of(param) is not None
+        if is_url and self.pymux.current_session.options.open_url_target == OpenUrlTarget.BROADCAST:
+            return True, links
+        peer = max((link for link in links if link.version >= PEER_ACTS), key=lambda link: link.last_used, default=None)
+        latest = self.pymux.latest_client() if is_url else self.download_client(pane)
+        if peer is not None and (latest is None or peer.last_used > latest.last_used):
+            return False, [peer]
+        return True, []
+
+    def forward_osc(self, pane: Pane, code: str, param: str, acts: bool = True) -> None:
         """
         Write an OSC sequence of a pane to the terminals of the
         clients. ptterm hands over the three that only the terminal of
@@ -215,11 +238,16 @@ class Outward:
         **A peer that watches this server hears it too**, as it came,
         and serves it under its own options for its own clients: a
         mirror holds no screen that could hear it for itself.
-        Lillecarl/pymux#759.
+        Lillecarl/pymux#759. `acts` is false at a peer that the owner
+        did not choose to open a URL or save a download (`who_acts`).
         """
         try:
+            here = acts
+            acting: list[PeerLink] = []
+            if acts and code == Osc.TERMINAL_EXTENSION:
+                here, acting = self.who_acts(pane, param)
             for link in self.pymux.peer_links():
-                link.pane_said(pane, code, param)
+                link.pane_said(pane, code, param, acts=link in acting)
 
             # A notification the hub recorded goes to a terminal that
             # reports clicks as OSC 99 instead (`Notifier.notified`).
@@ -240,7 +268,7 @@ class Outward:
                 # of the user; one it did not parse must not, because
                 # an unchecked payload drives that terminal instead of
                 # only naming a service.
-                if not self._read_terminal_extension(pane, param):
+                if not self._read_terminal_extension(pane, param, here):
                     return
                 recorded = request_attention_of(param) not in (None, "no")
 
@@ -395,10 +423,11 @@ class Outward:
         if mark is not None and not isinstance(screen, WindowScreen):
             screen.mark_row(mark)
 
-    def _read_terminal_extension(self, pane: Pane, param: str) -> bool:
+    def _read_terminal_extension(self, pane: Pane, param: str, acts: bool) -> bool:
         """
         Read one subcommand of "OSC 1337". True when the sequence may
-        travel on to the terminal of the user.
+        travel on to the terminal of the user. `acts` says whether this
+        server opens a URL and saves a download (`who_acts`).
 
         The browser keeps its question (`open-url-mode` asks it). The
         working directory, a user variable, a mark, an attention ask
@@ -410,7 +439,8 @@ class Outward:
         """
         url = open_url_of(param)
         if url is not None:
-            self.open_url(url, pane=pane)
+            if acts:
+                self.open_url(url, pane=pane)
             return False
 
         keyed = extension_key_of(param)
@@ -504,24 +534,28 @@ class Outward:
         if key in FILE_KEYS:
             # A download goes to one client, which `send_download`
             # chooses; it is never this broadcast.
-            self._read_download(pane, key, rest)
+            self._read_download(pane, key, rest, acts)
             return False
 
         return False
 
-    def _read_download(self, pane: Pane, key: str, rest: str) -> None:
-        "Read one sequence of a pane's download, and send a whole file on."
+    def _read_download(self, pane: Pane, key: str, rest: str, acts: bool) -> None:
+        """
+        Read one sequence of a pane's download, and send a whole file on
+        when `acts`. Every server reads each part: the one that acts is
+        chosen again at the last part, by who was used last.
+        """
         try:
             finished = pane.downloads.read(key, rest)
         except DownloadRefused as refused:
-            client = self.download_client(pane)
             logger.warning("Refused a download of pane %s: %s", pane.pane_id, refused)
+            client = self.download_client(pane) if acts else None
             if client is not None:
                 client.message = str(refused)
             return
         if finished is not None and finished.inline:
             self._draw_inline_image(pane, finished)
-        elif finished is not None:
+        elif finished is not None and acts:
             self.send_download(pane, finished)
 
     def _draw_inline_image(self, pane: Pane, finished: FinishedDownload) -> None:

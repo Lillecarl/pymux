@@ -211,7 +211,7 @@ class RichClipboard:
             # A peer that watches this server serves the text under its
             # own options, as it does a pane's OSC 52.
             for link in self.pymux.peer_links():
-                link.pane_said(pane, Osc.CLIPBOARD, param)
+                link.pane_said(pane, Osc.CLIPBOARD, param, acts=False)
         for connection in self.pymux._client_states:
             # No connection is a socket command's temporary client.
             if connection is None:

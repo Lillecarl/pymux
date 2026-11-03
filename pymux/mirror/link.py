@@ -17,7 +17,16 @@ from collections import deque
 from typing import TYPE_CHECKING, ClassVar
 
 import anyio
-from libpymux.protocol import OLDEST_PEER_VERSION, PEER_PINGS, PEER_VERSION, PEER_WINDOWS, Field, Message, Packet
+from libpymux.protocol import (
+    OLDEST_PEER_VERSION,
+    PEER_ACTS,
+    PEER_PINGS,
+    PEER_VERSION,
+    PEER_WINDOWS,
+    Field,
+    Message,
+    Packet,
+)
 from libpymux.wire import MSGPACK_ZSTD, choose, encode_json, encode_msgpack
 from prompt_toolkit.data_structures import Size
 from ptterm import Terminal
@@ -170,17 +179,30 @@ class PeerLink:
             self.lost(source)
             return None
 
-    def pane_said(self, pane: Pane, code: str, param: str) -> None:
-        "Pass an OSC sequence of a pane on to the peer (`Outward.forward_osc`)."
-        if not self.watching and pane.pane_id not in self.sources:
+    def hears(self, pane: Pane) -> bool:
+        "Whether the OSC sequences of `pane` go to this peer."
+        return self.watching or pane.pane_id in self.sources
+
+    def pane_said(self, pane: Pane, code: str, param: str, acts: bool) -> None:
+        """
+        Pass an OSC sequence of a pane on to the peer (`Outward.forward_osc`).
+        `acts` says whether the peer opens its URL or saves its download.
+        """
+        if not self.hears(pane):
             return
         # A frame carries the pointer, and the marks of a shell name
         # rows of the history, which stays here.
         if code in (Osc.POINTER_SHAPE, Osc.SHELL_INTEGRATION):
             return
-        self.queue(
-            {Field.CMD: Packet.MIRROR_OSC, Field.PANE_ID: int(pane.pane_id), Field.CODE: code, Field.DATA: param}
-        )
+        packet: Message = {
+            Field.CMD: Packet.MIRROR_OSC,
+            Field.PANE_ID: int(pane.pane_id),
+            Field.CODE: code,
+            Field.DATA: param,
+        }
+        if code == Osc.TERMINAL_EXTENSION and self.version >= PEER_ACTS:
+            packet[Field.ACTS] = acts
+        self.queue(packet)
 
     def tree_changed(self) -> None:
         "Something the tree holds may have changed (`Pymux.invalidate`)."

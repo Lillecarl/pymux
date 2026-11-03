@@ -35,6 +35,7 @@ __all__ = [
     "END",
     "IMAGES_BY_HASH",
     "OLDEST_PEER_VERSION",
+    "PEER_ACTS",
     "PEER_PINGS",
     "PEER_VERSION",
     "PEER_WINDOWS",
@@ -65,7 +66,7 @@ READ_SIZE = 1 << 20
 #: one misreads it raises `PEER_VERSION`; one that stops speaking the
 #: older form raises `OLDEST_PEER_VERSION` too. Every field is named
 #: and has a default, so most changes need neither. Lillecarl/pymux#759.
-PEER_VERSION = 4
+PEER_VERSION = 5
 OLDEST_PEER_VERSION = 1
 
 #: From this version a frame may name an image the peer stored by its
@@ -80,6 +81,11 @@ PEER_PINGS = 3
 #: `mirror-window-frame`s, and the person's input back as
 #: `mirror-window-input`. Lillecarl/pymux#888.
 PEER_WINDOWS = 4
+
+#: From this version a `mirror-osc` that opens a URL or saves a download
+#: says under `acts` whether this peer is the one server that does it.
+#: Lillecarl/pymux#854.
+PEER_ACTS = 5
 
 
 def peer_upgrade(version: object, oldest: object) -> str | None:
@@ -376,6 +382,10 @@ class Field(StrEnum):
     #: the one its writer turns to.
     WIRE = "wire"
     CODE = "code"
+    #: In a `mirror-osc`, whether the peer opens the URL or saves the
+    #: download. A packet without it is from an owner that lets every
+    #: server act.
+    ACTS = "acts"
     PANE = "pane"
     PANE_ID = "pane_id"
     WRITABLE = "writable"

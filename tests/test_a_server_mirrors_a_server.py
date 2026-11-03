@@ -1029,6 +1029,47 @@ async def test_a_loopback_url_keeps_its_port_when_it_is_free_here(two_servers):
     assert list(peer.peers.tunnels.listening) == [port]
 
 
+@pytest.mark.parametrize("used_last", ["here", "there"])
+async def test_a_url_of_a_mirrored_pane_opens_once_where_a_person_was_last(two_servers, monkeypatch, used_last):
+    "A person at both servers gets the URL once, on the terminal they used last. Lillecarl/pymux#854."
+    owner, peer, client = two_servers
+    owner.options.set_clipboard = Clipboard.OFF
+    peer.options.set_clipboard = Clipboard.ON
+    there, _ = await shown_here(owner, peer, client)
+    (link,) = owner.peer_links()
+    output = Vt100_Output(stdout=io.StringIO(), get_size=lambda: Size(rows=24, columns=80))
+    with create_pipe_input() as pipe:
+        theirs = owner.add_client(
+            output=output,
+            input=pipe,
+            color_depth=ColorDepth.DEPTH_8_BIT,
+            connection=Connection("there", None, owner, "/dev/pts/9"),
+        )
+        opened: dict[str, list[str]] = {"here": [], "there": []}
+        for name, state in (("here", client), ("there", theirs)):
+
+            def send(packet, name=name):
+                if packet.get(Field.CMD) == Packet.OPEN:
+                    opened[name].append(packet[Field.DATA])
+
+            monkeypatch.setattr(state.connection, "send_packet", send)
+        if used_last == "here":
+            owner.client_was_used(theirs)
+            owner.peer_was_used(link)
+        else:
+            owner.peer_was_used(link)
+            owner.client_was_used(theirs)
+
+        url = "https://example.com/"
+        control = there.terminal.terminal_control
+        control.feed_output("\x1b]1337;OpenURL=:%s\x07" % (base64.b64encode(url.encode()).decode(),))
+        # The copy goes behind the URL, so once it is here the peer has
+        # had its chance to open the URL too.
+        control.feed_output("\x1b]52;c;%s\x07" % (base64.b64encode(b"behind it").decode(),))
+        await until(lambda: peer.clipboard.get_data().text == "behind it", "the copy behind the URL arrives")
+        assert opened == {used_last: [url], "there" if used_last == "here" else "here": []}
+
+
 async def test_a_link_to_itself_mirrors_nothing(two_servers):
     owner, peer, client = two_servers
     link = peer.peers.of(peer.socket_name)

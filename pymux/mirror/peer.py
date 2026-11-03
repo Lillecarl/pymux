@@ -708,7 +708,10 @@ class Peer:
             pane = self.tree.panes.get(pane_id) if isinstance(pane_id, int) else None
             if pane is not None:
                 self.tree.pymux.outward.forward_osc(
-                    pane, str(packet.get(Field.CODE, "")), str(packet.get(Field.DATA, ""))
+                    pane,
+                    str(packet.get(Field.CODE, "")),
+                    str(packet.get(Field.DATA, "")),
+                    acts=bool(packet.get(Field.ACTS, True)),
                 )
             return
         if packet.get(Field.CMD) == Packet.MIRROR_COPIED:
