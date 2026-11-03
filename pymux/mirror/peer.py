@@ -664,6 +664,9 @@ class Peer:
             self.connected = False
             self.stream = None
             self._send.close()
+            self.tree.pymux.drag_and_drop.cut_off(
+                [pane for pane in self.tree.panes.values() if not isinstance(pane.terminal, WindowWidget)]
+            )
         if refused is not None:
             self.say(None)
             return None

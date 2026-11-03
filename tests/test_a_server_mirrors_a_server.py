@@ -388,6 +388,34 @@ async def test_a_drag_a_program_there_offers_goes_through_the_terminal_here(two_
     assert owner.drag_and_drop._peer_drags == {}
 
 
+async def test_a_drop_over_a_mirror_ends_here_when_the_link_goes(two_servers, monkeypatch):
+    "The terminal is told nothing takes it, and the registration is back with the link. Lillecarl/pymux#909."
+    owner, peer, client = two_servers
+    there, here, at, heard, raw = await kitty_here(owner, peer, client, monkeypatch)
+    there.terminal.terminal_control.feed_output(dnd("t=a:i=7;text/x-mine"))
+    await until(
+        lambda: "text/x-mine" in "".join(raw), "the terminal here registers for the program's type", lambda: raw
+    )
+    peer.drag_and_drop.terminal_said(
+        client.connection, "t=m:x=%d:y=%d:X=0:Y=0:o=1;text/x-mine" % (at.xpos + 1, at.ypos + 1)
+    )
+    await until(lambda: heard, "the move reaches the program there")
+    raw.clear()
+
+    (link,) = links_of(owner)
+    link.detach_and_close()
+    await until(lambda: dnd("t=m:x=0:y=0:X=0:Y=0:o=0") in raw, "the terminal here hears nothing takes it", lambda: raw)
+    await until(
+        lambda: (
+            [part for part in raw if part.startswith(dnd("t=a;")[:-2])][-1:]
+            == [dnd("t=a;text/uri-list text/plain;charset=utf-8 text/plain text/x-mine")]
+        ),
+        "the terminal here registers for the program's type again",
+        lambda: raw,
+    )
+    assert dnd("t=a;text/uri-list text/plain;charset=utf-8 text/plain") in raw
+
+
 async def test_a_drop_on_a_pane_there_that_did_not_register_is_pasted(two_servers, monkeypatch):
     owner, peer, client = two_servers
     there, here, at, heard, raw = await kitty_here(owner, peer, client, monkeypatch)

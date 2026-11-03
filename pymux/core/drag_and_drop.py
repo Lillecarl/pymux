@@ -35,6 +35,7 @@ import hashlib
 import hmac
 import shlex
 import weakref
+from collections.abc import Iterable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, Final
@@ -638,6 +639,30 @@ class DragAndDrop:
             logger.exception("Ending the drag and drop of pane %s failed.", pane.pane_id)
 
     def _forget(self, pane: Pane) -> None:
+        self._end_over(pane)
+        # The peer's own mirror of the pane goes too, and ends what it carried.
+        self._peer_drops.pop(pane, None)
+        self._peer_drags.pop(pane, None)
+        self.sync_all()
+
+    def cut_off(self, panes: Iterable[Pane]) -> None:
+        """
+        The link to the owner of these mirrored panes went: each drop and
+        drag over them ends, and they take part in nothing until a frame
+        of the next link says what their programs registered. Never raises.
+        """
+        try:
+            for pane in panes:
+                self._end_over(pane)
+                dnd = _registration(pane)
+                if dnd is not None:
+                    dnd.register({})
+            self.sync_all()
+        except Exception:
+            logger.exception("Ending the drag and drop over a peer's panes failed.")
+
+    def _end_over(self, pane: Pane) -> None:
+        "End each terminal's drop or drag over `pane`."
         for connection, state in list(self._terminals.items()):
             if state.drop is not None and state.drop.pane is pane:
                 if state.drop.copy is not None:
@@ -650,7 +675,3 @@ class DragAndDrop:
             if state.drag is pane:
                 self._send(connection, DndPacket(DndType.DRAG_ERROR, cell_y=-1))
                 state.drag = None
-        # The peer's own mirror of the pane goes too, and ends what it carried.
-        self._peer_drops.pop(pane, None)
-        self._peer_drags.pop(pane, None)
-        self.sync_all()
