@@ -688,6 +688,9 @@ in
           # kitty's python package, whose drag and drop code judges what
           # pymux sends a terminal. Lillecarl/pymux#892.
           PYMUX_KITTY = "${kitty}/lib/kitty";
+          # The kitten that speaks kitty's file transfer to the pymux
+          # client. Lillecarl/pymux#912.
+          PYMUX_KITTEN = "${kitty}/bin/kitten";
         };
       }
       # `--durations` names what the suite spends its time on, and

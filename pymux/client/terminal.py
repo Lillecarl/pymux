@@ -50,6 +50,7 @@ from ..connection.packet_table import PacketTable
 from .base import Client
 from .browsers import Browsers
 from .downloads import save_whole
+from .kitty_terminal import KittyTerminal
 from .sending_files import SendingFiles
 from .uploads import (
     LOCAL_CLIENT_OPTIONS,
@@ -266,6 +267,9 @@ class TerminalClient(Client):
         self.tasks: anyio.abc.TaskGroup | None = None
         #: The files a pane asks for: `pymux receive`. Lillecarl/pymux#743.
         self.sending_files = SendingFiles(self)
+        #: kitty's file transfer, answered as the terminal.
+        #: Lillecarl/pymux#912.
+        self.kitty_terminal = KittyTerminal(self)
         #: One write to the terminal at a time: the socket client draws
         #: a question from a thread.
         self._terminal_lock = threading.Lock()
@@ -315,6 +319,7 @@ class TerminalClient(Client):
         # arrives.
         self.downloads.clear()
         self.sending_files.connection_started()
+        self.kitty_terminal.connection_started()
         self._send_size()
         self.send_packet(
             {
@@ -342,6 +347,7 @@ class TerminalClient(Client):
                 Field.BROWSERS: True,
                 Field.SAVES_FILES: True,
                 Field.SENDS_FILES: True,
+                Field.KITTY_TRANSFERS: True,
                 # Whether this client answers a ping. A server drops a
                 # client that stops answering, and never one that did
                 # not say it would. Lillecarl/pymux#446.
@@ -687,6 +693,10 @@ class TerminalClient(Client):
     @_PACKETS.handles(Packet.LIST_FILES)
     def _on_list_files(self, packet: Message) -> None:
         self.sending_files.listing_asked(packet)
+
+    @_PACKETS.handles(Packet.KITTY_TRANSFER)
+    def _on_kitty_transfer(self, packet: Message) -> None:
+        self.kitty_terminal.said(packet)
 
     @_PACKETS.handles(Packet.BROWSER_STOP)
     def _on_browser_stop(self, packet: Message) -> None:

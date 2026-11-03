@@ -64,14 +64,15 @@ SAID_NO = "the person said no"
 @dataclass(slots=True)
 class Asking:
     """
-    A request the person has not answered yet. `flags_after` holds the
-    keyboard flags the server asked for meanwhile.
+    A question the person has not answered yet: `decided` takes one of
+    `answers`. `flags_after` holds the keyboard flags the server asked
+    for meanwhile.
     """
 
     request: str
-    wanted: list[Wanted]
     text: str
-    grant_seconds: float
+    answers: frozenset[Answer]
+    decided: Callable[[Answer], None]
     flags_before: int | None
     flags_after: int | None = None
 
@@ -180,16 +181,35 @@ class SendingFiles:
         if self.granted() or allowed(wanted, settings.roots):
             self.send(request, wanted)
             return
-        if self.asking is not None:
-            client.send_packet(done_packet(request, BUSY))
-            return
         _rows, columns = client.size()
         text = question(pane, client.server_host(), wanted, settings.grant_seconds, Path.home(), columns)
-        self.asking = Asking(request, wanted, text, settings.grant_seconds, client.kitty_flags)
+
+        def decided(answer: Answer) -> None:
+            if answer is Answer.NO:
+                client.send_packet(done_packet(request, SAID_NO))
+                return
+            if answer is Answer.GRANT:
+                self.grant(settings.grant_seconds)
+            self.send(request, wanted)
+
+        if not self.ask(request, text, frozenset(Answer), decided):
+            client.send_packet(done_packet(request, BUSY))
+
+    def grant(self, seconds: float) -> None:
+        "Let the server read without asking, for `seconds`."
+        self.grant_until = self.clock() + seconds
+
+    def ask(self, request: str, text: str, answers: frozenset[Answer], decided: Callable[[Answer], None]) -> bool:
+        "Put a question to the person. False when another one shows: one at a time."
+        if self.asking is not None:
+            return False
+        client = self.client
+        self.asking = Asking(request, text, answers | {Answer.NO}, decided, client.kitty_flags)
         # The answer has to arrive as a plain key.
         if client.kitty_flags:
             client.set_kitty_flags(0)
         self.draw_question()
+        return True
 
     def draw_question(self) -> None:
         "Draw the question on the last row, and put the cursor back."
@@ -228,17 +248,11 @@ class SendingFiles:
         if keys.startswith(ESCAPE) and keys != ESCAPE:
             return False
         answer = answer_of(keys)
-        if answer is None:
+        if answer is None or self.asking is None or answer not in self.asking.answers:
             return True
         asking = self.stop_asking()
-        if asking is None:
-            return True
-        if answer is Answer.NO:
-            self.client.send_packet(done_packet(asking.request, SAID_NO))
-            return True
-        if answer is Answer.GRANT:
-            self.grant_until = self.clock() + asking.grant_seconds
-        self.send(asking.request, asking.wanted)
+        if asking is not None:
+            asking.decided(answer)
         return True
 
     def send(self, request: str, wanted: list[Wanted]) -> None:

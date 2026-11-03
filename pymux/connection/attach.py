@@ -96,6 +96,7 @@ def start_gui(connection: ServerConnection, packet: Message) -> None:
     connection.starts_browsers = bool(packet.get(Field.BROWSERS))
     connection.saves_files = bool(packet.get(Field.SAVES_FILES))
     connection.sends_files = bool(packet.get(Field.SENDS_FILES))
+    connection.answers_transfers = bool(packet.get(Field.KITTY_TRANSFERS))
     connection.answers_ping = bool(packet.get(Field.PINGS))
     connection.pacing.paced = bool(packet.get(Field.PACED))
     connection.environment = packet.get(Field.ENVIRONMENT) or {}

@@ -37,10 +37,14 @@ __all__ = [
     "LocalOption",
     "UploadSettings",
     "Wanted",
+    "all_under",
     "allowed",
     "answer_of",
     "done_packet",
     "expand",
+    "fitted",
+    "grant_answers",
+    "home_as_tilde",
     "inspect",
     "listed_packet",
     "listing",
@@ -241,6 +245,11 @@ def allowed(wanted: Iterable[Wanted], roots: tuple[Path, ...]) -> bool:
     return all(one.refused is not None or _under(one.path, roots) for one in wanted)
 
 
+def all_under(paths: Iterable[str], roots: tuple[Path, ...]) -> bool:
+    "Whether every path, resolved, lies under `upload-paths`. **It blocks.**"
+    return all(_under(Path(path).resolve(), roots) for path in paths)
+
+
 def size_text(size: int) -> str:
     "A size for a person: 2.1 MB."
     value = float(size)
@@ -256,7 +265,7 @@ def _shown(text: str) -> str:
     return "".join(char if char.isprintable() else "?" for char in text)
 
 
-def _home_as_tilde(path: Path, home: Path) -> str:
+def home_as_tilde(path: Path, home: Path) -> str:
     if path.is_relative_to(home):
         return str(Path("~") / path.relative_to(home))
     return str(path)
@@ -265,16 +274,26 @@ def _home_as_tilde(path: Path, home: Path) -> str:
 def question(pane: str, host: str, wanted: list[Wanted], grant_seconds: float, home: Path, columns: int) -> str:
     """
     The question, cut to fit `columns` cells. It names the file each
-    path resolved to, which is the one that would be read. The list of
-    files is what gets cut, so the answers always show.
+    path resolved to, which is the one that would be read.
     """
-    listed = _shown(
-        ", ".join(
-            "%s (%s)" % (_home_as_tilde(one.path, home), size_text(one.size)) for one in wanted if one.refused is None
-        )
+    listed = ", ".join(
+        "%s (%s)" % (home_as_tilde(one.path, home), size_text(one.size)) for one in wanted if one.refused is None
     )
-    asking = _shown("pane %s on %s asks for " % (pane, host))
-    answers = ": y once / a for %d min / n" % (grant_seconds // SECONDS_PER_MINUTE,)
+    return fitted("pane %s on %s asks for " % (pane, host), listed, grant_answers(grant_seconds), columns)
+
+
+def grant_answers(grant_seconds: float) -> str:
+    return ": y once / a for %d min / n" % (grant_seconds // SECONDS_PER_MINUTE,)
+
+
+def fitted(asking: str, listed: str, answers: str, columns: int) -> str:
+    """
+    A question cut to fit `columns` cells, with nothing in it the
+    terminal acts on. `listed` is what gets cut, so the answers always
+    show.
+    """
+    listed = _shown(listed)
+    asking = _shown(asking)
     room = columns - 1 - get_cwidth(asking) - get_cwidth(answers)
     if get_cwidth(listed) > room:
         while listed and get_cwidth(listed) > room - get_cwidth(ELLIPSIS):

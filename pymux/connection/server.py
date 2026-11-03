@@ -133,6 +133,7 @@ class ServerConnection:
         "starts_browsers": Keep.REBUILT,
         "saves_files": Keep.REBUILT,
         "sends_files": Keep.REBUILT,
+        "answers_transfers": Keep.REBUILT,
         "may_attach": Keep.REBUILT,
         "forwards": Keep.DROPPED,
         "pipe_connection": Keep.DROPPED,
@@ -267,6 +268,9 @@ class ServerConnection:
         #: requests that wait for its answer. Lillecarl/pymux#743.
         self.sends_files = False
         self.files = Files(self)
+        #: Whether this client answers kitty's file transfer as the
+        #: terminal. Lillecarl/pymux#912.
+        self.answers_transfers = False
         #: This client's sound, when it plays it. Lillecarl/pymux#657.
         self.audio: AudioLink | None = None
         #: What this connection is for, when it is not an attached
@@ -664,6 +668,10 @@ class ServerConnection:
     @_PACKETS.handles(Packet.FILES_LISTED)
     def _on_files_listed(self, packet: Message) -> None:
         self.files.listed(packet)
+
+    @_PACKETS.handles(Packet.KITTY_TRANSFER)
+    def _on_kitty_transfer(self, packet: Message) -> None:
+        self.pymux.kitty_transfers.terminal_said(self, str(packet.get(Field.DATA) or ""))
 
     @_PACKETS.handles(Packet.REDRAW)
     def _on_redraw(self, packet: Message) -> None:

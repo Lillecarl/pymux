@@ -255,6 +255,11 @@ class Packet(StrEnum):
     # `request`, to complete `pymux receive`. The client answers only
     # inside a grant or `upload-paths`.
     LIST_FILES = "list-files"
+    # Either side: one command of kitty's file transfer, OSC 5113, as it
+    # stands after `5113;`, under `data`. The server sends what the
+    # program in the pane `pane` said, and the client answers as the
+    # terminal. Lillecarl/pymux#912.
+    KITTY_TRANSFER = "kitty-transfer"
 
     # Sound, on the attached connection of a client that said `audio` in
     # `start-gui`. Lillecarl/pymux#657.
@@ -492,6 +497,9 @@ class Field(StrEnum):
     #: In `start-gui`: this client answers `send-files`. An older one
     #: drops it unread, and `pymux receive` would wait for ever.
     SENDS_FILES = "sends-files"
+    #: In `start-gui`: this client answers `kitty-transfer` as the
+    #: terminal. An older one drops it unread. Lillecarl/pymux#912.
+    KITTY_TRANSFERS = "kitty-transfers"
     #: In `send-files` and its answers: the id of the request, and the
     #: paths it asks for.
     REQUEST = "request"

@@ -3,23 +3,29 @@ kitty's file transfer protocol (OSC 5113) between the panes and the
 terminals of the clients. https://sw.kovidgoyal.net/kitty/file-transfer-protocol/.
 Lillecarl/pymux#912.
 
-**A session goes to one terminal.** A program starts one with `send` or
+**A session goes to one client.** A program starts one with `send` or
 `receive`. pymux gives it to the client a download would go to
-(`Outward.download_client`), when that client's terminal transfers
-files: kitty since 0.49.2, or any terminal under `file-transfer
-passthrough`. kitty asks the person, and its answers carry the session's
-id, which takes them back to the pane that started it. pymux keeps the
-id as it is: a bypass password is hashed with it.
+(`Outward.download_client`). When that client's terminal transfers
+files (kitty since 0.49.2, or any terminal under `file-transfer
+passthrough`), the commands go to the terminal, and kitty asks the
+person. Otherwise the pymux client is the terminal
+(`pymux.client.kitty_transfer`), and asks the person itself. Either
+way the answers carry the session's id, which takes them back to the
+pane that started it. pymux keeps the id as it is: a bypass password is
+hashed with it.
 
-A session that no terminal takes is refused, as kitty refuses one.
+A session that neither takes is refused, as kitty refuses one.
 """
 
 from __future__ import annotations
 
 import time
+from contextlib import suppress
 from dataclasses import dataclass
+from enum import Enum, auto
 from typing import TYPE_CHECKING, ClassVar, Final
 
+from libpymux.protocol import Field, Packet
 from pyte.keep import Keep
 from pyte.osc import Osc
 from pyte.screen import Screen
@@ -28,6 +34,7 @@ from pyte.sequences.strings import OscString, StringReport
 
 from ..enums import FileTransfer
 from ..log import logger
+from ..pipes.base import BrokenPipeError
 
 if TYPE_CHECKING:
     from ..connection.client_state import ClientState
@@ -49,10 +56,18 @@ _TERMINAL_GONE: Final = "EIO:the terminal of the transfer went away"
 _CANCELED: Final = "CANCELED"
 
 
+class Route(Enum):
+    "Who answers a session as the terminal."
+
+    TERMINAL = auto()
+    PYMUX_CLIENT = auto()
+
+
 @dataclass
 class _Session:
     pane: Pane
     connection: ServerConnection
+    route: Route
     #: When the program or the terminal last said something of it.
     used: float
 
@@ -72,20 +87,21 @@ class KittyTransfers:
 
     def listens(self, connection: ServerConnection) -> bool:
         "Whether OSC 5113 from this terminal is cut out of its keys: it carries a session."
-        return any(session.connection is connection for session in self._sessions.values())
+        return any(
+            session.connection is connection and session.route is Route.TERMINAL for session in self._sessions.values()
+        )
 
-    def forwards(self, client: ClientState) -> bool:
-        "Whether a session goes to this client's terminal."
+    def route_for(self, client: ClientState) -> Route | None:
+        "Who answers a session that goes to this client, or `None` for nobody."
         connection = client.connection
         if connection is None or client.temporary:
-            return False
-        match client.options.file_transfer:
-            case FileTransfer.PASSTHROUGH:
-                return True
-            case FileTransfer.PYMUX:
-                return False
-            case _:
-                return connection.replies.identity.transfers_files()
+            return None
+        chosen = client.options.file_transfer
+        if chosen is FileTransfer.PASSTHROUGH or (
+            chosen is FileTransfer.AUTO and connection.replies.identity.transfers_files()
+        ):
+            return Route.TERMINAL
+        return Route.PYMUX_CLIENT if connection.answers_transfers else None
 
     # The panes.
 
@@ -101,12 +117,14 @@ class KittyTransfers:
         self._prune(now)
         if command.action in (Action.SEND, Action.RECEIVE):
             client = self.pymux.outward.download_client(pane)
-            if client is None or client.connection is None or not self.forwards(client):
+            route = None if client is None else self.route_for(client)
+            if client is None or client.connection is None or route is None:
                 if command.quiet < _SILENT:
                     self._tell(pane, TransferCommand(Action.STATUS, id=command.id, status=_REFUSED))
                 return
-            self._sessions[(client.connection, command.id)] = _Session(pane, client.connection, now)
-            self._send(client.connection, command)
+            session = _Session(pane, client.connection, route, now)
+            self._sessions[(client.connection, command.id)] = session
+            self._send(session, command)
             return
         session = next(
             (
@@ -119,19 +137,19 @@ class KittyTransfers:
         if session is None:
             return
         session.used = now
-        self._send(session.connection, command)
+        self._send(session, command)
 
     def forget(self, pane: Pane) -> None:
         "A pane's program ended: its sessions end, and each terminal is told to drop its own."
         for key, session in list(self._sessions.items()):
             if session.pane is pane:
                 del self._sessions[key]
-                self._send(session.connection, TransferCommand(Action.CANCEL, id=key[1]))
+                self._send(session, TransferCommand(Action.CANCEL, id=key[1]))
 
     # The terminals.
 
     def terminal_said(self, connection: ServerConnection, param: str) -> None:
-        "One OSC 5113 command from a client's terminal, after its code. Never raises."
+        "One OSC 5113 command from a client's terminal or from the pymux client, after its code. Never raises."
         try:
             command = TransferCommand.decode(param)
         except Malformed:
@@ -161,10 +179,21 @@ class KittyTransfers:
             if now - session.used > IDLE_SECONDS:
                 del self._sessions[key]
 
-    def _send(self, connection: ServerConnection, command: TransferCommand) -> None:
-        "Write one command to a terminal now: a transfer waits for no frame."
-        connection.write_output_raw(str(command))
-        connection.flush_output()
+    def _send(self, session: _Session, command: TransferCommand) -> None:
+        "Give one command to whoever answers the session now: a transfer waits for no frame."
+        connection = session.connection
+        if session.route is Route.TERMINAL:
+            connection.write_output_raw(str(command))
+            connection.flush_output()
+            return
+        with suppress(BrokenPipeError):
+            connection.send_packet(
+                {
+                    Field.CMD: Packet.KITTY_TRANSFER,
+                    Field.DATA: command.param(),
+                    Field.PANE: "%%%d" % (session.pane.pane_id,),
+                }
+            )
 
     def _tell(self, pane: Pane, answer: StringReport) -> None:
         "Write one command to a pane's program. A program that has gone hears nothing."
