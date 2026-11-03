@@ -67,7 +67,7 @@ from .names import (
     key_named,
     with_alt,
 )
-from .replies import TERMINAL_REPLY, pixels_to_cells, reply_of
+from .replies import TERMINAL_REPLY, is_leave, pixels_to_cells, reply_of
 
 __all__ = ["MAX_KEYS_TO_REMEMBER", "MAX_STRING_LENGTH", "KittyVt100Parser", "logger", "parse_kitty_key"]
 
@@ -290,7 +290,8 @@ class KittyVt100Parser(Vt100Parser):
         self.pixel_cell = pixel_cell
         #: Where in its cell the last mouse report was, as fractions.
         self.pointer_fraction = (0.5, 0.5)
-        #: The cell of the last mouse report, column and row from 0.
+        #: The cell of the last mouse report, column and row from 0, or
+        #: None once the pointer left the window.
         self.pointer_cell: tuple[int, int] | None = None
         #: Called after each mouse report, before a handler reads it.
         self.pointer_moved = pointer_moved
@@ -415,6 +416,13 @@ class KittyVt100Parser(Vt100Parser):
         if key is TERMINAL_REPLY or key is Keys.CPRResponse:
             if self.reply_callback is not None:
                 self.reply_callback(insert_text)
+            return
+        if key is Keys.Vt100MouseEvent and is_leave(insert_text):
+            # kitty's report that the pointer left the window: no cell
+            # is under it, and no handler reads it.
+            self.pointer_cell = None
+            if self.pointer_moved is not None:
+                self.pointer_moved()
             return
         if key is Keys.Vt100MouseEvent and self.pixel_cell is not None:
             cell = self.pixel_cell()

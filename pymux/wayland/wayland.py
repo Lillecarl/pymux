@@ -566,6 +566,14 @@ class WaylandServer:
                     compositor.focus(toplevel)
                 compositor.pointer_button(button, pressed, time)
 
+    def pointer_leave(self, toplevel: int, time: int) -> None:
+        "The pointer left the pane of this window: its surface gets a leave."
+        compositor = self.compositor
+        if compositor is None:
+            return
+        with contextlib.suppress(KeyError):
+            compositor.pointer_leave(toplevel, time)
+
     def scroll(
         self, toplevel: int, position: Point, steps: int, time: int, fraction: tuple[float, float] | None = None
     ) -> None:

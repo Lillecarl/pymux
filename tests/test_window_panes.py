@@ -779,6 +779,53 @@ async def test_the_terminal_shows_the_pointer_the_window_asks_for(tmp_path):
         assert pane.screen.pointer_shapes.shape == "text"
 
 
+async def test_a_pointer_that_moves_off_the_pane_leaves_the_window(tmp_path):
+    "Lillecarl/pymux#899."
+    async with with_a_window(tmp_path) as (pymux, state, pane, _recorder, log, _probe):
+        await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
+        pymux.session_defaults.mouse = True
+        where = await once(
+            lambda: state.layout_manager.pane_write_positions.get(pane), 10.0, "the pane was never drawn"
+        )
+        state.connection._process({"cmd": "in", "data": "\x1b[<35;%d;%dM" % (where.xpos + 4, where.ypos + 2)})
+        state.connection._process({"cmd": "in", "data": "\x1b[<35;%d;%dM" % (where.xpos + 5, where.ypos + 2)})
+        # The second move is inside the pane too, so it is no leave.
+        width, height = pymux.terminals.cell_size()
+        second = "motion %d %d" % (4.5 * width, 1.5 * height)
+        await once(lambda: second in logged(log), 10.0, lambda: "no second move: %s" % logged(log)[-6:])
+        assert "leave" not in logged(log)
+        below = where.ypos + where.height
+        state.connection._process({"cmd": "in", "data": "\x1b[<35;%d;%dM" % (where.xpos + 4, below + 1)})
+        await once(lambda: "leave" in logged(log), 10.0, lambda: "no leave: %s" % logged(log)[-6:])
+
+
+async def test_a_pointer_that_leaves_the_terminal_leaves_the_window(tmp_path):
+    "kitty's leave report, in SGR pixel mode. Lillecarl/pymux#899."
+    async with with_a_window(tmp_path, cell=(10, 20)) as (pymux, state, pane, recorder, log, _probe):
+        await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
+        pymux.session_defaults.mouse = True
+        state.connection.graphics.terminal_version = "kitty(0.49.2)"
+        state.connection._process({Field.CMD: Packet.DETECT})
+        await once(lambda: "\x1b[?1016$p" in recorder.out, 10.0, "the terminal was never asked")
+        state.connection._process({"cmd": "in", "data": "\x1b[?1016;2$y"})
+        await once(lambda: "\x1b[?1016h" in recorder.out, 10.0, "pixel mode was never turned on")
+        where = await once(
+            lambda: state.layout_manager.pane_write_positions.get(pane), 10.0, "the pane was never drawn"
+        )
+        x, y = (where.xpos + 3) * 10 + 7, where.ypos * 20 + 13
+        # The first move is the window's enter, and the second its motion.
+        for across in (x, x + 1):
+            state.connection._process({"cmd": "in", "data": "\x1b[<35;%d;%dM" % (across, y)})
+        await once(
+            lambda: any(line.startswith("motion") for line in logged(log)),
+            10.0,
+            lambda: "no motion arrived: %s" % logged(log)[-6:],
+        )
+        state.connection._process({"cmd": "in", "data": "\x1b[<%d;%d;%dM" % (256 | 32, x, y)})
+        await once(lambda: "leave" in logged(log), 10.0, lambda: "no leave: %s" % logged(log)[-6:])
+        assert state.connection.pointer_cell is None
+
+
 @pytest.mark.parametrize("scroll", list(WindowScroll))
 async def test_a_scroll_reaches_the_window_as_the_client_says(tmp_path, scroll):
     "One cell of pixels for `smooth`, one wheel notch for `notch`. Lillecarl/pymux#652."

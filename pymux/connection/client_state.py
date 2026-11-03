@@ -52,6 +52,8 @@ from .frame_holds import FrameHolds
 from .lookups import Lookups
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from prompt_toolkit.input import Input
     from prompt_toolkit.layout.containers import AnyContainer
     from prompt_toolkit.layout.screen import WritePosition
@@ -156,6 +158,7 @@ class ClientState:
         "has_prefix": Keep.SAVED,
         "url_mode": Keep.DROPPED,
         "border_drag": Keep.DROPPED,
+        "pointer_left": Keep.DROPPED,
         "key_tables": Keep.SAVED,
         "message": Keep.SAVED,
         "confirmations": Keep.SAVED,
@@ -267,6 +270,10 @@ class ClientState:
         #: The line between two panes this client is dragging, from the
         #: press to the release. Lillecarl/pymux#772.
         self.border_drag: BorderDrag | None = None
+
+        #: What to call when the pointer leaves what it is over: a
+        #: window pane's `pointer_left`. Lillecarl/pymux#899.
+        self.pointer_left: Callable[[], None] | None = None
 
         #: Ticks of the input this client sent against ticks of the
         #: frames it asked for. A redraw is scheduled, and input

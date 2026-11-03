@@ -6,8 +6,9 @@ button it receives to the file named on its command line. With
 writes "frame" for each. With `--idle` it commits nothing but a frame
 callback instead, as Firefox does to wait for the next frame, and
 writes "idle" each time one is answered. Each time the pointer enters,
-it asks for a text pointer. With `--text` it takes text through text
-input while it has the keyboard, and writes "text <string>" for each.
+it asks for a text pointer, and it writes "leave" each time the pointer
+leaves. With `--text` it takes text through text input while it has
+the keyboard, and writes "text <string>" for each.
 
 It stays up until it is asked to close, which is what a window pane
 does to a window when the pane is killed.
@@ -52,6 +53,7 @@ def main(log_path: str, animate: bool, idle: bool, text: bool) -> None:
     keyboard.dispatcher["key"] = lambda _k, _serial, _time, key, state: log.write("key %d %d\n" % (key, state))
     pointer = seat.get_pointer()
     pointer.dispatcher["motion"] = lambda _p, _time, x, y: log.write("motion %d %d\n" % (x, y))
+    pointer.dispatcher["leave"] = lambda _p, _serial, _surface: log.write("leave\n")
     pointer.dispatcher["button"] = lambda _p, _serial, _time, button, state: log.write(
         "button %d %d\n" % (button, state)
     )

@@ -306,7 +306,7 @@ class ServerConnection:
             # Lillecarl/pymux#182.
             speaks_protocol=self.replies.keyboard_is_supported,
             pixel_cell=self.replies.pixel_cell,
-            pointer_moved=lambda: self.pymux.terminals.sync_pointer_shape_of(self),
+            pointer_moved=lambda: self.pymux.terminals.pointer_moved(self),
         )
 
         # The shape of the pointer that this client was told about. A

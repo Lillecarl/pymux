@@ -134,6 +134,24 @@ class Terminals:
         except Exception:
             logger.exception("Sending the shape of the pointer failed.")
 
+    def pointer_moved(self, connection: ServerConnection) -> None:
+        """
+        One client's pointer moved, or left the window of its terminal.
+        What it was over is told that it left, when it asked to be told,
+        and the pointer takes the shape of what it is over now.
+        Lillecarl/pymux#899.
+        """
+        client_state = self.pymux._client_states.get(connection)
+        if client_state is not None:
+            left = getattr(self._handler_under(connection, client_state), "pointer_left", None)
+            previous, client_state.pointer_left = client_state.pointer_left, left
+            if previous is not None and previous != left:
+                try:
+                    previous()
+                except Exception:
+                    logger.exception("Telling a pane that the pointer left it failed.")
+        self.sync_pointer_shape_of(connection)
+
     def sync_pointer_shape_of(self, connection: ServerConnection) -> None:
         "The same for one client, whose pointer moved."
         client_state = self.pymux._client_states.get(connection)
@@ -156,14 +174,19 @@ class Terminals:
         drag = client_state.border_drag
         if drag is not None:
             return drag.seam.pointer_shape
-        cell = connection.pointer_cell
-        if cell is not None:
-            column, row = cell
-            handlers = client_state.app.renderer.mouse_handlers.mouse_handlers.get(row)
-            shape = getattr(handlers.get(column) if handlers is not None else None, "pointer_shape", None)
-            if shape:
-                return shape
+        shape = getattr(self._handler_under(connection, client_state), "pointer_shape", None)
+        if shape:
+            return shape
         return pointer_shape_of(self.pymux.focus.pane_of(client_state))
+
+    def _handler_under(self, connection: ServerConnection, client_state: ClientState) -> object | None:
+        "The mouse handler under the client's pointer, or None outside its window."
+        cell = connection.pointer_cell
+        if cell is None:
+            return None
+        column, row = cell
+        handlers = client_state.app.renderer.mouse_handlers.mouse_handlers.get(row)
+        return handlers.get(column) if handlers is not None else None
 
     def sync_progress(self) -> None:
         """

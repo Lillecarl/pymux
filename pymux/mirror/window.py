@@ -255,6 +255,9 @@ class RemoteWindow:
     def scroll(self, toplevel: int, position: Point, steps: int, time: int) -> None:
         self._input({"kind": "scroll", **self._at(position), "steps": steps})
 
+    def pointer_leave(self, toplevel: int, time: int) -> None:
+        self._input({"kind": "leave"})
+
 
 def _bounds(rects: Iterable[tuple[Any, ...]]) -> tuple[int, int, int, int] | None:
     "The box around rectangles that start `(x, y, w, h)`, or None for none."

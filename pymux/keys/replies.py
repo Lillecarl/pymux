@@ -12,7 +12,7 @@ from __future__ import annotations
 from pyte.sequences.replies import parse_reply
 from pyte.sequences.reports import CursorPositionReport, SgrMouseReport
 
-__all__ = ["TERMINAL_REPLY", "pixels_to_cells", "reply_of"]
+__all__ = ["TERMINAL_REPLY", "is_leave", "pixels_to_cells", "reply_of"]
 
 
 #: The key a terminal reply arrives as. None of them is a key event,
@@ -24,6 +24,12 @@ TERMINAL_REPLY = object()
 #: The button bit of a report SGR pixel mode adds: the pointer left the
 #: window. kitty's `mouse.c`, `LEAVE_INDICATOR`.
 _LEAVE_BIT = 1 << 8
+
+
+def is_leave(report: str) -> bool:
+    "Whether this mouse report says the pointer left the window. Lillecarl/pymux#899."
+    parsed = SgrMouseReport.parse(report)
+    return parsed is not None and bool(parsed.button & _LEAVE_BIT)
 
 
 def pixels_to_cells(report: str, width: int, height: int, origin: int) -> tuple[str, float, float] | None:

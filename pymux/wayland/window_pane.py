@@ -58,6 +58,7 @@ class WindowHost(Protocol):
     def type_text(self, toplevel: int, text: str) -> bool: ...
     def pointer(self, toplevel: int, position: Point, button: int | None, pressed: bool, time: int) -> None: ...
     def scroll(self, toplevel: int, position: Point, steps: int, time: int) -> None: ...
+    def pointer_leave(self, toplevel: int, time: int) -> None: ...
     def frame(self, toplevel: int) -> tuple[int, int, bytes] | None: ...
     async def drawn_again(self, toplevels: Iterable[int], timeout: float) -> None: ...
     def view_of(
@@ -339,25 +340,42 @@ class _PaneWindow(Window):
     ) -> None:
         super()._write_to_screen_at_index(screen, mouse_handlers, write_position, parent_style, erase_bg)
         control = self.content
+        assert isinstance(control, WindowControl)
         left, top = write_position.xpos, write_position.ypos
-
-        def handler(mouse_event: MouseEvent) -> None:
-            position = Point(x=mouse_event.position.x - left, y=mouse_event.position.y - top)
-            control.mouse_handler(
-                MouseEvent(
-                    position=position,
-                    event_type=mouse_event.event_type,
-                    button=mouse_event.button,
-                    modifiers=mouse_event.modifiers,
-                )
-            )
-
         mouse_handlers.set_mouse_handler_for_range(
             x_min=left,
             x_max=left + write_position.width,
             y_min=top,
             y_max=top + write_position.height,
-            handler=handler,
+            handler=_PaneHandler(control, left, top),
+        )
+
+
+class _PaneHandler:
+    """
+    The mouse handler of a window pane: an event goes to the control at
+    its cell in the pane. `Terminals.pointer_moved` calls `pointer_left`
+    when the pointer moves off the pane. Lillecarl/pymux#899.
+    """
+
+    __slots__ = ("control", "left", "pointer_left", "top")
+
+    def __init__(self, control: WindowControl, left: int, top: int) -> None:
+        self.control = control
+        self.left = left
+        self.top = top
+        # The widget's own method, so that the handler of the next frame
+        # compares equal and moving inside the pane is no leave.
+        self.pointer_left = control.widget.pointer_left
+
+    def __call__(self, mouse_event: MouseEvent) -> None:
+        self.control.mouse_handler(
+            MouseEvent(
+                position=Point(x=mouse_event.position.x - self.left, y=mouse_event.position.y - self.top),
+                event_type=mouse_event.event_type,
+                button=mouse_event.button,
+                modifiers=mouse_event.modifiers,
+            )
         )
 
 
@@ -440,6 +458,10 @@ class WindowWidget:
         released = event.event_type == MouseEventType.MOUSE_UP
         button = _BUTTONS.get(event.button) if (pressed or released) else None
         self.host.pointer(self.toplevel, event.position, button, pressed, now())
+
+    def pointer_left(self) -> None:
+        "The pointer moved off the pane: the window under it gets a leave."
+        self.host.pointer_leave(self.toplevel, now())
 
 
 def is_window_pane(pane: Pane) -> bool:

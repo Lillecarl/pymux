@@ -140,6 +140,8 @@ class MirrorWindowSource:
             host.press(widget.toplevel, modifiers, int(data.get("code", 0)), now())
         elif kind == "text":
             host.type_text(widget.toplevel, str(data.get("text", "")))
+        elif kind == "leave":
+            host.pointer_leave(widget.toplevel, now())
         elif kind in ("pointer", "scroll"):
             x, y = float(data.get("x", 0)), float(data.get("y", 0))
             cell = Point(x=int(x), y=int(y))

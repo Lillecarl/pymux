@@ -793,6 +793,19 @@ def test_a_leave_is_dropped():
     assert pixels_to_cells("\x1b[<%d;5;5M" % (256 | 32 | 3), 10, 20, 0) is None
 
 
+def test_a_leave_takes_the_pointer_off_every_cell():
+    "kitty's leave report reaches no handler, and says where the pointer is not. Lillecarl/pymux#899."
+    pressed = []
+    moved = []
+    parser = KittyVt100Parser(pressed.append, pixel_cell=lambda: (10, 20, 0), pointer_moved=lambda: moved.append(1))
+    parser.feed_and_flush("\x1b[<35;37;33M")
+    assert parser.pointer_cell == (3, 1)
+    parser.feed_and_flush("\x1b[<%d;37;33M" % (256 | 32))
+    assert parser.pointer_cell is None
+    assert len(moved) == 2
+    assert [key_press.data for key_press in pressed if key_press.key == Keys.Vt100MouseEvent] == ["\x1b[<35;4;2M"]
+
+
 def test_the_parser_reads_pixels_only_while_told_the_cell():
     pressed = []
     cell = [None]
