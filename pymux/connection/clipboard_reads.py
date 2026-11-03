@@ -27,6 +27,7 @@ __all__ = ["ClipboardReader"]
 _CLIPBOARD_REPLY = OSC + Osc.CLIPBOARD + ";"
 _KITTY_CLIPBOARD_REPLY = OSC + Osc.KITTY_CLIPBOARD + ";"
 _KITTY_DND_REPLY = OSC + Osc.KITTY_DND + ";"
+_FILE_TRANSFER_REPLY = OSC + Osc.FILE_TRANSFER + ";"
 
 #: How long a terminal has to answer a clipboard query, in seconds. A
 #: paste waits this long once; a terminal that lets it pass is not asked
@@ -108,7 +109,9 @@ class ClipboardReader:
         only once a query went out: nothing typed begins "ESC ] 52 ;".
         kitty's OSC 5522 packets are cut the same way, from a terminal
         that speaks it, and go to `RichClipboard.terminal_said`; its OSC
-        72 packets, once asked, to `DragAndDrop.terminal_said`.
+        72 packets, once asked, to `DragAndDrop.terminal_said`; its OSC
+        5113 commands, while it carries a session, to
+        `KittyTransfers.terminal_said`.
         """
         prefixes = []
         if self._asked:
@@ -120,6 +123,9 @@ class ClipboardReader:
         # kitty's drag and drop, once asked. Lillecarl/pymux#892.
         if self.connection.pymux.drag_and_drop.is_asked(self.connection):
             prefixes.append(_KITTY_DND_REPLY)
+        # kitty's file transfer, while a session runs. Lillecarl/pymux#912.
+        if self.connection.pymux.kitty_transfers.listens(self.connection):
+            prefixes.append(_FILE_TRANSFER_REPLY)
         if not prefixes and not self._partial:
             return data
         data = self._partial + data
@@ -139,6 +145,8 @@ class ClipboardReader:
             self.connection.pymux.rich_clipboard.terminal_said(self.connection, data[body:end])
         elif prefix == _KITTY_DND_REPLY:
             self.connection.pymux.drag_and_drop.terminal_said(self.connection, data[body:end])
+        elif prefix == _FILE_TRANSFER_REPLY:
+            self.connection.pymux.kitty_transfers.terminal_said(self.connection, data[body:end])
         else:
             self._answered(data[body:end])
         return data[:start] + self.take_answer(data[end + length :])

@@ -196,7 +196,8 @@ class ClientOptions(Options):
         FileTransfer.AUTO,
         doc=(
             "Who saves a file a pane sends to the person: this terminal, or the pymux client on the "
-            "person's machine. Lillecarl/pymux#743."
+            "person's machine. Also whether kitty's file transfer, OSC 5113, goes on to this terminal. "
+            "Lillecarl/pymux#743, Lillecarl/pymux#912."
         ),
     )
     notification_popups: NotificationPopups = option(

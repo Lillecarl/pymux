@@ -58,6 +58,7 @@ from .environment import take_environment_from
 from .focus import Focus
 from .forward_requests import ForwardRequests
 from .hooks import Hooks
+from .kitty_transfers import KittyTransfers
 from .outward import Outward
 from .overlays import Overlays
 from .pane import Pane
@@ -166,6 +167,7 @@ class Pymux:
         "outward": Keep.REBUILT,
         "rich_clipboard": Keep.REBUILT,
         "drag_and_drop": Keep.REBUILT,
+        "kitty_transfers": Keep.REBUILT,
         "notifier": Keep.REBUILT,
         "panes": Keep.REBUILT,
         "serving": Keep.REBUILT,
@@ -292,6 +294,7 @@ class Pymux:
         self.outward = Outward(self)
         self.rich_clipboard = RichClipboard(self)
         self.drag_and_drop = DragAndDrop(self)
+        self.kitty_transfers = KittyTransfers(self)
         #: The links to other servers whose panes this one mirrors.
         #: Lillecarl/pymux#759.
         self.peers = Peers(self)
@@ -1336,6 +1339,7 @@ class Pymux:
         if connection in self.connections:
             self.connections.remove(connection)
             self.counters.client_left(connection.pipe_connection)
+        self.kitty_transfers.client_gone(connection)
         if gone is not None:
             self.browsers.client_gone(gone)
             self.focus.sync_panes()

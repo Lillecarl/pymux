@@ -55,6 +55,11 @@ class KnownTerminal:
     #: Whether it saves an iTerm2 download. Ghostty parses one and drops
     #: it (`src/terminal/osc/parsers/iterm2.zig`). Lillecarl/pymux#746.
     saves_downloads: bool = False
+    #: The first version pymux sends kitty's file transfer, OSC 5113.
+    #: kitty 0.49.2 stopped a remote program from skipping its
+    #: confirmation, and the program in a pane is remote to it.
+    #: Lillecarl/pymux#912.
+    file_transfer: Version | None = None
     #: The number of the first pixel in a mouse report in pixels.
     #: Lillecarl/pymux#648.
     first_pixel: int = 1
@@ -71,6 +76,7 @@ TERMINALS: Final = (
         terms=frozenset({"xterm-kitty"}),
         placeholders=(0, 28, 0),
         progress=(0, 44, 0),
+        file_transfer=(0, 49, 2),
         first_pixel=0,
         key_profile="kitty",
     ),
@@ -168,6 +174,9 @@ class Identity(NamedTuple):
 
     def draws_progress(self) -> bool:
         return self.known is not None and self._since(self.known.progress)
+
+    def transfers_files(self) -> bool:
+        return self.known is not None and self._since(self.known.file_transfer)
 
     @property
     def notification_osc(self) -> Osc | None:
