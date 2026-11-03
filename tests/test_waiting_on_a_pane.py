@@ -172,15 +172,17 @@ async def test_quiet_waits_until_output_stops(pymux):
     async def feed() -> None:
         for _ in range(6):
             arrives(pane, ".")
+            # Stamped at the arrival: a stamp after the sleep loses any
+            # overrun of it from the margin.
+            times["last"] = anyio.current_time()
             await anyio.sleep(0.05)
-        times["last"] = anyio.current_time()
 
     await while_feeding(pymux, waiting, answer, feed)
     times["answered"] = anyio.current_time()
 
     assert answer.output == []
     assert answer.exit_code in (None, 0)
-    assert times["answered"] - times["last"] >= 0.1
+    assert times["answered"] - times["last"] >= 0.15
 
 
 async def test_a_quiet_longer_than_the_timeout_is_refused(pymux):
