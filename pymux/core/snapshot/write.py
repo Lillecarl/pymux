@@ -146,6 +146,12 @@ class Snapshot:
         # sqlite gives its journal the file's mode.
         os.close(os.open(self.partial, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600))
         self.db = apsw.Connection(str(self.partial))
+        # No sync per commit: `finish` syncs the whole file before the
+        # rename, and a crash throws the partial file away. Each of the
+        # schema's tables was a commit of its own, and under a loaded
+        # disk those fsyncs took 9 s of an upgrade. Lillecarl/pymux#923.
+        # The journal stays, in memory, so a failed write still rolls back.
+        self.db.execute("PRAGMA synchronous = OFF; PRAGMA journal_mode = MEMORY")
         self.db.execute(SCHEMA)
         self.db.execute("PRAGMA user_version = %d" % SNAPSHOT_VERSION)
         self.freezers: dict[int, Freezer] = {}
