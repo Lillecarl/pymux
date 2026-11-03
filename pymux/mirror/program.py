@@ -159,6 +159,16 @@ class RemoteProgram:
         if not self._stopped:
             self.peer.dnd(self.pane_id, packet.param())
 
+    def kitty_transfer(self, param: str) -> None:
+        "An OSC 5113 command for the program, from a terminal here (`KittyTransfers._tell`)."
+        if not self._stopped:
+            self.peer.kitty_transfer(self.pane_id, param)
+
+    def kitty_transfer_taken(self, session_id: str) -> None:
+        "Ask the owner when the program took what session `session_id` sent it (`KittyTransfers.taken`)."
+        if not self._stopped:
+            self.peer.kitty_transfer_taken(self.pane_id, session_id)
+
     def copy_mode(self, at: Place | None = None) -> None:
         "Copy mode runs on the owner, which holds the history (`Mirror.copy_mode`)."
         if not self._stopped:

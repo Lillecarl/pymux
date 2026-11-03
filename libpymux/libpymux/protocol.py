@@ -37,6 +37,7 @@ __all__ = [
     "OLDEST_PEER_VERSION",
     "PEER_ACTS",
     "PEER_DND",
+    "PEER_FILE_TRANSFER",
     "PEER_PINGS",
     "PEER_RICH_CLIPBOARD",
     "PEER_VERSION",
@@ -68,7 +69,7 @@ READ_SIZE = 1 << 20
 #: one misreads it raises `PEER_VERSION`; one that stops speaking the
 #: older form raises `OLDEST_PEER_VERSION` too. Every field is named
 #: and has a default, so most changes need neither. Lillecarl/pymux#759.
-PEER_VERSION = 7
+PEER_VERSION = 8
 OLDEST_PEER_VERSION = 1
 
 #: From this version a frame may name an image the peer stored by its
@@ -99,6 +100,11 @@ PEER_RICH_CLIPBOARD = 6
 #: kitty's drag and drop, under `dnd`, and its OSC 72 packets cross as
 #: `mirror-dnd`. Lillecarl/pymux#903.
 PEER_DND = 7
+
+#: From this version a mirrored pane's kitty file transfer (OSC 5113)
+#: crosses as `mirror-kitty-transfer`, and its pacing as
+#: `mirror-kitty-transfer-taken`. Lillecarl/pymux#912.
+PEER_FILE_TRANSFER = 8
 
 
 def peer_upgrade(version: object, oldest: object) -> str | None:
@@ -402,6 +408,13 @@ class Packet(StrEnum):
     # its code, under `data`: from the peer's terminal to the pane's
     # program, and back.
     MIRROR_DND = "mirror-dnd"
+    # One OSC 5113 command of a mirrored pane, after its code, under
+    # `data`: from the pane's program to the peer, and the answers of the
+    # peer's terminal back.
+    MIRROR_KITTY_TRANSFER = "mirror-kitty-transfer"
+    # A session's id under `data`: the peer asks when the pane's program
+    # has taken what it was sent, and the owner answers with the same.
+    MIRROR_KITTY_TRANSFER_TAKEN = "mirror-kitty-transfer-taken"
     # "That pane is not mirrored": there is none, under `error`.
     MIRROR_REFUSED = "mirror-refused"
 

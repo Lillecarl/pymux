@@ -248,6 +248,30 @@ class PeerLink:
         if source is not None:
             self.connection.pymux.drag_and_drop.peer_said(self, source.pane, str(packet.get(Field.DATA, "")))
 
+    def pane_transfer(self, pane: Pane, param: str) -> None:
+        "One OSC 5113 command of a pane's program, for the session a terminal at the peer answers."
+        if self.hears(pane):
+            self.queue({Field.CMD: Packet.MIRROR_KITTY_TRANSFER, Field.PANE_ID: int(pane.pane_id), Field.DATA: param})
+
+    @_PACKETS.handles(Packet.MIRROR_KITTY_TRANSFER)
+    def _on_kitty_transfer(self, packet: Message) -> None:
+        if self._driven(packet) is not None:
+            self.connection.pymux.kitty_transfers.terminal_said(self.connection, str(packet.get(Field.DATA, "")))
+
+    @_PACKETS.handles(Packet.MIRROR_KITTY_TRANSFER_TAKEN)
+    def _on_kitty_transfer_taken(self, packet: Message) -> None:
+        source = self._source_of(packet)
+        if source is not None:
+            self.connection.spawn(
+                self.connection.pymux.kitty_transfers.taken_for_peer(self, source.pane, str(packet.get(Field.DATA, "")))
+            )
+
+    def pane_took(self, pane: Pane, session_id: str) -> None:
+        "Say the pane's program took what the peer's session sent it."
+        self.queue(
+            {Field.CMD: Packet.MIRROR_KITTY_TRANSFER_TAKEN, Field.PANE_ID: int(pane.pane_id), Field.DATA: session_id}
+        )
+
     @_PACKETS.handles(Packet.MIRROR_CLIPBOARD_ANSWER)
     def _on_clipboard_answer(self, packet: Message) -> None:
         self.connection.pymux.rich_clipboard.peer_answered(self, str(packet.get(Field.DATA, "")))

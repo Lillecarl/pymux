@@ -16,6 +16,12 @@ hashed with it.
 
 A session that neither takes is refused, as kitty refuses one.
 
+**A mirrored pane's session can go to a peer** (`Route.PEER`): the
+server whose person used a mirror of the pane after every client here
+(`Outward.peer_used_after`). The peer serves it as a pane of its own,
+and its answers come back over the link. So do its questions of pace:
+the peer asks, and this side answers once the program took what came.
+
 **A file the terminal sends waits in the terminal.** Past `HOLD_BYTES`
 that the pane's program has not read, the server tells the client to
 stop reading its terminal (`Packet.HOLD_INPUT`), and kitty, whose child
@@ -33,7 +39,7 @@ from enum import Enum, auto
 from typing import TYPE_CHECKING, ClassVar, Final
 
 import anyio
-from libpymux.protocol import Field, Packet
+from libpymux.protocol import PEER_FILE_TRANSFER, Field, Packet
 from ptyhost.process import Process
 from pyte.keep import Keep
 from pyte.osc import Osc
@@ -43,11 +49,13 @@ from pyte.sequences.strings import OscString, StringReport
 
 from ..enums import FileTransfer
 from ..log import logger
+from ..mirror.program import RemoteProgram
 from ..pipes.base import BrokenPipeError
 
 if TYPE_CHECKING:
     from ..connection.client_state import ClientState
     from ..connection.server import ServerConnection
+    from ..mirror.link import PeerLink
     from .main import Pymux
     from .pane import Pane
 
@@ -77,6 +85,7 @@ class Route(Enum):
 
     TERMINAL = auto()
     PYMUX_CLIENT = auto()
+    PEER = auto()
 
 
 @dataclass
@@ -96,6 +105,7 @@ class KittyTransfers:
         # A transfer in flight is lost with its connection.
         "_sessions": Keep.DROPPED,
         "_held": Keep.DROPPED,
+        "_owner_takes": Keep.DROPPED,
     }
 
     def __init__(self, pymux: Pymux) -> None:
@@ -103,6 +113,8 @@ class KittyTransfers:
         self._sessions: dict[tuple[ServerConnection, str], _Session] = {}
         #: The connections told to stop reading their terminal.
         self._held: set[ServerConnection] = set()
+        #: What waits, on a peer, for the owner to say a mirrored pane's program took a part.
+        self._owner_takes: dict[tuple[Pane, str], anyio.Event] = {}
 
     def listens(self, connection: ServerConnection) -> bool:
         "Whether OSC 5113 from this terminal is cut out of its keys: it carries a session."
@@ -136,6 +148,12 @@ class KittyTransfers:
         self._prune(now)
         if command.action in (Action.SEND, Action.RECEIVE):
             client = self.pymux.outward.download_client(pane)
+            link = self.pymux.outward.peer_used_after(pane, client, PEER_FILE_TRANSFER)
+            if link is not None:
+                session = _Session(pane, link.connection, Route.PEER, now)
+                self._sessions[(link.connection, command.id)] = session
+                self._send(session, command)
+                return
             route = None if client is None else self.route_for(client)
             if client is None or client.connection is None or route is None:
                 if command.quiet < _SILENT:
@@ -160,6 +178,8 @@ class KittyTransfers:
 
     def forget(self, pane: Pane) -> None:
         "A pane's program ended: its sessions end, and each terminal is told to drop its own."
+        for key in [key for key in self._owner_takes if key[0] is pane]:
+            self._owner_takes.pop(key).set()
         for key, session in list(self._sessions.items()):
             if session.pane is pane:
                 del self._sessions[key]
@@ -191,11 +211,30 @@ class KittyTransfers:
     async def taken(self, connection: ServerConnection, session_id: str) -> None:
         "Answer the pymux client once the session's program holds every part it sent."
         session = self._sessions.get((connection, session_id))
-        process = None if session is None else session.pane.process
-        if isinstance(process, Process):
-            await process.input_written()
+        if session is not None:
+            await self._program_took(session.pane, session_id)
         with suppress(BrokenPipeError):
             connection.send_packet({Field.CMD: Packet.KITTY_TRANSFER_TAKEN, Field.DATA: session_id})
+
+    async def taken_for_peer(self, link: PeerLink, pane: Pane, session_id: str) -> None:
+        "Answer a peer once the program of `pane`, which it mirrors, holds every part the peer sent."
+        await self._program_took(pane, session_id)
+        link.pane_took(pane, session_id)
+
+    def owner_took(self, pane: Pane, session_id: str) -> None:
+        "The owner of a pane mirrored here says its program took what came (`taken`)."
+        took = self._owner_takes.pop((pane, session_id), None)
+        if took is not None:
+            took.set()
+
+    async def _program_took(self, pane: Pane, session_id: str) -> None:
+        process = pane.process
+        if isinstance(process, Process):
+            await process.input_written()
+        elif isinstance(process, RemoteProgram):
+            took = self._owner_takes.setdefault((pane, session_id), anyio.Event())
+            process.kitty_transfer_taken(session_id)
+            await took.wait()
 
     def _pace(self, key: tuple[ServerConnection, str], session: _Session) -> None:
         process = session.pane.process
@@ -244,6 +283,10 @@ class KittyTransfers:
     def _send(self, session: _Session, command: TransferCommand) -> None:
         "Give one command to whoever answers the session now: a transfer waits for no frame."
         connection = session.connection
+        if session.route is Route.PEER:
+            if connection.peer is not None:
+                connection.peer.pane_transfer(session.pane, command.param())
+            return
         if session.route is Route.TERMINAL:
             connection.write_output_raw(str(command))
             connection.flush_output()
@@ -258,7 +301,14 @@ class KittyTransfers:
             )
 
     def _tell(self, pane: Pane, answer: StringReport) -> None:
-        "Write one command to a pane's program. A program that has gone hears nothing."
+        "Write one command to a pane's program. A program that has gone hears nothing. A mirrored pane's goes to its owner."
+        program = pane.process
+        if isinstance(program, RemoteProgram):
+            if isinstance(answer, OscString):
+                program.kitty_transfer(answer.payload)
+            elif isinstance(answer, TransferCommand):
+                program.kitty_transfer(answer.param())
+            return
         screen = pane.screen
         if not isinstance(screen, Screen):
             return

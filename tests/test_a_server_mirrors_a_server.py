@@ -30,6 +30,7 @@ from prompt_toolkit.output.vt100 import Vt100_Output
 from pyte.keys.events import DEFAULT_KEY_PROFILE
 from pyte.mouse import MouseAction, MouseBits, MouseButton, MouseInput
 from pyte.osc import ColorBase
+from pyte.sequences.file_transfer import Action, TransferCommand
 from pyte.sequences.kitty_clipboard import ClipboardPacket
 from session import Connection
 from test_drag_a_border import DRAG, PRESS, _drawn, _mouse
@@ -56,6 +57,7 @@ from pymux.enums import Clipboard
 from pymux.layout.geometry import plan_of
 from pymux.mirror import peer as mirror_peer
 from pymux.mirror.program import RemoteProgram
+from pymux.options.options import ALL_CLIENT_OPTIONS
 from pymux.query import ask
 from pymux.style.colors import theme_color_base
 from pymux.terminals import PeerTerminal
@@ -360,6 +362,51 @@ async def test_a_drop_here_reaches_the_registered_program_there(two_servers, mon
     program.feed_output(dnd("t=r:o=1:i=7"))
     await until(lambda: dnd("t=r:o=1") in raw, "the end of the drop reaches the terminal", lambda: raw)
     assert owner.drag_and_drop._peer_drops == {}
+
+
+async def terminal_here(owner, peer, client, monkeypatch):
+    """
+    The mirror shown on a client whose terminal takes kitty's file
+    transfer. Answers the owner's pane, what its program hears, what the
+    terminal is sent, and the packets the client is sent.
+    """
+    there, _here = await shown_here(owner, peer, client)
+    heard: list[str] = []
+    monkeypatch.setattr(there.terminal.screen, "write_process_input", heard.append)
+    connection = client.connection
+    monkeypatch.setattr(connection, "client_state", client, raising=False)
+    raw: list[str] = []
+    monkeypatch.setattr(connection, "write_output_raw", raw.append, raising=False)
+    monkeypatch.setattr(connection, "flush_output", lambda: None, raising=False)
+    packets: list[dict] = []
+    monkeypatch.setattr(connection, "send_packet", packets.append, raising=False)
+    ALL_CLIENT_OPTIONS["file-transfer"].set_value(peer, "passthrough", target=client)
+    return there, heard, raw, packets
+
+
+async def test_a_file_transfer_there_is_answered_by_the_terminal_here(two_servers, monkeypatch):
+    "A mirrored pane's session goes to the peer's terminal, and its answers back. Lillecarl/pymux#912."
+    owner, peer, client = two_servers
+    there, heard, raw, _packets = await terminal_here(owner, peer, client, monkeypatch)
+    send = TransferCommand(Action.SEND, id="s1")
+    there.terminal.terminal_control.feed_output(str(send))
+    await until(lambda: str(send) in raw, "the session reaches the terminal here", lambda: raw)
+
+    ok = TransferCommand(Action.STATUS, id="s1", status="OK")
+    peer.kitty_transfers.terminal_said(client.connection, ok.param())
+    await until(lambda: heard, "the terminal's answer reaches the program there", lambda: heard)
+    assert heard == [str(ok)]
+
+
+async def test_the_pace_of_a_transfer_there_is_the_owners_to_say(two_servers, monkeypatch):
+    "The peer asks the owner when the program took a part, and answers its own client after."
+    owner, peer, client = two_servers
+    there, _heard, raw, packets = await terminal_here(owner, peer, client, monkeypatch)
+    there.terminal.terminal_control.feed_output(str(TransferCommand(Action.SEND, id="s1")))
+    await until(lambda: raw, "the session reaches the terminal here", lambda: raw)
+    with anyio.fail_after(5):
+        await peer.kitty_transfers.taken(client.connection, "s1")
+    assert {Field.CMD: Packet.KITTY_TRANSFER_TAKEN, Field.DATA: "s1"} in packets
 
 
 async def test_a_drag_a_program_there_offers_goes_through_the_terminal_here(two_servers, monkeypatch):

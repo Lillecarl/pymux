@@ -304,7 +304,7 @@ class RichClipboard:
             connection = link.connection
         if connection is None:
             client = self.pymux.outward.download_client(pane)
-            link = self._peer_used_after(pane, client)
+            link = self.pymux.outward.peer_used_after(pane, client, PEER_RICH_CLIPBOARD)
             connection = link.connection if link is not None else None if client is None else client.connection
         if link is None and (
             connection is None or connection not in self.pymux._client_states or not connection.replies.kitty_clipboard
@@ -335,17 +335,6 @@ class RichClipboard:
             link.pane_reads(pane, str(packet))
         else:
             self._send(connection, packet)
-
-    def _peer_used_after(self, pane: Pane, client: ClientState | None) -> PeerLink | None:
-        """
-        The peer whose person used a mirror of `pane` after `client`:
-        its terminal answers the pane's read. Lillecarl/pymux#902.
-        """
-        links = [link for link in self.pymux.peer_links() if link.hears(pane) and link.version >= PEER_RICH_CLIPBOARD]
-        link = max(links, key=lambda link: link.last_used, default=None)
-        if link is None or (client is not None and client.last_used >= link.last_used):
-            return None
-        return link
 
     def peer_password(self, link: PeerLink, password: str) -> None:
         "A paste event at the peer gave a mirrored pane `password`: a read under it goes there."

@@ -21,6 +21,8 @@ from prompt_toolkit.clipboard import ClipboardData
 from pyte.keep import Keep
 from pyte.kitty_clipboard import ClipboardWrite
 from pyte.osc import color_base_data
+from pyte.sequences.file_transfer import Malformed as TransferMalformed
+from pyte.sequences.file_transfer import TransferCommand
 from pyte.sequences.kitty_clipboard import strict_b64decode
 from pyte.sequences.kitty_dnd import DndPacket, Malformed
 
@@ -439,6 +441,14 @@ class Peer:
         "A drag and drop packet from a terminal here, for the program in the owner's pane `pane_id`."
         self.send({Field.CMD: Packet.MIRROR_DND, Field.PANE_ID: pane_id, Field.DATA: param})
 
+    def kitty_transfer(self, pane_id: int, param: str) -> None:
+        "One OSC 5113 command from a terminal here, for the program in the owner's pane `pane_id`."
+        self.send({Field.CMD: Packet.MIRROR_KITTY_TRANSFER, Field.PANE_ID: pane_id, Field.DATA: param})
+
+    def kitty_transfer_taken(self, pane_id: int, session_id: str) -> None:
+        "Ask the owner to say when the program in pane `pane_id` took what session `session_id` sent it."
+        self.send({Field.CMD: Packet.MIRROR_KITTY_TRANSFER_TAKEN, Field.PANE_ID: pane_id, Field.DATA: session_id})
+
     def send_clipboard_answer(self, sequence: str) -> None:
         "One packet of this side's answer to the owner's clipboard read (`RichClipboard.read_for_owner`)."
         self.send({Field.CMD: Packet.MIRROR_CLIPBOARD_ANSWER, Field.DATA: sequence})
@@ -763,6 +773,20 @@ class Peer:
                 except Malformed:
                     return
                 self.tree.pymux.drag_and_drop.pane_said(pane, dnd)
+            return
+        if packet.get(Field.CMD) == Packet.MIRROR_KITTY_TRANSFER:
+            pane = self.tree.panes.get(pane_id) if isinstance(pane_id, int) else None
+            if pane is not None:
+                try:
+                    command = TransferCommand.decode(str(packet.get(Field.DATA, "")))
+                except TransferMalformed:
+                    return
+                self.tree.pymux.kitty_transfers.pane_said(pane, command)
+            return
+        if packet.get(Field.CMD) == Packet.MIRROR_KITTY_TRANSFER_TAKEN:
+            pane = self.tree.panes.get(pane_id) if isinstance(pane_id, int) else None
+            if pane is not None:
+                self.tree.pymux.kitty_transfers.owner_took(pane, str(packet.get(Field.DATA, "")))
             return
         if packet.get(Field.CMD) == Packet.MIRROR_CLIPBOARD_READ:
             self.tree.pymux.rich_clipboard.read_for_owner(self, str(packet.get(Field.DATA, "")))

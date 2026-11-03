@@ -222,6 +222,18 @@ class Outward:
             return False, [peer]
         return True, []
 
+    def peer_used_after(self, pane: Pane, client: ClientState | None, version: int) -> PeerLink | None:
+        """
+        The peer, of `version` or later, whose person used a mirror of
+        `pane` after `client`: its terminal answers what the pane's
+        program asks of one. Lillecarl/pymux#902.
+        """
+        links = [link for link in self.pymux.peer_links() if link.hears(pane) and link.version >= version]
+        link = max(links, key=lambda link: link.last_used, default=None)
+        if link is None or (client is not None and client.last_used >= link.last_used):
+            return None
+        return link
+
     def forward_osc(self, pane: Pane, code: str, param: str, acts: bool = True) -> None:
         """
         Write an OSC sequence of a pane to the terminals of the
