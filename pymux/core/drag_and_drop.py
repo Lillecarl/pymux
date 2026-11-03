@@ -28,7 +28,6 @@ import hashlib
 import hmac
 import shlex
 import weakref
-from contextlib import suppress
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, Final
@@ -550,9 +549,17 @@ class DragAndDrop:
             self._tell(pane, DndPacket(DndType.DRAG_ERROR, payload="EPERM"), 0 if dnd is None else dnd.drag_client_id)
 
     def forget(self, pane: Pane) -> None:
-        "A pane went: a drop or drag of it ends, and the registrations shrink."
+        "A pane went: a drop or drag of it ends, and the registrations shrink. Never raises: a pane's end runs on."
+        try:
+            self._forget(pane)
+        except Exception:
+            logger.exception("Ending the drag and drop of pane %s failed.", pane.pane_id)
+
+    def _forget(self, pane: Pane) -> None:
         for connection, state in list(self._terminals.items()):
             if state.drop is not None and state.drop.pane is pane:
+                if state.drop.copy is not None:
+                    state.drop.copy.stop()
                 if state.drop.dropped:
                     self._send(connection, DndPacket(DndType.REQUEST))
                 else:
@@ -561,5 +568,4 @@ class DragAndDrop:
             if state.drag is pane:
                 self._send(connection, DndPacket(DndType.DRAG_ERROR, cell_y=-1))
                 state.drag = None
-        with suppress(Exception):
-            self._sync_all()
+        self._sync_all()

@@ -236,7 +236,7 @@ class RemoteCopy:
             return self._next()
         except _TooMuch as error:
             logger.warning("A drop from another machine was too large: %s.", error)
-            self._stop()
+            self.stop()
             return []
 
     def _chunk(self, item: _Item, packet: DndPacket) -> None:
@@ -284,7 +284,8 @@ class RemoteCopy:
         if item.top:
             self.failed.add(item.path)
 
-    def _stop(self) -> None:
+    def stop(self) -> None:
+        "End the copy here, with nothing pasted."
         if self.arriving.file is not None:
             self.arriving.file.close()
         self.queue.clear()
