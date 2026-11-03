@@ -685,6 +685,9 @@ in
           # The policy `pymux/entry_points/__init__.py` installs, so the
           # suite judges the lazy program a person runs.
           DEFERIMPORT_POLICY = "deny=hypothesis,asyncssh,olefile";
+          # kitty's python package, whose drag and drop code judges what
+          # pymux sends a terminal. Lillecarl/pymux#892.
+          PYMUX_KITTY = "${kitty}/lib/kitty";
         };
       }
       # `--durations` names what the suite spends its time on, and
