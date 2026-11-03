@@ -9,13 +9,17 @@ between that pane and the terminal. Lillecarl/pymux#892.
 from __future__ import annotations
 
 import base64
+import re
+import sys
 
+import pytest
 from libpymux.protocol import Field, Packet
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from run_commands import run_as
 from session import once, over_connection
 
+from pymux.core.drag_and_drop import server_machine_id
 from pymux.core.drop_files import decoded, paths_of
 from pymux.core.main import Pymux
 
@@ -180,11 +184,13 @@ async def test_a_request_with_no_drop_is_refused():
 async def test_a_drag_goes_between_its_pane_and_the_terminal():
     recorder = Recorder()
     pymux = Pymux(startup_command="sleep 30")
+    # Not the build machine's: a Mac has one, the Linux sandbox none.
+    pymux.drag_and_drop.machine_id = ELSEWHERE
     async with over_connection(pymux=pymux, read_packet=recorder) as session:
         state, (pane,), (at,) = await attached_to_kitty(pymux, session, recorder)
         heard = hear(pane)
         feed(state, pane, osc("t=o:x=1:i=3"))
-        await sent(recorder, osc("t=o:x=1"))
+        await sent(recorder, osc("t=o:x=1;" + ELSEWHERE))
 
         say(state, osc("t=o:x=%d:y=%d:X=40:Y=40" % (at.xpos + 4, at.ypos + 2)))
         assert heard == [osc("t=o:x=4:y=2:X=40:Y=40:i=3")]
@@ -230,6 +236,12 @@ async def test_a_terminal_that_never_answers_gets_no_registration():
         await once(lambda: QUERY in recorder.out, 10.0, "the terminal was never asked")
         await run_as(pymux, state, "display-message -p done")
         assert "\x1b]72;t=a" not in recorder.out
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="Linux reads /etc/machine-id")
+def test_a_mac_has_a_machine_id():
+    "Lillecarl/pymux#905."
+    assert re.fullmatch("1:[0-9a-f]{64}", server_machine_id())
 
 
 def test_base64_chunks_decode_with_or_without_padding():

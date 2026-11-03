@@ -31,9 +31,11 @@ which then gets the program's answers. Lillecarl/pymux#903.
 
 from __future__ import annotations
 
+import ctypes
 import hashlib
 import hmac
 import shlex
+import sys
 import weakref
 from collections.abc import Iterable
 from dataclasses import dataclass, field, replace
@@ -80,18 +82,81 @@ _DRAG_FINISHED: Final = 4
 _STARTED: Final = "OK"
 
 
+#: The frameworks kitty's `cocoa_get_machine_id` reads this Mac's id
+#: from: the IO registry's `IOPlatformUUID`, as a CFString.
+_IOKIT: Final = "/System/Library/Frameworks/IOKit.framework/IOKit"
+_CORE_FOUNDATION: Final = "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation"
+_UTF8: Final = 0x08000100
+
+
+def _hashed(mid: bytes) -> str:
+    return "1:" + hmac.new(_MACHINE_ID_KEY, mid, hashlib.sha256).hexdigest()
+
+
 def server_machine_id() -> str:
     """
     This machine's id, as kitty's `machine_id` hashes it: "1:" and the
-    HMAC of /etc/machine-id. "" where there is none to read; kitty takes
-    that as the terminal's own machine.
+    HMAC of /etc/machine-id, or of `IOPlatformUUID` on macOS. "" where
+    there is none to read; kitty takes that as the terminal's own machine.
     """
+    if sys.platform == "darwin":
+        uuid = _platform_uuid()
+        return _hashed(uuid.encode()) if uuid else ""
     try:
         with open("/etc/machine-id", "rb") as file:
             mid = file.read().rstrip()
     except OSError:
         return ""
-    return "1:" + hmac.new(_MACHINE_ID_KEY, mid, hashlib.sha256).hexdigest()
+    return _hashed(mid)
+
+
+def _platform_uuid() -> str:
+    'This Mac\'s `IOPlatformUUID`, read as kitty reads it, or "". Lillecarl/pymux#905.'
+    try:
+        iokit = ctypes.CDLL(_IOKIT)
+        cf = ctypes.CDLL(_CORE_FOUNDATION)
+    except OSError as error:
+        logger.warning("No machine id for kitty's drag and drop: %s.", error)
+        return ""
+    iokit.IOServiceMatching.restype = ctypes.c_void_p
+    iokit.IOServiceMatching.argtypes = [ctypes.c_char_p]
+    iokit.IOServiceGetMatchingService.restype = ctypes.c_uint32
+    iokit.IOServiceGetMatchingService.argtypes = [ctypes.c_uint32, ctypes.c_void_p]
+    iokit.IORegistryEntryCreateCFProperty.restype = ctypes.c_void_p
+    iokit.IORegistryEntryCreateCFProperty.argtypes = [
+        ctypes.c_uint32,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+    ]
+    iokit.IOObjectRelease.argtypes = [ctypes.c_uint32]
+    cf.CFStringCreateWithCString.restype = ctypes.c_void_p
+    cf.CFStringCreateWithCString.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_uint32]
+    cf.CFStringGetCString.restype = ctypes.c_bool
+    cf.CFStringGetCString.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_long, ctypes.c_uint32]
+    cf.CFRelease.argtypes = [ctypes.c_void_p]
+
+    # The service takes the reference to the matching dictionary; 0 is
+    # kIOMainPortDefault.
+    service = iokit.IOServiceGetMatchingService(0, iokit.IOServiceMatching(b"IOPlatformExpertDevice"))
+    if not service:
+        logger.warning("No machine id for kitty's drag and drop: no IOPlatformExpertDevice.")
+        return ""
+    key = cf.CFStringCreateWithCString(None, b"IOPlatformUUID", _UTF8)
+    try:
+        uuid = iokit.IORegistryEntryCreateCFProperty(service, key, None, 0)
+    finally:
+        cf.CFRelease(key)
+        iokit.IOObjectRelease(service)
+    if not uuid:
+        logger.warning("No machine id for kitty's drag and drop: no IOPlatformUUID.")
+        return ""
+    buffer = ctypes.create_string_buffer(1024)
+    try:
+        read = cf.CFStringGetCString(uuid, buffer, len(buffer), _UTF8)
+    finally:
+        cf.CFRelease(uuid)
+    return buffer.value.decode("utf-8", "replace").strip() if read else ""
 
 
 def _registration(pane: Pane | None) -> KittyDnd | None:
