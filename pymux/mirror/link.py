@@ -21,6 +21,7 @@ from libpymux.protocol import (
     OLDEST_PEER_VERSION,
     PEER_ACTS,
     PEER_PINGS,
+    PEER_PROGRAM_STATUS,
     PEER_RICH_CLIPBOARD,
     PEER_VERSION,
     PEER_WINDOWS,
@@ -98,6 +99,7 @@ class PeerLink:
         "_tree_changed": Keep.DROPPED,
         "_tree_sent": Keep.DROPPED,
         "_answer_owed": Keep.DROPPED,
+        "_program_status_sent": Keep.DROPPED,
     }
 
     def __init__(self, connection: ServerConnection, offered: object, version: int) -> None:
@@ -117,6 +119,8 @@ class PeerLink:
         self._tree_changed = anyio.Event()
         self._tree_sent: Tree | None = None
         self._answer_owed = False
+        #: The version of each pane's records this peer was sent.
+        self._program_status_sent: dict[PaneId, int] = {}
         # Each packet, or the mirror whose frame is built when its turn
         # comes, and whether the stream turns to zstd after it.
         self._queue: deque[tuple[MirrorSource | bytes, bool]] = deque()
@@ -195,6 +199,9 @@ class PeerLink:
         """
         if not self.hears(pane):
             return
+        # A prompt ends the work in progress, so both change the records.
+        if code in (Osc.SHELL_INTEGRATION, Osc.PROGRAM_STATUS):
+            self.send_program_status(pane)
         # A frame carries the pointer, and the marks of a shell name
         # rows of the history, which stays here.
         if code in (Osc.POINTER_SHAPE, Osc.SHELL_INTEGRATION, Osc.PROGRAM_STATUS):
@@ -208,6 +215,26 @@ class PeerLink:
         if code == Osc.TERMINAL_EXTENSION and self.version >= PEER_ACTS:
             packet[Field.ACTS] = acts
         self.queue(packet)
+
+    def send_program_status(self, pane: Pane) -> None:
+        """
+        Send the OSC 7501 records of `pane` whole, when they changed since
+        the last send. Not the reports one by one: a prompt or the end of
+        the process drops records with no report. Lillecarl/pymux#928.
+        """
+        statuses = getattr(pane.screen, "program_status", None)
+        if self.version < PEER_PROGRAM_STATUS or statuses is None or not self.hears(pane):
+            return
+        if self._program_status_sent.get(pane.pane_id, 0) == statuses.version:
+            return
+        self._program_status_sent[pane.pane_id] = statuses.version
+        self.queue(
+            {
+                Field.CMD: Packet.MIRROR_PROGRAM_STATUS,
+                Field.PANE_ID: int(pane.pane_id),
+                Field.DATA: [record.payload() for record in statuses.records.values()],
+            }
+        )
 
     def pane_wrote(self, pane: Pane, write: ClipboardWrite, text: str | None) -> None:
         """
@@ -307,6 +334,9 @@ class PeerLink:
                 self.queue(
                     {Field.CMD: Packet.TREE, Field.SERVER: server, Field.SERVER_ID: pymux.server_id, Field.ROWS: tree}
                 )
+                # After the tree, so the peer has the panes to put them on.
+                for pane in list(pymux.panes_by_id.values()):
+                    self.send_program_status(pane)
             with anyio.move_on_after(TREE_EVERY):
                 await self._tree_changed.wait()
             self._tree_changed = anyio.Event()
@@ -377,6 +407,7 @@ class PeerLink:
         if first:
             self.connection.pymux.terminals.sync_viewers()
         source.start()
+        self.send_program_status(pane)
 
     def _mirror_window(self, pane: Pane, widget: WindowWidget, packet: Message) -> None:
         "Lend a window pane: its frames as pixels. Lillecarl/pymux#888."

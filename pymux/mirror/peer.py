@@ -21,6 +21,7 @@ from prompt_toolkit.clipboard import ClipboardData
 from pyte.keep import Keep
 from pyte.kitty_clipboard import ClipboardWrite
 from pyte.osc import color_base_data
+from pyte.program_status import parse_report
 from pyte.sequences.file_transfer import Malformed as TransferMalformed
 from pyte.sequences.file_transfer import TransferCommand
 from pyte.sequences.kitty_clipboard import strict_b64decode
@@ -756,6 +757,20 @@ class Peer:
                     str(packet.get(Field.DATA, "")),
                     acts=bool(packet.get(Field.ACTS, True)),
                 )
+            return
+        if packet.get(Field.CMD) == Packet.MIRROR_PROGRAM_STATUS:
+            pane = self.tree.panes.get(pane_id) if isinstance(pane_id, int) else None
+            statuses = getattr(pane.screen, "program_status", None) if pane is not None else None
+            payloads = packet.get(Field.DATA)
+            if pane is not None and statuses is not None and isinstance(payloads, list):
+                # Checked as a pane's own report is: it came from a program.
+                reports = [parse_report(payload) for payload in payloads if isinstance(payload, str)]
+                statuses.replace([report for report in reports if report is not None])
+                # A server that mirrors this one hears it too.
+                for link in self.tree.pymux.peer_links():
+                    link.send_program_status(pane)
+                self.tree.pymux.terminals.sync_program_status()
+                self.tree.pymux.invalidate(Woke.PANE_PROGRAM_STATUS)
             return
         if packet.get(Field.CMD) == Packet.MIRROR_CLIPBOARD_WRITE:
             pane = self.tree.panes.get(pane_id) if isinstance(pane_id, int) else None

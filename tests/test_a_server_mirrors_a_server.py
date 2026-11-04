@@ -189,6 +189,24 @@ async def test_the_palette_a_program_there_set_reaches_the_mirror(two_servers):
     await until(lambda: entries() is None, "the reset reaches the mirror", entries)
 
 
+async def test_the_program_status_there_reaches_the_terminal_here(two_servers):
+    "OSC 7501 records cross whole, and a prompt there takes the work here too. Lillecarl/pymux#928."
+    owner, peer, client = two_servers
+    there, here = await shown_here(owner, peer, client)
+    statuses = here.screen.program_status
+
+    def held():
+        return {id: record.state for id, record in statuses.records.items()}
+
+    there.terminal.terminal_control.feed_output("\x1b]7501;state=working:app=claude-code\x1b\\")
+    there.terminal.terminal_control.feed_output("\x1b]7501;state=done:id=job\x1b\\")
+    await until(lambda: held() == {"": "working", "job": "done"}, "the records reach the mirror", held)
+    assert peer.terminals.program_status()["pane%d" % here.pane_id].endswith(":app=claude-code")
+
+    there.terminal.terminal_control.feed_output("\x1b]133;A\x1b\\")
+    await until(lambda: held() == {"job": "done"}, "the prompt takes the work here", held)
+
+
 async def test_a_copy_in_a_pane_there_reaches_the_clipboard_here(two_servers):
     "The owner passes the OSC on; the peer serves it under its own set-clipboard, though nobody looks at the pane."
     owner, peer, client = two_servers
