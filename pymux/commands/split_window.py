@@ -6,17 +6,20 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pymux.core.main import Pymux
     from pymux.core.window_tree import Window
+    from pymux.pane_command import PaneCommand
     from pymux.tags import Tags
 
 
 from pymux.commands import CommandParser, Target, add_command
 from pymux.commands.common import (
     add_format_arguments,
+    add_pane_command_argument,
     add_tag_arguments,
     find_window,
     print_object_format,
     the_window,
 )
+from pymux.pane_command import pane_command
 from pymux.tags import parse_tags
 
 
@@ -26,7 +29,7 @@ def split_window(pymux: Pymux, args: argparse.Namespace):
 
     `--tag` tags the new pane, as `set-tag` would.
     """
-    executable = args.executable
+    executable = pane_command(args.command)
     start_directory = args.start_directory
     tags = parse_tags(args.tags)
 
@@ -38,7 +41,7 @@ def split_window(pymux: Pymux, args: argparse.Namespace):
 
 async def _split(
     pymux: Pymux,
-    executable: str | None,
+    executable: PaneCommand | None,
     start_directory: str | None,
     target_window: Window | None,
     tags: Tags,
@@ -70,7 +73,9 @@ def add_arguments(parser: argparse.ArgumentParser):
     parser.add_argument("-d", dest="d", action="store_true", help="Leave the new pane unfocused.")
     parser.add_argument("-P", dest="P", action="store_true", help="Print information about the new pane.")
     add_format_arguments(parser, "The format to print with -P.")
-    parser.add_argument("executable", nargs="?", metavar="<executable>")
+    add_pane_command_argument(
+        parser, "What the new pane runs: one string through the shell, or a program and its arguments."
+    )
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):

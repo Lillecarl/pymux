@@ -73,8 +73,8 @@ def test_help_after_a_separator_is_a_word():
 
 def test_the_first_pane_keeps_its_help():
     "After `integrated` the words are a program's command line."
-    _options, mode, command = parse_arguments(["integrated", "htop", "--help"])
-    assert (mode, command) == (Mode.INTEGRATED, "htop --help")
+    options, mode, _command = parse_arguments(["integrated", "htop", "--help"])
+    assert (mode, options.pane_command) == (Mode.INTEGRATED, ["htop", "--help"])
 
 
 def test_imgcat_reads_its_own_help():

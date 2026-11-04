@@ -79,6 +79,7 @@ if TYPE_CHECKING:
     from ..connection.client import ClientRole
     from ..mirror.copying import MirrorCopy
     from ..mirror.link import PeerLink
+    from ..pane_command import PaneCommand
     from ..pipes.posix import PosixSocketListener
 
 __all__ = [
@@ -122,7 +123,9 @@ class Pymux:
         "listener": Keep.SAVED,
         "original_cwd": Keep.SAVED,
         "source_file": Keep.SAVED,
-        "startup_command": Keep.SAVED,
+        # Read once, for the first window, and a server only upgrades
+        # after that window is open.
+        "startup_command": Keep.DROPPED,
         "_startup_done": Keep.SAVED,
         # Set while the first window opens; a loaded server opened it.
         "_first_window": Keep.DROPPED,
@@ -199,7 +202,7 @@ class Pymux:
     def __init__(
         self,
         source_file: str | None = None,
-        startup_command: str | None = None,
+        startup_command: PaneCommand | None = None,
         session_name: str | None = None,
         size_with_no_client: Size | None = None,
     ):

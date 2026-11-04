@@ -2,14 +2,13 @@
 What a pymux command line means.
 
 `parse_arguments` reads it and answers three things: the options, the
-mode word, and the command as one string. Everything after that is
-about starting a server, so this is the last place where a mistake is
-still cheap.
+mode word, and the command for a server as one string. Everything
+after that is about starting a server, so this is the last place where
+a mistake is still cheap.
 
-A command is one string on purpose. That is what reaches a pane and
-what a server reads over the socket, and `shlex.quote` is what keeps an
-argument with a space in it in one piece on the way there.
-`PaneMaker.create_pane` takes it apart again with `shlex.split`.
+What `integrated` runs in its first pane goes by tmux's rule instead
+(`pymux.pane_command`): one word is a string for the shell, several
+are the program and its arguments. Lillecarl/pymux#933.
 """
 
 from __future__ import annotations
@@ -21,9 +20,9 @@ from pymux.entry_points.run_pymux import Attaching, _flag_args
 
 
 def parse(*argv):
-    "Return (mode, command) for a command line."
-    _options, mode, command = parse_arguments(list(argv))
-    return mode, command
+    "Return (mode, command) for a command line: the pane's command for `integrated`."
+    options, mode, command = parse_arguments(list(argv))
+    return mode, options.pane_command if mode is Mode.INTEGRATED else command
 
 
 # ----------------------------------------------------------------------
@@ -70,7 +69,7 @@ def test_only_first_separator_goes():
     "A second one is an argument of the program that runs."
     assert parse("integrated", "--", "sh", "--", "x") == (
         Mode.INTEGRATED,
-        "sh -- x",
+        ["sh", "--", "x"],
     )
 
 
@@ -78,7 +77,7 @@ def test_separator_keeps_option_of_program():
     "That is what a separator is for: the option belongs to the pane."
     assert parse("integrated", "--", "ls", "--color") == (
         Mode.INTEGRATED,
-        "ls --color",
+        ["ls", "--color"],
     )
 
 
@@ -90,24 +89,17 @@ def test_argument_with_space_stays_one_argument():
     "Lillecarl/pymux#39 is the other half of this."
     assert parse("integrated", "python3", "-c", "import sys") == (
         Mode.INTEGRATED,
-        "python3 -c 'import sys'",
+        ["python3", "-c", "import sys"],
     )
 
 
-def test_command_survives_round_trip():
-    "What `parse_arguments` writes, `shlex.split` reads back."
-    import shlex
-
-    argv = ["sh", "-c", "echo one two; sleep 30"]
-    _mode, command = parse("integrated", *argv)
-    assert shlex.split(command) == argv
+def test_one_word_is_a_command_for_the_shell():
+    "tmux's rule: `pymux integrated 'a; b'` runs both. Lillecarl/pymux#933."
+    assert parse("integrated", "--", "echo one; sleep 30") == (Mode.INTEGRATED, "echo one; sleep 30")
 
 
 def test_empty_argument_survives_as_well():
-    import shlex
-
-    _mode, command = parse("integrated", "sh", "-c", "")
-    assert shlex.split(command) == ["sh", "-c", ""]
+    assert parse("integrated", "sh", "-c", "") == (Mode.INTEGRATED, ["sh", "-c", ""])
 
 
 # ----------------------------------------------------------------------
@@ -137,9 +129,9 @@ def test_option_before_mode_word_is_not_lost_by_second_pass():
 
 
 def test_option_after_separator_belongs_to_program():
-    options, _mode, command = parse_arguments(["integrated", "--", "x", "-d"])
+    options, _mode, _command = parse_arguments(["integrated", "--", "x", "-d"])
     assert options.detach_others is False
-    assert command == "x -d"
+    assert options.pane_command == ["x", "-d"]
 
 
 # ----------------------------------------------------------------------

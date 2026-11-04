@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import CommandException, CommandParser, Target, add_command
-from pymux.commands.common import the_window
+from pymux.commands.common import add_pane_command_argument, the_window
 from pymux.commands.respawn_pane import replace_pane_program
 
 
@@ -39,6 +39,6 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser.add_argument(
         "-t", dest="target_window", metavar="<target-window>", help="The window whose active pane respawns."
     )
-    parser.add_argument(
-        "command", nargs="?", metavar="<command>", help="The program to run, instead of the default shell."
+    add_pane_command_argument(
+        parser, "What to run instead of the default shell: one string through it, or a program and its arguments."
     )

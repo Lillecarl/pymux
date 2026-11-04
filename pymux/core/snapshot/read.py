@@ -357,7 +357,6 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
     pymux.peers.returning_copies = select(db, PeerCopyRow)
     pymux.peers.returning_places = select(db, PeerPlaceRow)
     _read_bindings(pymux, db)
-    pymux.startup_command = server["startup_command"]
     pymux.wait_channels = {}
     for row in select(db, WaitChannelRow):
         channel = WaitChannel()

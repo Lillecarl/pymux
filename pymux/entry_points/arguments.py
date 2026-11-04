@@ -12,6 +12,7 @@ import shlex
 from enum import StrEnum
 
 from pymux import __version__, log
+from pymux.pane_command import pane_command
 
 __all__ = ["Mode", "parse_arguments"]
 
@@ -244,10 +245,10 @@ def parse_arguments(
     Read the command line: the options, the mode and the command.
 
     Returns the options, the mode word (`None` when there is none) and
-    the command as one string (`None` when there is none). A command is
-    one string because that is what reaches a pane and what a server
-    reads, and `shlex.quote` keeps an argument with a space in it in one
-    piece on the way.
+    the command for a server as one string (`None` when there is none),
+    which `shlex.quote` keeps each argument of in one piece. What
+    `integrated` runs in its first pane is not a server command: it is
+    `options.pane_command`, by `pymux.pane_command`'s rule.
 
     `run` does the rest. This is separate so that a test can ask what a
     command line means without starting a server.
@@ -266,6 +267,7 @@ def parse_arguments(
                 print(said, end="")
                 raise SystemExit(0)
     command = None
+    a.pane_command = None
     mode: Mode | None = _mode_of(rest[0]) if rest else None
 
     if mode is not None:
@@ -325,7 +327,7 @@ def parse_arguments(
     if mode is Mode.INTEGRATED:
         # The command of the first pane, rather than a pymux command
         # for a running server.
-        command = " ".join(shlex.quote(x) for x in rest) if rest else None
+        a.pane_command = pane_command(rest)
     elif mode is not None and rest:
         # A mode with extra arguments: e.g. `pymux list-sessions -F ...`.
         # The whole thing is sent to the server as one command.

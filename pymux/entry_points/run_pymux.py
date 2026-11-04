@@ -75,11 +75,13 @@ from pymux.config import find_config
 from pymux.entry_points.arguments import Mode, how_much_to_log, parse_arguments
 from pymux.entry_points.completion import answer_completion
 from pymux.options.scope import rerun_in_a_scope
+from pymux.pane_command import pane_command
 from pymux.utils import daemonize
 
 if TYPE_CHECKING:
     from pymux.client.terminal import TerminalClient
     from pymux.core.main import Pymux
+    from pymux.pane_command import PaneCommand
 
 __all__ = ["run"]
 
@@ -184,7 +186,7 @@ def run() -> None:
             # A server and one client in this process. The client reads a
             # queue that this server writes, so it reaches this server and
             # no other one.
-            mux = _new_pymux(source_file=filename, startup_command=command)
+            mux = _new_pymux(source_file=filename, startup_command=a.pane_command)
 
             # Only when a socket was asked for. The user interface never
             # reads it; it is there so that `pymux -S <socket> <command>`
@@ -393,7 +395,7 @@ def _start_and_attach(socket_name: str | None, filename: str | None, attaching: 
 
 def _new_pymux(
     source_file: str | None,
-    startup_command: str | None = None,
+    startup_command: PaneCommand | None = None,
     session_name: str | None = None,
     size_with_no_client: tuple[int, int] | None = None,
 ) -> Pymux:
@@ -767,12 +769,9 @@ def _new_session(
     attach = "d" not in flags
     session_name = values.get("s")
     start_directory = values.get("c")
-    window_name = values.get("n")
     format_str = values.get("F")
     print_info = "P" in flags
-    window_command = " ".join(positional) or None
-
-    startup_command = " ".join(x for x in (window_name, window_command) if x) or None
+    startup_command = pane_command(positional)
 
     # Read before a server is forked, so that a number nobody can read
     # leaves no server behind. The standing answer is tmux's, and

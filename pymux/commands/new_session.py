@@ -11,9 +11,15 @@ if TYPE_CHECKING:
 from prompt_toolkit.data_structures import Size
 
 from pymux.commands import CommandException, CommandParser, add_command
-from pymux.commands.common import add_format_arguments, add_tag_arguments, print_object_format
+from pymux.commands.common import (
+    add_format_arguments,
+    add_pane_command_argument,
+    add_tag_arguments,
+    print_object_format,
+)
 from pymux.core.session import DEFAULT_SIZE
 from pymux.enums import Woke
+from pymux.pane_command import pane_command
 from pymux.tags import parse_tags
 
 
@@ -105,7 +111,7 @@ def new_session(pymux: Pymux, args: argparse.Namespace):
 
 async def _open(pymux: Pymux, args: argparse.Namespace, session: Session) -> None:
     await pymux.panes.create_window(
-        command=args.command,
+        command=pane_command(args.command),
         start_directory=args.start_directory,
         name=args.window_name,
         session=session,
@@ -160,4 +166,6 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser.add_argument("-P", dest="P", action="store_true", help="Print information about the session.")
     add_format_arguments(parser, "The format to print with -P.")
     add_tag_arguments(parser, "session")
-    parser.add_argument("command", metavar="<shell-command>", nargs="?", help="What the first pane runs.")
+    add_pane_command_argument(
+        parser, "What the first pane runs: one string through the shell, or a program and its arguments."
+    )

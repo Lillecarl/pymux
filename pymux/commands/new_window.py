@@ -14,11 +14,13 @@ if TYPE_CHECKING:
 from pymux.commands import CommandException, CommandParser, Target, add_command
 from pymux.commands.common import (
     add_format_arguments,
+    add_pane_command_argument,
     add_tag_arguments,
     print_object_format,
     session_part,
 )
 from pymux.ids import WindowIndex
+from pymux.pane_command import pane_command
 from pymux.tags import parse_tags
 
 
@@ -169,7 +171,7 @@ async def _open(
     tags: Tags,
 ) -> None:
     made = await pymux.panes.create_window(
-        args.executable,
+        pane_command(args.command),
         start_directory=args.start_directory,
         name=args.name,
         index=where_new_window_goes(pymux, args, session, target),
@@ -219,4 +221,6 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser.add_argument("-P", dest="P", action="store_true", help="Print information about the new window.")
     add_format_arguments(parser, "The format to print with -P.")
     add_tag_arguments(parser, "window")
-    parser.add_argument("executable", nargs="?", metavar="<executable>")
+    add_pane_command_argument(
+        parser, "What the new pane runs: one string through the shell, or a program and its arguments."
+    )

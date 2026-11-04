@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 from ..enums import Woke
 from ..jobs.feed import JobFeed
 from ..jobs.job import Job, describe
+from ..pane_command import PaneCommand, spelled
 from .planes import remember_the_size_made_at
 from .session import Session
 from .window_tree import Window
@@ -32,7 +33,7 @@ class Overlays:
 
     async def display(
         self,
-        command: str | None = None,
+        command: PaneCommand | None = None,
         width: str | None = None,
         height: str | None = None,
         title: str | None = None,
@@ -67,7 +68,7 @@ class Overlays:
             window = None
 
         pane = await self.pymux.panes.create_pane(window=window, command=command, on_done=done)
-        self._show(session, pane, title or command or "overlay", width, height)
+        self._show(session, pane, title or (spelled(command) if command else "overlay"), width, height)
         return pane
 
     def ended(self, session: Session, pane: Pane | None) -> None:

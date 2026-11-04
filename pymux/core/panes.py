@@ -6,7 +6,6 @@ opens. `Pymux` keeps the registry of panes; this builds what goes in it.
 
 from __future__ import annotations
 
-import shlex
 import weakref
 from collections.abc import Callable
 from typing import TYPE_CHECKING, ClassVar
@@ -26,6 +25,7 @@ from ..ids import PaneId, WindowIndex
 from ..keys.actions import Kind, Origin, note, note_keys, started_by
 from ..keys.key_spelling import why_pane_cannot_read
 from ..log import logger
+from ..pane_command import PaneCommand, argv_of
 from ..wayland.window_pane import WindowWidget, is_window_pane
 from .environment import pane_environment
 from .pane import Pane
@@ -90,7 +90,7 @@ class PaneMaker:
     async def create_pane(
         self,
         window: Window | None = None,
-        command: str | None = None,
+        command: PaneCommand | None = None,
         start_directory: str | None = None,
         on_done: Callable[[], None] | None = None,
         session: Session | None = None,
@@ -103,7 +103,9 @@ class PaneMaker:
 
         :param window: If a window is given, take the CWD of the current
             process of that window as the start path for this pane.
-        :param command: If given, run this command instead of `default-shell`.
+        :param command: If given, run this instead of `default-shell`: a
+            string through `default-shell -c`, a list as it stands
+            (`pymux.pane_command`).
         :param start_directory: If given, use this as the CWD.
         :param session: Where this pane is going, which says how big it
             is until a client renders it. The pane is not in a window
@@ -173,15 +175,7 @@ class PaneMaker:
             if self.pymux.wayland.display and not environment.get("WAYLAND_DISPLAY"):
                 environment["WAYLAND_DISPLAY"] = self.pymux.wayland.display
 
-        # `shlex.split` and not `str.split`: a command reaches this as
-        # one string, and the quoting inside it is what says where one
-        # argument ends. A plain split on whitespace tears
-        # `sh -c 'echo one two'` into seven words, and `sh` then reads
-        # `'echo` as the whole of its script.
-        #
-        # `run_pymux.run` builds the string with `shlex.quote`, so this
-        # undoes exactly what that did.
-        command_list = shlex.split(command) if command else [options.default_shell]
+        command_list = argv_of(command, options.default_shell)
 
         self.pymux.shims.make(options)
 
@@ -597,7 +591,7 @@ class PaneMaker:
 
     async def create_window(
         self,
-        command: str | None = None,
+        command: PaneCommand | None = None,
         start_directory: str | None = None,
         name: str | None = None,
         index: WindowIndex | None = None,
@@ -637,7 +631,7 @@ class PaneMaker:
 
     async def add_process(
         self,
-        command: str | None = None,
+        command: PaneCommand | None = None,
         vsplit: bool = False,
         start_directory: str | None = None,
         window: Window | None = None,

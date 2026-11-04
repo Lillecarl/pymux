@@ -316,7 +316,6 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     signalled.woken = True
     held.locked = True
     pymux.wait_channels = {"done": signalled, "turn": held}
-    pymux.startup_command = "htop"
 
     center = pymux.notification_center
     center.add("built", "all green", Urgency.LOW, pane.pane_id)
@@ -646,7 +645,6 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                     "done": (True, False),
                     "turn": (False, True),
                 }
-                assert fresh.startup_command == "htop"
                 assert _copy_modes_of(fresh) == _copy_modes_of(pymux)
                 assert len(_copy_modes_of(fresh)) == 2
                 assert _bindings_of(fresh) == _bindings_of(pymux)

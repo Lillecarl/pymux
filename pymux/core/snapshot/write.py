@@ -367,7 +367,6 @@ def rows_of(pymux: Pymux, *, mirrored: bool) -> Iterator[Row]:
         ("startup_done", pymux._startup_done),
         ("clipboard", clipboard.text),
         ("clipboard_type", clipboard.type.value),
-        ("startup_command", pymux.startup_command),
     ):
         yield ServerRow(name, value)
     for name, text in sorted(pymux.named_buffers.items()):

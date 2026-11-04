@@ -34,8 +34,10 @@ from prompt_toolkit.data_structures import Size
 from session import over_connection
 
 #: A pane that is still there when the test looks at it. A program that
-#: exits takes its pane, and then its window, with it.
-PANE_THAT_STAYS = "%s -c 'import time; time.sleep(30)'" % (sys.executable,)
+#: exits takes its pane, and then its window, with it. Words and not a
+#: string, so no shell starts it: a shell that execs the program
+#: renames the window a moment later, and every client draws the name.
+PANE_THAT_STAYS = [sys.executable, "-c", "import time; time.sleep(30)"]
 
 SIZE = Size(rows=24, columns=80)
 

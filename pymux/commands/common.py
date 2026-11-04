@@ -30,6 +30,11 @@ from pymux.keys.key_spelling import why_pane_cannot_read
 from pymux.options.options import Option, Scope, SetOptionError
 
 
+def add_pane_command_argument(parser: argparse.ArgumentParser, help: str) -> None:
+    "tmux's `[shell-command [argument ...]]`, which `pane_command(args.command)` reads."
+    parser.add_argument("command", nargs="*", metavar="<shell-command>", help=help)
+
+
 def session_part(pymux: Pymux, target: str) -> tuple[Session | None, str]:
     """
     Split a `session:rest` target into the session and the rest.

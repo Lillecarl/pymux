@@ -8,6 +8,8 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import CommandParser, add_command
+from pymux.commands.common import add_pane_command_argument
+from pymux.pane_command import pane_command
 
 
 def display_popup(pymux: Pymux, args: argparse.Namespace):
@@ -23,7 +25,7 @@ def display_popup(pymux: Pymux, args: argparse.Namespace):
     nothing: an overlay of pymux always closes when its program ends.
     """
     return pymux.overlays.display(
-        command=args.executable,
+        command=pane_command(args.command),
         width=args.width,
         height=args.height,
         title=args.title,
@@ -38,4 +40,4 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser.add_argument("-w", dest="width", metavar="<width>", help="How many cells wide, or a share like '60%%'.")
     parser.add_argument("-h", dest="height", metavar="<height>", help="How many cells high, or a share like '60%%'.")
     parser.add_argument("-T", dest="title", metavar="<title>", help="The name on the title bar.")
-    parser.add_argument("executable", nargs="?", metavar="<executable>", help="The program to run.")
+    add_pane_command_argument(parser, "What to run: one string through the shell, or a program and its arguments.")
