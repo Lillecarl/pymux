@@ -78,7 +78,8 @@ class UrlMode:
         if isinstance(terminal, Terminal):
             shown = terminal.shown_rows()
             page = terminal.screen.page
-            links = links_in(page, *shown, rules) if shown is not None and page is not None else []
+            if shown is not None and page is not None:
+                links = links_in(page, *shown, rules, columns=terminal.screen.columns)
         given: dict[str, str] = {}
         names = iter(labels(len({link.url for link in links})))
         targets = []

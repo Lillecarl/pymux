@@ -56,6 +56,28 @@ async def test_a_lower_case_label_opens_its_link(pymux, monkeypatch):
         await shows(session, "https://b.io/second")
 
 
+async def test_a_url_a_program_broke_at_the_edge_opens_whole(pymux, monkeypatch):
+    "A hard break at the last column and an indent, as Claude Code writes it. Lillecarl/pymux#926."
+    opened = []
+    monkeypatch.setattr(
+        pymux.outward, "open_url", lambda url, confirmed=False, pane=None: opened.append((url, confirmed))
+    )
+    async with pymux.running(), attached(pymux) as session:
+        await shows(session, "$")
+        with set_app(pymux.connections[-1].client.state.app):
+            pane = pymux.arrangement.get_active_pane()
+        head = "https://a.io/"
+        head += "x" * (pane.terminal.screen.columns - 2 - len(head))
+        pane.terminal.terminal_control.feed_output("\r\n  %s\r\n  tail end\r\n" % head)
+        await shows(session, "tail end")
+        said(session, type="input", keys="C-b o")
+        await shows(session, "sttps://a.io/")
+
+        said(session, type="input", keys="s")
+        await once(lambda: opened, 10.0, "nothing was opened")
+        assert opened == [(head + "tail", True)]
+
+
 async def test_the_labels_show_over_a_pane_beside_another(pymux):
     """
     The panes draw in a chain of deferred draws, and a float of the
