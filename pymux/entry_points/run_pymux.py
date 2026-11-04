@@ -398,6 +398,7 @@ def _new_pymux(
     startup_command: PaneCommand | None = None,
     session_name: str | None = None,
     size_with_no_client: tuple[int, int] | None = None,
+    startup_window_name: str | None = None,
 ) -> Pymux:
     """
     Build the thing that runs a server.
@@ -417,6 +418,7 @@ def _new_pymux(
     return Pymux(
         source_file=source_file,
         startup_command=startup_command,
+        startup_window_name=startup_window_name,
         session_name=session_name,
         size_with_no_client=(
             None if size_with_no_client is None else Size(rows=size_with_no_client[1], columns=size_with_no_client[0])
@@ -769,6 +771,7 @@ def _new_session(
     attach = "d" not in flags
     session_name = values.get("s")
     start_directory = values.get("c")
+    window_name = values.get("n")
     format_str = values.get("F")
     print_info = "P" in flags
     startup_command = pane_command(positional)
@@ -809,6 +812,7 @@ def _new_session(
     mux = _new_pymux(
         source_file=attaching.config_file,
         startup_command=startup_command,
+        startup_window_name=window_name,
         session_name=session_name,
         size_with_no_client=size_with_no_client,
     )

@@ -126,6 +126,7 @@ class Pymux:
         # Read once, for the first window, and a server only upgrades
         # after that window is open.
         "startup_command": Keep.DROPPED,
+        "startup_window_name": Keep.DROPPED,
         "_startup_done": Keep.SAVED,
         # Set while the first window opens; a loaded server opened it.
         "_first_window": Keep.DROPPED,
@@ -205,6 +206,7 @@ class Pymux:
         startup_command: PaneCommand | None = None,
         session_name: str | None = None,
         size_with_no_client: Size | None = None,
+        startup_window_name: str | None = None,
     ):
         self._client_states: dict[ClientRole, ClientState] = {}
 
@@ -350,6 +352,7 @@ class Pymux:
         self._first_window: anyio.Event | None = None
         self.source_file = source_file
         self.startup_command = startup_command
+        self.startup_window_name = startup_window_name
 
         # Time when this server was started.
         self.created = time.time()
@@ -786,7 +789,7 @@ class Pymux:
                 self.spawn_command(self.configure())
 
                 # Make sure that there is one window created.
-                await self.panes.create_window(command=self.startup_command)
+                await self.panes.create_window(command=self.startup_command, name=self.startup_window_name)
             finally:
                 self._first_window.set()
         elif self._first_window is not None:
