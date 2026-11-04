@@ -178,7 +178,17 @@ class Planes:
             window = self.pymux.arrangement.get_active_window()
         if window is None:
             return self.size_with_no_client(None)
+        if window.owner_size is not None:
+            return window.owner_size
+        return self.room(window)
 
+    def room(self, window: Window) -> Size:
+        """
+        The size the clients and peers here give `window`. For a mirror
+        this is what goes to the owner (`Peer.tell_sizes`), never
+        `size`: the owner's size is the smallest room it was told, and
+        telling it back would hold it there.
+        """
         if window.options.window_size is WindowSize.MANUAL and window.manual_size is not None:
             return window.manual_size
 

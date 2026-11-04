@@ -148,11 +148,12 @@ class MirrorTree:
         # A tree is being applied: what it changes is the owner's already.
         self._updating = False
 
-    def update(self, server: str, server_id: str, tree: Tree) -> None:
+    def update(self, server: str, server_id: str, tree: Tree, sizes: object = None) -> None:
         """
         Make the sessions here what the owner's tree says, but for a
         session whose path holds this server: a mirror of this server's
-        own, which would come back once more with every tree.
+        own, which would come back once more with every tree. `sizes`
+        is the owner's size of each window, as `[id, rows, columns]`.
         """
         own = self.pymux.server_id
         rows = read_tree(tree)
@@ -162,6 +163,9 @@ class MirrorTree:
         try:
             self._update_panes(rows)
             self._update_windows(rows)
+            owner_sizes = _owner_sizes(sizes)
+            for remote_id, window in self.windows.items():
+                window.owner_size = owner_sizes.get(remote_id)
             self._update_sessions(server, server_id, rows)
         finally:
             self._updating = False
@@ -406,3 +410,18 @@ def _grouped(rows: list[Any], column: str) -> dict[Any, list[Any]]:
 
 def _size(rows: int | None, columns: int | None) -> Size | None:
     return Size(rows=rows, columns=columns) if rows is not None and columns is not None else None
+
+
+def _owner_sizes(sizes: object) -> dict[int, Size]:
+    "The `sizes` of a tree packet by window id; what is not three positive numbers is left out."
+    found: dict[int, Size] = {}
+    for entry in sizes if isinstance(sizes, list) else ():
+        if (
+            isinstance(entry, list)
+            and len(entry) == 3
+            and all(isinstance(number, int) for number in entry)
+            and entry[1] > 0
+            and entry[2] > 0
+        ):
+            found[entry[0]] = Size(rows=entry[1], columns=entry[2])
+    return found

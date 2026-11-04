@@ -117,7 +117,7 @@ class PeerLink:
         #: The peer asked for the sessions (`watch`).
         self.watching = False
         self._tree_changed = anyio.Event()
-        self._tree_sent: Tree | None = None
+        self._tree_sent: tuple[Tree, list[tuple[int, int, int]]] | None = None
         self._answer_owed = False
         #: The version of each pane's records this peer was sent.
         self._program_status_sent: dict[PaneId, int] = {}
@@ -328,11 +328,27 @@ class PeerLink:
         while not self.connection.closed:
             tree = tree_of(pymux)
             owed, self._answer_owed = self._answer_owed, False
-            if owed or tree != self._tree_sent:
+            # The size each window has here, which the peer lays it out
+            # at. A peer of an older build ignores it. Lillecarl/pymux#930.
+            sizes = sorted(
+                {
+                    (int(window.window_id), size.rows, size.columns)
+                    for session in pymux.sessions
+                    for window in session.arrangement.windows
+                    for size in (pymux.planes.size(window),)
+                }
+            )
+            if owed or (tree, sizes) != self._tree_sent:
                 self._size_the_panes()
-                self._tree_sent = tree
+                self._tree_sent = (tree, sizes)
                 self.queue(
-                    {Field.CMD: Packet.TREE, Field.SERVER: server, Field.SERVER_ID: pymux.server_id, Field.ROWS: tree}
+                    {
+                        Field.CMD: Packet.TREE,
+                        Field.SERVER: server,
+                        Field.SERVER_ID: pymux.server_id,
+                        Field.ROWS: tree,
+                        Field.SIZES: [list(size) for size in sizes],
+                    }
                 )
                 # After the tree, so the peer has the panes to put them on.
                 for pane in list(pymux.panes_by_id.values()):

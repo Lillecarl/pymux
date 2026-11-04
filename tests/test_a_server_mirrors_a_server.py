@@ -54,7 +54,7 @@ from pymux.core.rich_clipboard import RichClipboardData
 from pymux.core.snapshot.read import load, start
 from pymux.core.snapshot.write import save
 from pymux.core.upgrade import welcome_back
-from pymux.enums import Clipboard
+from pymux.enums import Clipboard, WindowSize
 from pymux.layout.geometry import plan_of
 from pymux.mirror import peer as mirror_peer
 from pymux.mirror.program import RemoteProgram
@@ -572,16 +572,43 @@ async def test_the_owner_lays_out_at_the_size_of_the_peer(two_servers):
     (mirror_window,) = link.tree.windows.values()
 
     await until(
-        lambda: owner.planes.size(owner_window) == peer.planes.size(mirror_window),
+        lambda: owner.planes.size(owner_window) == peer.planes.room(mirror_window),
         "the owner's window takes the room the peer has",
-        lambda: (owner.planes.size(owner_window), peer.planes.size(mirror_window)),
+        lambda: (owner.planes.size(owner_window), peer.planes.room(mirror_window)),
     )
-    (rect,) = [rect for slot, rect in plan_of(peer, mirror_window).rects.items() if here in slot.panes]
-    screen = here.terminal.terminal_control.screen
     await until(
-        lambda: (screen.columns, screen.lines) == (rect.width, rect.height),
+        lambda: all(screen == box for screen, box in pane_sizes(peer, mirror_window).values()),
         "the mirror fills its box here",
-        lambda: ((screen.columns, screen.lines), (rect.width, rect.height)),
+        lambda: pane_sizes(peer, mirror_window),
+    )
+
+
+async def test_a_window_smaller_there_is_as_small_here(two_servers):
+    """
+    Something at the owner holds the window under the peer's room. The
+    peer lays it out at the owner's size, so the room around it is the
+    background, as for any client bigger than its window.
+    Lillecarl/pymux#930.
+    """
+    owner, peer, client = two_servers
+    there, here = await shown_here(owner, peer, client)
+    owner_window = owner.arrangement.get_active_window()
+    (link,) = peer.peers.by_address.values()
+    (mirror_window,) = link.tree.windows.values()
+    small = Size(rows=10, columns=40)
+    owner_window.options.window_size = WindowSize.MANUAL
+    owner_window.manual_size = small
+    owner.invalidate()
+
+    await until(
+        lambda: peer.planes.size(mirror_window) == small,
+        "the mirror takes the owner's size",
+        lambda: peer.planes.size(mirror_window),
+    )
+    await until(
+        lambda: all(screen == box for screen, box in pane_sizes(peer, mirror_window).values()),
+        "the mirror fills its box here",
+        lambda: pane_sizes(peer, mirror_window),
     )
 
 
@@ -634,9 +661,9 @@ async def test_a_split_here_lays_the_window_out_there_at_the_peers_size(two_serv
     (link,) = peer.peers.by_address.values()
     (mirror_window,) = link.tree.windows.values()
     await until(
-        lambda: owner.planes.size(owner_window) == peer.planes.size(mirror_window),
+        lambda: owner.planes.size(owner_window) == peer.planes.room(mirror_window),
         "the owner's window takes the room the peer has",
-        lambda: (owner.planes.size(owner_window), peer.planes.size(mirror_window)),
+        lambda: (owner.planes.size(owner_window), peer.planes.room(mirror_window)),
     )
     assert owner.planes.size(owner_window).columns == 200
 
@@ -684,7 +711,7 @@ async def test_a_window_the_peer_stops_watching_keeps_its_size_there(two_servers
     (link,) = peer.peers.by_address.values()
     (mirror_window,) = link.tree.windows.values()
     await until(
-        lambda: owner.planes.size(owner_window) == peer.planes.size(mirror_window),
+        lambda: owner.planes.size(owner_window) == peer.planes.room(mirror_window),
         "the owner's window takes the room the peer has",
     )
     watched = owner.planes.size(owner_window)
@@ -724,7 +751,7 @@ async def test_a_drag_here_resizes_the_panes_there(two_servers):
     (mirror_window,) = link.tree.windows.values()
     left, right = mirror_window.panes
     await until(
-        lambda: owner.planes.size(owner_window) == peer.planes.size(mirror_window),
+        lambda: owner.planes.size(owner_window) == peer.planes.room(mirror_window),
         "the owner lays the window out at the peer's size",
     )
     drawn = _drawn(client)

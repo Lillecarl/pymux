@@ -79,6 +79,7 @@ class Window:
         "column_widths": Keep.SAVED,
         "manual_size": Keep.SAVED,
         "unwatched_size": Keep.SAVED,
+        "owner_size": Keep.DROPPED,  # the next tree says it again
         # The peer links again after an upgrade and says once more.
         "peer_watched": Keep.DROPPED,
         "selects_elsewhere": Keep.DROPPED,
@@ -132,6 +133,13 @@ class Window:
         #: watched it, and before that what the clients gave it when it
         #: was made. Lillecarl/pymux#817.
         self.unwatched_size: Size | None = None
+
+        #: How big the owner made this window, when it is a mirror of
+        #: another server's. The panes' screens come at that size, so
+        #: the layout here takes it too, and the room around it shows
+        #: as it does around any window smaller than a client.
+        #: Lillecarl/pymux#930.
+        self.owner_size: Size | None = None
 
         #: A server that mirrors this window shows it to a client there
         #: (`PeerLink._sized`), so a mark raised here is a mark seen.

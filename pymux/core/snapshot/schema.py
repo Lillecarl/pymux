@@ -158,6 +158,7 @@ WRITES: dict[str, frozenset[str]] = {
         "seen_at",
         "peer_watched",
         "selects_elsewhere",
+        "owner_size",
     },
     **{
         "%s.%s" % (scope.__module__, scope.__qualname__): frozenset(each.attribute for each in saved)

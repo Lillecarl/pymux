@@ -211,7 +211,7 @@ class Peers:
                         )
             peer.tell_sizes(
                 {
-                    remote_id: self.pymux.planes.size(window)
+                    remote_id: self.pymux.planes.room(window)
                     for remote_id, window in peer.tree.windows.items()
                     if any(window is one for one in windows)
                 }
@@ -742,6 +742,7 @@ class Peer:
                     str(packet.get(Field.SERVER) or self.address),
                     str(packet.get(Field.SERVER_ID) or ""),
                     packet.get(Field.ROWS) or {},
+                    packet.get(Field.SIZES),
                 )
             except Exception:
                 # A tree this side cannot build leaves the last one standing.
