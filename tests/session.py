@@ -217,6 +217,9 @@ class Client:
         "What `ClientRole.set_progress` was given last."
         self.progress = progress
 
+    def set_program_status(self, records):
+        pass
+
 
 #: The size a temporary client reports. Nothing draws in it; a window that
 #: sizes itself by the latest client must never read it.

@@ -28,6 +28,8 @@ from pymux.connection.rate import frames_per_second, per_second
 from pymux.tags import spelled
 
 if TYPE_CHECKING:
+    from pyte.program_status import Report
+
     from pymux.connection.client import ClientRole
     from pymux.connection.client_state import ClientState
     from pymux.connection.rate import Rate
@@ -466,6 +468,12 @@ def _pane_pid(context: FormatContext) -> str:
     return str(pid) if pid else ""
 
 
+def _program_status(context: FormatContext) -> Report | None:
+    "The most urgent OSC 7501 record of the pane. A window pane holds none."
+    statuses = getattr(context.the_pane().screen, "program_status", None)
+    return statuses.most_urgent() if statuses is not None else None
+
+
 def _pane_current_command(context: FormatContext) -> str:
     "Name of the command running in the pane."
     name = context.the_pane().process.get_name()
@@ -895,6 +903,10 @@ tmux_variables: dict[str, Callable[[FormatContext], str]] = {
     "pane_current_user": lambda c: c.the_pane().current_user or "",
     "pane_shell": lambda c: c.the_pane().shell or "",
     "pane_progress": lambda c: c.the_pane().progress.shown(),
+    # OSC 7501: the most urgent of what the pane's program says it is
+    # doing, and the line it said with it. Lillecarl/pymux#927.
+    "pane_program_state": lambda c: r.state if (r := _program_status(c)) is not None else "",
+    "pane_program_message": lambda c: (r.msg_text or "") if (r := _program_status(c)) is not None else "",
     "pane_dead": lambda c: "1" if c.the_pane().process.is_terminated else "0",
     # Read off the mode, and not off copy mode alone: tmux counts the
     # whole stack (`format_cb_pane_in_mode`), so a pane showing the

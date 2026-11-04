@@ -58,6 +58,9 @@ class FakeConnection:
     def set_progress(self, progress):
         pass
 
+    def set_program_status(self, records):
+        pass
+
 
 class FakeScreen:
     "The screen parts a shell-state read touches."

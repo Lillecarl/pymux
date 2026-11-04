@@ -16,6 +16,7 @@ from pyte.extra_cursors import ExtraShape
 from pyte.keep import Keep
 from pyte.modes import ModeState, PrivateMode
 from pyte.osc import Osc
+from pyte.program_status import QUERY as PROGRAM_STATUS_QUERY
 from pyte.sequences.csi import ask_mode, csi
 from pyte.sequences.escapes import esc
 from pyte.sequences.kitty_graphics import GraphicsReply
@@ -110,6 +111,7 @@ class TerminalReplies:
         "_kitty_supported": Keep.REBUILT,
         "notification_closes": Keep.REBUILT,
         "answered_notification_query": Keep.REBUILT,
+        "program_status": Keep.REBUILT,
         "detection_pending": Keep.DROPPED,
         # The client asks again when it reattaches to the new server.
         "terminal_said": Keep.DROPPED,
@@ -164,6 +166,9 @@ class TerminalReplies:
         self.notification_closes = False
         #: Whether the outer terminal answered the OSC 99 query.
         self.answered_notification_query = False
+        #: Whether the outer terminal answered "OSC 7501 ; ?", and so
+        #: keeps the records of the panes. Lillecarl/pymux#927.
+        self.program_status = False
 
     def start_detection(self) -> None:
         """
@@ -185,6 +190,7 @@ class TerminalReplies:
             + (TEXT_SIZE_PROBE if self.client.connection.size.rows >= TEXT_SIZE_PROBE_ROWS else "")
             + SURVEY
             + osc(Osc.NOTIFICATION, NOTIFICATION_QUERY)
+            + osc(Osc.PROGRAM_STATUS, PROGRAM_STATUS_QUERY)
             + DND_QUERY
         )
         self.client.flush_output()
@@ -284,6 +290,10 @@ class TerminalReplies:
                 self.client.pacing.frame_answered()
             case OscString(code=Osc.NOTIFICATION, payload=payload):
                 self._route_notification(payload)
+            case OscString(code=Osc.PROGRAM_STATUS, payload=payload) if payload.startswith(PROGRAM_STATUS_QUERY):
+                if not self.program_status:
+                    self.program_status = True
+                    self.client.pymux.terminals.sync_program_status()
             case OscString(code=code, payload=payload):
                 # The colours the terminal draws with, defaults and palette
                 # alike. It answers each on the code that asked, so this

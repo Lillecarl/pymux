@@ -290,7 +290,16 @@ class Outward:
                 # pane keeps one too.
                 self._read_current_directory(pane, param)
 
+            if code == Osc.PROGRAM_STATUS:
+                # The screen keeps the records, and each client's
+                # terminal is given every pane's. Lillecarl/pymux#927.
+                self.pymux.terminals.sync_program_status()
+                self.pymux.invalidate(Woke.PANE_PROGRAM_STATUS)
+                return
+
             if code == Osc.SHELL_INTEGRATION:
+                # A prompt ended what was working or blocked.
+                self.pymux.terminals.sync_program_status()
                 # The prompt, the command and the exit status it
                 # finished with, which the pane keeps. **They stay
                 # inside**, as tmux keeps them: they name rows of one

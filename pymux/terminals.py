@@ -22,6 +22,7 @@ from libpymux.protocol import Field, Packet
 from pyte.images import ASSUMED_CELL_HEIGHT, ASSUMED_CELL_WIDTH
 from pyte.keep import Keep
 from pyte.keys.events import KeyboardFlag
+from pyte.program_status import valid_id
 
 from .enums import ExtendedKeys
 from .log import logger
@@ -193,6 +194,35 @@ class Terminals:
                 client.set_progress(pane.progress if pane is not None else NO_PROGRESS)
         except Exception:
             logger.exception("Sending the progress failed.")
+
+    def program_status(self) -> dict[str, str]:
+        """
+        The OSC 7501 records of every pane, as report payloads by the id
+        a client's terminal holds them under: `pane<N>` and then the
+        program's own. Two panes would share a root record otherwise,
+        and the spec has a record say which terminal it came from. One
+        that no longer fits the limits under the prefix stays inside.
+        """
+        records: dict[str, str] = {}
+        for pane in list(self.pymux.panes_by_id.values()):
+            statuses = getattr(pane.screen, "program_status", None)
+            if statuses is None or not statuses.records or self.pymux._place_of(pane) is None:
+                continue
+            prefix = "pane%d" % pane.pane_id
+            for id, record in statuses.records.items():
+                relay = prefix + "/" + id if id else prefix
+                if valid_id(relay):
+                    records[relay] = record.payload(relay)
+        return records
+
+    def sync_program_status(self) -> None:
+        "Give every client's terminal the records of the panes. Lillecarl/pymux#927."
+        try:
+            records = self.program_status()
+            for client in self.pymux._client_states:
+                client.set_program_status(records)
+        except Exception:
+            logger.exception("Sending the program status failed.")
 
     def keyboard_source_flags(self) -> int:
         """

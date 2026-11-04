@@ -197,7 +197,7 @@ class PeerLink:
             return
         # A frame carries the pointer, and the marks of a shell name
         # rows of the history, which stays here.
-        if code in (Osc.POINTER_SHAPE, Osc.SHELL_INTEGRATION):
+        if code in (Osc.POINTER_SHAPE, Osc.SHELL_INTEGRATION, Osc.PROGRAM_STATUS):
             return
         packet: Message = {
             Field.CMD: Packet.MIRROR_OSC,

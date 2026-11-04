@@ -278,9 +278,14 @@ class PaneMaker:
             self.pymux.drag_and_drop.forget(pane)
             self.pymux.kitty_transfers.forget(pane)
 
+            statuses = getattr(pane.screen, "program_status", None)
+            if statuses is not None:
+                statuses.passed()
+
             if not self.pymux.options_of_pane(pane).remain_on_exit:
                 self.take_ended_pane(pane)
 
+            self.pymux.terminals.sync_program_status()
             self.pymux.invalidate(Woke.PANE_ENDED)
 
         def bell():

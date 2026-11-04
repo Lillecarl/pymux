@@ -140,6 +140,16 @@ async def test_where_the_shell_runs_is_what_it_said(pymux):
     assert format_pymux_string(pymux, "#{pane_current_host}|#{pane_current_user}|#{pane_shell}") == "far|deploy|fish"
 
 
+async def test_the_program_state_is_the_most_urgent_record(pymux):
+    "OSC 7501: blocked outranks working. Lillecarl/pymux#927."
+    asked = "#{pane_program_state}|#{pane_program_message}"
+    assert format_pymux_string(pymux, asked) == "|"
+    screen = _context(pymux).pane.screen
+    screen.osc("7501", "state=working")
+    screen.osc("7501", "state=blocked:id=worker:msg=QXBwcm92ZT8")
+    assert format_pymux_string(pymux, asked) == "blocked|Approve?"
+
+
 @pytest.mark.parametrize(
     ("path", "compact"),
     [

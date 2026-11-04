@@ -14,6 +14,7 @@ import anyio
 from libpymux.protocol import Field, Message, Packet
 from pyte.keep import Keep
 from pyte.osc import Osc
+from pyte.program_status import ProgramState, beneath
 from pyte.sequences.strings import osc
 
 from ..audio import AudioLink
@@ -85,6 +86,7 @@ class ClientRole:
         # A new server clears them with its first frame.
         "extra_cursors_sent": Keep.REBUILT,
         "_progress_sent": Keep.REBUILT,
+        "_program_status_sent": Keep.REBUILT,
         "can_forward": Keep.REBUILT,
         "answers_forwards": Keep.REBUILT,
         "_next_forwards": Keep.DROPPED,
@@ -232,6 +234,10 @@ class ClientRole:
         # The progress this client's terminal was told, the same way.
         self._progress_sent = NO_PROGRESS
 
+        # The records this client's terminal holds of the panes, as
+        # report payloads by id; None before the first. Lillecarl/pymux#927.
+        self._program_status_sent: dict[str, str] | None = None
+
         # The extra cursors this client's terminal draws itself.
         # Lillecarl/pymux#891.
         self.extra_cursors_sent = ExtraCursorsSent()
@@ -316,6 +322,35 @@ class ClientRole:
             return
         self._progress_sent = progress
         self.forward_osc(osc(Osc.MESSAGE, progress.sequence))
+
+    def set_program_status(self, records: dict[str, str]) -> None:
+        """
+        Make this client's terminal hold `records`, report payloads by
+        id, when it keeps OSC 7501 records. Only the difference goes out.
+
+        A clear takes the records beneath its id too, so what is still
+        there under one goes again. The first time clears everything,
+        which a server before this one may have left. Lillecarl/pymux#927.
+        """
+        if not self.replies.program_status:
+            return
+        sent = self._program_status_sent
+        cleared: list[str] = []
+        if sent is None:
+            sent = dict[str, str]()
+            cleared.append("")
+        for id in sorted(set(sent) - set(records), key=len):
+            if not any(beneath(id, parent) for parent in cleared):
+                cleared.append(id)
+        out = ["state=%s:id=%s" % (ProgramState.CLEAR, id) if id else "state=%s" % ProgramState.CLEAR for id in cleared]
+        out += [
+            payload
+            for id, payload in records.items()
+            if sent.get(id) != payload or any(beneath(id, parent) for parent in cleared)
+        ]
+        self._program_status_sent = dict(records)
+        for payload in out:
+            self.forward_osc(osc(Osc.PROGRAM_STATUS, payload))
 
     def request_repaint(self) -> None:
         """
