@@ -83,6 +83,17 @@ def looks_at(pymux, state):
         return pymux.arrangement.get_active_window()
 
 
+def without_activity_marks(pymux) -> None:
+    """
+    No window raises an activity mark. The server's first window runs a
+    shell that nobody looks at here, and a prompt it draws late, as it
+    does on a loaded builder, marks that window and draws every client's
+    window list: a frame, but not one a pane's write asked for.
+    """
+    for window in pymux.arrangement.windows:
+        window.options.monitor_activity = False
+
+
 async def create_window_of_its_own(pymux, state):
     "A new window, made by this client, so this client looks at it."
     with set_app(state.app):
@@ -100,6 +111,7 @@ async def test_pane_in_window_nobody_looks_at_draws_nothing():
         shown = looks_at(pymux, state)
         hidden = next(w for w in pymux.arrangement.windows if w is not shown)
 
+        without_activity_marks(pymux)
         await settled(state)
         drawn = state.app.render_counter
         await five_writes(hidden.panes[0], "nobody is looking\r\n")
@@ -129,6 +141,7 @@ async def test_pane_does_not_wake_client_looking_elsewhere():
         window_of_a = looks_at(pymux, a)
         assert looks_at(pymux, b) is not window_of_a
 
+        without_activity_marks(pymux)
         await settled(a, b)
         drawn_by_a = a.app.render_counter
         drawn_by_b = b.app.render_counter
