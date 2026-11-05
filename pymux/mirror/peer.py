@@ -9,6 +9,7 @@ One link per server, whatever number of its panes are mirrored here.
 from __future__ import annotations
 
 import math
+import socket
 from contextlib import suppress
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
@@ -31,6 +32,7 @@ from ..client.defaults import is_ssh_url
 from ..client.reconnect import link_ended_notice, link_notice, why
 from ..client.relink import Relink, Restarting, Wait
 from ..commands import CommandException
+from ..connection.log_asks import LogAsks, log_answer
 from ..enums import Clipboard, Woke
 from ..graphics.kitty_frames import decoders
 from ..log import logger
@@ -350,6 +352,8 @@ class Peer:
         "running": Keep.DROPPED,
         "relink": Keep.DROPPED,
         "_waiting": Keep.DROPPED,
+        "log_asks": Keep.DROPPED,
+        "_tasks": Keep.DROPPED,
     }
 
     def __init__(self, pymux: Pymux, address: str, **connect_with: Any) -> None:
@@ -385,6 +389,10 @@ class Peer:
         #: and `Peers.of` starts it again.
         self.running = False
         self._waiting = _PaneWaiting(self)
+        #: The `show-log -p` requests that wait for the owner. Lillecarl/pymux#934.
+        self.log_asks = LogAsks(self.send)
+        #: The scope of the link while it is up.
+        self._tasks: anyio.abc.TaskGroup | None = None
         #: The link while it is gone, as an SSH client's (`relink`). A
         #: sleep here breaks only a link that crosses the network.
         self.relink: Relink[anyio.abc.ByteStream] = Relink(
@@ -459,7 +467,13 @@ class Peer:
         # Zstd only across a network, as a client offers it.
         offer = [MSGPACK_ZSTD, MSGPACK] if is_ssh_url(self.address) else [MSGPACK]
         self.send(
-            {Field.CMD: Packet.PEER, Field.WIRE: offer, Field.VERSION: PEER_VERSION, Field.OLDEST: OLDEST_PEER_VERSION}
+            {
+                Field.CMD: Packet.PEER,
+                Field.WIRE: offer,
+                Field.VERSION: PEER_VERSION,
+                Field.OLDEST: OLDEST_PEER_VERSION,
+                Field.SERVER: socket.gethostname().partition(".")[0],
+            }
         )
         self.told.replay()
 
@@ -647,6 +661,7 @@ class Peer:
         # every client, so the link's trouble stays the link's.
         try:
             async with stream, anyio.create_task_group() as tasks:
+                self._tasks = tasks
                 tasks.start_soon(self._write, stream)
                 reader = PacketReader()
                 while refused is None:
@@ -674,6 +689,8 @@ class Peer:
         finally:
             self.connected = False
             self.stream = None
+            self._tasks = None
+            self.log_asks.gone()
             self._send.close()
             self.tree.pymux.drag_and_drop.cut_off(
                 [pane for pane in self.tree.panes.values() if not isinstance(pane.terminal, WindowWidget)]
@@ -693,6 +710,9 @@ class Peer:
             async for encoded in self._receive:
                 await stream.send(encoded)
         await stream.aclose()
+
+    async def _answer_log(self, packet: Message) -> None:
+        self.send(await anyio.to_thread.run_sync(log_answer, packet))
 
     def _refusal(self, packet: Message) -> str | None:
         """
@@ -727,6 +747,13 @@ class Peer:
     def _take(self, packet: Message) -> None:
         if packet.get(Field.CMD) == Packet.PING:
             self.send({Field.CMD: Packet.PONG})
+            return
+        if packet.get(Field.CMD) == Packet.REPORT_LOG:
+            if self._tasks is not None:
+                self._tasks.start_soon(self._answer_log, packet)
+            return
+        if packet.get(Field.CMD) == Packet.LOG:
+            self.log_asks.answered(packet)
             return
         if packet.get(Field.CMD) == Packet.RESTARTING:
             self.restart = (

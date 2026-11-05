@@ -38,6 +38,7 @@ from pyte.mouse import MODIFIERS, MouseAction, MouseBits, MouseButton, MouseInpu
 from pyte.osc import Osc, color_base_of
 from pyte.sequences.kitty_clipboard import b64
 
+from ..connection.log_asks import LogAsks, log_answer
 from ..connection.packet_table import PacketTable
 from ..enums import Woke
 from ..ids import PaneId, WindowId
@@ -100,10 +101,16 @@ class PeerLink:
         "_tree_sent": Keep.DROPPED,
         "_answer_owed": Keep.DROPPED,
         "_program_status_sent": Keep.DROPPED,
+        "host": Keep.DROPPED,
+        "log_asks": Keep.DROPPED,
     }
 
-    def __init__(self, connection: ServerConnection, offered: object, version: int) -> None:
+    def __init__(self, connection: ServerConnection, offered: object, version: int, host: str = "") -> None:
         self.connection = connection
+        #: The machine of the peer, as its `peer` said; "" from one older than `PEER_LOGS`.
+        self.host = host
+        #: The `show-log -p` requests that wait for the peer. Lillecarl/pymux#934.
+        self.log_asks = LogAsks(self.queue)
         #: The version of the link both sides speak (`peer_version`).
         self.version = version
         self.sources: dict[PaneId, MirrorSource] = {}
@@ -369,6 +376,7 @@ class PeerLink:
         self._queue.clear()
         self._ready.set()
         self._sized({})
+        self.log_asks.gone()
         self.connection.pymux.drag_and_drop.link_gone(self)
         if viewed:
             self.connection.pymux.terminals.sync_viewers()
@@ -399,6 +407,17 @@ class PeerLink:
 
     def _source_of(self, packet: Message) -> MirrorSource | None:
         return self.sources.get(PaneId(int(packet.get(Field.PANE_ID, -1))))
+
+    @_PACKETS.handles(Packet.REPORT_LOG)
+    def _on_report_log(self, packet: Message) -> None:
+        async def answer() -> None:
+            self.queue(await anyio.to_thread.run_sync(log_answer, packet))
+
+        self.connection.spawn(answer())
+
+    @_PACKETS.handles(Packet.LOG)
+    def _on_log(self, packet: Message) -> None:
+        self.log_asks.answered(packet)
 
     @_PACKETS.handles(Packet.MIRROR)
     def _on_mirror(self, packet: Message) -> None:

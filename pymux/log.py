@@ -50,6 +50,7 @@ from __future__ import annotations
 import logging
 import logging.handlers
 import os
+from collections import deque
 from enum import StrEnum
 from pathlib import Path
 
@@ -62,6 +63,7 @@ __all__ = [
     "logfile",
     "logger",
     "set_level",
+    "tail",
 ]
 
 
@@ -120,6 +122,28 @@ _logfile: Path | None = None
 def logfile() -> Path | None:
     "The file this process logs to, or `None` when nothing configured one."
     return _logfile
+
+
+#: The most of one line `tail` keeps, in characters. A line of the live
+#: log on 2026-11-05 ran to megabytes: 46k lines in 5 MB.
+LINE_LIMIT = 2000
+
+
+def tail(lines: int) -> str:
+    """
+    The last `lines` lines of this machine's pymux log, each cut at
+    `LINE_LIMIT`. **It blocks.** Raises `OSError` when there is no log
+    to read. Lillecarl/pymux#934.
+    """
+    path = logfile() or default_logfile()
+    with path.open(encoding="utf-8", errors="replace") as log:
+        last = deque(log, maxlen=max(lines, 0))
+    return "".join(
+        "%s… (%d more)\n" % (line[:LINE_LIMIT], len(text) - LINE_LIMIT)
+        if len(text := line.rstrip("\n")) > LINE_LIMIT
+        else line
+        for line in last
+    )
 
 
 def level() -> str:

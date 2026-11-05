@@ -143,6 +143,7 @@ MODULES = [
     "load_buffer",
     "save_buffer",
     "show_messages",
+    "show_log",
     "show_html_stylesheet",
     "attach_session",
     "switch_client",

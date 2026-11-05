@@ -46,6 +46,7 @@ from pymux.style.colors import COLOR_QUERIES, TRUECOLOR_PROBE
 from pymux.utils import nonblocking
 
 from ..connection.client_io import DND_OFF, PASTE_EVENTS_OFF, PIXEL_MOUSE_OFF, REPORTS_OFF
+from ..connection.log_asks import log_answer
 from ..connection.packet_table import PacketTable
 from .base import Client
 from .browsers import Browsers
@@ -698,6 +699,12 @@ class TerminalClient(Client):
     @_PACKETS.handles(Packet.LIST_FILES)
     def _on_list_files(self, packet: Message) -> None:
         self.sending_files.listing_asked(packet)
+
+    @_PACKETS.handles(Packet.REPORT_LOG)
+    def _on_report_log(self, packet: Message) -> None:
+        # `show-log -t` on the server: this machine's log, which the
+        # server cannot read. Lillecarl/pymux#934.
+        self.sending_files.off_the_loop(lambda: log_answer(packet), self.send_packet)
 
     @_PACKETS.handles(Packet.KITTY_TRANSFER)
     def _on_kitty_transfer(self, packet: Message) -> None:

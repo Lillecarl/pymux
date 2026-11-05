@@ -70,7 +70,7 @@ READ_SIZE = 1 << 20
 #: one misreads it raises `PEER_VERSION`; one that stops speaking the
 #: older form raises `OLDEST_PEER_VERSION` too. Every field is named
 #: and has a default, so most changes need neither. Lillecarl/pymux#759.
-PEER_VERSION = 9
+PEER_VERSION = 10
 OLDEST_PEER_VERSION = 1
 
 #: From this version a frame may name an image the peer stored by its
@@ -110,6 +110,10 @@ PEER_FILE_TRANSFER = 8
 #: From this version a pane's OSC 7501 records cross whole, as
 #: `mirror-program-status`, whenever they change. Lillecarl/pymux#928.
 PEER_PROGRAM_STATUS = 9
+
+#: From this version either side answers `report-log`, and `peer` names
+#: the peer's host under `server`. Lillecarl/pymux#934.
+PEER_LOGS = 10
 
 
 def peer_upgrade(version: object, oldest: object) -> str | None:
@@ -429,6 +433,12 @@ class Packet(StrEnum):
     # Either side: "every packet I write after this one is in `wire`".
     # `wire.py` holds the format. Lillecarl/pymux#633.
     WIRE = "wire"
+    # Either side, on an attached client's connection and on a peer link:
+    # "send the last `lines` lines of your machine's pymux log", under
+    # the id `request`. The answer is `log`, with the text under `data`,
+    # or `error`. Lillecarl/pymux#934.
+    REPORT_LOG = "report-log"
+    LOG = "log"
 
 
 class Field(StrEnum):
@@ -536,6 +546,8 @@ class Field(StrEnum):
     #: paths it asks for.
     REQUEST = "request"
     PATHS = "paths"
+    #: In `report-log`: how many lines of the log to send.
+    LINES = "lines"
     PORT = "port"
     PROGRAM = "program"
     PROFILE = "profile"

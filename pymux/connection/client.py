@@ -28,6 +28,7 @@ from .client_io import ClientInput, FrameOutput
 from .clipboard_reads import ClipboardReader
 from .extra_cursors import ExtraCursorsSent
 from .files import Files
+from .log_asks import LogAsks
 from .pacing import FramePacing
 from .packet_table import PacketTable
 from .replies import TerminalReplies
@@ -74,6 +75,7 @@ class ClientRole:
         "pacing": Keep.REBUILT,
         "clipboard": Keep.REBUILT,
         "files": Keep.REBUILT,
+        "log_asks": Keep.REBUILT,
         "hostname": Keep.REBUILT,
         "ttyname": Keep.REBUILT,
         "pid": Keep.REBUILT,
@@ -190,6 +192,8 @@ class ClientRole:
         #: requests that wait for its answer. Lillecarl/pymux#743.
         self.sends_files = False
         self.files = Files(self)
+        #: The `show-log` requests that wait for this client. Lillecarl/pymux#934.
+        self.log_asks = LogAsks(self.connection.send_packet)
         #: Whether this client answers kitty's file transfer as the
         #: terminal. Lillecarl/pymux#912.
         self.answers_transfers = False
@@ -411,6 +415,10 @@ class ClientRole:
     def _on_files_listed(self, packet: Message) -> None:
         self.files.listed(packet)
 
+    @_PACKETS.handles(Packet.LOG)
+    def _on_log(self, packet: Message) -> None:
+        self.log_asks.answered(packet)
+
     @_PACKETS.handles(Packet.KITTY_TRANSFER)
     def _on_kitty_transfer(self, packet: Message) -> None:
         self.pymux.kitty_transfers.terminal_said(self.connection, str(packet.get(Field.DATA) or ""))
@@ -563,4 +571,5 @@ class ClientRole:
         "What waits on this client lets go, after its connection closed."
         self.pacing.frames_shown.set()
         self.files.client_went()
+        self.log_asks.gone()
         self.pipeinput.close()

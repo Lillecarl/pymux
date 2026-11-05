@@ -318,8 +318,9 @@ class ServerConnection:
             logger.info("Refusing a peer link of version %s.", packet.get(Field.VERSION, 0))
             self.spawn(refuse())
             return
-        logger.info("A peer links, at version %s.", packet.get(Field.VERSION, 0))
-        link = PeerLink(self, packet.get(Field.WIRE), peer_version(packet.get(Field.VERSION)))
+        host = str(packet.get(Field.SERVER) or "")
+        logger.info("A peer%s links, at version %s.", " on %s" % (host,) if host else "", packet.get(Field.VERSION, 0))
+        link = PeerLink(self, packet.get(Field.WIRE), peer_version(packet.get(Field.VERSION)), host)
         self.role = link
         self.spawn(link.run())
 
