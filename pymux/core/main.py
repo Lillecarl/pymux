@@ -9,7 +9,8 @@ import weakref
 from collections import deque
 from collections.abc import Coroutine, Iterable
 from contextlib import asynccontextmanager, suppress
-from typing import TYPE_CHECKING, Any, ClassVar
+from functools import partial
+from typing import TYPE_CHECKING, Any, ClassVar, TextIO
 
 import anyio
 import anyio.abc
@@ -187,6 +188,7 @@ class Pymux:
         # The running server.
         "connections": Keep.DROPPED,
         "tasks": Keep.DROPPED,
+        "stall_stacks": Keep.REBUILT,
         "error_notice": Keep.REBUILT,
         "loop": Keep.DROPPED,
         "done": Keep.DROPPED,
@@ -309,6 +311,7 @@ class Pymux:
         #: it is there for exactly as long as this server serves, and
         #: `None` before and after. Lillecarl/pymux#87.
         self.tasks: anyio.abc.TaskGroup | None = None
+        self.stall_stacks: TextIO | None = None
 
         #: The corner that says an error was logged. Lillecarl/pymux#241.
         self.error_notice = ErrorNotice(self)
@@ -640,7 +643,10 @@ class Pymux:
         one takes the signal here. The work that needs a loop is in
         `running()`.
         """
-        introspect.answer_signal()
+        if introspect.answer_signal() is not None:
+            # Only a real server: the suite's hang guard is the same
+            # single faulthandler timer, and the loop watch would take it.
+            self.stall_stacks = introspect.stacks_stream()
         introspect.log_what_escapes()
         say_how_it_ends(logger)
 
@@ -664,7 +670,7 @@ class Pymux:
             self.error_notice.install()
             tasks.start_soon(self.waking.auto_refresh)
             tasks.start_soon(watch_window_output, self)
-            tasks.start_soon(watch_the_loop)
+            tasks.start_soon(partial(watch_the_loop, stacks=self.stall_stacks))
             tasks.start_soon(sweep, self)
             tasks.start_soon(self.port_offers.keep)
             tasks.start_soon(self.actions.keep, lambda: self.options.action_log_limit)

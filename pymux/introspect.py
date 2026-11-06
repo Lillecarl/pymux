@@ -43,7 +43,7 @@ import traceback
 from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TextIO
 
 import anyio
 
@@ -60,6 +60,7 @@ __all__ = [
     "Counters",
     "answer_signal",
     "stacks_file",
+    "stacks_stream",
     "where_dump_goes",
     "write_dump",
 ]
@@ -130,6 +131,11 @@ def where_dump_goes() -> Path:
 def stacks_file() -> Path:
     "Where a `SIGUSR1` writes."
     return where_dump_goes() / ("stacks-%d.log" % (os.getpid(),))
+
+
+def stacks_stream() -> TextIO | None:
+    "The open file `answer_signal` gave faulthandler, or None."
+    return _stacks_file
 
 
 def answer_signal() -> Path | None:

@@ -7,9 +7,10 @@ one, and none of them may take the server with it.
 
 from __future__ import annotations
 
+import faulthandler
 import time
 from functools import partial
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TextIO
 
 import anyio
 import anyio.abc
@@ -33,14 +34,30 @@ LOOP_TICK = 0.25
 LOOP_STALL = 1.0
 
 
-async def watch_the_loop(tick: float = LOOP_TICK, stall: float = LOOP_STALL) -> None:
-    "Log each turn of the loop that held it for `stall` seconds or more."
-    while True:
-        before = time.monotonic()
-        await anyio.sleep(tick)
-        late = time.monotonic() - before - tick
-        if late >= stall:
-            logger.warning("The loop stood still %.2fs.", late)
+async def watch_the_loop(tick: float = LOOP_TICK, stall: float = LOOP_STALL, stacks: TextIO | None = None) -> None:
+    """
+    Log each turn of the loop that held it for `stall` seconds or more.
+
+    With `stacks`, faulthandler's own thread writes every stack there
+    while the loop is still held: a log line after the stall cannot
+    say what held it. The C timer needs no GIL, so a stall inside one C
+    call is caught too. Lillecarl/pymux#936.
+    """
+    try:
+        while True:
+            if stacks is not None:
+                faulthandler.dump_traceback_later(tick + stall, file=stacks)
+            before = time.monotonic()
+            await anyio.sleep(tick)
+            late = time.monotonic() - before - tick
+            if late >= stall:
+                if stacks is not None:
+                    logger.warning("The loop stood still %.2fs; its stacks are in %s.", late, stacks.name)
+                else:
+                    logger.warning("The loop stood still %.2fs.", late)
+    finally:
+        if stacks is not None:
+            faulthandler.cancel_dump_traceback_later()
 
 
 #: How often the windows are checked for output and for quiet, in
