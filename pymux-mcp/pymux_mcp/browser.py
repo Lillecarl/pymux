@@ -60,6 +60,7 @@ import psutil
 from libpymux import Job, Pane, Server, Window
 from PIL import Image, ImageDraw, ImageFont
 
+from . import bridge, qutebridge
 from .cdp import CDPError, Connection, Page, connected
 
 __all__ = ["Browser", "Kind", "Seat", "close", "collect", "find", "open_browser", "sweep", "tab"]
@@ -377,13 +378,29 @@ def _chromium(
     ]
 
 
+#: The config.py pymux hands a qutebrowser it starts, in its profile.
+QUTEBROWSER_CONFIG: Final = "pymux-config.py"
+
+
 def _qutebrowser(executable: str, seat: Seat, profile: Path, port: int, arguments: Sequence[str]) -> list[str]:
     "Chromium's switches reach QtWebEngine through `--qt-flag`."
     platform = ["env", "QT_QPA_PLATFORM=%s" % (QT_PLATFORM[seat],)] if seat in QT_PLATFORM else []
+    config = profile / QUTEBROWSER_CONFIG
+    config.write_text(
+        # The bridge, and then the profile's own config.py, which a kept
+        # profile may have: `--config-py` takes its place.
+        "config.load_autoconfig()\n"
+        + qutebridge.loader(socket_path=str(bridge.socket_for(profile)))
+        + "import os as _os\n"
+        "_own = _os.path.join(str(config.configdir), 'config.py')\n"
+        "if _os.path.exists(_own):\n"
+        "    config.source(_own)\n"
+    )
     return [
         *platform,
         executable,
         "--basedir=%s" % (profile,),
+        "--config-py=%s" % (config,),
         "--qt-flag=remote-debugging-port=%d" % (port,),
         *("--qt-flag=%s" % (switch.removeprefix("--"),) for switch in CALM),
         *(SOFTWARE if seat is Seat.HEADLESS else ()),
@@ -515,6 +532,9 @@ async def close(browser: Browser) -> None:
                 await _ended(pid, KILL_TIMEOUT)
     finally:
         _forget(browser.profile)
+        if browser.kind is Kind.QUTEBROWSER:
+            # Outside the profile when the profile's path is long.
+            bridge.socket_for(browser.profile).unlink(missing_ok=True)
 
 
 async def _ask_to_quit(browser: Browser, pid: int | None) -> bool:

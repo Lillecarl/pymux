@@ -69,6 +69,24 @@ so. pymux picks its port and quits it with SIGTERM, because QtWebEngine
 refuses port 0 and does not quit on `Browser.close`. A Chromium switch
 reaches it as `--qt-flag=<switch>` in `arguments`.
 
+### Inside qutebrowser
+
+`qutebrowser.python` runs Python in a qutebrowser's own process, on its
+main loop, and answers the last line's value, what it printed, and the
+messages the browser showed meanwhile. `qutebrowser.command` runs a
+qutebrowser command, such as `set zoom.default 125%`, and answers its
+error. So an agent reads and changes a browser's live settings, which
+the DevTools protocol cannot reach.
+
+Both go through `qutebridge.py`, a socket that config.py starts inside
+the browser. A qutebrowser `browser.open` starts serves it from the
+first moment. With no `name`, both operations reach the person's own
+qutebrowser, which serves it once its config.py loads the bridge and
+the person types `:pymux-bridge on`; `:pymux-bridge off` shuts the agent
+out again. `python -m pymux_mcp.qutebridge --off` prints the lines for
+config.py. The socket is mode 0600: it runs any Python as the person,
+in the browser that holds their logins.
+
 A browser's profile is thrown away when it closes, unless `profile`
 names one: a kept profile lives in
 `$XDG_STATE_HOME/pymux/browsers/<name>`, or `qutebrowsers/<name>` for

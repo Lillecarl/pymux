@@ -11,6 +11,7 @@ from __future__ import annotations
 import dataclasses
 import json
 from collections.abc import Awaitable, Callable, Sequence
+from pathlib import Path
 from typing import Annotated, Any, Final, Literal
 
 import anyio
@@ -18,7 +19,7 @@ from libpymux import CommandError, Job, Pane, Server, Session, Window
 from libpymux.operations import WaitFor
 from pydantic import BaseModel, ConfigDict, Field
 
-from . import browser, cdp
+from . import bridge, browser, cdp
 from .fonts import bundled
 from .registry import Registry
 
@@ -967,3 +968,59 @@ async def browser_console(
     "What a tab logged to its console, and the exceptions it threw, oldest first."
     async with browser.tab(server, name, tab) as page:
         return await browser.console(page, limit)
+
+
+# -- qutebrowser, from inside ------------------------------------------------
+
+Qutebrowser = Annotated[
+    str | None,
+    Field(
+        description=(
+            "A qutebrowser `browser.open` started, by name. Left out, the person's own qutebrowser,"
+            " once they typed `:pymux-bridge on` in it."
+        )
+    ),
+]
+
+
+async def _bridge_of(server: Server, name: str | None) -> Path:
+    if name is None:
+        return bridge.own_socket()
+    found = await browser.find(server, name)
+    if found.kind is not browser.Kind.QUTEBROWSER:
+        raise ValueError("%r is %s; only a qutebrowser has a bridge" % (name, found.kind.value))
+    await browser.touch(server, found)
+    return bridge.socket_for(found.profile)
+
+
+@operation("qutebrowser.python")
+async def qutebrowser_python(
+    server: Server,
+    code: Annotated[
+        str,
+        Field(
+            description=(
+                "Python to run in qutebrowser's process, on its main loop. The last line's value is answered"
+                " when it is an expression. Names kept between calls: `objreg`, `config` (config.val.x,"
+                " config.instance), `message`, `command(text)`, `window()`, `tab()`, and anything you define."
+            )
+        ),
+    ],
+    name: Qutebrowser = None,
+    timeout: Seconds = 60.0,
+) -> Json:
+    "Run Python inside a qutebrowser, and answer its value, what it printed, and what the browser showed."
+    return await bridge.ask(await _bridge_of(server, name), {"python": code}, timeout)
+
+
+@operation("qutebrowser.command")
+async def qutebrowser_command(
+    server: Server,
+    command: Annotated[
+        str, Field(description="A qutebrowser command line, as typed after `:`: `set zoom.default 125%`.")
+    ],
+    name: Qutebrowser = None,
+    timeout: Seconds = 60.0,
+) -> Json:
+    "Run a qutebrowser command, and answer its error, if any, and the messages the browser showed."
+    return await bridge.ask(await _bridge_of(server, name), {"command": command}, timeout)

@@ -55,6 +55,12 @@ Linux only), `seat: "desktop"` in a window on the server machine's desktop,
 - with the person: `browser.point` shows them an element,
   `browser.selection` reads what they selected.
 
+qutebrowser from inside: `qutebrowser.python` (Python on its main loop; names
+`config`, `objreg`, `message`, `command()`, `window()`, `tab()`) and
+`qutebrowser.command` (`set zoom.default 125%`). `name` picks a qutebrowser
+`browser.open` started; without it, the person's own, after they type
+`:pymux-bridge on`.
+
 A browser closes after `idle` seconds unused (half an hour by default).
 `browser.close` it when done. `profile` keeps logins between browsers.
 

@@ -225,6 +225,43 @@ async def test_an_extension_loads_at_launch_and_into_a_running_browser(server, t
 
 
 @needs_qutebrowser
+@pytest.mark.parametrize("profile", [None, "kept"])
+async def test_an_agent_reaches_into_qutebrowser_through_its_bridge(server, tmp_path, monkeypatch, profile):
+    """
+    Python and commands run inside the browser, with what it said. A
+    kept profile under this test's long temporary path is too long for a
+    socket, so its bridge serves from the runtime directory.
+    """
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    opened = await call(
+        server,
+        "browser.open",
+        name="probe",
+        kind="qutebrowser",
+        seat="headless",
+        url=PAGE,
+        profile=profile,
+        arguments=QUTEBROWSER_ARGUMENTS,
+    )
+    try:
+        said = await call(server, "qutebrowser.python", name="probe", code="config.val.zoom.default")
+        assert said == {"value": 100.0, "error": None, "stdout": "", "messages": []}, said
+        said = await call(server, "qutebrowser.command", name="probe", command="set zoom.default 125%")
+        assert said["error"] is None, said
+        said = await call(server, "qutebrowser.python", name="probe", code="print('hi'); tab().url().toString()")
+        assert (said["value"], said["stdout"]) == (PAGE, "hi\n"), said
+        said = await call(
+            server, "qutebrowser.python", name="probe", code="message.info('seen'); config.val.zoom.default"
+        )
+        assert said["value"] == 125.0 and said["messages"] == [{"level": "info", "text": "seen"}], said
+        said = await call(server, "qutebrowser.command", name="probe", command="no-such-command")
+        assert "no such command" in said["error"], said
+    finally:
+        await call(server, "browser.close", name="probe")
+    assert not browser.bridge.socket_for(Path(opened["profile"])).exists()
+
+
+@needs_qutebrowser
 async def test_qutebrowser_refuses_what_only_chromium_has(server, tmp_path):
     "No extensions and no chrome://settings, said plainly rather than as a protocol error."
     extension = an_extension(tmp_path / "first", "first")
