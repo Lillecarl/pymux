@@ -196,6 +196,28 @@ async def test_a_failed_task_leaves_the_connection_reading():
         connection.close_connection()
 
 
+async def test_a_task_spawned_before_the_connection_serves_runs():
+    """
+    The server starts `serve` with `start_soon`, so a packet can be sent
+    before its scope opens. Each upgrade lost one to a resumed client.
+    Lillecarl/pymux#937.
+    """
+    ran = []
+
+    async def note(what):
+        ran.append(what)
+
+    async with anyio.create_task_group() as tasks:
+        connection = ServerConnection(FakePymux(tasks), FakePipe())
+        assert connection._tasks is None
+        connection.spawn(note("first"))
+        connection.spawn(note("second"))
+        await _until(lambda: len(ran) == 2)
+
+        assert ran == ["first", "second"]
+        connection.close_connection()
+
+
 async def test_a_task_spawned_on_a_closed_connection_says_so(caplog):
     "Nothing would run it, so it is not quietly taken."
 

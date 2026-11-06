@@ -102,6 +102,7 @@ class ServerConnection:
         # connects again.
         "role": Keep.DROPPED,
         "_tasks": Keep.DROPPED,
+        "_before_serving": Keep.DROPPED,
         "closed": Keep.DROPPED,
         "_unanswered": Keep.DROPPED,
         # The pipe's counts start again on the next server's connection.
@@ -136,6 +137,12 @@ class ServerConnection:
         #: client goes, and none of them can outlive the server: the
         #: group is a child of `Pymux.running`'s. Lillecarl/pymux#87.
         self._tasks: anyio.abc.TaskGroup | None = None
+        #: What was spawned before `serve()` opened that scope, started
+        #: there in order; `None` once it opened. A connection the
+        #: server made is served by a `start_soon`, so it can be sent
+        #: to before its scope exists: a resumed client lost a packet
+        #: at upgrades that way. Lillecarl/pymux#937.
+        self._before_serving: list[Coroutine[Any, Any, object]] | None = []
 
         self.requests = Requests(self)
 
@@ -170,6 +177,9 @@ class ServerConnection:
         and reports again -- a lost task becomes an endless storm of
         repaints on the terminal of every client.
         """
+        if self._tasks is None and self._before_serving is not None:
+            self._before_serving.append(coro)
+            return
         if self._tasks is None:
             logger.warning("A task was spawned on a connection that does not serve: %s.", coro.__qualname__)
             coro.close()
@@ -217,6 +227,9 @@ class ServerConnection:
             try:
                 async with anyio.create_task_group() as tasks:
                     self._tasks = tasks
+                    waiting, self._before_serving = self._before_serving or [], None
+                    for coro in waiting:
+                        tasks.start_soon(self._run_task, coro)
                     try:
                         await self._read_until_it_ends()
                     finally:
