@@ -236,8 +236,7 @@ async def test_the_upkeep_keeps_the_newest(tmp_path):
 def test_the_upkeep_gives_every_free_page_back(tmp_path):
     """
     `PRAGMA incremental_vacuum` returns a row per page it frees. Dropped
-    at the first row, it freed one page per upkeep, and the live log
-    grew to 164 MB. Lillecarl/pymux#940.
+    at the first row, it freed one page per upkeep. Lillecarl/pymux#941.
     """
     db = apsw.Connection(str(tmp_path / "actions.db"))
     try:
