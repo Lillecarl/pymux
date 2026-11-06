@@ -85,6 +85,7 @@ class _Quiet:
 
     closed = False
     ready_f = None
+    more_is_waiting = False
 
     def write_text(self, text: str) -> None:
         pass

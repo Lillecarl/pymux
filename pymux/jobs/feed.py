@@ -35,6 +35,7 @@ class _NoBackend:
     "No pty behind a viewer: `#{pane_pid}` reads blank."
 
     pid: int | None = None
+    more_is_waiting = False
 
 
 class JobFeed:
