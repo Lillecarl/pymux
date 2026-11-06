@@ -64,7 +64,8 @@ qutebrowser from inside: `qutebrowser.python` (Python on its main loop; names
 
 Firefox or Glide from inside: `gecko.chrome` runs JavaScript in the browser
 window with chrome privilege (`gBrowser`, `Services`); in Glide, `glide` is
-its config API (`glide.o.hint_size = "20px"`).
+its config API (`glide.o.hint_size = "20px"`). Without `name`, the person's own
+Glide, after they type `:pymux_bridge on`.
 
 A browser closes after `idle` seconds unused (half an hour by default).
 `browser.close` it when done. `profile` keeps logins between browsers.

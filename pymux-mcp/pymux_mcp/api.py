@@ -20,7 +20,7 @@ from libpymux import CommandError, Job, Pane, Server, Session, Window
 from libpymux.operations import WaitFor
 from pydantic import BaseModel, ConfigDict, Field
 
-from . import bridge, browser, cdp, gecko, rdp
+from . import bridge, browser, cdp, gecko, glidebridge, rdp
 from .fonts import bundled
 from .registry import Registry
 
@@ -1011,10 +1011,26 @@ async def gecko_chrome(
             )
         ),
     ],
-    name: BrowserName = "browser",
+    name: Annotated[
+        str | None,
+        Field(
+            description=(
+                "A Firefox or Glide `browser.open` started, by name. Left out, the person's own Glide,"
+                " once they typed `:pymux_bridge on` in it."
+            )
+        ),
+    ] = None,
     timeout: Seconds = 60.0,
 ) -> Any:
-    "Run privileged JavaScript inside a Firefox or Glide `browser.open` started, and answer its value."
+    "Run privileged JavaScript inside Firefox or Glide, and answer its value."
+    if name is None:
+        path = glidebridge.default_path()
+        if not path.is_socket():
+            raise LookupError(
+                "no Glide bridge at %s: a Glide whose glide.ts loads pymux-mcp's glidebridge serves it"
+                " once `:pymux_bridge on` is typed in it" % (path,)
+            )
+        return await gecko.chrome(path, code, timeout)
     found = await browser.find(server, name)
     if found.kind not in browser.GECKO:
         raise ValueError("%r is %s; only Firefox and Glide have a chrome to reach" % (name, found.kind.value))

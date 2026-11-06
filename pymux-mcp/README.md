@@ -107,6 +107,14 @@ privilege, and answers the last statement's value. In Glide, `glide` is
 its config API, as `glide.ts` sees it, so an agent reads and changes the
 browser's live settings and key maps.
 
+With no `name`, `gecko.chrome` reaches the person's own Glide, through
+`glidebridge.py`. `python -m pymux_mcp.glidebridge --off --socket PATH`
+prints lines for glide.ts that add `:pymux_bridge on|off|status`. `on`
+opens Glide's debugger on a socket, by default
+`$XDG_STATE_HOME/pymux/glide.sock`, with mode 0600; `off` closes it. The
+path is written into the lines, because a Glide started from the Dock
+does not see the shell's environment.
+
 A browser's profile is thrown away when it closes, unless `profile`
 names one: a kept profile lives in
 `$XDG_STATE_HOME/pymux/browsers/<name>`, or `qutebrowsers/`,
