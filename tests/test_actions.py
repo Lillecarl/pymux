@@ -25,7 +25,7 @@ from test_command_mode import press as press_key
 from test_helix_mode_keys import _copy_mode_on
 from test_helix_status_keys import _helix
 
-from pymux.keys.actions import SCHEMA_VERSION, Kind, Origin, _upkeep, note, started_by
+from pymux.keys.actions import SCHEMA_VERSION, Kind, Origin, _prepare, _upkeep, note, started_by
 
 
 def _rows(path) -> list[dict]:
@@ -231,6 +231,27 @@ async def test_the_upkeep_keeps_the_newest(tmp_path):
     finally:
         db.close()
     assert names == ["w3", "w4"]
+
+
+def test_the_upkeep_gives_every_free_page_back(tmp_path):
+    """
+    `PRAGMA incremental_vacuum` returns a row per page it frees. Dropped
+    at the first row, it freed one page per upkeep, and the live log
+    grew to 164 MB. Lillecarl/pymux#940.
+    """
+    db = apsw.Connection(str(tmp_path / "actions.db"))
+    try:
+        _prepare(db)
+        db.execute("CREATE TABLE scratch (b BLOB)")
+        db.execute("INSERT INTO scratch VALUES (zeroblob(1 << 20))")
+        db.execute("DROP TABLE scratch")
+        assert db.execute("PRAGMA freelist_count").get > 1
+
+        _upkeep(db, 0)
+
+        assert db.execute("PRAGMA freelist_count").get == 0
+    finally:
+        db.close()
 
 
 async def test_a_file_of_another_schema_is_moved_aside(tmp_path):

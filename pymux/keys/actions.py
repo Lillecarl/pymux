@@ -413,9 +413,11 @@ def _upkeep(db: apsw.Connection, limit: int) -> None:
     if limit:
         with db:
             db.execute("DELETE FROM actions WHERE id <= (SELECT max(id) FROM actions) - ?", (limit,))
-    db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-    db.execute("PRAGMA incremental_vacuum")
-    db.execute("PRAGMA optimize")
+    # `.get` reads every row. `incremental_vacuum` frees one page per
+    # row, so a cursor dropped at the first row frees one page.
+    db.execute("PRAGMA wal_checkpoint(TRUNCATE)").get
+    db.execute("PRAGMA incremental_vacuum").get
+    db.execute("PRAGMA optimize").get
 
 
 def note_keys(pymux: Pymux, key_table: str, keys: str) -> None:
