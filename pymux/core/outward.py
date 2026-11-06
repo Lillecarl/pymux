@@ -26,6 +26,7 @@ from ..log import logger
 from ..mirror.program import RemoteProgram
 from ..notify.notifications import NotificationSource, Urgency, is_question
 from ..notify.osc import (
+    OPEN_URL_PREFIX,
     build_osc,
     copy_data_of,
     current_dir_of,
@@ -131,6 +132,21 @@ class Outward:
             self.pymux.tasks.start_soon(self._open_through, program, url, confirmed)
             return
         self._open(url, confirmed)
+
+    def open_url_of_a_pane(self, url: str, confirmed: bool, pane: Pane) -> None:
+        """
+        `open-url` run by a program in `pane` opens where the pane's
+        "OSC 1337 ; OpenURL" would: here, or at the peer whose person
+        used a mirror of the pane last (`who_acts`). A person who sees
+        this server only through a peer has no client here.
+        Lillecarl/pymux#944.
+        """
+        param = OPEN_URL_PREFIX + base64.b64encode(url.encode()).decode()
+        here, acting = self.who_acts(pane, param)
+        for link in acting:
+            link.pane_said(pane, Osc.TERMINAL_EXTENSION, param, acts=True)
+        if here:
+            self.open_url(url, confirmed, pane)
 
     async def _open_through(self, program: RemoteProgram, url: str, confirmed: bool) -> None:
         "Open a loopback URL of a mirrored pane, once a port here leads to its machine."

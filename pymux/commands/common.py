@@ -131,7 +131,7 @@ def window_in(session: Session, target: str) -> Window | None:
     return None
 
 
-def _pane_of_asking_client(pymux: Pymux) -> Pane | None:
+def pane_of_asking_client(pymux: Pymux) -> Pane | None:
     """
     The pane a socket command arrived from, or None.
 
@@ -166,7 +166,7 @@ def _sent_from_nowhere(pymux: Pymux) -> bool:
         asking = pymux.get_client_state()
     except ValueError:
         return False
-    return asking.temporary and _pane_of_asking_client(pymux) is None
+    return asking.temporary and pane_of_asking_client(pymux) is None
 
 
 def find_pane(pymux: Pymux, target: str | None) -> Pane | None:
@@ -178,7 +178,7 @@ def find_pane(pymux: Pymux, target: str | None) -> Pane | None:
     `session:window.pane`.
     """
     if target is None or target == "":
-        caller = _pane_of_asking_client(pymux)
+        caller = pane_of_asking_client(pymux)
         if caller is not None:
             return caller
         pane = pymux.arrangement.get_active_pane()

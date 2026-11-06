@@ -15,6 +15,7 @@ import base64
 import io
 import socket
 import sys
+from types import SimpleNamespace
 from urllib.parse import urlparse
 
 import anyio
@@ -1456,6 +1457,28 @@ async def test_a_url_of_a_mirrored_pane_opens_once_where_a_person_was_last(two_s
         control.feed_output("\x1b]52;c;%s\x07" % (base64.b64encode(b"behind it").decode(),))
         await until(lambda: peer.clipboard.get_data().text == "behind it", "the copy behind the URL arrives")
         assert opened == {used_last: [url], "there" if used_last == "here" else "here": []}
+
+
+async def test_open_url_from_a_pane_opens_at_the_peer_when_nobody_is_here(two_servers, monkeypatch):
+    "A person who sees the owner only through a peer. Lillecarl/pymux#944."
+    owner, peer, client = two_servers
+    there, _ = await shown_here(owner, peer, client)
+    opened: list[str] = []
+
+    def send(packet):
+        if packet.get(Field.CMD) == Packet.OPEN:
+            opened.append(packet[Field.DATA])
+
+    monkeypatch.setattr(client.client.connection, "send_packet", send)
+    assert owner.clients == []
+
+    url = "https://example.com/"
+    # A socket command typed in `there`, as `pymux open-url` sends it.
+    asking = SimpleNamespace(temporary=True, caller_pane_id=there.pane_id, session=owner.current_session)
+    monkeypatch.setattr(owner, "get_client_state", lambda: asking)
+    owner.handle_command("open-url %s" % (url,))
+    await until(lambda: opened == [url], "the peer opens the URL")
+    assert not [line for line in owner.message_log if "Nobody is attached" in line]
 
 
 async def test_a_link_to_itself_mirrors_nothing(two_servers):

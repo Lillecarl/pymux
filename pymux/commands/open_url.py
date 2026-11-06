@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import CommandParser, add_command
+from pymux.commands.common import pane_of_asking_client
 
 
 def open_url(pymux: Pymux, args: argparse.Namespace) -> None:
@@ -18,7 +19,11 @@ def open_url(pymux: Pymux, args: argparse.Namespace) -> None:
     asks first follows `open-url-mode`. "-c" is the answer of a
     confirmation: it opens without asking again.
     """
-    pymux.outward.open_url(args.url, confirmed=bool(args.c))
+    pane = pane_of_asking_client(pymux)
+    if pane is None:
+        pymux.outward.open_url(args.url, confirmed=bool(args.c))
+    else:
+        pymux.outward.open_url_of_a_pane(args.url, bool(args.c), pane)
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
