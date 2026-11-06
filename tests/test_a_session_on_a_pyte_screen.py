@@ -898,7 +898,7 @@ def test_a_dangling_sequence_does_not_swallow_the_next_output():
     session.take_packet({"cmd": Packet.OUT, "data": "abc\x1b[1;"})
     assert session._stream.ground_timer_active
 
-    session._ground_timer.since -= 5  # The timeout passed with no byte.
+    session._ground_timer.since -= 5  # The timeout passed with no packet.
     session.take_packet({"cmd": Packet.OUT, "data": "def"})
 
     assert not session._stream.ground_timer_active

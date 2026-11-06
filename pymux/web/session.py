@@ -114,6 +114,9 @@ class SessionScreen:
         """
         kind = packet.get(Field.CMD)
         if kind == Packet.OUT:
+            # No loop schedules this viewer, so a sequence expires at
+            # the next packet instead of at its deadline.
+            self._ground_timer.expire()
             self._ground_timer.feed(packet[Field.DATA])
         elif kind in (Packet.EXIT, Packet.ERR):
             return True

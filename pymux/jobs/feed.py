@@ -35,7 +35,6 @@ class _NoBackend:
     "No pty behind a viewer: `#{pane_pid}` reads blank."
 
     pid: int | None = None
-    more_is_waiting = False
 
 
 class JobFeed:
@@ -57,6 +56,9 @@ class JobFeed:
     new server's viewer replays the tail again: what the screen showed
     is the job's, so nothing else needs to cross. Lillecarl/pymux#715.
     """
+
+    #: `feed_output` feeds what it is given at once, so nothing waits.
+    output_is_waiting = False
 
     KEEP: ClassVar[dict[str, Keep]] = {
         "job": Keep.SAVED,

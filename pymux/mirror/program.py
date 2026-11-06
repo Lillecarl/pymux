@@ -35,7 +35,6 @@ class _NoMachinery:
     "No process runs here, so there is nothing to ask about one."
 
     pid: int | None = None
-    more_is_waiting = False
 
 
 class RemoteProgram:
@@ -67,6 +66,9 @@ class RemoteProgram:
         "_streaming": Keep.DROPPED,
         "stale": Keep.DROPPED,
     }
+
+    #: The owner parses; this side lays frames and feeds no stream.
+    output_is_waiting = False
 
     @classmethod
     def of(cls, peer: Peer, pane_id: int) -> Callable[[TerminalControl], RemoteProgram]:
