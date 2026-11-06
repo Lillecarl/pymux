@@ -132,6 +132,12 @@ class Kind(StrEnum):
 #: Qt's platform plugin by seat; on the desktop Qt picks its own.
 QT_PLATFORM: Final = {Seat.HEADLESS: "offscreen", Seat.PANE: "wayland"}
 
+#: A headless qutebrowser draws in software, as a headless Chromium does.
+#: Under `offscreen`, QtWebEngine's GPU process aborts on Linux with
+#: "GLOzone not found for unknown", and on macOS loses its GL context;
+#: measured on QtWebEngine 6.11.
+SOFTWARE: Final = ("--qt-flag=disable-gpu",)
+
 
 class BrowserGone(LookupError):
     "No browser by that name, or one that stopped listening."
@@ -380,6 +386,7 @@ def _qutebrowser(executable: str, seat: Seat, profile: Path, port: int, argument
         "--basedir=%s" % (profile,),
         "--qt-flag=remote-debugging-port=%d" % (port,),
         *("--qt-flag=%s" % (switch.removeprefix("--"),) for switch in CALM),
+        *(SOFTWARE if seat is Seat.HEADLESS else ()),
         *arguments,
         BLANK,
     ]
