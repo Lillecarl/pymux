@@ -171,7 +171,7 @@ class ServerConnection:
         repaints on the terminal of every client.
         """
         if self._tasks is None:
-            logger.warning("A task was spawned on a connection that does not serve.")
+            logger.warning("A task was spawned on a connection that does not serve: %s.", coro.__qualname__)
             coro.close()
             return
         self._tasks.start_soon(self._run_task, coro)
