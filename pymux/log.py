@@ -100,8 +100,16 @@ logger = logging.getLogger(__package__)
 #: handler so that an embedder gets no stderr. Without this line the
 #: warning that names a socket room somebody else owns would be written
 #: nowhere. Lillecarl/pymux#405. ptyhost is one too: "Feeding the
-#: terminal emulator failed" went nowhere. Lillecarl/pymux#737.
-LOGGERS = [logger, logging.getLogger("libpymux"), logging.getLogger("ptyhost"), logging.getLogger("asyncio")]
+#: terminal emulator failed" went nowhere. Lillecarl/pymux#737. And
+#: ptterm, which logs a sequence its ground timer drops.
+#: Lillecarl/pymux#935.
+LOGGERS = [
+    logger,
+    logging.getLogger("libpymux"),
+    logging.getLogger("ptyhost"),
+    logging.getLogger("ptterm"),
+    logging.getLogger("asyncio"),
+]
 
 #: How large the log may get before it starts again, and how many of the
 #: old ones to keep.
