@@ -62,7 +62,7 @@ split of a window somebody works in; closing it then takes only its own
 panes away. Every browser prefers reduced motion, so a watched one
 sends fewer frames.
 
-`kind` is `chromium` or `qutebrowser`. qutebrowser runs on QtWebEngine,
+`kind` is `chromium`, `qutebrowser`, `firefox` or `glide`. qutebrowser runs on QtWebEngine,
 which is Chromium, so every operation that reads or acts on a page works
 the same. It loads no extensions and has no `browser.setting`; both say
 so. pymux picks its port and quits it with SIGTERM, because QtWebEngine
@@ -87,10 +87,30 @@ out again. `python -m pymux_mcp.qutebridge --off` prints the lines for
 config.py. The socket is mode 0600: it runs any Python as the person,
 in the browser that holds their logins.
 
+### Firefox and Glide
+
+Firefox and Glide, which is Firefox with a keyboard-driven shell, speak
+no Chromium protocol. pymux starts them with `--start-debugger-server`
+on a Unix socket in the profile, writes a `user.js` that lets a client
+in, and drives them over Firefox's own debugging protocol (`rdp.py`).
+The operations are the same; `gecko.py` holds them by the names
+`browser.py` gives Chromium's. Nothing sets `navigator.webdriver`, as
+Marionette and WebDriver BiDi do.
+
+What reads or acts on a page runs in the tab's content process, in
+`gecko_page.js`: the accessibility tree, refs, and input through the
+EventUtils Marionette uses, so a page sees a click as trusted.
+Loading an address and pictures run in the parent process.
+
+`gecko.chrome` runs JavaScript in the browser window with chrome
+privilege, and answers the last statement's value. In Glide, `glide` is
+its config API, as `glide.ts` sees it, so an agent reads and changes the
+browser's live settings and key maps.
+
 A browser's profile is thrown away when it closes, unless `profile`
 names one: a kept profile lives in
-`$XDG_STATE_HOME/pymux/browsers/<name>`, or `qutebrowsers/<name>` for
-qutebrowser, and keeps its logins,
+`$XDG_STATE_HOME/pymux/browsers/<name>`, or `qutebrowsers/`,
+`firefoxes/` or `glides/` for the other kinds, and keeps its logins,
 extensions and settings for the next browser that names it. One
 browser at a time can have a profile open.
 
@@ -112,8 +132,9 @@ connects to the browser again, through the port written into its
 profile. That port listens on the server machine's loopback, so
 pymux-mcp has to run on that machine.
 
-The browser comes from `executable`, then `PYMUX_MCP_CHROMIUM` or
-`PYMUX_MCP_QUTEBROWSER`, then `chromium` or `qutebrowser` on the PATH.
+The browser comes from `executable`, then `PYMUX_MCP_<KIND>` such as
+`PYMUX_MCP_GLIDE`, then the kind's name on the PATH, then, for Firefox
+and Glide on macOS, the app in `/Applications`.
 
 ## One place for each argument
 
@@ -134,5 +155,6 @@ environment stamps the job.
 `tests/test_pymux_mcp.py` in pymux checks the registry and the schemas
 with no server. `check_pymux_mcp` in `tests/drive_with_pty.py` drives the
 two tools through an MCP client against a server that is really there.
-`tests/test_mcp_browsers.py` drives a real Chromium and a real
-qutebrowser, headless and in a pane, in `checks.pymux-browsers`.
+`tests/test_mcp_browsers.py` drives a real Chromium, qutebrowser and
+Firefox, headless and in a pane, in `checks.pymux-browsers`. nixpkgs has
+no Glide, so Glide is checked by hand on macOS.

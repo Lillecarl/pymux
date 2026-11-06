@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import dataclasses
 import json
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Any, Final, Literal
 
@@ -19,7 +20,7 @@ from libpymux import CommandError, Job, Pane, Server, Session, Window
 from libpymux.operations import WaitFor
 from pydantic import BaseModel, ConfigDict, Field
 
-from . import bridge, browser, cdp
+from . import bridge, browser, cdp, gecko, rdp
 from .fonts import bundled
 from .registry import Registry
 
@@ -620,13 +621,34 @@ Of = Annotated[
 ]
 
 
+@asynccontextmanager
+async def _tab(server: Server, name: str, tab: str | None) -> AsyncIterator[tuple[Any, Any]]:
+    """
+    A tab of the browser `name`, and the module that drives it, which
+    gives each operation the same name: `browser` for Chromium and
+    qutebrowser, `gecko` for Firefox and Glide.
+    """
+    found = await browser.find(server, name)
+    if found.kind in browser.GECKO:
+        async with gecko.tab(server, name, tab) as page:
+            yield gecko, page
+    else:
+        async with browser.tab(server, name, tab) as page:
+            yield browser, page
+
+
 @operation("browser.open")
 async def open_browser(
     server: Server,
     name: Annotated[str, Field(description="What the other browser operations call it.")] = "browser",
     kind: Annotated[
         browser.Kind,
-        Field(description="`chromium`, or `qutebrowser`, which loads no extensions and has no `browser.setting`."),
+        Field(
+            description=(
+                "`chromium`; `qutebrowser`; or `firefox` or `glide`, which `gecko.chrome` reaches inside."
+                " Only Chromium loads extensions and has `browser.setting`."
+            )
+        ),
     ] = browser.Kind.CHROMIUM,
     seat: Annotated[
         browser.Seat,
@@ -666,8 +688,8 @@ async def open_browser(
         str | None,
         Field(
             description=(
-                "The browser to run; left out, PYMUX_MCP_CHROMIUM or PYMUX_MCP_QUTEBROWSER,"
-                " else `chromium` or `qutebrowser` on the PATH."
+                "The browser to run; left out, PYMUX_MCP_<KIND> (PYMUX_MCP_GLIDE), else the kind's name"
+                " on the PATH, else on macOS its app in /Applications."
             )
         ),
     ] = None,
@@ -711,11 +733,11 @@ async def open_browser(
     if url == browser.BLANK:
         return opened.json()
     try:
-        async with browser.tab(server, name) as page:
-            loaded = await browser.goto(page, url, timeout)
-    except cdp.CDPError as error:
+        async with _tab(server, name, None) as (driver, page):
+            loaded = await driver.goto(page, url, timeout)
+    except (cdp.CDPError, rdp.RDPError) as error:
         last = await browser.said(opened)
-        raise cdp.CDPError(
+        raise type(error)(
             "the browser %r is open, but %s; browser.goto tries again%s"
             % (name, error, "; the browser said: %s" % (last,) if last else "")
         ) from error
@@ -766,6 +788,8 @@ async def browser_tabs(server: Server, name: BrowserName = "browser") -> list[Js
     endpoint = found.endpoint()
     if endpoint is None:
         raise browser.BrowserGone("the browser %r is not listening" % (name,))
+    if found.kind in browser.GECKO:
+        return await gecko.listed(Path(endpoint))
     async with cdp.connected(endpoint) as connection:
         return [
             {"tab": one["targetId"], "title": one["title"], "url": one["url"]} for one in await browser.tabs(connection)
@@ -777,8 +801,8 @@ async def browser_goto(
     server: Server, url: str, name: BrowserName = "browser", tab: Tab = None, timeout: Seconds = 30.0
 ) -> Json:
     "Load an address in a tab, and wait for it to load or `timeout`."
-    async with browser.tab(server, name, tab) as page:
-        return await browser.goto(page, url, timeout)
+    async with _tab(server, name, tab) as (driver, page):
+        return await driver.goto(page, url, timeout)
 
 
 @operation("browser.snapshot")
@@ -798,8 +822,8 @@ async def browser_snapshot(
     `browser.find`, by `within` a ref, or by `browser.screenshot` with
     `marks`.
     """
-    async with browser.tab(server, name, tab) as page:
-        return await browser.snapshot(page, limit, within)
+    async with _tab(server, name, tab) as (driver, page):
+        return await driver.snapshot(page, limit, within)
 
 
 @operation("browser.find")
@@ -811,8 +835,8 @@ async def browser_find(
     limit: Annotated[int, Field(gt=0, description="The most elements to answer.")] = 30,
 ) -> str:
     "The elements of a tab that read `text`, as `browser.snapshot` lines with refs, without the rest of the tree."
-    async with browser.tab(server, name, tab) as page:
-        lines = await browser.find_text(page, text, limit)
+    async with _tab(server, name, tab) as (driver, page):
+        lines = await driver.find_text(page, text, limit)
     return "\n".join(lines) if lines else "nothing reads %s" % (json.dumps(text, ensure_ascii=False),)
 
 
@@ -822,8 +846,8 @@ async def browser_selection(server: Server, name: BrowserName = "browser", tab: 
     What a person selected in a tab, as text, and the element around it
     as a ref, a role and a name: how they point the agent at something.
     """
-    async with browser.tab(server, name, tab) as page:
-        found = await browser.selection(page)
+    async with _tab(server, name, tab) as (driver, page):
+        found = await driver.selection(page)
     return found if found is not None else "nothing is selected"
 
 
@@ -841,8 +865,8 @@ async def browser_at(
     element to act on that holds the point. Read the point off
     `browser.screenshot`.
     """
-    async with browser.tab(server, name, tab) as page:
-        return await browser.at(page, *await browser.point(page, x, y, of))
+    async with _tab(server, name, tab) as (driver, page):
+        return await driver.at(page, *await driver.point(page, x, y, of))
 
 
 @operation("browser.click")
@@ -863,9 +887,9 @@ async def browser_click(
     """
     if (x is None) != (y is None):
         raise ValueError("a point takes both `x` and `y`")
-    async with browser.tab(server, name, tab) as page:
-        at_point = None if x is None or y is None else await browser.point(page, x, y, of)
-        return await browser.click(page, ref, selector, at_point)
+    async with _tab(server, name, tab) as (driver, page):
+        at_point = None if x is None or y is None else await driver.point(page, x, y, of)
+        return await driver.click(page, ref, selector, at_point)
 
 
 @operation("browser.point")
@@ -883,8 +907,8 @@ async def browser_point(
     the rest, and put `label` beside it, for `seconds`. How the agent
     says "this one".
     """
-    async with browser.tab(server, name, tab) as page:
-        await browser.point_at(page, ref, selector, label, seconds)
+    async with _tab(server, name, tab) as (driver, page):
+        await driver.point_at(page, ref, selector, label, seconds)
 
 
 @operation("browser.type")
@@ -899,10 +923,10 @@ async def browser_type(
     tab: Tab = None,
 ) -> None:
     "Type text into an element, or where the focus is when none is named."
-    async with browser.tab(server, name, tab) as page:
-        await browser.type_text(page, text, ref, selector, clear)
+    async with _tab(server, name, tab) as (driver, page):
+        await driver.type_text(page, text, ref, selector, clear)
         if enter:
-            await browser.press(page, "Enter")
+            await driver.press(page, "Enter")
 
 
 @operation("browser.press")
@@ -913,8 +937,8 @@ async def browser_press(
     tab: Tab = None,
 ) -> None:
     "Press one key where the focus is."
-    async with browser.tab(server, name, tab) as page:
-        await browser.press(page, key)
+    async with _tab(server, name, tab) as (driver, page):
+        await driver.press(page, key)
 
 
 @operation("browser.evaluate")
@@ -925,8 +949,8 @@ async def browser_evaluate(
     tab: Tab = None,
 ) -> Any:
     "Run JavaScript in a tab, and answer its value as JSON."
-    async with browser.tab(server, name, tab) as page:
-        return await browser.evaluate(page, expression)
+    async with _tab(server, name, tab) as (driver, page):
+        return await driver.evaluate(page, expression)
 
 
 @operation("browser.screenshot")
@@ -953,8 +977,8 @@ async def browser_screenshot(
     A picture of a tab. With `marks`, act on what you see by its ref,
     with no snapshot of the whole page.
     """
-    async with browser.tab(server, name, tab) as page:
-        png, found = await browser.screenshot(page, full_page, fit, marks)
+    async with _tab(server, name, tab) as (driver, page):
+        png, found = await driver.screenshot(page, full_page, fit, marks)
     return Png(png, "\n".join(mark.line() for mark in found))
 
 
@@ -966,8 +990,36 @@ async def browser_console(
     limit: Annotated[int, Field(gt=0, description="The most messages to answer, the latest ones.")] = 50,
 ) -> list[Json]:
     "What a tab logged to its console, and the exceptions it threw, oldest first."
-    async with browser.tab(server, name, tab) as page:
-        return await browser.console(page, limit)
+    async with _tab(server, name, tab) as (driver, page):
+        return await driver.console(page, limit)
+
+
+# -- Firefox and Glide, from inside ------------------------------------------
+
+
+@operation("gecko.chrome")
+async def gecko_chrome(
+    server: Server,
+    code: Annotated[
+        str,
+        Field(
+            description=(
+                "JavaScript to run in the browser window of Firefox's or Glide's parent process, with"
+                " chrome privilege: `gBrowser`, `Services`, `Cc`/`Ci`/`Cu`. In Glide, `glide` is its config"
+                " API, as glide.ts sees it: `glide.o.hint_size = '20px'`, `glide.keymaps.set(...)`. The last"
+                " statement's value is answered; a promise is awaited."
+            )
+        ),
+    ],
+    name: BrowserName = "browser",
+    timeout: Seconds = 60.0,
+) -> Any:
+    "Run privileged JavaScript inside a Firefox or Glide `browser.open` started, and answer its value."
+    found = await browser.find(server, name)
+    if found.kind not in browser.GECKO:
+        raise ValueError("%r is %s; only Firefox and Glide have a chrome to reach" % (name, found.kind.value))
+    await browser.touch(server, found)
+    return await gecko.chrome(gecko.socket_of(found), code, timeout)
 
 
 # -- qutebrowser, from inside ------------------------------------------------

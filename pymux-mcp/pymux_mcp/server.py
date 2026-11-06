@@ -30,8 +30,8 @@ __all__ = ["build", "describe", "render"]
 
 INSTRUCTIONS = """\
 Drive the pymux terminal multiplexer: sessions, windows, panes, jobs
-that run without a pane, and Chromium or qutebrowser browsers a person
-can watch (`browser.open`). Call `pymux` with an operation and its
+that run without a pane, and Chromium, qutebrowser, Firefox or Glide
+browsers a person can watch (`browser.open`). Call `pymux` with an operation and its
 arguments; `pymux_describe` lists the operations, and with one name
 answers its arguments as JSON Schema. Start with the operation `tree`.
 """

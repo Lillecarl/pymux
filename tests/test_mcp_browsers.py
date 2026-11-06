@@ -37,11 +37,17 @@ ARGUMENTS = ["--no-sandbox"]
 QUTEBROWSER_ARGUMENTS = ["--qt-flag=no-sandbox"]
 
 needs_qutebrowser = pytest.mark.skipif(shutil.which("qutebrowser") is None, reason="no qutebrowser on the PATH")
-KINDS = ["chromium", pytest.param("qutebrowser", marks=needs_qutebrowser)]
+needs_firefox = pytest.mark.skipif(shutil.which("firefox") is None, reason="no firefox on the PATH")
+KINDS = [
+    "chromium",
+    pytest.param("qutebrowser", marks=needs_qutebrowser),
+    pytest.param("firefox", marks=needs_firefox),
+]
 
 
 def arguments(kind: str) -> list[str]:
-    return ARGUMENTS if kind == "chromium" else QUTEBROWSER_ARGUMENTS
+    "Each kind's way to leave its own sandbox off; Firefox's is `MOZ_DISABLE_CONTENT_SANDBOX`, set by the check."
+    return {"chromium": ARGUMENTS, "qutebrowser": QUTEBROWSER_ARGUMENTS}.get(kind, [])
 
 
 PAGE = (
@@ -183,6 +189,47 @@ async def test_a_kept_profile_outlives_its_browser(server, tmp_path, monkeypatch
         async with browser.tab(server, "probe") as page:
             cookies = (await page.send("Network.getCookies", {"urls": ["https://example.com/"]}))["cookies"]
         assert [(one["name"], one["value"]) for one in cookies] == [("kept", "yes")]
+    finally:
+        await call(server, "browser.close", name="probe")
+
+
+@needs_firefox
+async def test_firefox_is_reached_from_inside_and_keeps_its_profile(server, tmp_path, monkeypatch):
+    """
+    `gecko.chrome` runs in the browser window with chrome privilege; a
+    preference it sets outlives the browser in a kept profile; and a ref
+    outlives the connection that made it, as Chromium's does.
+    """
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    launch = {"kind": "firefox", "seat": "headless", "profile": "work"}
+    opened = await call(server, "browser.open", name="probe", url=PAGE, **launch)
+    assert opened["profile"] == str(tmp_path / "state" / "pymux" / "firefoxes" / "work"), opened
+    try:
+        assert await call(server, "gecko.chrome", name="probe", code="gBrowser.tabs.length") == 1
+        set_it = "Services.prefs.setStringPref('pymux.kept', 'yes'); (async () => 'set')()"
+        assert await call(server, "gecko.chrome", name="probe", code=set_it) == "set"
+        with pytest.raises(LookupError, match="nowhere is not defined"):
+            await call(server, "gecko.chrome", name="probe", code="nowhere.at.all")
+        snapshot = await call(server, "browser.snapshot", name="probe")
+        go = next(line for line in snapshot.splitlines() if "button" in line and '"Go"' in line)
+        assert ref(go) in await call(server, "browser.snapshot", name="probe")
+    finally:
+        await call(server, "browser.close", name="probe")
+
+    await call(server, "browser.open", name="probe", **launch)
+    try:
+        assert (
+            await call(server, "gecko.chrome", name="probe", code="Services.prefs.getStringPref('pymux.kept')") == "yes"
+        )
+    finally:
+        await call(server, "browser.close", name="probe")
+
+
+async def test_only_firefox_and_glide_have_a_chrome(server):
+    await call(server, "browser.open", name="probe", seat="headless", arguments=ARGUMENTS)
+    try:
+        with pytest.raises(ValueError, match="only Firefox and Glide"):
+            await call(server, "gecko.chrome", name="probe", code="1")
     finally:
         await call(server, "browser.close", name="probe")
 

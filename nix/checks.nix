@@ -781,8 +781,9 @@ in
           tests/test_firefox_in_a_window_pane.py
       '';
 
-  # pymux-mcp's browsers against a real server: Chromium and qutebrowser
-  # headless as a job, and headful in a window pane. Lillecarl/pymux#822.
+  # pymux-mcp's browsers against a real server: Chromium, qutebrowser
+  # and Firefox headless as a job, and headful in a window pane.
+  # Lillecarl/pymux#822.
   browsers =
     runInSandbox
       {
@@ -790,11 +791,15 @@ in
         inputs = [
           chromium
           qutebrowser
+          firefox
         ];
       }
       ''
         # Chromium aborts in Skia at its first text with no fontconfig.
         export FONTCONFIG_FILE=${makeFontsConf { fontDirectories = [ dejavu_fonts ]; }}
+        # The build sandbox has no room for Firefox's content sandbox; a
+        # job a test starts inherits this.
+        export MOZ_DISABLE_CONTENT_SANDBOX=1
         ${waylandTestEnv}/bin/python -m pytest -q -p no:cacheprovider \
           -o faulthandler_timeout=120 \
           ${lib.optionalString (browsersTests != "") "-k ${lib.escapeShellArg browsersTests}"} \

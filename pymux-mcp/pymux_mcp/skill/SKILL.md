@@ -42,7 +42,8 @@ to the person in a window. A job outlives the call that started it.
 
 ## Browsers
 
-`browser.open` starts Chromium, or qutebrowser with `kind: "qutebrowser"`:
+`browser.open` starts Chromium, or another `kind`: `qutebrowser`, `firefox`,
+`glide`:
 `seat: "pane"` in a window pane a person can watch (`window` splits theirs;
 Linux only), `seat: "desktop"` in a window on the server machine's desktop,
 `seat: "headless"` as a job. Then:
@@ -60,6 +61,10 @@ qutebrowser from inside: `qutebrowser.python` (Python on its main loop; names
 `qutebrowser.command` (`set zoom.default 125%`). `name` picks a qutebrowser
 `browser.open` started; without it, the person's own, after they type
 `:pymux-bridge on`.
+
+Firefox or Glide from inside: `gecko.chrome` runs JavaScript in the browser
+window with chrome privilege (`gBrowser`, `Services`); in Glide, `glide` is
+its config API (`glide.o.hint_size = "20px"`).
 
 A browser closes after `idle` seconds unused (half an hour by default).
 `browser.close` it when done. `profile` keeps logins between browsers.

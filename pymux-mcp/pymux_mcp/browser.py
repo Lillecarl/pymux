@@ -31,6 +31,11 @@ with QtWebEngine 6.11: it refuses port 0, so pymux picks the port and
 writes `DevToolsActivePort` itself; it answers `Browser.close` and keeps
 running, so it is asked to quit with SIGTERM; `Target.createTarget`
 answers "Not supported"; and it has no `Extensions` domain.
+
+**Firefox and Glide speak no Chromium protocol.** pymux starts them with
+`--start-debugger-server` on a Unix socket in the profile, and `gecko`
+drives a tab over Firefox's own protocol, `rdp`, by the names this
+module gives Chromium's operations.
 """
 
 from __future__ import annotations
@@ -38,6 +43,7 @@ from __future__ import annotations
 import base64
 import contextlib
 import io
+import itertools
 import json
 import os
 import re
@@ -62,6 +68,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 from . import bridge, qutebridge
 from .cdp import CDPError, Connection, Page, connected
+from .rdp import RDPError
 
 __all__ = ["Browser", "Kind", "Seat", "close", "collect", "find", "open_browser", "sweep", "tab"]
 
@@ -128,6 +135,27 @@ class Seat(StrEnum):
 class Kind(StrEnum):
     CHROMIUM = "chromium"
     QUTEBROWSER = "qutebrowser"
+    FIREFOX = "firefox"
+    GLIDE = "glide"
+
+
+#: The kinds that speak Firefox's protocol, `rdp`, and not Chromium's.
+GECKO: Final = frozenset({Kind.FIREFOX, Kind.GLIDE})
+
+#: Where kept profiles of each kind live, under pymux's state: no kind
+#: reads another's.
+PROFILE_DIRECTORIES: Final = {
+    Kind.CHROMIUM: "browsers",
+    Kind.QUTEBROWSER: "qutebrowsers",
+    Kind.FIREFOX: "firefoxes",
+    Kind.GLIDE: "glides",
+}
+
+#: Where macOS keeps a kind that is not on the PATH: in its app bundle.
+BUNDLED: Final = {
+    Kind.FIREFOX: "/Applications/Firefox.app/Contents/MacOS/firefox",
+    Kind.GLIDE: "/Applications/Glide.app/Contents/MacOS/glide",
+}
 
 
 #: Qt's platform plugin by seat; on the desktop Qt picks its own.
@@ -200,7 +228,10 @@ class Browser:
         return self.holder.id if isinstance(self.holder, Window) else None
 
     def endpoint(self) -> str | None:
-        "The browser's WebSocket, or None before it listens."
+        "The browser's WebSocket, or for Firefox and Glide its debugger's socket; None before it listens."
+        if self.kind in GECKO:
+            path = bridge.socket_for(self.profile, DEBUGGER_SOCKET)
+            return str(path) if path.is_socket() else None
         try:
             port, path = (self.profile / PORT_FILE).read_text().split()
         except OSError, ValueError:
@@ -211,7 +242,7 @@ class Browser:
 def profiles(kind: Kind = Kind.CHROMIUM) -> Path:
     "Where kept profiles of a kind live; the two kinds cannot read each other's."
     state = os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state"
-    return Path(state) / "pymux" / ("browsers" if kind is Kind.CHROMIUM else "qutebrowsers")
+    return Path(state) / "pymux" / PROFILE_DIRECTORIES[kind]
 
 
 def kept(profile: Path) -> bool:
@@ -222,6 +253,13 @@ def kept(profile: Path) -> bool:
 def program(kind: Kind, executable: str | None) -> str:
     variable = "PYMUX_MCP_%s" % (kind.name,)
     found = executable or os.environ.get(variable) or shutil.which(kind.value)
+    if not found and kind in BUNDLED and os.path.isfile(BUNDLED[kind]):
+        found = BUNDLED[kind]
+    if found and kind in GECKO:
+        # Gecko on macOS finds XUL beside the path it was started by: through
+        # the link Homebrew's glide-browser cask puts on the PATH it ends
+        # with "Couldn't load XPCOM". Measured on Glide 0.1.65a.
+        found = os.path.realpath(found)
     if not found:
         raise LookupError(
             "no %s: name `executable`, set %s, or put %s on the PATH" % (kind.value, variable, kind.value)
@@ -310,7 +348,7 @@ async def open_browser(
     loaded.
     """
     if extensions and kind is not Kind.CHROMIUM:
-        raise ValueError("only Chromium loads extensions")
+        raise ValueError("only Chromium loads extensions at the start")
     for directory in extensions:
         _an_extension(directory)
     if window is not None and seat is not Seat.PANE:
@@ -328,8 +366,9 @@ async def open_browser(
         profile = Path(tempfile.mkdtemp(prefix="pymux-browser-"))
     else:
         profile.mkdir(parents=True, exist_ok=True)
-        # The last run's port, which would read as listening at once.
+        # The last run's port or socket, which would read as listening at once.
         (profile / PORT_FILE).unlink(missing_ok=True)
+        bridge.socket_for(profile, DEBUGGER_SOCKET).unlink(missing_ok=True)
     used = time.time()
     tags = {
         NAME_TAG: name,
@@ -344,8 +383,10 @@ async def open_browser(
     try:
         if kind is Kind.CHROMIUM:
             command = _chromium(program(kind, executable), seat, profile, extensions, arguments)
-        else:
+        elif kind is Kind.QUTEBROWSER:
             command = _qutebrowser(program(kind, executable), seat, profile, port or 0, arguments)
+        else:
+            command = _gecko(program(kind, executable), seat, profile, arguments)
         if seat is not Seat.PANE:
             holder = await server.run_job(shlex.join(command), tags=tags)
         elif window is None:
@@ -404,6 +445,57 @@ def _qutebrowser(executable: str, seat: Seat, profile: Path, port: int, argument
         "--qt-flag=remote-debugging-port=%d" % (port,),
         *("--qt-flag=%s" % (switch.removeprefix("--"),) for switch in CALM),
         *(SOFTWARE if seat is Seat.HEADLESS else ()),
+        *arguments,
+        BLANK,
+    ]
+
+
+#: The debugger's socket in a Firefox or Glide profile.
+DEBUGGER_SOCKET: Final = "debugger.sock"
+
+#: The preferences pymux writes to a Firefox or Glide profile's user.js,
+#: which the browser reads at each start. The first three let a client
+#: connect to the debugger, with chrome privilege and no prompt; the
+#: rest are `QUIET` and `CALM` in Firefox's words. A crash count turned
+#: off, because a browser killed at `close` counts as one, and enough of
+#: them start it in safe mode behind a dialog.
+GECKO_PREFERENCES: Final = {
+    "devtools.debugger.remote-enabled": True,
+    "devtools.chrome.enabled": True,
+    "devtools.debugger.prompt-connection": False,
+    "browser.shell.checkDefaultBrowser": False,
+    "browser.startup.homepage_override.mstone": "ignore",
+    "startup.homepage_welcome_url": "about:blank",
+    "startup.homepage_welcome_url.additional": "",
+    "browser.aboutwelcome.enabled": False,
+    "datareporting.policy.dataSubmissionEnabled": False,
+    "toolkit.telemetry.reportingpolicy.firstRun": False,
+    "browser.sessionstore.resume_from_crash": False,
+    "toolkit.startup.max_resumed_crashes": -1,
+    "ui.prefersReducedMotion": 1,
+    "general.smoothScroll": False,
+}
+
+
+def _gecko(executable: str, seat: Seat, profile: Path, arguments: Sequence[str]) -> list[str]:
+    """
+    Firefox or Glide on `profile`, its debugger on a socket. pymux owns the
+    profile's user.js, and writes it again at each start.
+    """
+    (profile / "user.js").write_text(
+        "".join(
+            "user_pref(%s, %s);\n" % (json.dumps(key), json.dumps(value)) for key, value in GECKO_PREFERENCES.items()
+        )
+    )
+    return [
+        *(["env", "MOZ_ENABLE_WAYLAND=1"] if seat is Seat.PANE else []),
+        executable,
+        *(["--headless"] if seat is Seat.HEADLESS else []),
+        "--no-remote",
+        "--profile",
+        str(profile),
+        "--start-debugger-server",
+        str(bridge.socket_for(profile, DEBUGGER_SOCKET)),
         *arguments,
         BLANK,
     ]
@@ -532,9 +624,11 @@ async def close(browser: Browser) -> None:
                 await _ended(pid, KILL_TIMEOUT)
     finally:
         _forget(browser.profile)
+        # Outside the profile when the profile's path is long.
         if browser.kind is Kind.QUTEBROWSER:
-            # Outside the profile when the profile's path is long.
             bridge.socket_for(browser.profile).unlink(missing_ok=True)
+        elif browser.kind in GECKO:
+            bridge.socket_for(browser.profile, DEBUGGER_SOCKET).unlink(missing_ok=True)
 
 
 async def _ask_to_quit(browser: Browser, pid: int | None) -> bool:
@@ -548,6 +642,13 @@ async def _ask_to_quit(browser: Browser, pid: int | None) -> bool:
     endpoint = browser.endpoint()
     if endpoint is None:
         return False
+    if browser.kind in GECKO:
+        # Here and not at the top: `gecko` takes this module's names.
+        from . import gecko
+
+        with contextlib.suppress(RDPError, OSError):
+            await gecko.quit_browser(Path(endpoint))
+        return True
     with contextlib.suppress(CDPError, OSError):
         async with connected(endpoint) as connection:
             await connection.send("Browser.close", timeout=QUIT_TIMEOUT)
@@ -557,13 +658,12 @@ async def _ask_to_quit(browser: Browser, pid: int | None) -> bool:
 def _pid(profile: Path, kind: Kind) -> int | None:
     """
     The process that has the profile open: for Chromium, the `host-pid`
-    it links its `SingletonLock` to; for qutebrowser, the one whose
+    it links its `SingletonLock` to; for the others, the one whose
     command line names the profile.
     """
-    if kind is Kind.QUTEBROWSER:
-        wanted = "--basedir=%s" % (profile,)
+    if kind is not Kind.CHROMIUM:
         for process in psutil.process_iter(["cmdline"]):
-            if wanted in (process.info["cmdline"] or ()):
+            if _opened(process.info["cmdline"] or [], profile, kind):
                 return process.pid
         return None
     try:
@@ -571,6 +671,15 @@ def _pid(profile: Path, kind: Kind) -> int | None:
     except OSError:
         return None
     return int(pid) if pid.isdigit() else None
+
+
+def _opened(command: Sequence[str], profile: Path, kind: Kind) -> bool:
+    "Whether `command` is the browser pymux started on `profile`; not one of its child processes."
+    if kind is Kind.QUTEBROWSER:
+        return "--basedir=%s" % (profile,) in command
+    return "--start-debugger-server" in command and any(
+        flag == "--profile" and path == str(profile) for flag, path in itertools.pairwise(command)
+    )
 
 
 def _alive(pid: int) -> bool:

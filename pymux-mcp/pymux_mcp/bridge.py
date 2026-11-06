@@ -31,18 +31,19 @@ BRIDGE: Final = "bridge.sock"
 SOCKET_PATH_MAX: Final = 103
 
 
-def socket_for(profile: Path) -> Path:
+def socket_for(profile: Path, name: str = BRIDGE) -> Path:
     """
-    Where a qutebrowser pymux starts on `profile` serves its bridge: in the
-    profile, or, when that path is too long for a socket, under a name
-    from the profile's hash in the runtime directory, which only this
-    user can enter.
+    Where a browser pymux starts on `profile` serves the socket `name`:
+    in the profile, or, when that path is too long for a socket, under a
+    name from the profile's hash in the runtime directory, which only
+    this user can enter.
     """
-    inside = profile / BRIDGE
+    inside = profile / name
     if len(os.fsencode(inside)) <= SOCKET_PATH_MAX:
         return inside
     runtime = Path(os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir())
-    return runtime / ("pymux-bridge-%s.sock" % (hashlib.sha256(os.fsencode(profile)).hexdigest()[:16],))
+    digest = hashlib.sha256(os.fsencode(profile)).hexdigest()[:16]
+    return runtime / ("pymux-%s-%s.sock" % (Path(name).stem, digest))
 
 
 def own_socket() -> Path:
