@@ -199,6 +199,10 @@ let
 
   firefoxTests = builtins.getEnv "PYMUX_FIREFOX_TESTS";
 
+  # A pytest `-k` expression for the browser suite, for instance
+  # `PYMUX_BROWSERS_TESTS=qutebrowser nix build --file . checks.pymux-browsers`.
+  browsersTests = builtins.getEnv "PYMUX_BROWSERS_TESTS";
+
   # A pytest `-k` expression for the openssh suite, for instance
   # `PYMUX_OPENSSH_TESTS=narrows nix build --file . checks.pymux-openssh`.
   # Several builds at once with expressions that pick the same test,
@@ -792,7 +796,9 @@ in
         # Chromium aborts in Skia at its first text with no fontconfig.
         export FONTCONFIG_FILE=${makeFontsConf { fontDirectories = [ dejavu_fonts ]; }}
         ${waylandTestEnv}/bin/python -m pytest -q -p no:cacheprovider \
-          -o faulthandler_timeout=120 tests/test_mcp_browsers.py
+          -o faulthandler_timeout=120 \
+          ${lib.optionalString (browsersTests != "") "-k ${lib.escapeShellArg browsersTests}"} \
+          tests/test_mcp_browsers.py
       '';
 
   # Sound between panes and a client, through a real PipeWire and a
