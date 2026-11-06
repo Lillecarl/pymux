@@ -11,6 +11,10 @@ and apsw reset with the GIL held. The action log's upkeep dropped its
 `PRAGMA incremental_vacuum` at the first row, and the commit of that
 row froze the server for 22s.
 `nix/patches/apsw-reset-releases-the-gil.patch`, Lillecarl/pymux#940.
+
+The close of the last connection checkpoints the WAL, and apsw closed
+with the GIL held. `nix/patches/apsw-close-releases-the-gil.patch`,
+Lillecarl/pymux#939.
 """
 
 from __future__ import annotations
@@ -91,3 +95,18 @@ def test_a_dropped_cursor_lets_another_thread_run(tmp_path):
     took, held = longest_hold(prepare)
     assert took > 0.05, "the commit is too quick to judge: %.3fs" % took
     assert held < took / 2, "held %.3fs of a %.3fs commit" % (held, took)
+
+
+def test_a_close_lets_another_thread_run(tmp_path):
+    def prepare():
+        db = a_database(tmp_path / "big.db")
+        # Never checkpointed: the close of the last connection copies the
+        # whole WAL into the database.
+        db.execute("PRAGMA wal_autocheckpoint = 0")
+        with db:
+            db.execute("INSERT INTO t VALUES (zeroblob(?))", (SIZE,))
+        return db.close
+
+    took, held = longest_hold(prepare)
+    assert took > 0.05, "the close is too quick to judge: %.3fs" % took
+    assert held < took / 2, "held %.3fs of a %.3fs close" % (held, took)
