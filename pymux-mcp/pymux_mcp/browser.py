@@ -440,12 +440,22 @@ async def _listening(browser: Browser, port: int | None) -> None:
                 if isinstance(browser.holder, Job):
                     await browser.holder.refresh()
                     if not browser.holder.running:
-                        said = await browser.holder.output(stderr=True)
-                        raise CDPError("the browser ended before it listened: %s" % (said.strip()[-2000:],))
+                        raise CDPError("the browser ended before it listened: %s" % (await said(browser),))
                 await anyio.sleep(0.1)
     except TimeoutError:
+        last = await said(browser)
         await close(browser)
-        raise CDPError("the browser did not listen in %gs" % (LISTEN_TIMEOUT,)) from None
+        raise CDPError("the browser did not listen in %gs: %s" % (LISTEN_TIMEOUT, last)) from None
+
+
+async def said(browser: Browser) -> str:
+    "The end of what a job's browser wrote, on both streams; nothing for a pane's, whose screen holds it."
+    if not isinstance(browser.holder, Job):
+        return ""
+    with contextlib.suppress(LookupError):
+        streams = [(await browser.holder.output(stderr=stderr)).strip() for stderr in (True, False)]
+        return "\n".join(stream[-2000:] for stream in streams if stream)
+    return ""
 
 
 def _announce(profile: Path, port: int) -> None:

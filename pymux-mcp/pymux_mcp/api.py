@@ -713,7 +713,11 @@ async def open_browser(
         async with browser.tab(server, name) as page:
             loaded = await browser.goto(page, url, timeout)
     except cdp.CDPError as error:
-        raise cdp.CDPError("the browser %r is open, but %s; browser.goto tries again" % (name, error)) from error
+        last = await browser.said(opened)
+        raise cdp.CDPError(
+            "the browser %r is open, but %s; browser.goto tries again%s"
+            % (name, error, "; the browser said: %s" % (last,) if last else "")
+        ) from error
     return {**opened.json(), "page": loaded}
 
 
