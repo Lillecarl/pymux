@@ -1,13 +1,18 @@
 """
-Chromium for an agent to drive, over the DevTools protocol, where a
+A browser for an agent to drive, over the DevTools protocol, where a
 person can watch it. Lillecarl/pymux#822.
 
-A browser runs in one of two seats:
+Two kinds speak that protocol: Chromium, and qutebrowser through its
+QtWebEngine.
+
+A browser runs in one of three seats:
 
 - `headless`: a job of the server, with nothing to see.
 - `pane`: a window pane of the server, through `wl`. Anybody attached
   watches it, over SSH too. It opens in a window of its own, or as a
-  split of a window somebody works in.
+  split of a window somebody works in. Linux only, as `wl` is.
+- `desktop`: a job of the server, in a window of its own on the desktop
+  of the server's machine.
 
 **pymux holds the browser, and this process holds nothing.** Each
 operation finds the browser by its tag, reads its port out of
@@ -20,6 +25,12 @@ ref names.
 
 The address is the server machine's loopback, so pymux-mcp has to run
 on that machine.
+
+**qutebrowser differs in four places**, measured on qutebrowser 3.7.0
+with QtWebEngine 6.11: it refuses port 0, so pymux picks the port and
+writes `DevToolsActivePort` itself; it answers `Browser.close` and keeps
+running, so it is asked to quit with SIGTERM; `Target.createTarget`
+answers "Not supported"; and it has no `Extensions` domain.
 """
 
 from __future__ import annotations
@@ -33,8 +44,11 @@ import re
 import shlex
 import shutil
 import signal
+import socket
 import tempfile
 import time
+import urllib.parse
+import urllib.request
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
 from enum import StrEnum
@@ -48,13 +62,14 @@ from PIL import Image, ImageDraw, ImageFont
 
 from .cdp import CDPError, Connection, Page, connected
 
-__all__ = ["Browser", "Seat", "close", "collect", "find", "open_browser", "sweep", "tab"]
+__all__ = ["Browser", "Kind", "Seat", "close", "collect", "find", "open_browser", "sweep", "tab"]
 
 #: The tag a browser's job or pane carries, with the browser's name.
 NAME_TAG: Final = "browser"
 #: The tag holding the profile, where the port is written.
 PROFILE_TAG: Final = "browser-profile"
 SEAT_TAG: Final = "browser-seat"
+KIND_TAG: Final = "browser-kind"
 #: When an agent or a person last used it, in Unix seconds.
 USED_TAG: Final = "browser-used"
 #: How many seconds unused before the collector closes it; 0 for never.
@@ -106,6 +121,16 @@ EXTENSIBLE: Final = ("--enable-unsafe-extension-debugging",)
 class Seat(StrEnum):
     HEADLESS = "headless"
     PANE = "pane"
+    DESKTOP = "desktop"
+
+
+class Kind(StrEnum):
+    CHROMIUM = "chromium"
+    QUTEBROWSER = "qutebrowser"
+
+
+#: Qt's platform plugin by seat; on the desktop Qt picks its own.
+QT_PLATFORM: Final = {Seat.HEADLESS: "offscreen", Seat.PANE: "wayland"}
 
 
 class BrowserGone(LookupError):
@@ -124,9 +149,17 @@ class Browser:
     """
 
     def __init__(
-        self, name: str, seat: Seat, profile: Path, holder: Job | Window | Pane, used: float, idle: float
+        self,
+        name: str,
+        kind: Kind,
+        seat: Seat,
+        profile: Path,
+        holder: Job | Window | Pane,
+        used: float,
+        idle: float,
     ) -> None:
         self.name = name
+        self.kind = kind
         self.seat = seat
         self.profile = profile
         self.holder = holder
@@ -136,6 +169,7 @@ class Browser:
     def json(self) -> dict[str, Any]:
         found: dict[str, Any] = {
             "name": self.name,
+            "kind": self.kind.value,
             "seat": self.seat.value,
             "profile": str(self.profile),
             "used": int(self.used),
@@ -167,21 +201,24 @@ class Browser:
         return "ws://127.0.0.1:%s%s" % (port, path)
 
 
-def profiles() -> Path:
-    "Where kept profiles live."
+def profiles(kind: Kind = Kind.CHROMIUM) -> Path:
+    "Where kept profiles of a kind live; the two kinds cannot read each other's."
     state = os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state"
-    return Path(state) / "pymux" / "browsers"
+    return Path(state) / "pymux" / ("browsers" if kind is Kind.CHROMIUM else "qutebrowsers")
 
 
 def kept(profile: Path) -> bool:
     "A profile `close` leaves where it is: one with a name."
-    return profile.parent == profiles()
+    return any(profile.parent == profiles(kind) for kind in Kind)
 
 
-def chromium(executable: str | None) -> str:
-    found = executable or os.environ.get("PYMUX_MCP_CHROMIUM") or shutil.which("chromium")
+def program(kind: Kind, executable: str | None) -> str:
+    variable = "PYMUX_MCP_%s" % (kind.name,)
+    found = executable or os.environ.get(variable) or shutil.which(kind.value)
     if not found:
-        raise LookupError("no Chromium: name `executable`, set PYMUX_MCP_CHROMIUM, or put chromium on the PATH")
+        raise LookupError(
+            "no %s: name `executable`, set %s, or put %s on the PATH" % (kind.value, variable, kind.value)
+        )
     return found
 
 
@@ -221,6 +258,9 @@ async def _browser(server: Server, holder: Job | Window | Pane) -> Browser:
     tags = holder.tags if isinstance(holder, Job) else (await server.tags()).get(holder.id, {})
     return Browser(
         tags[NAME_TAG] or "",
+        # A Chromium opened before kinds existed carries no kind, and is
+        # collected like any other.
+        Kind(tags.get(KIND_TAG) or Kind.CHROMIUM),
         Seat(tags[SEAT_TAG]),
         Path(tags[PROFILE_TAG] or ""),
         holder,
@@ -254,19 +294,23 @@ async def open_browser(
     window: str | None = None,
     profile_name: str | None = None,
     extensions: Sequence[str] = (),
+    kind: Kind = Kind.CHROMIUM,
 ) -> Browser:
     """
-    Start a browser in `seat`, and answer it once it listens: in a split
-    of `window` when one is named, on the kept profile `profile_name`
-    when one is named, and with the unpacked `extensions` loaded.
+    Start a browser of `kind` in `seat`, and answer it once it listens:
+    in a split of `window` when one is named, on the kept profile
+    `profile_name` when one is named, and with the unpacked `extensions`
+    loaded.
     """
+    if extensions and kind is not Kind.CHROMIUM:
+        raise ValueError("only Chromium loads extensions")
     for directory in extensions:
         _an_extension(directory)
     if window is not None and seat is not Seat.PANE:
         raise ValueError("only a `pane` browser opens in a window")
     if profile_name is not None and not PROFILE_NAME.fullmatch(profile_name):
         raise ValueError("%r is not a profile name: letters, digits, `.`, `_` and `-`" % (profile_name,))
-    profile = None if profile_name is None else profiles() / profile_name
+    profile = None if profile_name is None else profiles(kind) / profile_name
     for existing in await every(server):
         if existing.name == name:
             raise ValueError("a browser named %r is open; close it or pick another name" % (name,))
@@ -282,12 +326,40 @@ async def open_browser(
     used = time.time()
     tags = {
         NAME_TAG: name,
+        KIND_TAG: kind.value,
         SEAT_TAG: seat.value,
         PROFILE_TAG: str(profile),
         USED_TAG: str(int(used)),
         IDLE_TAG: "%g" % (idle,),
     }
-    argv = [
+    port = _free_port() if kind is Kind.QUTEBROWSER else None
+    holder: Job | Window | Pane
+    try:
+        if kind is Kind.CHROMIUM:
+            command = _chromium(program(kind, executable), seat, profile, extensions, arguments)
+        else:
+            command = _qutebrowser(program(kind, executable), seat, profile, port or 0, arguments)
+        if seat is not Seat.PANE:
+            holder = await server.run_job(shlex.join(command), tags=tags)
+        elif window is None:
+            holder = await _in_a_window(server, name, session, command, tags)
+        else:
+            holder = await _beside(server, window, command, tags)
+        browser = Browser(name, kind, seat, profile, holder, used, idle)
+        await _listening(browser, port)
+    except BaseException:
+        _forget(profile)
+        raise
+    return browser
+
+
+def _chromium(
+    executable: str, seat: Seat, profile: Path, extensions: Sequence[str], arguments: Sequence[str]
+) -> list[str]:
+    placed = {Seat.HEADLESS: ["--headless=new"], Seat.PANE: ["--ozone-platform=wayland"], Seat.DESKTOP: []}
+    return [
+        executable,
+        *placed[seat],
         "--remote-debugging-port=0",
         "--user-data-dir=%s" % (profile,),
         *QUIET,
@@ -295,24 +367,32 @@ async def open_browser(
         *EXTENSIBLE,
         *(["--load-extension=%s" % (",".join(extensions),)] if extensions else []),
         *arguments,
+        BLANK,
     ]
-    holder: Job | Window | Pane
-    try:
-        if seat is Seat.HEADLESS:
-            command = [chromium(executable), "--headless=new", *argv, BLANK]
-            holder = await server.run_job(shlex.join(command), tags=tags)
-        else:
-            command = [chromium(executable), "--ozone-platform=wayland", *argv, BLANK]
-            if window is None:
-                holder = await _in_a_window(server, name, session, command, tags)
-            else:
-                holder = await _beside(server, window, command, tags)
-        browser = Browser(name, seat, profile, holder, used, idle)
-        await _listening(browser)
-    except BaseException:
-        _forget(profile)
-        raise
-    return browser
+
+
+def _qutebrowser(executable: str, seat: Seat, profile: Path, port: int, arguments: Sequence[str]) -> list[str]:
+    "Chromium's switches reach QtWebEngine through `--qt-flag`."
+    platform = ["env", "QT_QPA_PLATFORM=%s" % (QT_PLATFORM[seat],)] if seat in QT_PLATFORM else []
+    return [
+        *platform,
+        executable,
+        "--basedir=%s" % (profile,),
+        "--qt-flag=remote-debugging-port=%d" % (port,),
+        *("--qt-flag=%s" % (switch.removeprefix("--"),) for switch in CALM),
+        *arguments,
+        BLANK,
+    ]
+
+
+def _free_port() -> int:
+    """
+    A loopback port nothing listens on now. Another program can take it
+    before qutebrowser does, and then the browser does not listen.
+    """
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        return probe.getsockname()[1]
 
 
 async def _in_a_window(
@@ -347,13 +427,16 @@ async def _wl(server: Server, pane: Pane, command: Sequence[str], holder: Window
     result = await server.cmd(["wl", "-t", pane.id, "--", *command], check=False)
     if result.exit_code != 0:
         await holder.kill()
-        raise CDPError("chromium ended before it opened a window: %s" % ((result.stdout + result.stderr).strip(),))
+        raise CDPError("the browser ended before it opened a window: %s" % ((result.stdout + result.stderr).strip(),))
 
 
-async def _listening(browser: Browser) -> None:
+async def _listening(browser: Browser, port: int | None) -> None:
+    "Wait until the browser listens; on `port`, for one that writes no `DevToolsActivePort` of its own."
     try:
         with anyio.fail_after(LISTEN_TIMEOUT):
             while browser.endpoint() is None:
+                if port is not None:
+                    await anyio.to_thread.run_sync(_announce, browser.profile, port)
                 if isinstance(browser.holder, Job):
                     await browser.holder.refresh()
                     if not browser.holder.running:
@@ -363,6 +446,16 @@ async def _listening(browser: Browser) -> None:
     except TimeoutError:
         await close(browser)
         raise CDPError("the browser did not listen in %gs" % (LISTEN_TIMEOUT,)) from None
+
+
+def _announce(profile: Path, port: int) -> None:
+    "Write `DevToolsActivePort` as Chromium does, once the browser on `port` answers `/json/version`."
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:%d/json/version" % (port,), timeout=1) as answer:
+            url = json.load(answer)["webSocketDebuggerUrl"]
+    except OSError, ValueError, KeyError:
+        return
+    (profile / PORT_FILE).write_text("%d\n%s\n" % (port, urllib.parse.urlsplit(url).path))
 
 
 #: How long a browser asked to quit may take before its holder is killed.
@@ -377,22 +470,17 @@ async def close(browser: Browser) -> None:
     Stop the browser, and take its holder away, and its profile unless
     it is kept.
 
-    Chromium is asked to quit first. Killing a window pane closes one of
-    its windows and nothing more, and the next one opens in its place.
+    The browser is asked to quit first. Killing a window pane closes one
+    of its windows and nothing more, and the next one opens in its place.
 
-    The profile goes only once Chromium's process ended: its last window
-    closes before it does, and it writes into the profile until then.
+    The profile goes only once the browser's process ended: its last
+    window closes before it does, and it writes into the profile until
+    then.
     """
-    pid = _pid(browser.profile)
+    pid = _pid(browser.profile, browser.kind)
     try:
-        endpoint = browser.endpoint()
-        if endpoint is not None:
+        if await _ask_to_quit(browser, pid):
             with anyio.move_on_after(QUIT_TIMEOUT):
-                try:
-                    async with connected(endpoint) as connection:
-                        await connection.send("Browser.close")
-                except CDPError, OSError:
-                    pass
                 while await _held(browser):
                     await anyio.sleep(0.1)
         if isinstance(browser.holder, Pane):
@@ -412,8 +500,35 @@ async def close(browser: Browser) -> None:
         _forget(browser.profile)
 
 
-def _pid(profile: Path) -> int | None:
-    "The process that has the profile open, from the `host-pid` Chromium links its `SingletonLock` to."
+async def _ask_to_quit(browser: Browser, pid: int | None) -> bool:
+    "Ask the browser to quit, and answer whether it was asked."
+    if browser.kind is Kind.QUTEBROWSER:
+        if pid is None:
+            return False
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(pid, signal.SIGTERM)
+        return True
+    endpoint = browser.endpoint()
+    if endpoint is None:
+        return False
+    with contextlib.suppress(CDPError, OSError):
+        async with connected(endpoint) as connection:
+            await connection.send("Browser.close", timeout=QUIT_TIMEOUT)
+    return True
+
+
+def _pid(profile: Path, kind: Kind) -> int | None:
+    """
+    The process that has the profile open: for Chromium, the `host-pid`
+    it links its `SingletonLock` to; for qutebrowser, the one whose
+    command line names the profile.
+    """
+    if kind is Kind.QUTEBROWSER:
+        wanted = "--basedir=%s" % (profile,)
+        for process in psutil.process_iter(["cmdline"]):
+            if wanted in (process.info["cmdline"] or ()):
+                return process.pid
+        return None
     try:
         _host, _, pid = os.readlink(profile / "SingletonLock").rpartition("-")
     except OSError:
@@ -436,6 +551,11 @@ async def _ended(pid: int, timeout: float) -> None:
             await anyio.sleep(0.1)
 
 
+def _only_chromium(browser: Browser, does: str) -> None:
+    if browser.kind is not Kind.CHROMIUM:
+        raise ValueError("only Chromium %s; %r is %s" % (does, browser.name, browser.kind.value))
+
+
 def _an_extension(directory: str) -> None:
     if not os.path.isabs(directory) or not os.path.isfile(os.path.join(directory, "manifest.json")):
         raise ValueError("%r is not an unpacked extension: an absolute directory with a manifest.json" % (directory,))
@@ -445,6 +565,7 @@ def _an_extension(directory: str) -> None:
 
 async def load_extension(browser: Browser, directory: str) -> str:
     "Load an unpacked extension into the running browser, and answer its id."
+    _only_chromium(browser, "loads extensions")
     _an_extension(directory)
     endpoint = browser.endpoint()
     if endpoint is None:
@@ -468,6 +589,7 @@ async def setting(browser: Browser, key: str, value: Any = None, change: bool = 
     In a tab opened in the background and closed after, so the tab a
     person reads stays in front.
     """
+    _only_chromium(browser, "has chrome://settings")
     endpoint = browser.endpoint()
     if endpoint is None:
         raise BrowserGone("the browser %r is not listening" % (browser.name,))

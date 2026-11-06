@@ -34,8 +34,9 @@
   xclip,
   # A real browser in a window pane.
   firefox,
-  # The browser pymux-mcp drives over the DevTools protocol.
+  # The browsers pymux-mcp drives over the DevTools protocol.
   chromium,
+  qutebrowser,
   waylandProtocols,
   callPackage,
   xorg-server,
@@ -776,13 +777,16 @@ in
           tests/test_firefox_in_a_window_pane.py
       '';
 
-  # pymux-mcp's browsers against a real server: Chromium headless as a
-  # job, and headful in a window pane. Lillecarl/pymux#822.
+  # pymux-mcp's browsers against a real server: Chromium and qutebrowser
+  # headless as a job, and headful in a window pane. Lillecarl/pymux#822.
   browsers =
     runInSandbox
       {
         name = "pymux-browsers";
-        inputs = [ chromium ];
+        inputs = [
+          chromium
+          qutebrowser
+        ];
       }
       ''
         # Chromium aborts in Skia at its first text with no fontconfig.

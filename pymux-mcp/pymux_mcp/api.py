@@ -623,11 +623,17 @@ Of = Annotated[
 async def open_browser(
     server: Server,
     name: Annotated[str, Field(description="What the other browser operations call it.")] = "browser",
+    kind: Annotated[
+        browser.Kind,
+        Field(description="`chromium`, or `qutebrowser`, which loads no extensions and has no `browser.setting`."),
+    ] = browser.Kind.CHROMIUM,
     seat: Annotated[
         browser.Seat,
         Field(
             description=(
-                "`pane`: a window of this server that a person attached can watch. `headless`: nothing to watch."
+                "`pane`: a window of this server that a person attached can watch; Linux only."
+                " `desktop`: a window of its own on the desktop of the server's machine."
+                " `headless`: nothing to watch."
             )
         ),
     ] = browser.Seat.PANE,
@@ -656,13 +662,22 @@ async def open_browser(
         ),
     ] = None,
     executable: Annotated[
-        str | None, Field(description="Chromium to run; PYMUX_MCP_CHROMIUM or `chromium` on the PATH when left out.")
+        str | None,
+        Field(
+            description=(
+                "The browser to run; left out, PYMUX_MCP_CHROMIUM or PYMUX_MCP_QUTEBROWSER,"
+                " else `chromium` or `qutebrowser` on the PATH."
+            )
+        ),
     ] = None,
     extensions: Annotated[
         list[str] | None,
         Field(description="Unpacked extensions to load: absolute directories, each with its manifest.json."),
     ] = None,
-    arguments: Annotated[list[str] | None, Field(description="More command line for Chromium.")] = None,
+    arguments: Annotated[
+        list[str] | None,
+        Field(description="More command line for the browser; qutebrowser passes a Chromium switch as `--qt-flag=X`."),
+    ] = None,
     idle: Annotated[
         float,
         Field(ge=0, description="Close it after this many seconds unused by you or a person; 0 keeps it."),
@@ -670,7 +685,7 @@ async def open_browser(
     timeout: Seconds = 30.0,
 ) -> Json:
     """
-    Start a Chromium to drive, and answer it once `url` loaded.
+    Start a browser to drive, and answer it once `url` loaded.
 
     It runs across calls until `browser.close`, or until nobody used it
     for `idle` seconds: no browser operation, and no key or mouse from a
@@ -690,6 +705,7 @@ async def open_browser(
         window=window,
         profile_name=profile,
         extensions=extensions or (),
+        kind=kind,
     )
     if url == browser.BLANK:
         return opened.json()

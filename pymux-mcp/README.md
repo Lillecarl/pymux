@@ -36,9 +36,11 @@ ids that the other operations take.
 
 ## Browsers
 
-`browser.open` starts a Chromium for an agent to drive over the DevTools
-protocol: `headless` as a job, or `pane` in a window pane that anybody
-attached can watch. `browser.snapshot` answers the page as its
+`browser.open` starts a browser for an agent to drive over the DevTools
+protocol: `headless` as a job, `pane` in a window pane that anybody
+attached can watch, or `desktop` as a job in a window of its own on the
+desktop of the server's machine. `pane` needs `wl`, so it is Linux only;
+on macOS, `desktop` is the seat a person can watch. `browser.snapshot` answers the page as its
 accessibility tree, with a ref on each element that `browser.click` and
 `browser.type` take. `browser.goto`, `browser.press`, `browser.evaluate`,
 `browser.screenshot`, `browser.console`, `browser.tabs`, `browser.list`
@@ -60,9 +62,17 @@ split of a window somebody works in; closing it then takes only its own
 panes away. Every browser prefers reduced motion, so a watched one
 sends fewer frames.
 
+`kind` is `chromium` or `qutebrowser`. qutebrowser runs on QtWebEngine,
+which is Chromium, so every operation that reads or acts on a page works
+the same. It loads no extensions and has no `browser.setting`; both say
+so. pymux picks its port and quits it with SIGTERM, because QtWebEngine
+refuses port 0 and does not quit on `Browser.close`. A Chromium switch
+reaches it as `--qt-flag=<switch>` in `arguments`.
+
 A browser's profile is thrown away when it closes, unless `profile`
 names one: a kept profile lives in
-`$XDG_STATE_HOME/pymux/browsers/<name>` and keeps its logins,
+`$XDG_STATE_HOME/pymux/browsers/<name>`, or `qutebrowsers/<name>` for
+qutebrowser, and keeps its logins,
 extensions and settings for the next browser that names it. One
 browser at a time can have a profile open.
 
@@ -80,12 +90,12 @@ looks every thirty seconds, so nothing is collected while no pymux-mcp
 runs.
 
 pymux holds each browser, so it outlives this process. Every operation
-connects to the browser again, through the port Chromium writes into
-its profile. That port listens on the server machine's loopback, so
+connects to the browser again, through the port written into its
+profile. That port listens on the server machine's loopback, so
 pymux-mcp has to run on that machine.
 
-Chromium comes from `executable`, then `PYMUX_MCP_CHROMIUM`, then
-`chromium` on the PATH.
+The browser comes from `executable`, then `PYMUX_MCP_CHROMIUM` or
+`PYMUX_MCP_QUTEBROWSER`, then `chromium` or `qutebrowser` on the PATH.
 
 ## One place for each argument
 
@@ -106,5 +116,5 @@ environment stamps the job.
 `tests/test_pymux_mcp.py` in pymux checks the registry and the schemas
 with no server. `check_pymux_mcp` in `tests/drive_with_pty.py` drives the
 two tools through an MCP client against a server that is really there.
-`tests/test_mcp_browsers.py` drives a real Chromium in both seats, in
-`checks.pymux-browsers`.
+`tests/test_mcp_browsers.py` drives a real Chromium and a real
+qutebrowser, headless and in a pane, in `checks.pymux-browsers`.

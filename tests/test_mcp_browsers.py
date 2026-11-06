@@ -1,8 +1,9 @@
 """
 pymux-mcp's browsers against a server that is really there: Chromium
-headless as a job, and headful in a window pane. Lillecarl/pymux#822.
+and qutebrowser headless as a job, and headful in a window pane.
+Lillecarl/pymux#822.
 
-Runs in `checks.pymux-browsers`, which puts Chromium on the PATH.
+Runs in `checks.pymux-browsers`, which puts both on the PATH.
 """
 
 from __future__ import annotations
@@ -32,6 +33,16 @@ from pymux_mcp.api import OPERATIONS, Png
 
 #: A build sandbox has no room for Chromium's own sandbox.
 ARGUMENTS = ["--no-sandbox"]
+#: The same switch, through qutebrowser to its QtWebEngine.
+QUTEBROWSER_ARGUMENTS = ["--qt-flag=no-sandbox"]
+
+needs_qutebrowser = pytest.mark.skipif(shutil.which("qutebrowser") is None, reason="no qutebrowser on the PATH")
+KINDS = ["chromium", pytest.param("qutebrowser", marks=needs_qutebrowser)]
+
+
+def arguments(kind: str) -> list[str]:
+    return ARGUMENTS if kind == "chromium" else QUTEBROWSER_ARGUMENTS
+
 
 PAGE = (
     "data:text/html;base64,"
@@ -75,11 +86,13 @@ def ref(line: str) -> str:
     return line.rsplit("[ref=", 1)[1].rstrip("]")
 
 
+@pytest.mark.parametrize("kind", KINDS)
 @pytest.mark.parametrize("seat", ["headless", "pane"])
-async def test_an_agent_fills_a_form_and_reads_what_the_page_logged(server, seat):
-    opened = await call(server, "browser.open", name="probe", seat=seat, url=PAGE, arguments=ARGUMENTS)
+async def test_an_agent_fills_a_form_and_reads_what_the_page_logged(server, seat, kind):
+    opened = await call(server, "browser.open", name="probe", kind=kind, seat=seat, url=PAGE, arguments=arguments(kind))
     profile = Path(opened["profile"])
     assert ("window" if seat == "pane" else "job") in opened, opened
+    assert opened["kind"] == kind, opened
     assert [one["name"] for one in await call(server, "browser.list")] == ["probe"]
 
     snapshot = await call(server, "browser.snapshot", name="probe")
@@ -107,12 +120,12 @@ async def test_an_agent_fills_a_form_and_reads_what_the_page_logged(server, seat
     (tab,) = await call(server, "browser.tabs", name="probe")
     assert tab["title"] == "probe", tab
 
-    pid = browser._pid(profile)
+    pid = browser._pid(profile, browser.Kind(kind))
     assert pid is not None
     await call(server, "browser.close", name="probe")
     assert await call(server, "browser.list") == []
-    # A pane's window closes before Chromium ends, which writes into the
-    # profile until it does.
+    # A pane's window closes before the browser ends, which writes into
+    # the profile until it does.
     assert not browser._alive(pid)
     assert not profile.exists()
     if seat == "pane":
@@ -146,22 +159,26 @@ async def test_a_browser_beside_a_persons_work_takes_only_its_own_panes_away(ser
     assert [pane.id for pane in await window.panes()] == [work.id]
 
 
-async def test_a_kept_profile_outlives_its_browser(server, tmp_path, monkeypatch):
+@pytest.mark.parametrize(("kind", "directory"), [("chromium", "browsers"), ("qutebrowser", "qutebrowsers")])
+async def test_a_kept_profile_outlives_its_browser(server, tmp_path, monkeypatch, kind, directory):
     "What the browser stored is there the next time, and one profile takes one browser at a time."
+    if shutil.which(kind) is None:
+        pytest.skip("no %s on the PATH" % (kind,))
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
-    opened = await call(server, "browser.open", name="probe", seat="headless", profile="work", arguments=ARGUMENTS)
-    assert opened["kept"] and opened["profile"] == str(tmp_path / "state" / "pymux" / "browsers" / "work")
+    launch = {"kind": kind, "seat": "headless", "profile": "work", "arguments": arguments(kind)}
+    opened = await call(server, "browser.open", name="probe", **launch)
+    assert opened["kept"] and opened["profile"] == str(tmp_path / "state" / "pymux" / directory / "work")
     cookie = {"name": "kept", "value": "yes", "domain": "example.com", "path": "/", "expires": 2e9}
     try:
         with pytest.raises(ValueError, match="has the profile"):
-            await call(server, "browser.open", name="other", seat="headless", profile="work", arguments=ARGUMENTS)
+            await call(server, "browser.open", name="other", **launch)
         async with browser.tab(server, "probe") as page:
             await page.send("Network.setCookie", cookie)
     finally:
         await call(server, "browser.close", name="probe")
     assert Path(opened["profile"]).is_dir()
 
-    await call(server, "browser.open", name="probe", seat="headless", profile="work", arguments=ARGUMENTS)
+    await call(server, "browser.open", name="probe", **launch)
     try:
         async with browser.tab(server, "probe") as page:
             cookies = (await page.send("Network.getCookies", {"urls": ["https://example.com/"]}))["cookies"]
@@ -203,6 +220,24 @@ async def test_an_extension_loads_at_launch_and_into_a_running_browser(server, t
         assert "chrome-extension://%s/worker.js" % (loaded["id"],) in await workers(server)
         with pytest.raises(ValueError, match="not an unpacked extension"):
             await call(server, "browser.extension", name="probe", directory=str(tmp_path))
+    finally:
+        await call(server, "browser.close", name="probe")
+
+
+@needs_qutebrowser
+async def test_qutebrowser_refuses_what_only_chromium_has(server, tmp_path):
+    "No extensions and no chrome://settings, said plainly rather than as a protocol error."
+    extension = an_extension(tmp_path / "first", "first")
+    with pytest.raises(ValueError, match="only Chromium"):
+        await call(server, "browser.open", name="probe", kind="qutebrowser", seat="headless", extensions=[extension])
+    await call(
+        server, "browser.open", name="probe", kind="qutebrowser", seat="headless", arguments=QUTEBROWSER_ARGUMENTS
+    )
+    try:
+        with pytest.raises(ValueError, match="only Chromium"):
+            await call(server, "browser.extension", name="probe", directory=extension)
+        with pytest.raises(ValueError, match="only Chromium"):
+            await call(server, "browser.setting", name="probe", key="translate_blocked_languages")
     finally:
         await call(server, "browser.close", name="probe")
 

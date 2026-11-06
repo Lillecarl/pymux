@@ -42,8 +42,10 @@ to the person in a window. A job outlives the call that started it.
 
 ## Browsers
 
-`browser.open` starts Chromium: `seat: "pane"` in a window pane a person can
-watch (`window` splits theirs), `seat: "headless"` as a job. Then:
+`browser.open` starts Chromium, or qutebrowser with `kind: "qutebrowser"`:
+`seat: "pane"` in a window pane a person can watch (`window` splits theirs;
+Linux only), `seat: "desktop"` in a window on the server machine's desktop,
+`seat: "headless"` as a job. Then:
 
 - read: `browser.snapshot` (accessibility tree with refs), `browser.find`
   (only elements reading some text), `browser.screenshot` with `marks`
