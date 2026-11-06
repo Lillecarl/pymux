@@ -52,7 +52,7 @@ from ..wayland.browsers import Browsers
 from ..wayland.portal import Portal
 from ..wayland.wayland import WaylandServer
 from .arrangement import Arrangement
-from .chores import sweep, watch_window_output
+from .chores import sweep, watch_the_loop, watch_window_output
 from .drag_and_drop import DragAndDrop
 from .environment import take_environment_from
 from .focus import Focus
@@ -664,6 +664,7 @@ class Pymux:
             self.error_notice.install()
             tasks.start_soon(self.waking.auto_refresh)
             tasks.start_soon(watch_window_output, self)
+            tasks.start_soon(watch_the_loop)
             tasks.start_soon(sweep, self)
             tasks.start_soon(self.port_offers.keep)
             tasks.start_soon(self.actions.keep, lambda: self.options.action_log_limit)

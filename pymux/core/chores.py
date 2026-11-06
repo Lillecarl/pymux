@@ -22,7 +22,25 @@ if TYPE_CHECKING:
     from ..notify.notifications import Notification
     from .main import Pymux
 
-__all__ = ["seen_of", "sweep", "watch_window_output"]
+__all__ = ["seen_of", "sweep", "watch_the_loop", "watch_window_output"]
+
+
+#: How often the loop watch wakes, and how late a wake may be before it
+#: is logged, in seconds. A live pane's reads once stood still 3.85s
+#: with nothing in the log to say whether the server was the one held.
+#: Lillecarl/pymux#936.
+LOOP_TICK = 0.25
+LOOP_STALL = 1.0
+
+
+async def watch_the_loop(tick: float = LOOP_TICK, stall: float = LOOP_STALL) -> None:
+    "Log each turn of the loop that held it for `stall` seconds or more."
+    while True:
+        before = time.monotonic()
+        await anyio.sleep(tick)
+        late = time.monotonic() - before - tick
+        if late >= stall:
+            logger.warning("The loop stood still %.2fs.", late)
 
 
 #: How often the windows are checked for output and for quiet, in
