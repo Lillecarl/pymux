@@ -49,6 +49,8 @@
   ruff,
   # The model API the scenario check aims claude-code at.
   aimock,
+  # Only the browser check uses it; pyterm passes its fork.
+  qutebrowser,
   # The PipeWire a server starts for `audio-server private`. Null leaves
   # them out of the closure, and the server finds them on the PATH or
   # shares the PipeWire it finds. Lillecarl/pymux#657.
@@ -272,6 +274,7 @@ let
       pyrefly
       ruff
       aimock
+      qutebrowser
       pipewire
       wireplumber
       ;
