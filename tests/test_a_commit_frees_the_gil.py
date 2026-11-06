@@ -1,19 +1,19 @@
 """
 A commit on a worker thread leaves the other threads running.
 
-apsw's `with db:` commits through `sqlite3_exec`, which held the GIL, so
-one slow fsync of the action log froze the server for 39s.
-`nix/patches/apsw-context-manager-releases-the-gil.patch`,
-Lillecarl/pymux#936.
+Upstream apsw holds the GIL through each of these calls. pymux builds
+apsw from the `async-gil-release-v2` branch of Lillecarl/apsw, which
+releases it (`nix/python-pins.nix`).
 
-A cursor dropped at a row commits too: its reset halts the statement,
-and apsw reset with the GIL held. The action log's upkeep dropped its
-`PRAGMA incremental_vacuum` at the first row, and the commit of that
-row froze the server for 22s.
-`nix/patches/apsw-reset-releases-the-gil.patch`, Lillecarl/pymux#940.
+apsw's `with db:` commits through `sqlite3_exec`, so one slow fsync of
+the action log froze the server for 39s. Lillecarl/pymux#936.
 
-The close of the last connection checkpoints the WAL, and apsw closed
-with the GIL held. `nix/patches/apsw-close-releases-the-gil.patch`,
+A cursor dropped at a row commits too: its reset halts the statement.
+The action log's upkeep dropped its `PRAGMA incremental_vacuum` at the
+first row, and the commit of that row froze the server for 22s.
+Lillecarl/pymux#940.
+
+The close of the last connection checkpoints the WAL.
 Lillecarl/pymux#939.
 """
 
