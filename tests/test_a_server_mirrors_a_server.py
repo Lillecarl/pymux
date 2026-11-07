@@ -56,7 +56,7 @@ from pymux.core.snapshot.read import load, start
 from pymux.core.snapshot.write import save
 from pymux.core.upgrade import welcome_back
 from pymux.enums import Clipboard, WindowSize
-from pymux.layout.geometry import plan_of
+from pymux.layout.geometry import plan_of, room_for_panes
 from pymux.mirror import peer as mirror_peer
 from pymux.mirror.program import RemoteProgram
 from pymux.options.options import ALL_CLIENT_OPTIONS
@@ -892,6 +892,36 @@ async def test_a_new_window_there_takes_the_client_along(two_servers, line):
         lambda: client.app.layout.has_focus(shown.active_pane.terminal),
         "the client focuses the new pane",
         seen=lambda: client.app.layout.current_control,
+    )
+
+
+async def test_a_status_line_that_wraps_here_takes_its_rows_from_the_pane_there(two_servers):
+    """
+    The peer tells the owner its room with its own status rows off it,
+    so a window list that wraps to a second row here makes the pane
+    there a row shorter. Lillecarl/pymux#954.
+    """
+    owner, peer, client = two_servers
+    there, _here = await shown_here(owner, peer, client)
+    shown = here_session(peer).arrangement.get_active_window_for(client.app)
+    # The owner's default size first, then the room the peer tells it.
+    await until(
+        lambda: there.screen.lines == room_for_panes(peer, shown).rows,
+        "the pane there takes the room here",
+        seen=lambda: (there.screen.lines, room_for_panes(peer, shown).rows),
+    )
+    assert client.layout_manager.status.rows() == 1
+    before = there.screen.lines
+
+    for number in range(5):
+        await run_as(peer, client, "new-window -d -n %s" % ("window-%d-" % number * 2))
+    await until(lambda: client.layout_manager.status.rows() > 1, "the window list wraps")
+    grown = client.layout_manager.status.rows() - 1
+
+    await until(
+        lambda: there.screen.lines == before - grown,
+        "the pane there gives the status line its rows",
+        seen=lambda: (there.screen.lines, before, grown),
     )
 
 

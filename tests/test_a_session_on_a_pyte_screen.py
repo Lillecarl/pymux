@@ -234,6 +234,34 @@ async def test_a_watching_client_refuses_the_mouse(pymux):
         assert refused == "this client only watches"
 
 
+async def test_a_status_line_that_wraps_takes_its_rows_from_the_panes(pymux):
+    """
+    A window list that grows past one row makes the status line taller,
+    and the pane under it gives up the row: its program is told, and no
+    row of it hides under the bar. Lillecarl/pymux#954.
+    """
+    async with pymux.running(), attached(pymux) as session:
+        await shows(session, "$")
+        window = pymux.arrangement.get_active_window()
+        pane = window.active_pane
+        (client,) = pymux.clients
+        assert client.layout_manager.status.rows() == 1
+        before = pane.screen.lines
+
+        for number in range(4):
+            said(session, type="input", keys="C-b :")
+            said(session, type="text", text="new-window -d -n %s" % ("window-%d-" % number * 2))
+            said(session, type="input", keys="Enter")
+        await once(lambda: client.layout_manager.status.rows() > 1, 10.0, "the window list never wrapped")
+        grown = client.layout_manager.status.rows() - 1
+
+        await once(
+            lambda: pane.screen.lines == before - grown,
+            5.0,
+            lambda: "the pane kept %d rows under a status line of %d" % (pane.screen.lines, grown + 1),
+        )
+
+
 async def test_a_frame_carries_what_it_drew(pymux):
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
