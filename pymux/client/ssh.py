@@ -61,7 +61,7 @@ from .forwards import Forwards
 from .reconnect import why
 from .relink import Relink, Restarting, TerminalWaiting
 from .ssh_requests import browser_asked, forward_asked, open_asked, reap_forwards, report_forwards
-from .terminal import DELETE_EVERY_IMAGE, TerminalClient
+from .terminal import DELETE_EVERY_IMAGE, TerminalClient, drain_replies
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Awaitable, Callable
@@ -471,7 +471,9 @@ class SshClient(TerminalClient):
             except Exception as error:
                 cannot = error
 
-        self._reset_terminal()
+            self._reset_terminal()
+            with contextlib.suppress(Exception):
+                drain_replies(stdin_fd, self.write_terminal)
 
         if cannot is not None:
             sys.stderr.write("pymux cannot reach the server on %s: %s\n" % (self.target.host, why(cannot)))

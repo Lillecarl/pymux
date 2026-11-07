@@ -22,6 +22,8 @@ import signal
 import socket
 import sys
 import threading
+import time
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 import anyio
@@ -127,6 +129,57 @@ DETECTION_QUERIES = (
     + COLOR_QUERIES.encode("ascii")
     + DEVICE_ATTRIBUTES_QUERY
 )
+
+
+#: What the client asks last as it leaves, and the answer it reads to.
+#: DSR 5, "are you there": every VT100 answers it, in order with the
+#: rest, and nothing else the client or the server asks uses it. Not
+#: DA1, which the detection asks too, so its answer may still be on the way.
+STATUS_QUERY = csi(escape.DSR, 5).encode()
+STATUS_OK = csi(escape.DSR, 0).encode()
+
+#: How long a leaving client reads the terminal's answers for. Past it,
+#: the rest reach the shell, as they did before the client read any.
+DRAIN_WITHIN = 0.5
+
+
+def drain_replies(fd: int, write: Callable[[bytes], None], within: float = DRAIN_WITHIN) -> None:
+    """
+    Read away what the terminal still owes the client, up to the answer
+    to one last question.
+
+    A client that ends right after it starts asked the detection
+    queries and left before the answers came. They then reached the
+    shell as typed text: `^[[?31u^[[?2026;2$y^[_Gi=31;OK^[\\…`. The
+    terminal answers in order, so everything before the answer to
+    `STATUS_QUERY` is an answer to something the client sent.
+    Lillecarl/pyterm#960.
+
+    Raw mode has to be on: in cooked mode the terminal driver echoes
+    the answers before anything reads them. A key pressed while the
+    client leaves goes too, when it arrives with the answers: a tty has
+    no way to put bytes back.
+    """
+    if not os.isatty(fd):
+        return
+    write(STATUS_QUERY)
+    deadline = time.monotonic() + within
+    tail = b""
+    while (left := deadline - time.monotonic()) > 0:
+        ready, _, _ = select.select((fd,), (), (), left)
+        if not ready:
+            return
+        try:
+            chunk = os.read(fd, 4096)
+        except BlockingIOError:
+            continue
+        except OSError:
+            return
+        if not chunk:
+            return
+        tail = tail[-len(STATUS_OK) :] + chunk
+        if STATUS_OK in tail:
+            return
 
 
 def detection_queries(probe: str) -> bytes:
@@ -516,6 +569,10 @@ class TerminalClient(Client):
         self._restore_modes()
         with contextlib.suppress(Exception):
             self._reset_terminal()
+        # After the reset, which turns the reports off: one sent before
+        # it is drained too. Inside the caller's raw mode.
+        with contextlib.suppress(Exception):
+            drain_replies(sys.stdin.fileno(), self.write_terminal)
         # The objects of frames the terminal never got to read.
         if self._shm is not None:
             with contextlib.suppress(Exception):
