@@ -14,9 +14,11 @@ import json
 import os
 import shlex
 import shutil
+import signal
 import struct
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import anyio
@@ -32,6 +34,8 @@ from libpymux.connection import CommandResult
 from PIL import Image, ImageColor
 from pymux_mcp import browser
 from pymux_mcp.api import OPERATIONS, Png
+
+from pymux import log
 
 #: A build sandbox has no room for Chromium's own sandbox.
 ARGUMENTS = ["--no-sandbox"]
@@ -80,9 +84,42 @@ async def server(tmp_path):
         try:
             yield found
         finally:
-            await found.cmd("kill-server", check=False)
-            with anyio.fail_after(30):
+            started = time.monotonic()
+            with anyio.move_on_after(10) as asking:
+                await found.cmd("kill-server", check=False)
+            with anyio.move_on_after(30):
                 await process.wait()
+            if process.returncode is None:
+                # anyio's Process waits for ever on its way out, so a server
+                # that does not end held the whole suite until its timeout.
+                stacks = await _stacks_of(process)
+                process.kill()
+                await process.wait()
+                pytest.fail("the server did not end at kill-server; its stacks:\n%s" % (stacks,))
+            if asking.cancelled_caught:
+                holders = [one.pid for one in psutil.process_iter() if _holds(one, sock)]
+                pytest.fail(
+                    "kill-server had no answer in 10s; the server ended %.1fs after it was asked;"
+                    " processes with the socket open: %s" % (time.monotonic() - started, holders)
+                )
+
+
+def _holds(process: psutil.Process, sock: str) -> bool:
+    try:
+        return any(connection.laddr == sock for connection in process.net_connections("unix"))
+    except psutil.Error:
+        return False
+
+
+async def _stacks_of(process: anyio.abc.Process) -> str:
+    "What a server's SIGUSR1 dump says, beside its log."
+    dump = log.default_logfile().parent / ("stacks-%d.log" % (process.pid,))
+    process.send_signal(signal.SIGUSR1)
+    await anyio.sleep(1)
+    try:
+        return dump.read_text()
+    except OSError as why:
+        return "none: %s" % (why,)
 
 
 async def call(server: Server, op: str, **args):
