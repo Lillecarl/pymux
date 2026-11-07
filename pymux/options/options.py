@@ -224,6 +224,11 @@ class FieldOption(Option):
         setattr(self._options_of(owner), self.declared.attribute, parsed)
         if self.declared.on_set is not None:
             self.declared.on_set(pymux, owner)
+        if self.scope is Scope.CLIENT:
+            from pymux.connection.client_state import ClientState
+
+            if isinstance(owner, ClientState):
+                owner.client.tell_options()
 
     @override
     def set_default(self, pymux: Pymux, value: str) -> None:

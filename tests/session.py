@@ -220,6 +220,9 @@ class Client:
     def set_program_status(self, records):
         pass
 
+    def tell_options(self):
+        "A stub keeps no options between attaches. Lillecarl/pymux#957."
+
 
 #: The size a temporary client reports. Nothing draws in it; a window that
 #: sizes itself by the latest client must never read it.

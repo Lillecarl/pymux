@@ -215,6 +215,15 @@ class Options:
     def __post_init__(self) -> None:
         object.__setattr__(self, "owner", None)
 
+    def set_ones(self) -> list[list[str]]:
+        "`[name, value]` of each option not at its default, as `set-option` takes it back."
+        spelled = []
+        for name, declared in self.DECLARED.items():
+            value = getattr(self, declared.attribute)
+            if value != declared.default:
+                spelled.append([name, ("on" if value else "off") if isinstance(value, bool) else str(value)])
+        return spelled
+
     def hold(self, name: str, value: Any) -> None:
         "Take a value the owner already acts on, without its `on_write`."
         object.__setattr__(self, name, value)

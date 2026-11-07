@@ -90,6 +90,15 @@ export interface Welcome {
   size: Size;
 }
 
+/**
+ * The client options a person set on a session view's client, each time
+ * they change, as `set-option` takes them back. Lillecarl/pymux#957.
+ */
+export interface ClientOptions {
+  type: "client-options";
+  options: [name: string, value: string][];
+}
+
 /** The rows that changed, and nothing else. */
 export interface Frame {
   type: "frame";
@@ -346,6 +355,16 @@ export interface PymuxPane {
     options?: boolean | AddEventListenerOptions,
   ): void;
   /**
+   * The client options set on a session view's client changed. The
+   * element names them when it connects again; a page that keeps
+   * `detail` names them in the next `src` it sets. Lillecarl/pymux#957.
+   */
+  addEventListener(
+    type: "client-options",
+    listener: (event: CustomEvent<ClientOptions["options"]>) => void,
+    options?: boolean | AddEventListenerOptions,
+  ): void;
+  /**
    * `connected` is the welcome and not the socket: `writable` and the
    * size are true by then.
    */
@@ -401,6 +420,8 @@ export class PymuxPane extends HTMLElement {
   #cellWidths = new Set<number>();
   #rows: HTMLDivElement[] = [];
   #socket: WebSocket | null = null;
+  /** The client options the server last said, or null before it said any. */
+  #clientOptions: ClientOptions["options"] | null = null;
   #ownsSocket = false;
   #writable = false;
   /** Whether a welcome came since `src` was set; see `retryAfter`. */
@@ -733,7 +754,7 @@ export class PymuxPane extends HTMLElement {
   }
 
   #tryAgain(code: number): void {
-    const url = this.#socket?.url;
+    const url = this.#withOptions(this.#socket?.url);
     const delay = retryAfter(code, this.#welcomed, this.#failures);
     if (url === undefined || delay === null) return;
     this.#failures += 1;
@@ -743,6 +764,17 @@ export class PymuxPane extends HTMLElement {
         detail: { delay, attempt: this.#failures },
       }),
     );
+  }
+
+  /**
+   * `url` naming the client options last heard, so a server that
+   * restarted gives the new client what the person set on the old one.
+   */
+  #withOptions(url: string | undefined): string | undefined {
+    if (url === undefined || this.#clientOptions === null) return url;
+    const where = new URL(url);
+    where.searchParams.set("options", JSON.stringify(this.#clientOptions));
+    return where.toString();
   }
 
   /** Close a socket this element opened, and attempt nothing more. */
@@ -763,11 +795,16 @@ export class PymuxPane extends HTMLElement {
   // -- what arrives --------------------------------------------------
 
   #onMessage(event: MessageEvent): void {
-    let frame: Welcome | Frame;
+    let frame: Welcome | Frame | ClientOptions;
     try {
-      frame = JSON.parse(String(event.data)) as Welcome | Frame;
+      frame = JSON.parse(String(event.data)) as Welcome | Frame | ClientOptions;
     } catch {
       this.dispatchEvent(new CustomEvent("error", { detail: "bad frame" }));
+      return;
+    }
+    if (frame.type === "client-options") {
+      this.#clientOptions = frame.options;
+      this.dispatchEvent(new CustomEvent("client-options", { detail: frame.options }));
       return;
     }
     this.receive(frame);

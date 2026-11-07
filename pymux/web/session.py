@@ -28,6 +28,7 @@ import json
 import time
 from collections.abc import AsyncIterable, Awaitable, Callable
 from typing import Any
+from urllib.parse import unquote
 
 import anyio
 from libpymux.protocol import Field, Packet
@@ -41,7 +42,7 @@ from pymux.keys.key_spelling import event_however_it_is_written
 from pymux.log import logger
 from pymux.web.protocol import MOUSE, PaneView, Typed, encode_unsent, mouse_of, typed_of
 
-__all__ = ["SessionScreen", "run_session"]
+__all__ = ["CLIENT_OPTIONS", "SessionScreen", "client_options_of", "run_session"]
 
 #: What this terminal says it is. pyte answers as xterm does, and holds
 #: 24-bit colour, so the client need not guess down to 256.
@@ -61,6 +62,35 @@ LARGEST = 1000
 #: same five seconds a pane uses. Lillecarl/pymux#485.
 _GROUND_TIMEOUT = 5
 
+#: What a viewer is told when the client options set on its client
+#: change, so the page keeps them for its next connection.
+CLIENT_OPTIONS = "client-options"
+
+#: The most client options a page may name. ClientOptions holds about
+#: thirty; this only stops a query from growing without bound.
+_MOST_OPTIONS = 200
+
+
+def client_options_of(text: str) -> list[list[str]]:
+    """
+    The `[name, value]` pairs a page kept, out of its query: URL-quoted
+    JSON. What is not such a pair is left out; the server says what is
+    wrong with a name or a value it gets.
+    """
+    if not text:
+        return []
+    try:
+        found = json.loads(unquote(text))
+    except ValueError:
+        return []
+    if not isinstance(found, list):
+        return []
+    return [
+        [name, value]
+        for name, value in (one for one in found[:_MOST_OPTIONS] if isinstance(one, list) and len(one) == 2)
+        if isinstance(name, str) and isinstance(value, str)
+    ]
+
 
 class SessionScreen:
     """
@@ -75,9 +105,14 @@ class SessionScreen:
         columns: int,
         send: Callable[[dict[str, Any]], None],
         read_only: bool = False,
+        client_options: list[list[str]] | None = None,
     ) -> None:
         self._send = send
         self.read_only = read_only
+        #: The client options set on this client, as the server last
+        #: said them, and whether the viewer has heard them since.
+        self.client_options: list[list[str]] = list(client_options or [])
+        self.client_options_told = True
         self.screen = Screen(rows, columns, write_process_input=self._answer)
         self._stream = Stream(self.screen)
         self._ground_timer = GroundTimer(self._stream, _GROUND_TIMEOUT, time.monotonic)
@@ -96,6 +131,8 @@ class SessionScreen:
                 Field.COLOR_DEPTH: COLOR_DEPTH,
                 Field.TERM: TERM,
                 Field.COLORTERM: COLORTERM,
+                Field.CLIENT_OPTIONS: self.client_options,
+                Field.KEEPS_OPTIONS: True,
             }
         )
         # The server reads the answers only after this packet, and this
@@ -119,6 +156,11 @@ class SessionScreen:
             # the next packet instead of at its deadline.
             self._ground_timer.expire()
             self._ground_timer.feed(packet[Field.DATA])
+        elif kind == Packet.CLIENT_OPTIONS:
+            told = packet.get(Field.CLIENT_OPTIONS)
+            if isinstance(told, list) and told != self.client_options:
+                self.client_options = told
+                self.client_options_told = False
         elif kind in (Packet.EXIT, Packet.ERR):
             return True
         return False
@@ -139,6 +181,13 @@ class SessionScreen:
 
     def welcome(self) -> dict[str, Any]:
         return self._view.welcome(self.screen, self.screen.writes, not self.read_only)
+
+    def options_untold(self) -> dict[str, Any] | None:
+        "The client options, when they changed since the viewer heard them."
+        if self.client_options_told:
+            return None
+        self.client_options_told = True
+        return {"type": CLIENT_OPTIONS, "options": self.client_options}
 
     async def frame(self) -> dict[str, Any] | None:
         "What the viewer has not seen, or None."
@@ -235,6 +284,7 @@ async def run_session(
     rows: int,
     columns: int,
     read_only: bool = False,
+    client_options: list[list[str]] | None = None,
 ) -> None:
     """
     Be one client of the server at the other end of `stream`, for one
@@ -259,7 +309,7 @@ async def run_session(
         while outgoing:
             await stream.send(outgoing.pop(0))
 
-    session = SessionScreen(rows, columns, send, read_only=read_only)
+    session = SessionScreen(rows, columns, send, read_only=read_only, client_options=client_options)
     session.start()
     await flush()
     await to_viewer(session.welcome())
@@ -280,6 +330,9 @@ async def run_session(
                     if raw and session.take_packet(json.loads(raw.decode("utf-8"))):
                         ended = True
                 await flush()
+                options = session.options_untold()
+                if options is not None:
+                    await to_viewer(options)
                 frame = await session.frame()
                 if frame is not None:
                     await to_viewer(frame)

@@ -96,6 +96,7 @@ class ClientRole:
         "saves_files": Keep.REBUILT,
         "sends_files": Keep.REBUILT,
         "answers_transfers": Keep.REBUILT,
+        "keeps_options": Keep.REBUILT,
         "forwards": Keep.DROPPED,
         "pipeinput": Keep.DROPPED,
         # The next server measures the client's round trip again.
@@ -197,6 +198,9 @@ class ClientRole:
         #: Whether this client answers kitty's file transfer as the
         #: terminal. Lillecarl/pymux#912.
         self.answers_transfers = False
+        #: Whether this client keeps its own options between attaches,
+        #: and so hears them each time one changes. Lillecarl/pymux#957.
+        self.keeps_options = False
         #: This client's sound, when it plays it. Lillecarl/pymux#657.
         self.audio: AudioLink | None = None
 
@@ -355,6 +359,13 @@ class ClientRole:
         self._program_status_sent = dict(records)
         for payload in out:
             self.forward_osc(osc(Osc.PROGRAM_STATUS, payload))
+
+    def tell_options(self) -> None:
+        "Send the client options set on this client, when it keeps them."
+        if self.keeps_options:
+            self.connection.send_packet(
+                {Field.CMD: Packet.CLIENT_OPTIONS, Field.CLIENT_OPTIONS: self.state.options.set_ones()}
+            )
 
     def request_repaint(self) -> None:
         """

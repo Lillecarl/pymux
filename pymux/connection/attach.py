@@ -105,6 +105,7 @@ def start_gui(connection: ServerConnection, packet: Message) -> None:
     client.saves_files = bool(packet.get(Field.SAVES_FILES))
     client.sends_files = bool(packet.get(Field.SENDS_FILES))
     client.answers_transfers = bool(packet.get(Field.KITTY_TRANSFERS))
+    client.keeps_options = bool(packet.get(Field.KEEPS_OPTIONS))
     connection.answers_ping = bool(packet.get(Field.PINGS))
     client.pacing.paced = bool(packet.get(Field.PACED))
     client.environment = packet.get(Field.ENVIRONMENT) or {}
@@ -134,6 +135,7 @@ def start_gui(connection: ServerConnection, packet: Message) -> None:
     # After the options: what the client had set while it ran
     # wins over what its file says. Lillecarl/pymux#409.
     welcome_back(connection.pymux, client.state, client.client_id)
+    client.tell_options()
 
     # The session this client landed on takes the names that
     # follow a client: a display, an agent, a session bus.

@@ -36,7 +36,7 @@ from pymux.core.main import Pymux
 from pymux.layout import plan_container
 from pymux.log import logger
 from pymux.pipes.memory import connect_in_memory
-from pymux.web.session import SessionScreen
+from pymux.web.session import CLIENT_OPTIONS, SessionScreen, client_options_of
 
 ROWS, COLUMNS = 12, 60
 
@@ -57,7 +57,7 @@ def pymux():
 
 
 @asynccontextmanager
-async def attached(pymux, read_only: bool = False):
+async def attached(pymux, read_only: bool = False, client_options=None):
     """
     A `SessionScreen` on a connection of its own, with a task feeding it
     everything the server sends. The context and the list of connections
@@ -77,6 +77,7 @@ async def attached(pymux, read_only: bool = False):
         COLUMNS,
         lambda packet: client_end.write_nowait(encode_json(packet)),
         read_only=read_only,
+        client_options=client_options,
     )
 
     # Every packet the server sends is a call of `write_encoded`, made when it
@@ -292,6 +293,36 @@ async def test_a_program_status_that_wraps_the_window_list_takes_its_rows_from_t
             5.0,
             lambda: "the pane kept %d rows under a status line of %d" % (pane.screen.lines, grown + 1),
         )
+
+
+async def test_a_view_names_the_options_it_kept_and_hears_each_change(pymux):
+    """
+    Each stream is a new client, so the page keeps what the person set
+    on the last one and names it in the next. Lillecarl/pymux#957.
+    """
+    async with pymux.running(), attached(pymux, client_options=[["name", "desk"]]) as session:
+        await shows(session, "$")
+        (client,) = pymux.clients
+        assert client.options.name == "desk"
+        assert session.options_untold() is None
+
+        with set_app(client.app):
+            pymux.handle_command("set-client-option theme nearest")
+            pymux.handle_command("set-client-option name phone")
+        await once(lambda: session.client_options == [["name", "phone"]], 5.0, lambda: repr(session.client_options))
+        assert session.options_untold() == {"type": CLIENT_OPTIONS, "options": [["name", "phone"]]}
+        assert session.options_untold() is None
+
+
+def test_a_query_names_only_option_pairs():
+    assert client_options_of("") == []
+    assert client_options_of("not json") == []
+    assert client_options_of("%5B%5B%22name%22%2C%22desk%22%5D%5D") == [["name", "desk"]]
+    assert client_options_of('[["name", "desk"], ["theme"], ["x", 1], "y", ["a", "b"]]') == [
+        ["name", "desk"],
+        ["a", "b"],
+    ]
+    assert client_options_of('{"name": "desk"}') == []
 
 
 async def test_a_frame_carries_what_it_drew(pymux):

@@ -57,6 +57,26 @@ function say(text: string): void {
   about.textContent = text;
 }
 
+/** Where the page keeps the client options of a session view. */
+const KEPT_OPTIONS = "pymux-client-options";
+
+// A private window, or a browser that blocks storage, throws on either.
+function keptOptions(): string | null {
+  try {
+    return localStorage.getItem(KEPT_OPTIONS);
+  } catch {
+    return null;
+  }
+}
+
+function keepOptions(options: string): void {
+  try {
+    localStorage.setItem(KEPT_OPTIONS, options);
+  } catch {
+    // Kept for this stream's reconnects only, by the element.
+  }
+}
+
 if (!pane || !token) {
   say(
     "Open the address that `pymux web` printed, with ?pane=%1001 or ?session on it.",
@@ -71,6 +91,11 @@ if (!pane || !token) {
     // the room: a client's size is its terminal's.
     element.setAttribute("fit", "");
     document.body.classList.add("session");
+    // What the person set on this view's client, kept for the next one:
+    // each stream is a new client. Lillecarl/pymux#957.
+    const kept = keptOptions();
+    if (kept !== null) where.searchParams.set("options", kept);
+    element.addEventListener("client-options", (event) => keepOptions(JSON.stringify(event.detail)));
   }
 
   element.addEventListener("connected", () =>

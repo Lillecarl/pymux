@@ -235,11 +235,12 @@ async def _serve_a_session(socket_path: str, connection: ServerConnection, query
     """
     One viewer as one client of the session, with everything a client
     draws. `rows` and `columns` in the query are the element's first size;
-    a `size` message moves it after. Lillecarl/pymux#481.
+    a `size` message moves it after. Lillecarl/pymux#481. `options` is
+    the client options the page kept, as JSON. Lillecarl/pymux#957.
     """
     import anyio
 
-    from pymux.web.session import LARGEST, run_session
+    from pymux.web.session import LARGEST, client_options_of, run_session
 
     def cells(name: str, default: int) -> int:
         try:
@@ -266,6 +267,7 @@ async def _serve_a_session(socket_path: str, connection: ServerConnection, query
             cells("rows", 24),
             cells("columns", 80),
             read_only=not writable,
+            client_options=client_options_of(_one_of(query, "options") or ""),
         )
     except Exception as ended:
         logger.info("A viewer of the session ended: %s", ended)

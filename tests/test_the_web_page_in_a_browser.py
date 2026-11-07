@@ -302,6 +302,42 @@ async def test_the_escape_button_aborts_and_leaves_the_keys_on_the_terminal(serv
         assert await call(server, "browser.evaluate", name="page", expression=THE_KEYBOARD_HAS_THE_FOCUS)
 
 
+async def test_a_session_view_keeps_its_client_options_over_a_reload(server):
+    "Each stream is a new client; the page names what was set on the last. Lillecarl/pymux#957."
+
+    async def names() -> list[str]:
+        listed = await server.cmd(["list-clients", "-F", "#{client_name}"])
+        return listed.stdout.split()
+
+    async with a_page(server, "sleep 60", writable=True, session=True):
+        with anyio.fail_after(20):
+            while not await call(
+                server, "browser.evaluate", name="page", expression="document.querySelector('pymux-pane').writable"
+            ):
+                await anyio.sleep(0.1)
+        # Typed on the page, as a person sets one on the client they look through.
+        await call(server, "browser.click", name="page", selector="pymux-pane")
+        await call(server, "browser.evaluate", name="page", expression=PRESS_WITH_CONTROL % json.dumps("b"))
+        await call(server, "browser.press", name="page", key=":")
+        await call(
+            server,
+            "browser.evaluate",
+            name="page",
+            expression="document.querySelector('pymux-pane').send({type: 'text', text: 'set-client-option name phone'})",
+        )
+        await call(server, "browser.press", name="page", key="Enter")
+        with anyio.fail_after(10):
+            while await call(
+                server, "browser.evaluate", name="page", expression="localStorage.getItem('pymux-client-options')"
+            ) != json.dumps([["name", "phone"]], separators=(",", ":")):
+                await anyio.sleep(0.1)
+
+        await call(server, "browser.evaluate", name="page", expression="location.reload()")
+        with anyio.fail_after(20):
+            while await names() != ["phone"]:
+                await anyio.sleep(0.1)
+
+
 async def test_a_click_on_the_page_reaches_a_program_that_asked_for_the_mouse(server):
     """
     The whole way: Chromium's click, the element's cell, the server's

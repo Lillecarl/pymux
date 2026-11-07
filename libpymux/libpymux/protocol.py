@@ -240,6 +240,11 @@ class Packet(StrEnum):
     # socket": wait `wait` seconds for it instead of leaving.
     # Lillecarl/pymux#409.
     RESTARTING = "restarting"
+    # Every client option a person set on this client, as `[name, value]`
+    # under `client-options`, each time one changes: to a client that
+    # said `keeps-options`, so it can name them in its next `start-gui`.
+    # Lillecarl/pymux#957.
+    CLIENT_OPTIONS = "client-options"
     # One frame of a pane a client is streaming, under `data`. A relay
     # passes `data` on without reading it: the frames are the protocol
     # and this envelope is ours to change. Lillecarl/pymux#461.
@@ -513,6 +518,7 @@ class Field(StrEnum):
     #: Who a client is across reattaches to a restarted server.
     CLIENT_ID = "client-id"
     CLIENT_OPTIONS = "client-options"
+    KEEPS_OPTIONS = "keeps-options"
     DIRECTION = "direction"
     LISTEN_HOST = "listen_host"
     LISTEN_PORT = "listen_port"
