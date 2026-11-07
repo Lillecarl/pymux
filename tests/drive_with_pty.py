@@ -677,7 +677,14 @@ class Attached:
         print(self.seen[-4000:].decode("utf-8", "replace"))
         if self.stderr_path is not None and self.stderr_path.exists():
             print("--- client stderr ---\n" + self.stderr_path.read_text(errors="replace"))
+        ended = self.client.poll()
         log = getattr(self, "server_log", None)
+        if ended is not None:
+            # A client that left without a word: its status says whether it
+            # exited or a signal took it. Lillecarl/pyterm#967.
+            print("--- the client ended: %s ---" % (_ending(ended),))
+            if log is not None and log.exists():
+                print("\n".join(log.read_text(errors="replace").splitlines()[-40:]))
         if log is not None and log.exists():
             # Only what the server complained about: the whole log is
             # every frame of every render.
@@ -691,6 +698,12 @@ class Attached:
             probes = [line for line in log.read_text(errors="replace").splitlines() if "PROBE" in line]
             if probes:
                 print("--- probes ---\n" + "\n".join(probes[-25:]))
+
+
+def _ending(returncode: int) -> str:
+    if returncode < 0:
+        return "signal %s" % (signal.Signals(-returncode).name,)
+    return "exit status %d" % (returncode,)
 
 
 class SecondClient(Attached):
