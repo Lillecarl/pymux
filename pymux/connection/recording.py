@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import base64
 import os
+import tempfile
 import time
 from collections.abc import Callable
 from datetime import datetime
@@ -59,6 +60,10 @@ class Recording:
         self.idle_time_limit = idle_time_limit
         self.events: list[list[float | str]] = []
         self.stop: Callable[[], None] = lambda: None
+        #: Set by `record-client` on a mirrored session: gives the
+        #: written files to the owner and says where they went, or
+        #: answers None when it cannot. Lillecarl/pymux#955.
+        self.forward: Callable[[list[Path]], str | None] | None = None
         self._timestamp = int(time.time())
         self._started = time.monotonic()
 
@@ -72,11 +77,23 @@ class Recording:
             ]
         )
 
-    def finish(self, directory: Path | None = None) -> Path:
-        "Stop listening, and write the files. Gives back the `.bin`."
+    def finish(self, directory: Path | None = None) -> Path | str:
+        """
+        Stop listening, and write the files. Gives back the `.bin`, or
+        where `forward` sent them.
+        """
         self.stop()
+        if self.forward is not None and directory is None:
+            with tempfile.TemporaryDirectory() as held:
+                self._write(Path(held))
+                sent = self.forward(sorted(Path(held).iterdir()))
+            if sent is not None:
+                return sent
+        return self._write(directory or recordings_directory())
+
+    def _write(self, directory: Path) -> Path:
         return write_recording(
-            directory or recordings_directory(),
+            directory,
             self.name,
             self.lines,
             self.columns,

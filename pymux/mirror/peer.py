@@ -8,9 +8,11 @@ One link per server, whatever number of its panes are mirrored here.
 
 from __future__ import annotations
 
+import base64
 import math
 import socket
 from contextlib import suppress
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import anyio
@@ -62,7 +64,11 @@ if TYPE_CHECKING:
     from .sink import MirrorSink
     from .window import RemoteWindow
 
-__all__ = ["Peer", "Peers", "Told"]
+__all__ = ["RECORDING_PIECE", "Peer", "Peers", "Told"]
+
+#: The most of a recording's file one `recording` packet carries, so a
+#: long recording does not hold the link for one huge write.
+RECORDING_PIECE = 1 << 20
 
 
 def _clipboard_write_of(packet: Message) -> ClipboardWrite | None:
@@ -344,6 +350,7 @@ class Peer:
         "_send": Keep.DROPPED,
         "_receive": Keep.DROPPED,
         "accepted": Keep.DROPPED,
+        "version": Keep.DROPPED,
         "stream": Keep.DROPPED,
         "tree": Keep.DROPPED,
         "server": Keep.DROPPED,
@@ -377,6 +384,8 @@ class Peer:
         self.stream: anyio.abc.ByteStream | None = None
         #: The owner said which versions of the link it speaks, and they meet ours.
         self.accepted = False
+        #: The version of the link both sides speak, once accepted.
+        self.version = 0
         #: What the owner calls itself, as its trees say.
         self.server: str | None = None
         #: The owner said it restarts: why, and until when on the loop's clock.
@@ -445,6 +454,30 @@ class Peer:
     def send(self, packet: Message) -> None:
         if self.connected:
             self._send.send_nowait(encode_json(packet))
+
+    def send_recording(self, files: list[Path]) -> None:
+        """
+        Give the owner the files of a client recording made on one of its
+        sessions, a piece at a time, in order behind everything sent
+        before. Lillecarl/pymux#955.
+
+        **They travel as their own packets**, never as anything a client
+        draws or types, so a recording can never take in the channel that
+        carries recordings and feed on itself.
+        """
+        for path in files:
+            data = path.read_bytes()
+            for start in range(0, max(1, len(data)), RECORDING_PIECE):
+                piece = data[start : start + RECORDING_PIECE]
+                self.send(
+                    {
+                        Field.CMD: Packet.RECORDING,
+                        Field.NAME: path.name,
+                        Field.DATA: base64.b64encode(piece).decode("ascii"),
+                        Field.OFFSET: start,
+                        Field.LAST: start + RECORDING_PIECE >= len(data),
+                    }
+                )
 
     def dnd(self, pane_id: int, param: str) -> None:
         "A drag and drop packet from a terminal here, for the program in the owner's pane `pane_id`."
@@ -742,6 +775,8 @@ class Peer:
                 PEER_VERSION,
             )
         self.accepted = True
+        theirs = packet.get(Field.VERSION)
+        self.version = min(PEER_VERSION, theirs if isinstance(theirs, int) else 0)
         return None
 
     def _take(self, packet: Message) -> None:

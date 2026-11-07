@@ -12,8 +12,10 @@ and is then sent the newest page.
 
 from __future__ import annotations
 
+import base64
 import socket
 from collections import deque
+from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
 import anyio
@@ -40,6 +42,7 @@ from pyte.sequences.kitty_clipboard import b64
 
 from ..connection.log_asks import LogAsks, log_answer
 from ..connection.packet_table import PacketTable
+from ..connection.recording import recordings_directory
 from ..enums import Woke
 from ..ids import PaneId, WindowId
 from ..layout.geometry import size_the_panes_of
@@ -418,6 +421,37 @@ class PeerLink:
     @_PACKETS.handles(Packet.LOG)
     def _on_log(self, packet: Message) -> None:
         self.log_asks.answered(packet)
+
+    @_PACKETS.handles(Packet.RECORDING)
+    def _on_recording(self, packet: Message) -> None:
+        """
+        A piece of a client recording the peer made on a session of this
+        server: it goes where this server's own recordings go, beside a
+        `.part` until its last piece. Lillecarl/pymux#955.
+        """
+        name = str(packet.get(Field.NAME) or "")
+        # Only a file name: a peer writes nowhere but the recordings.
+        if not name or Path(name).name != name or name.startswith("."):
+            logger.warning("Dropped a recording piece named %r.", name)
+            return
+        try:
+            piece = base64.b64decode(str(packet.get(Field.DATA) or ""), validate=True)
+        except ValueError:
+            logger.warning("Dropped a piece of the recording %s that is not base64.", name)
+            return
+        directory = recordings_directory()
+        part = directory / (name + ".part")
+        try:
+            directory.mkdir(parents=True, exist_ok=True)
+            # The first piece starts the file: a `.part` left by a link
+            # that went mid-file is not part of this one.
+            with open(part, "wb" if not packet.get(Field.OFFSET) else "ab") as held:
+                held.write(piece)
+            if packet.get(Field.LAST):
+                part.replace(directory / name)
+                logger.info("Recorded %s from the peer on %s.", directory / name, self.host or "a peer")
+        except OSError as error:
+            logger.warning("Could not write the recording %s: %s", name, error)
 
     @_PACKETS.handles(Packet.MIRROR)
     def _on_mirror(self, packet: Message) -> None:

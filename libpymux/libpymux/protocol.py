@@ -40,6 +40,7 @@ __all__ = [
     "PEER_FILE_TRANSFER",
     "PEER_PINGS",
     "PEER_PROGRAM_STATUS",
+    "PEER_RECORDINGS",
     "PEER_RICH_CLIPBOARD",
     "PEER_VERSION",
     "PEER_WINDOWS",
@@ -70,7 +71,7 @@ READ_SIZE = 1 << 20
 #: one misreads it raises `PEER_VERSION`; one that stops speaking the
 #: older form raises `OLDEST_PEER_VERSION` too. Every field is named
 #: and has a default, so most changes need neither. Lillecarl/pymux#759.
-PEER_VERSION = 10
+PEER_VERSION = 11
 OLDEST_PEER_VERSION = 1
 
 #: From this version a frame may name an image the peer stored by its
@@ -114,6 +115,11 @@ PEER_PROGRAM_STATUS = 9
 #: From this version either side answers `report-log`, and `peer` names
 #: the peer's host under `server`. Lillecarl/pymux#934.
 PEER_LOGS = 10
+
+#: From this version a peer sends the owner the files of a client
+#: recording made on one of the owner's sessions, as `recording`.
+#: Lillecarl/pymux#955.
+PEER_RECORDINGS = 11
 
 
 def peer_upgrade(version: object, oldest: object) -> str | None:
@@ -439,6 +445,11 @@ class Packet(StrEnum):
     # or `error`. Lillecarl/pymux#934.
     REPORT_LOG = "report-log"
     LOG = "log"
+    # Peer to owner: a piece of one file of a client recording made on
+    # one of the owner's sessions, under `name` and `data` (base64),
+    # at byte `offset`, with `last` on the final piece of that file.
+    # Lillecarl/pymux#955.
+    RECORDING = "recording"
 
 
 class Field(StrEnum):
@@ -577,6 +588,8 @@ class Field(StrEnum):
     #: In `file`: the name the pane gave the file, and the id its parts
     #: share. Lillecarl/pymux#743.
     NAME = "name"
+    #: In `recording`: where in its file a piece starts.
+    OFFSET = "offset"
     TRANSFER = "transfer"
     #: In `peer` and `peer-accepted`: the newest version of a peer link
     #: a side speaks, and the oldest (`PEER_VERSION`).

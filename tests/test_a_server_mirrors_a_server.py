@@ -57,6 +57,7 @@ from pymux.core.snapshot.write import save
 from pymux.core.upgrade import welcome_back
 from pymux.enums import Clipboard, WindowSize
 from pymux.layout.geometry import plan_of, room_for_panes
+from pymux.mirror import link as mirror_link
 from pymux.mirror import peer as mirror_peer
 from pymux.mirror.program import RemoteProgram
 from pymux.options.options import ALL_CLIENT_OPTIONS
@@ -971,6 +972,44 @@ async def test_record_pane_records_there_and_says_so_here(two_servers, tmp_path,
     assert there.recording is None
     assert client.message.startswith("Recorded ")
     assert list((tmp_path / "pymux" / "recordings").glob("*.bin"))
+
+
+@pytest.mark.parametrize("local", [False, True])
+async def test_record_client_writes_on_the_owner_unless_kept_here(two_servers, tmp_path, monkeypatch, local):
+    """
+    A client on a mirrored session records to the owner, where the work
+    is; `-l` keeps it here. Lillecarl/pymux#955.
+
+    Both servers run in this process and read one `XDG_STATE_HOME`, so
+    the owner is told apart by its own state directory.
+    """
+    here_state, there_state = tmp_path / "here", tmp_path / "there"
+    monkeypatch.setenv("XDG_STATE_HOME", str(here_state))
+    owner, peer, client = two_servers
+    await shown_here(owner, peer, client)
+    # The owner writes where its own recordings go.
+    monkeypatch.setattr(mirror_link, "recordings_directory", lambda: there_state / "pymux" / "recordings")
+
+    # It runs here, where the client is, and leaves nothing to await.
+    assert run_as(peer, client, "record-client -l mine" if local else "record-client mine") is None
+    assert client.client.recording is not None
+    assert run_as(peer, client, "record-client") is None
+    assert client.client.recording is None
+    assert client.message.startswith("Recorded "), client.message
+
+    written = here_state if local else there_state
+    other = there_state if local else here_state
+    await until(
+        lambda: (
+            {one.name for one in (written / "pymux" / "recordings").glob("mine*")}
+            == {"mine.bin", "mine.reads.json", "mine.session.json"}
+        ),
+        "the three files land on the chosen server",
+        seen=lambda: sorted(p.name for p in written.rglob("*")),
+    )
+    assert not list(other.rglob("mine*")), "and nowhere else"
+    # The answer says where the files went: the owner's name, or here.
+    assert (" on " in client.message) is not local, client.message
 
 
 async def test_capture_pane_reads_the_pane_there_while_nobody_sees_it(two_servers):
