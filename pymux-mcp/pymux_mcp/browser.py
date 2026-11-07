@@ -602,13 +602,15 @@ async def close(browser: Browser) -> None:
     The profile goes only once the browser's process ended: its last
     window closes before it does, and it writes into the profile until
     then.
+
+    It answers once the holder is gone too, since the holder is the
+    record `every` reads. A job ends after its process does: the server
+    has to reap it first. Lillecarl/pyterm#966.
     """
     pid = _pid(browser.profile, browser.kind)
     try:
         if await _ask_to_quit(browser, pid):
-            with anyio.move_on_after(QUIT_TIMEOUT):
-                while await _held(browser):
-                    await anyio.sleep(0.1)
+            await _unheld(browser, QUIT_TIMEOUT)
         if isinstance(browser.holder, Pane):
             # Its own panes, never the window: somebody else works there.
             for pane in await _panes(browser.holder.server, browser):
@@ -622,6 +624,7 @@ async def close(browser: Browser) -> None:
                 with contextlib.suppress(ProcessLookupError):
                     os.kill(pid, signal.SIGKILL)
                 await _ended(pid, KILL_TIMEOUT)
+        await _unheld(browser, KILL_TIMEOUT)
     finally:
         _forget(browser.profile)
         # Outside the profile when the profile's path is long.
@@ -801,6 +804,13 @@ async def collect(server_for: Callable[[], Awaitable[Server]]) -> None:
         # sweep that failed must not end the ones after it.
         with contextlib.suppress(Exception):
             await sweep(await server_for())
+
+
+async def _unheld(browser: Browser, timeout: float) -> None:
+    "Wait until nothing holds the browser, or for `timeout` seconds."
+    with anyio.move_on_after(timeout):
+        while await _held(browser):
+            await anyio.sleep(0.1)
 
 
 async def _held(browser: Browser) -> bool:

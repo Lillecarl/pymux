@@ -12,6 +12,7 @@ import base64
 import io
 import json
 import os
+import shlex
 import shutil
 import struct
 import subprocess
@@ -257,6 +258,35 @@ async def test_only_firefox_and_glide_have_a_chrome(server):
             await call(server, "gecko.chrome", name="probe", code="1")
     finally:
         await call(server, "browser.close", name="probe")
+
+
+#: A qutebrowser that will not quit: `close` has to kill it.
+STUBBORN = "import signal, time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(60)"
+
+
+async def test_close_answers_once_the_holder_is_gone(server, tmp_path, monkeypatch):
+    """
+    The job ends after the browser's process does: here by a second, on a
+    busy server by its reap. browser.list read it as open. Lillecarl/pyterm#966.
+    """
+    monkeypatch.setattr(browser, "QUIT_TIMEOUT", 0.5)
+    profile = tmp_path / "profile"
+    profile.mkdir()
+    tags = {
+        browser.NAME_TAG: "probe",
+        browser.KIND_TAG: browser.Kind.QUTEBROWSER.value,
+        browser.SEAT_TAG: browser.Seat.HEADLESS.value,
+        browser.PROFILE_TAG: str(profile),
+    }
+    fake = shlex.join([sys.executable, "-c", STUBBORN, "--basedir=%s" % (profile,)])
+    await server.run_job("trap '' TERM; %s; sleep 1" % (fake,), tags=tags)
+    with anyio.fail_after(10):
+        while browser._pid(profile, browser.Kind.QUTEBROWSER) is None:
+            await anyio.sleep(0.05)
+
+    with anyio.fail_after(10):
+        await call(server, "browser.close", name="probe")
+    assert await call(server, "browser.list") == []
 
 
 def an_extension(directory: Path, name: str) -> str:
