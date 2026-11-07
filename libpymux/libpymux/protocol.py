@@ -38,6 +38,7 @@ __all__ = [
     "PEER_ACTS",
     "PEER_DND",
     "PEER_FILE_TRANSFER",
+    "PEER_IMAGE_PASTE",
     "PEER_PINGS",
     "PEER_PROGRAM_STATUS",
     "PEER_RECORDINGS",
@@ -71,7 +72,7 @@ READ_SIZE = 1 << 20
 #: one misreads it raises `PEER_VERSION`; one that stops speaking the
 #: older form raises `OLDEST_PEER_VERSION` too. Every field is named
 #: and has a default, so most changes need neither. Lillecarl/pymux#759.
-PEER_VERSION = 11
+PEER_VERSION = 12
 OLDEST_PEER_VERSION = 1
 
 #: From this version a frame may name an image the peer stored by its
@@ -120,6 +121,11 @@ PEER_LOGS = 10
 #: recording made on one of the owner's sessions, as `recording`.
 #: Lillecarl/pymux#955.
 PEER_RECORDINGS = 11
+
+#: From this version a peer passes on what a client's `clipboard-image`
+#: says, as `mirror-clipboard-image`, for the owner's compositor to
+#: offer. Lillecarl/pymux#956.
+PEER_IMAGE_PASTE = 12
 
 
 def peer_upgrade(version: object, oldest: object) -> str | None:
@@ -450,6 +456,12 @@ class Packet(StrEnum):
     # at byte `offset`, with `last` on the final piece of that file.
     # Lillecarl/pymux#955.
     RECORDING = "recording"
+    # Client to server, ahead of the Ctrl-V that pastes it: the image
+    # the person's machine holds on its clipboard, as base64 PNG under
+    # `data`, or "" for none. A peer passes it to the owner of the pane
+    # the key goes to as `mirror-clipboard-image`. Lillecarl/pymux#956.
+    CLIPBOARD_IMAGE = "clipboard-image"
+    MIRROR_CLIPBOARD_IMAGE = "mirror-clipboard-image"
 
 
 class Field(StrEnum):

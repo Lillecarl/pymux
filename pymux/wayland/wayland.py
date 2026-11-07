@@ -27,6 +27,7 @@ started there belongs on that screen, not on one nobody looks at.
 
 from __future__ import annotations
 
+import base64
 import contextlib
 import errno
 import logging
@@ -39,12 +40,14 @@ from typing import TYPE_CHECKING, Any
 
 import anyio
 import anyio.abc
+from libpymux.protocol import PEER_IMAGE_PASTE, Field, Packet
 from prompt_toolkit.application.current import get_app
 from prompt_toolkit.clipboard import ClipboardData
 
 from pymux.enums import Clipboard, WindowScroll, Woke
 from pymux.graphics.window_frames import FrameRects, VideoFrame, WindowView
 from pymux.ids import PaneId
+from pymux.mirror.program import RemoteProgram
 from pymux.niceness import as_a_person_runs
 from pymux.wayland.wayland_scale import DEFAULT_WAYLAND_SCALE, resolve_scale
 from pymux.wayland.window_pane import WindowWidget, now
@@ -54,6 +57,7 @@ if TYPE_CHECKING:
     from prompt_toolkit.layout.containers import WritePosition
     from pysmithay import Compositor, Vp9Encoder
 
+    from pymux.connection.client_state import ClientState
     from pymux.core.main import Pymux
     from pymux.core.pane import Pane
 
@@ -70,6 +74,10 @@ TEXT_TYPES = ("text/plain;charset=utf-8", "UTF8_STRING", "text/plain", "STRING",
 
 #: What the compositor offers when it holds a selection itself.
 HELD_TYPES = TEXT_TYPES[:3]
+
+#: What it offers besides while it holds an image from the person's
+#: machine. Lillecarl/pymux#956.
+IMAGE_TYPE = "image/png"
 
 #: OSC 52's letter for each selection.
 OSC52_LETTER = {"clipboard": "c", "primary": "p"}
@@ -184,6 +192,9 @@ class WaylandServer:
         self.display: str | None = None
         #: The text a pane last copied, per selection.
         self.copied: dict[str, str] = {}
+        #: The image the person's machine held at their last Ctrl-V, which
+        #: the clipboard offers as `IMAGE_TYPE`. Lillecarl/pymux#956.
+        self.image: bytes | None = None
         #: Each open window, by the compositor's id, and the pane showing it.
         self.panes: dict[int, Pane] = {}
         #: The same windows' widgets, which the events update.
@@ -263,8 +274,8 @@ class WaylandServer:
         match event:
             case ("selection", str(target), list(mime_types)) if mime_types:
                 tasks.start_soon(self._take_selection, compositor, target, mime_types)
-            case ("send", str(target), str(_mime_type), int(pipe)):
-                tasks.start_soon(self._answer_paste, target, pipe)
+            case ("send", str(target), str(mime_type), int(pipe)):
+                tasks.start_soon(self._answer_paste, target, mime_type, pipe)
             case ("toplevel", int(toplevel), int(tag)):
                 self._opened(compositor, toplevel, self._launches.get(tag), tasks)
             case ("title", int(toplevel), str(title)) if toplevel in self.widgets:
@@ -694,6 +705,9 @@ class WaylandServer:
             return
         text = data.decode("utf-8", "replace")
         self.copied[target] = text
+        if target == "clipboard":
+            # A copy here is newer than the image a Ctrl-V brought.
+            self.image = None
         if self.pymux.options.set_clipboard is not Clipboard.ON or not text:
             return
         if target == "clipboard":
@@ -702,13 +716,53 @@ class WaylandServer:
         # The terminal holds it now, and the next paste asks there.
         _hold(compositor, target)
 
-    async def _answer_paste(self, target: str, fd: int) -> None:
-        "A pane pasted what the compositor holds: find the text, and write it."
-        text = ""
+    def take_client_image(self, client_state: ClientState, data: str) -> None:
+        """
+        The image a client sent ahead of its Ctrl-V, as base64 PNG, or ""
+        for none. It goes to the compositor of the pane the key goes to:
+        the owner's, through the peer link, for a mirrored pane, queued
+        ahead of the key. Lillecarl/pymux#956.
+        """
+        try:
+            image = base64.b64decode(data, validate=True) or None
+        except ValueError:
+            logger.warning("Dropped a clipboard image that is not base64.")
+            return
+        session = client_state.session
+        window = session.arrangement.get_active_window_for(client_state.app) if session is not None else None
+        program = window.active_pane.process if window is not None and window.active_pane is not None else None
+        if isinstance(program, RemoteProgram):
+            if program.peer.version >= PEER_IMAGE_PASTE:
+                program.peer.send({Field.CMD: Packet.MIRROR_CLIPBOARD_IMAGE, Field.DATA: data})
+            return
+        self.hold_image(image)
+
+    def hold_image(self, image: bytes | None) -> None:
+        """
+        Offer `image` on the clipboard as `IMAGE_TYPE`, beside the text,
+        or stop offering one. A client sends it ahead of each Ctrl-V, so
+        a program that pastes an image on that key -- Claude Code asks
+        `wl-paste -l` -- finds the person's. Lillecarl/pymux#956.
+        """
+        # Nothing to withdraw leaves the selection where it is: under
+        # `set-clipboard off` a pane holds it, and its text stays.
+        had, self.image = self.image is not None, image
+        if self.compositor is not None and (image is not None or had):
+            _hold(self.compositor, "clipboard", image is not None)
+
+    async def _answer_paste(self, target: str, mime_type: str, fd: int) -> None:
+        "A pane pasted what the compositor holds: find it, and write it."
+        if mime_type == IMAGE_TYPE and target == "clipboard" and self.image is not None:
+            await _write_all(fd, self.image)
+            return
         if self.pymux.options.set_clipboard is Clipboard.ON:
             text = await self._read_the_terminal(target)
             if text is None:
                 text = self._fallback(target)
+        else:
+            # Only a held image takes the selection here, from the pane
+            # that copied this; the person's paste buffer stays theirs.
+            text = self.copied.get(target, "")
         await _write_all(fd, text.encode("utf-8"))
 
     async def _read_the_terminal(self, target: str) -> str | None:
@@ -749,9 +803,9 @@ async def _bind(path: str | None) -> Compositor | None:
         await anyio.sleep(BIND_RETRY_SECONDS)
 
 
-def _hold(compositor: Compositor, target: str) -> None:
+def _hold(compositor: Compositor, target: str, image: bool = False) -> None:
     "Take the selection, answered by `_answer_paste` when a pane pastes."
-    compositor.set_selection(target, dict.fromkeys(HELD_TYPES))
+    compositor.set_selection(target, dict.fromkeys((*HELD_TYPES, IMAGE_TYPE) if image else HELD_TYPES))
 
 
 async def _read_all(fd: int) -> bytes | None:

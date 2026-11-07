@@ -13,6 +13,7 @@ difference of the transport and nothing else.
 
 from __future__ import annotations
 
+import base64
 import contextlib
 import os
 import secrets
@@ -50,6 +51,7 @@ from ..connection.log_asks import log_answer
 from ..connection.packet_table import PacketTable
 from .base import Client
 from .browsers import Browsers
+from .clipboard_image import clipboard_image, pastes_an_image
 from .downloads import save_whole
 from .kitty_terminal import KittyTerminal
 from .sending_files import SendingFiles
@@ -275,6 +277,9 @@ class TerminalClient(Client):
         #: kitty's file transfer, answered as the terminal.
         #: Lillecarl/pymux#912.
         self.kitty_terminal = KittyTerminal(self)
+        #: What was typed from a Ctrl-V on, while the clipboard's image is
+        #: read; None when nothing waits. Lillecarl/pymux#956.
+        self._behind_an_image: list[str] | None = None
         #: One write to the terminal at a time: the socket client draws
         #: a question from a thread.
         self._terminal_lock = threading.Lock()
@@ -854,6 +859,29 @@ class TerminalClient(Client):
         if data and self.sending_files.asking is not None and self.sending_files.answer(data):
             return
 
+        # **A Ctrl-V waits for the clipboard's image**, and what is typed
+        # meanwhile waits behind it, so the image reaches the pane's
+        # compositor before the key that pastes it. Lillecarl/pymux#956.
+        if self._behind_an_image is not None:
+            self._behind_an_image.append(data)
+            return
+        if self.tasks is not None and pastes_an_image(data):
+            self._behind_an_image = [data]
+            self.tasks.start_soon(self._send_the_image_then_the_keys)
+            return
+        self._send_input(data)
+
+    async def _send_the_image_then_the_keys(self) -> None:
+        image = await clipboard_image()
+        with contextlib.suppress(BrokenPipeError):
+            self.send_packet(
+                {Field.CMD: Packet.CLIPBOARD_IMAGE, Field.DATA: base64.b64encode(image or b"").decode("ascii")}
+            )
+        held, self._behind_an_image = self._behind_an_image or [], None
+        for data in held:
+            self._send_input(data)
+
+    def _send_input(self, data: str) -> None:
         # Send the input in chunks, so that a long paste reaches the
         # server as keystrokes rather than as one packet the server
         # only dispatches when the whole of it has arrived.

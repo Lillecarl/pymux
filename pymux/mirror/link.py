@@ -422,6 +422,16 @@ class PeerLink:
     def _on_log(self, packet: Message) -> None:
         self.log_asks.answered(packet)
 
+    @_PACKETS.handles(Packet.MIRROR_CLIPBOARD_IMAGE)
+    def _on_clipboard_image(self, packet: Message) -> None:
+        "The image a person's Ctrl-V brings, for this server's compositor to offer. Lillecarl/pymux#956."
+        try:
+            image = base64.b64decode(str(packet.get(Field.DATA) or ""), validate=True) or None
+        except ValueError:
+            logger.warning("Dropped a mirrored clipboard image that is not base64.")
+            return
+        self.connection.pymux.wayland.hold_image(image)
+
     @_PACKETS.handles(Packet.RECORDING)
     def _on_recording(self, packet: Message) -> None:
         """

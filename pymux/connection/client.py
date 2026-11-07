@@ -388,6 +388,11 @@ class ClientRole:
         # instead, so this is handled first. Lillecarl/pymux#524.
         self.state.input_tick += 1
 
+    @_PACKETS.handles(Packet.CLIPBOARD_IMAGE)
+    def _on_clipboard_image(self, packet: Message) -> None:
+        "The image on the person's clipboard, sent ahead of their Ctrl-V. Lillecarl/pymux#956."
+        self.pymux.wayland.take_client_image(self.state, str(packet.get(Field.DATA) or ""))
+
     @_PACKETS.handles(Packet.DETECT)
     def _on_detect(self, packet: Message) -> None:
         self.replies.start_detection()

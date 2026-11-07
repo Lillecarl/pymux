@@ -6,6 +6,7 @@ runs this and `checks.pymux-unit` skips it. Lillecarl/pymux#383.
 
 from __future__ import annotations
 
+import base64
 import contextlib
 import os
 import sys
@@ -94,6 +95,47 @@ async def environment_of_a_pane(mux, tmp_path) -> str:
     await mux.panes.create_window("%s -c %s" % (sys.executable, _quoted(script)))
     await once(out.exists, 10.0, "the pane never wrote its environment")
     return out.read_text()
+
+
+#: The smallest PNG there is, to stand for a screenshot.
+A_PNG = bytes.fromhex(
+    "89504e470d0a1a0a0000000d4948445200000001000000010806000000"
+    "1f15c4890000000d49444154789c63f8cfc0f01f0005000201a5f6455e0000000049454e44ae426082"
+)
+
+
+async def types_and_image(mux) -> tuple[list[str], bytes]:
+    "What wl-paste lists, and what it pastes as image/png."
+    with anyio.fail_after(15):
+        listed = await anyio.run_process(["wl-paste", "--list-types"], env=environment(mux), check=False)
+        image = await anyio.run_process(["wl-paste", "--type", "image/png"], env=environment(mux), check=False)
+    return listed.stdout.decode().split(), image.stdout
+
+
+async def test_an_image_from_the_persons_clipboard_is_offered_and_pasted(mux):
+    """
+    Claude Code lists the types, then reads image/png. A client sends the
+    image ahead of Ctrl-V, and none when there is none, which withdraws
+    it. Lillecarl/pymux#956.
+    """
+    mux.wayland.hold_image(A_PNG)
+    types, image = await types_and_image(mux)
+    assert "image/png" in types and "text/plain" in types, types
+    assert image == A_PNG
+
+    mux.wayland.hold_image(None)
+    types, _image = await types_and_image(mux)
+    assert "image/png" not in types, types
+
+
+async def test_a_clients_clipboard_image_reaches_the_compositor(tmp_path):
+    "The packet a client sends ahead of Ctrl-V, for a pane on this server."
+    terminal = ClipboardTerminal()
+    async with attached(tmp_path, terminal, Clipboard.ON) as pymux:
+        terminal.state.client.handle({"cmd": "clipboard-image", "data": base64.b64encode(A_PNG).decode("ascii")})
+        assert pymux.wayland.image == A_PNG
+        _types, image = await types_and_image(pymux)
+        assert image == A_PNG
 
 
 async def test_it_listens_beside_the_server_socket(mux, tmp_path):

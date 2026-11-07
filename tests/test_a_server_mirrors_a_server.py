@@ -974,6 +974,24 @@ async def test_record_pane_records_there_and_says_so_here(two_servers, tmp_path,
     assert list((tmp_path / "pymux" / "recordings").glob("*.bin"))
 
 
+async def test_a_clipboard_image_here_goes_to_the_owner_of_the_pane(two_servers):
+    """
+    The image a client sends ahead of Ctrl-V goes where the key goes: to
+    the owner of the mirrored pane, for its compositor to offer, and an
+    empty one withdraws it. Lillecarl/pymux#956.
+    """
+    owner, peer, client = two_servers
+    await shown_here(owner, peer, client)
+    image = b"\x89PNG not really"
+
+    peer.wayland.take_client_image(client, base64.b64encode(image).decode("ascii"))
+    await until(lambda: owner.wayland.image == image, "the owner holds the image")
+    assert peer.wayland.image is None, "and this server does not"
+
+    peer.wayland.take_client_image(client, "")
+    await until(lambda: owner.wayland.image is None, "an empty one withdraws it")
+
+
 @pytest.mark.parametrize("local", [False, True])
 async def test_record_client_writes_on_the_owner_unless_kept_here(two_servers, tmp_path, monkeypatch, local):
     """
