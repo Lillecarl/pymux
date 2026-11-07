@@ -40,6 +40,24 @@ print("ended")
 """
 
 
+#: apsw alone, with no shield: the pinned fork ends the worker itself.
+#: Lillecarl/apsw#6.
+BARE = """
+import anyio
+import apsw
+
+
+async def main():
+    with anyio.CancelScope() as scope:
+        scope.cancel()
+        await apsw.Connection.as_async(":memory:")
+
+
+anyio.run(main)
+print("ended")
+"""
+
+
 def test_a_cancelled_open_lets_the_process_exit(tmp_path):
     done = subprocess.run(
         [sys.executable, "-c", PROGRAM, str(tmp_path / "actions.sqlite")],
@@ -47,4 +65,9 @@ def test_a_cancelled_open_lets_the_process_exit(tmp_path):
         text=True,
         timeout=10,
     )
+    assert done.stdout.strip() == "ended", done.stderr
+
+
+def test_the_pinned_apsw_ends_a_cancelled_open_s_worker():
+    done = subprocess.run([sys.executable, "-c", BARE], capture_output=True, text=True, timeout=10)
     assert done.stdout.strip() == "ended", done.stderr
