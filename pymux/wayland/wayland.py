@@ -744,6 +744,7 @@ class WaylandServer:
         a program that pastes an image on that key -- Claude Code asks
         `wl-paste -l` -- finds the person's. Lillecarl/pymux#956.
         """
+        logger.info("The clipboard offers an image of %d bytes.", len(image) if image is not None else 0)
         # Nothing to withdraw leaves the selection where it is: under
         # `set-clipboard off` a pane holds it, and its text stays.
         had, self.image = self.image is not None, image

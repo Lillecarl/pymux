@@ -18,9 +18,16 @@ import anyio
 
 __all__ = ["clipboard_image", "pastes_an_image"]
 
-#: Ctrl-V as a legacy terminal sends it, and as the kitty keyboard
-#: protocol does. Claude Code pastes an image on it.
-CTRL_V = ("\x16", "\x1b[118;5u")
+#: Ctrl-V as a legacy terminal sends it. Claude Code pastes an image on it.
+CTRL_V = "\x16"
+
+#: v under the kitty keyboard protocol, in every form its flags give it:
+#: alternate keys after the code, an event type after the modifiers.
+#: The modifiers are one more than their bits, and Control is 4.
+_KITTY_V = re.compile(r"\x1b\[118(?::\d*)*;(\d+)(?::(\d+))?(?:;[\d:]*)?u")
+
+#: kitty's event type for a release, which pastes nothing.
+_RELEASE = "3"
 
 #: How long a clipboard read may hold the key behind it.
 READ_SECONDS = 2.0
@@ -30,8 +37,10 @@ _PNG_DATA = re.compile(r"«data PNGf([0-9A-Fa-f]*)»")
 
 
 def pastes_an_image(data: str) -> bool:
-    "Whether typed `data` holds a Ctrl-V."
-    return any(key in data for key in CTRL_V)
+    "Whether typed `data` holds a Ctrl-V, in whatever keyboard mode the pane's program set."
+    if CTRL_V in data:
+        return True
+    return any((int(found.group(1)) - 1) & 4 and found.group(2) != _RELEASE for found in _KITTY_V.finditer(data))
 
 
 async def clipboard_image() -> bytes | None:

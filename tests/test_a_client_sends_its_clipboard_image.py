@@ -70,6 +70,25 @@ async def test_no_image_says_so_and_withdraws_the_last_one(client, monkeypatch):
     assert kinds(client) == [(Packet.CLIPBOARD_IMAGE, ""), (Packet.IN, "\x16")]
 
 
+@pytest.mark.parametrize(
+    ("typed", "pastes"),
+    [
+        ("\x16", True),
+        ("\x1b[118;5u", True),
+        ("\x1b[118;5:1u", True),
+        ("\x1b[118:86;5u", True),
+        ("\x1b[118;5:3u", False),
+        ("\x1b[118;1u", False),
+        ("\x1b[118;2u", False),
+        ("\x1b[119;5u", False),
+        ("v", False),
+    ],
+)
+def test_ctrl_v_in_every_keyboard_mode(typed, pastes):
+    "Legacy, and kitty's with event types and alternate keys; a release is no paste."
+    assert clipboard_image.pastes_an_image(typed) is pastes
+
+
 def test_other_keys_send_no_image(client):
     client._take_input("v\x1b[A")
     assert kinds(client) == [(Packet.IN, "v\x1b[A")]
