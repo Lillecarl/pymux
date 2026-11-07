@@ -41,6 +41,18 @@ fullscreen.addEventListener("click", () => {
   void element.fullscreen().catch((error: unknown) => say(`Full screen was refused: ${String(error)}`));
 });
 
+// **A browser with no Keyboard Lock keeps Escape in full screen**:
+// Firefox and Safari leave full screen on it, and the page never hears
+// it. Escape is pymux's abort, so such a browser gets Ctrl-[, which a
+// terminal sends as the same byte, and a button.
+const escape = needed(document.getElementById("escape"), "escape button");
+const hint = needed(document.getElementById("escape-hint"), "escape hint");
+escape.hidden = hint.hidden = "keyboard" in navigator;
+// The mousedown would move the focus to the button, and the next key
+// would go nowhere.
+escape.addEventListener("mousedown", (event) => event.preventDefault());
+escape.addEventListener("click", () => element.send({ type: "input", keys: "Escape" }));
+
 function say(text: string): void {
   about.textContent = text;
 }

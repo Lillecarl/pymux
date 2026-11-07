@@ -35,8 +35,14 @@ header {
   gap: 12px;
 }
 
-#fullscreen {
+#fullscreen,
+#escape {
   font: inherit;
+  font-size: 0.85rem;
+}
+
+#escape-hint {
+  color: var(--quiet);
   font-size: 0.85rem;
 }
 

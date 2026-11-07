@@ -202,9 +202,9 @@ async def test_escape_on_the_page_reaches_the_program(server):
 #: The prefix, which `browser.press` cannot hold Control for. The
 #: element reads the event and not who sent it. A plain character goes
 #: by `beforeinput`, which only a real key fires, so it is pressed.
-PRESS_THE_PREFIX = """
+PRESS_WITH_CONTROL = """
 document.querySelector("pymux-pane").shadowRoot.querySelector(".keyboard")
-  .dispatchEvent(new KeyboardEvent("keydown", { key: "b", ctrlKey: true, bubbles: true, cancelable: true }))
+  .dispatchEvent(new KeyboardEvent("keydown", { key: %s, ctrlKey: true, bubbles: true, cancelable: true }))
 """
 
 #: A pointer that moves across the screen, a cell at a time.
@@ -219,11 +219,15 @@ POINTER_MOVES = """
 """
 
 
-@pytest.mark.parametrize("moving", [False, True])
-async def test_escape_in_the_session_view_leaves_copy_mode(server, moving):
+@pytest.mark.parametrize(
+    ("escape", "moving"),
+    [("Escape", False), ("Escape", True), ("C-[", False)],
+)
+async def test_escape_in_the_session_view_leaves_copy_mode(server, escape, moving):
     """
     Escape is pymux's abort. A pointer that moves after it sends mouse
-    reports right behind the escape byte.
+    reports right behind the escape byte. Ctrl-[ is Escape for a browser
+    that keeps Escape for itself in full screen: Firefox.
     """
     async with a_page(server, "seq 100; sleep 60", writable=True, session=True):
         with anyio.fail_after(20):
@@ -238,18 +242,64 @@ async def test_escape_in_the_session_view_leaves_copy_mode(server, moving):
             tree = await call(server, "tree")
             return "".join(each["mode"] for one in tree for window in one["windows"] for each in window["panes"])
 
-        await call(server, "browser.evaluate", name="page", expression=PRESS_THE_PREFIX)
+        await call(server, "browser.evaluate", name="page", expression=PRESS_WITH_CONTROL % json.dumps("b"))
         await call(server, "browser.press", name="page", key="[")
         with anyio.fail_after(20):
             while not await mode():
                 await anyio.sleep(0.1)
 
-        await call(server, "browser.press", name="page", key="Escape")
+        if escape == "C-[":
+            await call(server, "browser.evaluate", name="page", expression=PRESS_WITH_CONTROL % json.dumps("["))
+        else:
+            await call(server, "browser.press", name="page", key="Escape")
         if moving:
             await call(server, "browser.evaluate", name="page", expression=POINTER_MOVES)
         with anyio.fail_after(10):
             while await mode():
                 await anyio.sleep(0.1)
+
+
+#: Whether the element's keyboard still has the focus.
+THE_KEYBOARD_HAS_THE_FOCUS = """
+document.activeElement === document.querySelector("pymux-pane")
+  && document.querySelector("pymux-pane").shadowRoot.activeElement?.className === "keyboard"
+"""
+
+
+async def test_the_escape_button_aborts_and_leaves_the_keys_on_the_terminal(server):
+    """
+    For a browser that keeps Escape in full screen. Chromium has the
+    Keyboard Lock, so the page hides the button here; the test shows it.
+    """
+    async with a_page(server, "seq 100; sleep 60", writable=True, session=True):
+        with anyio.fail_after(20):
+            while not await call(
+                server, "browser.evaluate", name="page", expression="document.querySelector('pymux-pane').writable"
+            ):
+                await anyio.sleep(0.1)
+        assert await call(
+            server, "browser.evaluate", name="page", expression="document.getElementById('escape').hidden"
+        )
+        await call(
+            server, "browser.evaluate", name="page", expression="document.getElementById('escape').hidden = false"
+        )
+        await call(server, "browser.click", name="page", selector="pymux-pane")
+
+        async def mode() -> str:
+            tree = await call(server, "tree")
+            return "".join(each["mode"] for one in tree for window in one["windows"] for each in window["panes"])
+
+        await call(server, "browser.evaluate", name="page", expression=PRESS_WITH_CONTROL % json.dumps("b"))
+        await call(server, "browser.press", name="page", key="[")
+        with anyio.fail_after(20):
+            while not await mode():
+                await anyio.sleep(0.1)
+
+        await call(server, "browser.click", name="page", selector="#escape")
+        with anyio.fail_after(10):
+            while await mode():
+                await anyio.sleep(0.1)
+        assert await call(server, "browser.evaluate", name="page", expression=THE_KEYBOARD_HAS_THE_FOCUS)
 
 
 async def test_a_click_on_the_page_reaches_a_program_that_asked_for_the_mouse(server):
