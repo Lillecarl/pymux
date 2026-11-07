@@ -864,6 +864,26 @@ async def test_a_command_that_changes_nothing_there_still_ends_a_disagreement(tw
     await until(lambda: mirror_window.active_pane is link.tree.panes[owner_right.pane_id], "the owner's answer ends it")
 
 
+async def test_move_window_takes_a_mirrored_sessions_name_here(two_servers):
+    "`--session` names a session the way this server spells it, `server/name`. Lillecarl/pyterm#965."
+    owner, peer, client = two_servers
+    await shown_here(owner, peer, client)
+    (link,) = peer.peers.by_address.values()
+    owner.handle_command("new-window -d")
+    owner.handle_command("new-session -d -s other")
+    other = owner.get_session("other")
+    assert other is not None
+    await until(
+        lambda: any(session.name.endswith("/other") for session in link.tree.sessions.values()),
+        "the tree brings the other session",
+    )
+    (here,) = (session.name for session in link.tree.sessions.values() if session.name.endswith("/other"))
+    before = len(other.arrangement.windows)
+
+    await run_as(peer, client, "move-window --session %s" % (here,))
+    await until(lambda: len(other.arrangement.windows) == before + 1, "the window moves into the other session")
+
+
 async def test_the_focus_here_follows_a_pane_selected_there(two_servers):
     "select-pane runs on the owner; the tree that answers it moves the client's focus, with no key after."
     owner, peer, client = two_servers

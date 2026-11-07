@@ -63,7 +63,7 @@ def move_window(pymux: Pymux, args: argparse.Namespace) -> None:
         target += ":"
     dst, rest = session_part(pymux, target)
     if dst is None:
-        raise CommandException("can't find session: %s" % (args.dst_window,))
+        raise CommandException("can't find session: %s" % (target.rpartition(":")[0],))
     arrangement = dst.arrangement
 
     if rest == "":
@@ -108,7 +108,13 @@ def move_window(pymux: Pymux, args: argparse.Namespace) -> None:
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    parser = add_command(subparsers, move_window, acts_on={"src_window": Target.WINDOW, "dst_window": Target.SLOT})
+    parser = add_command(
+        subparsers,
+        move_window,
+        # `--session` too, or a peer sends the owner a mirrored session's
+        # `server/name`, which the owner has no session by. Lillecarl/pyterm#965.
+        acts_on={"src_window": Target.WINDOW, "dst_window": Target.SLOT, "session": Target.SESSION},
+    )
     parser.add_argument(
         "-s", dest="src_window", metavar="<src-window>", help="The window to move; the active one is the default."
     )

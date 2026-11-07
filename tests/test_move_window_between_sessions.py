@@ -190,10 +190,19 @@ async def test_an_unknown_destination_session_is_an_error(pymux):
     await two_sessions(pymux)
 
     assert await over_socket(pymux, "move-window", "-s", "home:1", "-t", "nope:5") == [
-        "pymux: can't find session: nope:5"
+        "pymux: can't find session: nope"
     ]
 
     assert indices(pymux, "home") == [1, 2]
+
+
+async def test_an_unknown_session_named_apart_is_named_in_the_error(pymux):
+    "It said `None`: the message printed `-t`, which `--session` leaves out. Lillecarl/pyterm#965."
+    await two_sessions(pymux)
+
+    assert await over_socket(pymux, "move-window", "-s", "home:1", "--session", "nope") == [
+        "pymux: can't find session: nope"
+    ]
 
 
 async def test_a_destination_that_is_not_an_index_is_an_error(pymux):
