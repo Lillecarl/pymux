@@ -20,6 +20,7 @@ import sys
 from pathlib import Path
 
 import anyio
+import psutil
 import pytest
 from libpymux import Server
 
@@ -247,6 +248,18 @@ async def test_a_window_firefox_has_not_finished_is_left_out(server):
         assert [tab["url"] for tab in tabs] == [PAGE], tabs
         went = await call(server, "browser.goto", name="probe", url=PAGE)
         assert went["loaded"], went
+    finally:
+        await call(server, "browser.close", name="probe")
+
+
+@needs_firefox
+async def test_firefox_applies_no_staged_update(server):
+    "It would relaunch itself outside pymux. Lillecarl/pyterm#945."
+    opened = await call(server, "browser.open", name="probe", kind="firefox", seat="headless")
+    try:
+        pid = browser._pid(Path(opened["profile"]), browser.Kind.FIREFOX)
+        assert pid is not None
+        assert psutil.Process(pid).environ().get("MOZ_DISABLE_UPDATE_PROCESSING") == "1"
     finally:
         await call(server, "browser.close", name="probe")
 

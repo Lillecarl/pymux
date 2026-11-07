@@ -476,6 +476,13 @@ GECKO_PREFERENCES: Final = {
     "general.smoothScroll": False,
 }
 
+#: The environment of a Firefox or Glide. A staged update is applied at
+#: startup, before user.js is read: Firefox relaunched itself, headful
+#: and outside pymux, and changed the person's installed app. Only this
+#: variable stops it (nsAppRunner.cpp, ShouldNotProcessUpdates; Mozilla
+#: bug 2055849). Lillecarl/pyterm#945.
+GECKO_ENVIRONMENT: Final = {"MOZ_DISABLE_UPDATE_PROCESSING": "1"}
+
 
 def _gecko(executable: str, seat: Seat, profile: Path, arguments: Sequence[str]) -> list[str]:
     """
@@ -487,8 +494,10 @@ def _gecko(executable: str, seat: Seat, profile: Path, arguments: Sequence[str])
             "user_pref(%s, %s);\n" % (json.dumps(key), json.dumps(value)) for key, value in GECKO_PREFERENCES.items()
         )
     )
+    environment = {**GECKO_ENVIRONMENT, **({"MOZ_ENABLE_WAYLAND": "1"} if seat is Seat.PANE else {})}
     return [
-        *(["env", "MOZ_ENABLE_WAYLAND=1"] if seat is Seat.PANE else []),
+        "env",
+        *("%s=%s" % pair for pair in environment.items()),
         executable,
         *(["--headless"] if seat is Seat.HEADLESS else []),
         "--no-remote",
