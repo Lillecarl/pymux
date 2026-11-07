@@ -16,10 +16,10 @@ from pymux.commands import (
     CommandParser,
     Role,
     Target,
-    _refuse_undeclared_targets,
     add_command,
     add_target,
     parser_tree,
+    refuse_undeclared_targets,
     target_of,
     targets_of,
 )
@@ -67,7 +67,7 @@ def test_a_target_spelled_with_a_plain_argument_fails_the_tree():
     parser.add_argument("-S", "--session", dest="session", metavar="<target-session>")
 
     with pytest.raises(TypeError, match=r"moves -S/--session$"):
-        _refuse_undeclared_targets(subparsers.choices)
+        refuse_undeclared_targets(subparsers.choices)
 
 
 def test_the_tree_declares_every_target_it_spells():

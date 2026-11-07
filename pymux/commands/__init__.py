@@ -39,6 +39,7 @@ __all__ = [
     "handle_command",
     "not_past_this_client",
     "parser_tree",
+    "refuse_undeclared_targets",
     "target_of",
     "targets_of",
     "this_client",
@@ -397,12 +398,12 @@ def add_commands_to(subparsers: Any) -> None:
     """
     for name in MODULES:
         import_module("." + name, __name__).register(subparsers)
+    refuse_undeclared_targets(subparsers.choices)
 
     import_module("pymux.plugins").register(subparsers)
-    _refuse_undeclared_targets(subparsers.choices)
 
 
-def _refuse_undeclared_targets(parsers: Mapping[str, argparse.ArgumentParser]) -> None:
+def refuse_undeclared_targets(parsers: Mapping[str, argparse.ArgumentParser]) -> None:
     "A target spelled with a plain `add_argument` completes as nothing and forwards as typed."
     undeclared = sorted(
         "%s %s" % (name, "/".join(action.option_strings) or action.dest)

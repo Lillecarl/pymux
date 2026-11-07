@@ -64,6 +64,26 @@ CLASHING = GREET.replace(
 )
 
 
+#: A target spelled the tmux way with a plain argument, and a command
+#: mounted before it: both go.
+UNDECLARED = '''
+from pymux.commands import add_command
+
+
+def mounted_first(pymux, args):
+    """Mounted before the plugin fails."""
+
+
+def untargeted(pymux, args):
+    """Names a pane without add_target."""
+
+
+def register(subparsers):
+    add_command(subparsers, mounted_first)
+    add_command(subparsers, untargeted).add_argument("-t", metavar="<target-pane>")
+'''
+
+
 def _home(tmp_path, **plugins):
     plugins_dir = tmp_path / "pymux" / "plugins"
     plugins_dir.mkdir(parents=True)
@@ -86,7 +106,7 @@ async def test_a_plugin_in_the_configuration_directory_runs(tmp_path, monkeypatc
 
 
 def test_a_broken_plugin_is_left_out_and_the_rest_load(tmp_path, caplog):
-    environ = _home(tmp_path, a_broken=BROKEN, b_clashing=CLASHING, c_greet=GREET)
+    environ = _home(tmp_path, a_broken=BROKEN, b_clashing=CLASHING, c_greet=GREET, d_undeclared=UNDECLARED)
     subparsers = CommandParser(add_help=False).add_subparsers(parser_class=CommandParser)
     for name in commands.MODULES:
         import_module("pymux.commands." + name).register(subparsers)
@@ -94,7 +114,9 @@ def test_a_broken_plugin_is_left_out_and_the_rest_load(tmp_path, caplog):
     plugins.register(subparsers, environ)
 
     refused = {record.args[0] for record in caplog.records if "failed to load" in record.msg}
-    assert refused == {"a_broken", "b_clashing"}
+    assert refused == {"a_broken", "b_clashing", "d_undeclared"}
+    assert not {"mounted-first", "untargeted"} & set(subparsers.choices)
+    assert not {"mounted-first", "untargeted"} & {action.dest for action in subparsers._choices_actions}
     assert subparsers.choices["kill-server"].get_default("_handler").__module__ == "pymux.commands.kill_server"
     assert "count-panes" in subparsers.choices
     assert "greet-from-home" in subparsers.choices

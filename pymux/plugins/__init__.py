@@ -34,16 +34,29 @@ def register(subparsers: argparse._SubParsersAction[CommandParser], environ: Map
     """
     Mount every plugin on the tree.
 
-    **A plugin that fails is logged and left out.** The tree holds
-    every command, so one broken file would otherwise take all of them
-    with it -- `kill-server` included. That covers a name another
-    command already has, which argparse refuses with a ValueError.
+    **A plugin that fails is logged and left out**, with every command
+    it mounted before it failed. The tree holds every command, so one
+    broken file would otherwise take all of them with it --
+    `kill-server` included. That covers a name another command already
+    has, which argparse refuses with a ValueError, and a target spelled
+    without `add_target`.
     """
+    from pymux.commands import refuse_undeclared_targets
+
     for plugin in pkgutil.iter_modules([*__path__, plugin_dir(environ)]):
+        before = set(subparsers.choices)
         try:
             _module(plugin).register(subparsers)
+            refuse_undeclared_targets({name: p for name, p in subparsers.choices.items() if name not in before})
         except Exception:
+            _unmount(subparsers, set(subparsers.choices) - before)
             logger.exception("pymux: the plugin %s failed to load", plugin.name)
+
+
+def _unmount(subparsers: argparse._SubParsersAction[CommandParser], names: set[str]) -> None:
+    for name in names:
+        del subparsers.choices[name]
+    subparsers._choices_actions = [action for action in subparsers._choices_actions if action.dest not in names]
 
 
 def _module(plugin: pkgutil.ModuleInfo) -> ModuleType:
