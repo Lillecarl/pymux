@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, NamedTuple
 
 from pyte.program_status import URGENCY
 
+from pymux import log
 from pymux.commands import CommandException
 from pymux.connection.rate import frames_per_second, per_second
 from pymux.tags import spelled
@@ -640,6 +641,11 @@ def _pid(context: FormatContext) -> str:
     return str(os.getpid())
 
 
+def _server_log(context: FormatContext) -> str:
+    "The file this server logs to; empty when it logs to none. Lillecarl/pyterm#49."
+    return str(log.logfile() or "")
+
+
 def _version(context: FormatContext) -> str:
     from pymux import __version__
 
@@ -998,6 +1004,7 @@ tmux_variables: dict[str, Callable[[FormatContext], str]] = {
     # Server.
     "socket_path": _socket_path,
     "pid": _pid,
+    "server_log": _server_log,
     "version": _version,
     "start_time": _created,
     "host": lambda c: _hostname(),

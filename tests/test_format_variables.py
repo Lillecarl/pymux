@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import pytest
 
+from pymux import log
 from pymux.connection.client_state import ClientState
 from pymux.format import (
     FormatContext,
@@ -47,6 +48,14 @@ async def test_variable_that_nobody_knows_is_empty(pymux):
 async def test_several_variables_in_one_string(pymux):
     answer = format_pymux_string(pymux, "#{session_name}:#{window_index}")
     assert answer.split(":")[0] == pymux.session_name
+
+
+async def test_the_server_log_is_the_file_it_logs_to(pymux, monkeypatch, tmp_path):
+    "Lillecarl/pyterm#49."
+    monkeypatch.setattr(log, "logfile", lambda: tmp_path / "server.log")
+    assert format_pymux_string(pymux, "#{server_log}") == str(tmp_path / "server.log")
+    monkeypatch.setattr(log, "logfile", lambda: None)
+    assert format_pymux_string(pymux, "#{server_log}") == ""
 
 
 async def test_the_hostname_is_spelled_the_way_tmux_spells_it(pymux, monkeypatch):
