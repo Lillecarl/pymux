@@ -933,6 +933,9 @@ tmux_variables: dict[str, Callable[[FormatContext], str]] = {
     "window_name": _window_name,
     "window_active": _window_active,
     "window_flags": _window_flags,
+    # `#F`: the flags with the progress after them, padded so the window
+    # list does not move. Lillecarl/pymux#960.
+    "window_status_flags": _symbol_window_flags,
     "window_progress": _window_progress,
     "window_bell_flag": _window_bell_flag,
     "window_activity_flag": _window_activity_flag,

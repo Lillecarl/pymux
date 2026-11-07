@@ -25,7 +25,7 @@ from pymux.format import (
     holds_a_template,
     tmux_variables,
 )
-from pymux.jinja import BROKEN
+from pymux.jinja import BROKEN, _compile
 
 
 @pytest.mark.parametrize(
@@ -59,6 +59,33 @@ async def test_a_template_can_do_arithmetic_and_filters(pymux):
     assert format_pymux_string(pymux, "{{ (history_limit | int) + 1 }}") == str(
         pymux.session_defaults.history_limit + 1
     )
+
+
+async def test_a_template_has_jinjas_globals_and_its_own_names(pymux):
+    "`render` builds the context itself, so what `Template.render` would give is checked here."
+    assert format_pymux_string(pymux, "{{ range(3) | list }}") == "[0, 1, 2]"
+    drawn = "{% set ns = namespace(n=1) %}{% set ns.n = ns.n + 1 %}{% set word = 'x' %}{{ ns.n }}{{ word }}"
+    assert format_pymux_string(pymux, drawn) == "2x"
+
+
+@pytest.mark.parametrize(
+    ("option", "tmux"),
+    [
+        ("status_left", "[#S] "),
+        ("status_right", " %H:%M %d-%b-%y "),
+        ("window_status_format", "#I:#W#F"),
+        ("window_status_current_format", "#I:#W#F"),
+        ("pane_title_format", " #T  #{pane_current_path_compact} "),
+    ],
+)
+async def test_each_default_template_draws_what_its_tmux_format_did(pymux, option, tmux):
+    "Every default is jinja, and looks as tmux's spelling did. Lillecarl/pymux#960."
+    pymux.options.test_mode = True
+    window = pymux.current_session.arrangement.get_active_window()
+    owner = window.options if option == "pane_title_format" else pymux.session_defaults
+    default = getattr(owner, option)
+    assert holds_a_template(default)
+    assert format_pymux_string(pymux, default) == format_pymux_string(pymux, tmux)
 
 
 async def test_a_name_nobody_knows_draws_nothing(pymux):
@@ -135,6 +162,9 @@ async def test_only_the_facts_a_template_asks_for_are_read(pymux, monkeypatch):
     forty variables. A template that asks for one costs one.
     """
     read = []
+    # A compiled template holds the readers it found, so one compiled
+    # before the swap below would read the old ones.
+    _compile.cache_clear()
 
     for name in ("session_name", "pane_current_path", "history_size"):
         handler = tmux_variables[name]

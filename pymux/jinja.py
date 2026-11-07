@@ -73,11 +73,33 @@ EXTRA_FACTS: dict[str, Callable[[FormatContext], object]] = {
 }
 
 
+type _Reader = Callable[[FormatContext], object]
+
+
 class _Compiled(NamedTuple):
-    "A template, and the names it asks for."
+    "A template, and how to read each fact it asks for and what it is when that fails."
 
     template: Template
-    names: frozenset[str]
+    readers: tuple[tuple[str, _Reader, object], ...]
+    #: jinja2's own globals (`range`, `namespace`, ...). `Template.render`
+    #: copies them out of a `ChainMap` on every call, a name at a time,
+    #: and that cost a keystroke more than every fact it read.
+    #: Lillecarl/pymux#960.
+    globals: dict[str, object]
+
+
+def _readers(names: frozenset[str]) -> tuple[tuple[str, _Reader, object], ...]:
+    "Each name pymux has a fact for. jinja2 answers any other with nothing, as `#{not_a_variable}` does."
+    from .format import tmux_variables
+
+    readers: list[tuple[str, _Reader, object]] = []
+    for name in sorted(names):
+        extra = EXTRA_FACTS.get(name)
+        if extra is not None:
+            readers.append((name, extra, {}))
+        elif (handler := tmux_variables.get(name)) is not None:
+            readers.append((name, handler, ""))
+    return tuple(readers)
 
 
 #: A sandbox, because a program in a pane can send commands, and
@@ -91,10 +113,9 @@ _environment = SandboxedEnvironment(undefined=ChainableUndefined)
 def _compile(source: str) -> _Compiled | TemplateSyntaxError:
     "The compiled template, or the reason there is none."
     try:
-        return _Compiled(
-            _environment.from_string(source),
-            frozenset(find_undeclared_variables(_environment.parse(source))),
-        )
+        tree = _environment.parse(source)
+        template = _environment.from_string(tree)
+        return _Compiled(template, _readers(frozenset(find_undeclared_variables(tree))), dict(template.globals))
     except TemplateSyntaxError as error:
         # Kept rather than raised, so that a template which cannot
         # parse is compiled once and not once a frame -- and logged
@@ -105,34 +126,24 @@ def _compile(source: str) -> _Compiled | TemplateSyntaxError:
 
 def render(context: FormatContext, source: str) -> str:
     "Draw this template with the facts of this context."
-    from .format import Missing, tmux_variables
-
     compiled = _compile(source)
     if isinstance(compiled, TemplateSyntaxError):
         return BROKEN
 
-    facts = {}
-    for name in compiled.names:
-        extra = EXTRA_FACTS.get(name)
-        if extra is not None:
-            try:
-                facts[name] = extra(context)
-            except Missing:
-                facts[name] = {}
-            continue
-
-        handler = tmux_variables.get(name)
-        if handler is None:
-            # Not a fact pymux has. jinja2 answers with nothing, the
-            # same as `#{not_a_variable}` does.
-            continue
+    facts = compiled.globals.copy()
+    for name, read, failed in compiled.readers:
         try:
-            facts[name] = handler(context)
+            facts[name] = read(context)
         except Exception:
-            facts[name] = ""
+            facts[name] = failed
 
+    template = compiled.template
     try:
-        return compiled.template.render(facts)
+        # `Template.render`, less its two walks of the globals: `facts`
+        # holds them, and only `{% import %}` reads the set of their
+        # names, which a template with no loader cannot do.
+        drawn = _environment.context_class(_environment, facts, template.name, template.blocks)
+        return "".join(template.root_render_func(drawn))
     except Exception:
         logger.exception("A template failed while it was drawn.")
         return BROKEN

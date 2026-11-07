@@ -32,6 +32,9 @@ DEFAULT_UPDATE_ENVIRONMENT = (
     "XDG_SESSION_DESKTOP XDG_SESSION_TYPE"
 )
 
+#: tmux's `#I:#W#F`, in jinja. Lillecarl/pymux#960.
+WINDOW_STATUS = "{{ window_index }}:{{ window_name or '(noname)' }}{{ window_status_flags }}"
+
 
 def _key_profile(value: str) -> str:
     if value not in KEY_PROFILES:
@@ -188,8 +191,8 @@ class SessionOptions(Options):
     lock_command: str = option(
         "vlock", doc="What lock-server, lock-session and lock-client run to hold the keyboard.", choices=["vlock"]
     )
-    status_right: str = option(" %H:%M %d-%b-%y ", doc="What the right of the status line says.")
-    status_left: str = option("[#S] ", doc="What the left of the status line says.")
+    status_right: str = option(" {{ now.strftime('%H:%M %d-%b-%y') }} ", doc="What the right of the status line says.")
+    status_left: str = option("[{{ session_name }}] ", doc="What the left of the status line says.")
     status_right_length: int = option(
         40,
         doc="The most cells the right of the status line takes. At 20 a rate beside the clock pushed the clock off.",
@@ -201,8 +204,8 @@ class SessionOptions(Options):
         doc="The most rows the window list wraps to; a window past the last row is cut. Lillecarl/pymux#723.",
         choices=[1, 2, 3, 5],
     )
-    window_status_format: str = option("#I:#W#F", doc="How the status line names a window.")
-    window_status_current_format: str = option("#I:#W#F", doc="How the status line names the active window.")
+    window_status_format: str = option(WINDOW_STATUS, doc="How the status line names a window.")
+    window_status_current_format: str = option(WINDOW_STATUS, doc="How the status line names the active window.")
     bell_symbol: str = option(
         "!",
         doc="What `#F` writes for a bell. ASCII, so every font has it; a configuration may set icons. Lillecarl/pymux#767.",
