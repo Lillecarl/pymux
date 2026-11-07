@@ -57,6 +57,20 @@ async def test_cover_draws_over_the_pane_and_keeps_its_size():
         assert pane.process.sy == height
 
 
+async def test_the_message_sits_in_the_middle_like_the_title():
+    "Carl: the content should be centered in the double-height pane bar."
+    async with create_client(CHROME) as (pymux, draw):
+        pane = _pane(pymux)
+        draw()
+        pane.screen.osc("7501", "state=blocked:msg=%s" % APPROVE)
+        rows = draw()
+        row = _first_terminal_row(pymux, rows, above=1)
+        position = pymux.get_client_state().layout_manager.pane_write_positions[pane]
+        mine = row[position.xpos : position.xpos + position.width]
+        before, after = mine.index(SHOWN), len(mine) - mine.index(SHOWN) - len(SHOWN)
+        assert abs(before - after) <= 2, dump(rows)
+
+
 @pytest.mark.parametrize("record", ["state=blocked", "state=working:msg=%s" % APPROVE])
 async def test_no_row_without_a_message_or_with_the_row_off(record):
     "No message, no row; and `off` shows none even with one."

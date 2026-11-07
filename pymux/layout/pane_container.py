@@ -27,7 +27,6 @@ from prompt_toolkit.layout.containers import (
     WritePosition,
     to_container,
 )
-from prompt_toolkit.layout.controls import FormattedTextControl
 from prompt_toolkit.layout.dimension import Dimension as D
 from prompt_toolkit.layout.mouse_handlers import MouseHandlers
 from prompt_toolkit.layout.screen import Char, Screen
@@ -284,7 +283,14 @@ def create_container_for_process(
             content=Window(
                 height=1,
                 char=" ",
-                content=FormattedTextControl(get_message),
+                # The bar's own control, so the message sits in the
+                # middle under the title.
+                content=PaneTitleBar(
+                    get_number=nothing,
+                    get_left=nothing,
+                    get_middle=get_message,
+                    get_right=nothing,
+                ),
                 style="class:titlebar class:pane-message",
             ),
             filter=Condition(
