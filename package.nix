@@ -153,7 +153,13 @@ let
             scdoc < ${./man/pymux.1.scd} > pymux.1
             installManPage pymux.1
             install -Dm644 ${base16-schemes-json}/base16-schemes.json \
-              "$out/${python.sitePackages}/pymux/base16-schemes.json"
+              "$out/${python.sitePackages}/pymux/style/base16-schemes.json"
+            # The suites name the file by `PYMUX_BASE16_SCHEMES`, so only
+            # the installed module can say it finds the file without it.
+            # `-P`: the build directory holds the source, which has no file.
+            # Lillecarl/pymux#946.
+            env -u PYMUX_BASE16_SCHEMES PYTHONPATH="$out/${python.sitePackages}" \
+              ${deps}/bin/python -P -c 'from pymux.style import style_base16; assert style_base16.names(), style_base16.__file__'
           ''
           + lib.optionalString (pipewire != null && wireplumber != null) ''
             # `pymux/audio.py` reads these before the PATH.
