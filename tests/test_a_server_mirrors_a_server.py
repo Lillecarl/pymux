@@ -1035,6 +1035,52 @@ async def test_a_status_line_that_time_wraps_here_takes_its_rows_from_the_pane_t
     )
 
 
+async def test_receive_there_asks_the_person_who_attaches_here(two_servers, tmp_path):
+    """
+    `pymux receive` in a pane there gets its files from the client here:
+    the person attaches through this peer, and nobody attaches there.
+    Lillecarl/pymux#947.
+    """
+    from libpymux.objects import Server
+    from test_a_pane_asks_for_a_file import parts_of
+
+    from pymux.connection.files import Files
+
+    owner, peer, client = two_servers
+    there, _here = await shown_here(owner, peer, client)
+    asked: list[dict] = []
+    client.client.sends_files = True
+    client.client.files = Files(client.client)
+    client.client.connection.send_packet = asked.append
+
+    source = tmp_path / "report.txt"
+    source.write_bytes(b"from the person's machine")
+    into = tmp_path / "into"
+    into.mkdir()
+
+    def send_files() -> dict | None:
+        return next((packet for packet in asked if packet[Field.CMD] == Packet.SEND_FILES), None)
+
+    async def the_person() -> None:
+        await until(lambda: send_files() is not None, "the client here is asked", seen=lambda: asked)
+        packet = send_files()
+        assert packet is not None and packet[Field.PATHS] == ["~/report.txt"]
+        request = packet[Field.REQUEST]
+        for part in parts_of(request, source, "~/report.txt"):
+            client.client.files.took_part(part)
+        client.client.files.took_part({Field.CMD: Packet.UPLOAD_DONE, Field.REQUEST: request})
+
+    with anyio.fail_after(10):
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(the_person)
+            said = await Server(owner.socket_name).cmd(
+                ["receive", "-d", str(into), "~/report.txt"], pane_id=str(there.pane_id)
+            )
+    assert said.exit_code == 0, said
+    assert (into / "report.txt").read_bytes() == b"from the person's machine"
+    assert not peer.peers.by_address[owner.socket_name].relays.held
+
+
 async def test_a_window_shown_again_draws_once_its_mirror_caught_up(two_servers, monkeypatch):
     "Nothing changed there either: the owner answers the resume, and the client draws then, not at the hold's end."
     monkeypatch.setattr(mirror_peer, "HOLD_FOR_FRESH", 30.0)

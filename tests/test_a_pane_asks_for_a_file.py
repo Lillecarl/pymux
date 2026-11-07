@@ -303,7 +303,7 @@ async def test_a_stopped_receive_withdraws_its_request():
         connection = state.client.connection
         upload = connection.client.files.ask_for(["x"], "%1")
         with anyio.move_on_after(0.1):
-            await wait_for_files(session.pymux, connection.client, upload, Path("/"))
+            await wait_for_files(connection.client.files, upload, Path("/"), session.pymux)
         await once(
             lambda: any(packet["cmd"] == Packet.FILES_WITHDRAWN for packet in sent),
             10.0,

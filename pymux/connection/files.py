@@ -14,13 +14,27 @@ import anyio
 from libpymux.protocol import Field, Message, Packet
 from pyte.keep import Keep
 
+from ..enums import FileTransfer
 from ..pipes.base import BrokenPipeError
 from .uploads import LIST_SECONDS, Listing, Upload
 
 if TYPE_CHECKING:
+    from ..mirror.files import Relay
     from .client import ClientRole
+    from .client_state import ClientState
 
-__all__ = ["Files"]
+__all__ = ["Files", "why_it_sends_no_file"]
+
+
+def why_it_sends_no_file(client: ClientState | None) -> str | None:
+    "Why `client` cannot send a file for `pymux receive`, or None when it can."
+    if client is None:
+        return "Nobody is attached to the session of this pane, so nobody can send a file."
+    if client.options.file_transfer is FileTransfer.PASSTHROUGH:
+        return "file-transfer is passthrough, and only the pymux client sends a file."
+    if not client.client.sends_files:
+        return "This pymux client is too old to send a file; start a new one."
+    return None
 
 
 class Files:
@@ -38,7 +52,8 @@ class Files:
     def __init__(self, client: ClientRole) -> None:
         self.client = client
 
-        self.uploads: dict[str, Upload] = {}
+        #: An `Upload` the command here waits on, or a peer's `Relay`.
+        self.uploads: dict[str, Upload | Relay] = {}
         self.listings: dict[str, Listing] = {}
 
     def saved(self, packet: Message) -> None:
@@ -75,7 +90,15 @@ class Files:
         self.client.connection.send_packet(upload.packet(pane))
         return upload
 
-    def stop_waiting(self, upload: Upload) -> None:
+    def ask_for_a_peer(self, relay: Relay, pane: str) -> None:
+        "Ask this client for the files an owner's `pymux receive` wants, through `relay`. Lillecarl/pymux#947."
+        if self.client.connection.closed:
+            relay.end("the client went before it answered")
+            return
+        self.uploads[relay.request] = relay
+        self.client.connection.send_packet(relay.packet(pane))
+
+    def stop_waiting(self, upload: Upload | Relay) -> None:
         """
         Forget a request whose `pymux receive` stopped waiting. One the
         client has not finished is withdrawn, or its question stays up

@@ -5,17 +5,21 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from pymux.connection.client import ClientRole
-    from pymux.connection.uploads import Upload
-    from pymux.core.main import Pymux
-    from pymux.core.pane import Pane
-
+from libpymux.protocol import PEER_FILES
 
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import answer, find_pane, refuse_without_a_waiter
+from pymux.connection.files import why_it_sends_no_file
 from pymux.connection.uploads import receive_into
-from pymux.enums import FileTransfer
+
+if TYPE_CHECKING:
+    from pymux.connection.files import Files
+    from pymux.connection.uploads import Upload
+    from pymux.core.main import Pymux
+    from pymux.core.pane import Pane
+    from pymux.mirror.files import PeerSender
+
+    type Sender = Files | PeerSender
 
 
 def receive(pymux: Pymux, args: argparse.Namespace):
@@ -30,7 +34,7 @@ def receive(pymux: Pymux, args: argparse.Namespace):
     Lillecarl/pymux#743.
     """
     refuse_without_a_waiter(pymux, "wait")
-    pane, client = _sender(pymux)
+    pane, files = _sender(pymux)
 
     caller = pymux.caller
     here = caller.cwd if caller is not None else None
@@ -38,23 +42,25 @@ def receive(pymux: Pymux, args: argparse.Namespace):
     if not directory.is_dir():
         raise CommandException("%s is not a directory." % (directory,))
 
-    upload = client.files.ask_for(list(args.paths), "%%%d" % (pane.pane_id,))
-    return wait_for_files(pymux, client, upload, directory)
+    upload = files.ask_for(list(args.paths), "%%%d" % (pane.pane_id,))
+    return wait_for_files(files, upload, directory, pymux)
 
 
-def _sender(pymux: Pymux) -> tuple[Pane, ClientRole]:
-    "The caller's pane, and the client that sends its files."
+def _sender(pymux: Pymux) -> tuple[Pane, Sender]:
+    "The caller's pane, and what asks the person for its files: a client here, or a peer."
     pane = find_pane(pymux, None)
     if pane is None:
         raise CommandException("There is no pane to ask from.")
     client = pymux.outward.download_client(pane)
-    if client is None:
-        raise CommandException("Nobody is attached to the session of this pane, so nobody can send a file.")
-    if client.options.file_transfer is FileTransfer.PASSTHROUGH:
-        raise CommandException("file-transfer is passthrough, and only the pymux client sends a file.")
-    if not client.client.sends_files:
-        raise CommandException("This pymux client is too old to send a file; start a new one.")
-    return pane, client.client
+    # The person who used a mirror of this pane last sends, through
+    # the peer they attach to. Lillecarl/pymux#947.
+    link = pymux.outward.peer_used_after(pane, client, PEER_FILES)
+    if link is not None:
+        return pane, link.files.sender(pane)
+    refused = why_it_sends_no_file(client)
+    if refused is not None or client is None:
+        raise CommandException(refused or "")
+    return pane, client.client.files
 
 
 def list_person_files(pymux: Pymux, args: argparse.Namespace):
@@ -66,20 +72,20 @@ def list_person_files(pymux: Pymux, args: argparse.Namespace):
     person. Lillecarl/pymux#748.
     """
     refuse_without_a_waiter(pymux, "wait")
-    _pane, client = _sender(pymux)
-    return _print_listing(pymux, client, args.directory)
+    _pane, files = _sender(pymux)
+    return _print_listing(pymux, files, args.directory)
 
 
-async def _print_listing(pymux: Pymux, client: ClientRole, directory: str) -> None:
-    for name in await client.files.names_in(directory):
+async def _print_listing(pymux: Pymux, files: Sender, directory: str) -> None:
+    for name in await files.names_in(directory):
         answer(pymux, name)
 
 
-async def wait_for_files(pymux: Pymux, client: ClientRole, upload: Upload, directory: Path) -> None:
+async def wait_for_files(files: Sender, upload: Upload, directory: Path, pymux: Pymux) -> None:
     try:
         failed = await receive_into(upload, directory, lambda text: answer(pymux, text))
     finally:
-        client.files.stop_waiting(upload)
+        files.stop_waiting(upload)
     if failed:
         raise CommandException("\n".join("Did not receive %s." % (why,) for why in failed))
 

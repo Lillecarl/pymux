@@ -52,6 +52,7 @@ from ..style.style import DEFAULT_THEME
 from ..terminals import PeerTerminal
 from ..wayland.window_pane import WindowWidget
 from .copying import place_of
+from .files import LinkFiles
 from .source import MirrorSource
 from .tree import Tree, tree_of
 from .window_source import MirrorWindowSource
@@ -106,6 +107,7 @@ class PeerLink:
         "_program_status_sent": Keep.DROPPED,
         "host": Keep.DROPPED,
         "log_asks": Keep.DROPPED,
+        "files": Keep.DROPPED,
     }
 
     def __init__(self, connection: ServerConnection, offered: object, version: int, host: str = "") -> None:
@@ -114,6 +116,8 @@ class PeerLink:
         self.host = host
         #: The `show-log -p` requests that wait for the peer. Lillecarl/pymux#934.
         self.log_asks = LogAsks(self.queue)
+        #: The `pymux receive` requests that wait for the peer's client. Lillecarl/pymux#947.
+        self.files = LinkFiles(self.queue)
         #: The version of the link both sides speak (`peer_version`).
         self.version = version
         self.sources: dict[PaneId, MirrorSource] = {}
@@ -380,6 +384,7 @@ class PeerLink:
         self._ready.set()
         self._sized({})
         self.log_asks.gone()
+        self.files.gone()
         self.connection.pymux.drag_and_drop.link_gone(self)
         if viewed:
             self.connection.pymux.terminals.sync_viewers()
@@ -421,6 +426,14 @@ class PeerLink:
     @_PACKETS.handles(Packet.LOG)
     def _on_log(self, packet: Message) -> None:
         self.log_asks.answered(packet)
+
+    @_PACKETS.handles(Packet.PEER_UPLOAD)
+    def _on_upload(self, packet: Message) -> None:
+        self.files.took_part(packet)
+
+    @_PACKETS.handles(Packet.PEER_FILES_LISTED)
+    def _on_files_listed(self, packet: Message) -> None:
+        self.files.listed(packet)
 
     @_PACKETS.handles(Packet.MIRROR_CLIPBOARD_IMAGE)
     def _on_clipboard_image(self, packet: Message) -> None:

@@ -37,6 +37,7 @@ __all__ = [
     "OLDEST_PEER_VERSION",
     "PEER_ACTS",
     "PEER_DND",
+    "PEER_FILES",
     "PEER_FILE_TRANSFER",
     "PEER_IMAGE_PASTE",
     "PEER_PINGS",
@@ -72,7 +73,7 @@ READ_SIZE = 1 << 20
 #: one misreads it raises `PEER_VERSION`; one that stops speaking the
 #: older form raises `OLDEST_PEER_VERSION` too. Every field is named
 #: and has a default, so most changes need neither. Lillecarl/pymux#759.
-PEER_VERSION = 12
+PEER_VERSION = 13
 OLDEST_PEER_VERSION = 1
 
 #: From this version a frame may name an image the peer stored by its
@@ -126,6 +127,12 @@ PEER_RECORDINGS = 11
 #: says, as `mirror-clipboard-image`, for the owner's compositor to
 #: offer. Lillecarl/pymux#956.
 PEER_IMAGE_PASTE = 12
+
+#: From this version the owner asks a peer for the files of `pymux
+#: receive`, as `mirror-send-files`, and for the names that complete one,
+#: as `mirror-list-files`. The peer's client answers, and the peer passes
+#: each answer back. Lillecarl/pymux#947.
+PEER_FILES = 13
 
 
 def peer_upgrade(version: object, oldest: object) -> str | None:
@@ -467,6 +474,17 @@ class Packet(StrEnum):
     # the key goes to as `mirror-clipboard-image`. Lillecarl/pymux#956.
     CLIPBOARD_IMAGE = "clipboard-image"
     MIRROR_CLIPBOARD_IMAGE = "mirror-clipboard-image"
+    # Owner to peer: `send-files` and `list-files` for a person who
+    # attaches through the peer, with the owner's `request` and
+    # `pane_id`; and `files-withdrawn` when `pymux receive` stops
+    # waiting. Peer to owner: each `upload` and `upload-done` of the
+    # peer's client, whole under `data`, and the names it listed.
+    # Lillecarl/pymux#947.
+    MIRROR_SEND_FILES = "mirror-send-files"
+    MIRROR_FILES_WITHDRAWN = "mirror-files-withdrawn"
+    MIRROR_LIST_FILES = "mirror-list-files"
+    PEER_UPLOAD = "peer-upload"
+    PEER_FILES_LISTED = "peer-files-listed"
 
 
 class Field(StrEnum):

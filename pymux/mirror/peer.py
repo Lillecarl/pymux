@@ -42,6 +42,7 @@ from ..options.tables import PeerCopyRow, PeerPlaceRow
 from ..wayland.window_pane import WindowWidget
 from .copying import place_of
 from .dial import abort, dial, dial_beside
+from .files import Relays
 from .program import HOLD_FOR_FRESH, RemoteProgram
 from .tree import MirrorTree
 from .tunnel import Tunnels
@@ -361,6 +362,7 @@ class Peer:
         "relink": Keep.DROPPED,
         "_waiting": Keep.DROPPED,
         "log_asks": Keep.DROPPED,
+        "relays": Keep.DROPPED,
         "_tasks": Keep.DROPPED,
     }
 
@@ -401,6 +403,8 @@ class Peer:
         self._waiting = _PaneWaiting(self)
         #: The `show-log -p` requests that wait for the owner. Lillecarl/pymux#934.
         self.log_asks = LogAsks(self.send)
+        #: The owner's `pymux receive` requests that a client here answers. Lillecarl/pymux#947.
+        self.relays = Relays(pymux, self.send)
         #: The scope of the link while it is up.
         self._tasks: anyio.abc.TaskGroup | None = None
         #: The link while it is gone, as an SSH client's (`relink`). A
@@ -725,6 +729,7 @@ class Peer:
             self.stream = None
             self._tasks = None
             self.log_asks.gone()
+            self.relays.gone()
             self._send.close()
             self.tree.pymux.drag_and_drop.cut_off(
                 [pane for pane in self.tree.panes.values() if not isinstance(pane.terminal, WindowWidget)]
@@ -821,6 +826,16 @@ class Peer:
                     str(packet.get(Field.DATA, "")),
                     acts=bool(packet.get(Field.ACTS, True)),
                 )
+            return
+        if packet.get(Field.CMD) in (Packet.MIRROR_SEND_FILES, Packet.MIRROR_LIST_FILES):
+            pane = self.tree.panes.get(pane_id) if isinstance(pane_id, int) else None
+            if packet.get(Field.CMD) == Packet.MIRROR_SEND_FILES:
+                self.relays.send_files(pane, packet)
+            elif self._tasks is not None:
+                self._tasks.start_soon(self.relays.list_files, pane, packet)
+            return
+        if packet.get(Field.CMD) == Packet.MIRROR_FILES_WITHDRAWN:
+            self.relays.withdrawn(packet)
             return
         if packet.get(Field.CMD) == Packet.MIRROR_PROGRAM_STATUS:
             pane = self.tree.panes.get(pane_id) if isinstance(pane_id, int) else None

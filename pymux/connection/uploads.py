@@ -30,6 +30,7 @@ __all__ = [
     "Listing",
     "Upload",
     "receive_into",
+    "send_files_packet",
 ]
 
 #: How long a completion waits for the client's listing. A shell holds
@@ -69,8 +70,8 @@ class Upload:
     has no bound: a file is held whole until the command has written it.
     """
 
-    def __init__(self, paths: list[str]) -> None:
-        self.request = secrets.token_hex(8)
+    def __init__(self, paths: list[str], request: str | None = None) -> None:
+        self.request = request or secrets.token_hex(8)
         self.paths = paths
         self._parts = ArrivingFiles()
         self._send, self.outcomes = anyio.create_memory_object_stream[_Outcome](math.inf)
@@ -79,7 +80,7 @@ class Upload:
 
     def packet(self, pane: str) -> Message:
         "The `send-files` packet that asks the client."
-        return {Field.CMD: Packet.SEND_FILES, Field.REQUEST: self.request, Field.PATHS: self.paths, Field.PANE: pane}
+        return send_files_packet(self.request, self.paths, pane)
 
     def take(self, packet: Mapping[str, object]) -> None:
         "One `upload` or `upload-done` packet of this request."
@@ -107,6 +108,11 @@ class Upload:
         # A part after the end, or after the command stopped waiting.
         with suppress(anyio.ClosedResourceError, anyio.BrokenResourceError):
             self._send.send_nowait(outcome)
+
+
+def send_files_packet(request: str, paths: list[str], pane: str) -> Message:
+    "The `send-files` packet that asks a client for `paths`, for `pymux receive` in `pane`."
+    return {Field.CMD: Packet.SEND_FILES, Field.REQUEST: request, Field.PATHS: paths, Field.PANE: pane}
 
 
 class Listing:
