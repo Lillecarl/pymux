@@ -189,7 +189,8 @@ class Peers:
         panes of the window each client looks at, in a mirrored session.
         And tell each owner how much room those windows have here, so
         it lays them out at that size. `Pymux.invalidate` calls this,
-        since a switch, a split and a resize all reach it.
+        since a switch, a split and a resize all reach it, and so does a
+        frame that draws a status line of another height.
         """
         if not self.by_address:
             return

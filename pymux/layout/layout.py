@@ -191,6 +191,9 @@ class LayoutManager:
         #: handler may change what it measures.
         self.frame_plans: dict[window_tree.Window, Plan] | None = None
 
+        #: The status rows the last frame drew.
+        self._status_rows_drawn = 0
+
         self.chooser = ChooserView(self)
         self.status = StatusLine(self)
         self.menu = Menu(self)
@@ -204,9 +207,16 @@ class LayoutManager:
         self.status.frame_changed()
 
     def frame_ended(self, app: Application[Any]) -> None:
+        rows = self.status.rows()
         self._body.frame_ended()
         self.frame_plans = None
         self.status.frame_changed()
+        if rows != self._status_rows_drawn:
+            self._status_rows_drawn = rows
+            # A clock, a frame rate or a pane's write can wrap the
+            # window list with no `Pymux.invalidate`, which is what
+            # tells an owner the room here. Lillecarl/pymux#954.
+            self.pymux.peers.sync_sight()
 
     @property
     def pane_write_positions(self) -> dict[Pane, WritePosition]:

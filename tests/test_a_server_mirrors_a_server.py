@@ -47,6 +47,7 @@ from pymux.answer import Answer, current_answer
 from pymux.client import reconnect as reconnect_module
 from pymux.client import relink
 from pymux.commands import handle_command
+from pymux.commands.set_option import find_option
 from pymux.connection import server as server_module
 from pymux.core import kitty_transfers
 from pymux.core.forwarding import with_port
@@ -60,7 +61,7 @@ from pymux.layout.geometry import plan_of, room_for_panes
 from pymux.mirror import link as mirror_link
 from pymux.mirror import peer as mirror_peer
 from pymux.mirror.program import RemoteProgram
-from pymux.options.options import ALL_CLIENT_OPTIONS
+from pymux.options.options import ALL_CLIENT_OPTIONS, Scope
 from pymux.query import ask
 from pymux.style.colors import theme_color_base
 from pymux.terminals import PeerTerminal
@@ -918,6 +919,114 @@ async def test_a_status_line_that_wraps_here_takes_its_rows_from_the_pane_there(
         await run_as(peer, client, "new-window -d -n %s" % ("window-%d-" % number * 2))
     await until(lambda: client.layout_manager.status.rows() > 1, "the window list wraps")
     grown = client.layout_manager.status.rows() - 1
+
+    await until(
+        lambda: there.screen.lines == before - grown,
+        "the pane there gives the status line its rows",
+        seen=lambda: (there.screen.lines, before, grown),
+    )
+
+
+#: Carl's status line (croshome's home/pymux.nix): a jinja2 status-right
+#: that holds the program's message, and an entry with its state.
+CARLS_STATUS = {
+    "status-right": (
+        "{% if pane_program_state %} {{ pane_program_state }}"
+        "{% if pane_program_message and client_width|int >= 100 %}:"
+        " {{ pane_program_message|truncate(40, true, '…') }}{% endif %} ·{% endif %}"
+        " {{ client_fps }}{% if client_window_fps %} · {{ client_window_fps|replace(' fps', '') }} wl{% endif %}"
+        " ↓{{ client_bytes_down|int|filesizeformat }} ↑{{ client_bytes_up|int|filesizeformat }}"
+        " {{ client_rate_down }} {{ now.strftime('%H:%M') }} "
+    ),
+    "status-right-length": "110",
+    "window-status-format": "#I:#W#F#{?pane_program_state, #{pane_program_state},}",
+    "window-status-current-format": "#I:#W#F#{?pane_program_state, #{pane_program_state},}",
+}
+
+
+@pytest.mark.parametrize(
+    "status",
+    [
+        {"status-right": "#{pane_program_message}", "status-right-length": "200"},
+        CARLS_STATUS,
+    ],
+    ids=["message", "carls"],
+)
+async def test_a_program_status_that_wraps_the_window_list_here_takes_its_rows_from_the_pane_there(two_servers, status):
+    """
+    Carl's case: Claude Code's OSC 7501 there lengthens the status line
+    here, the window list wraps, and the pane there gives up the row.
+    Lillecarl/pymux#954.
+    """
+    owner, peer, client = two_servers
+    client.app.output.get_size = lambda: Size(rows=40, columns=120)
+    # Long enough that four entries fill one row, and the state wraps it.
+    for number in range(3):
+        owner.handle_command("new-window -d -n window-%d-pane" % number)
+    there, _here = await shown_here(owner, peer, client)
+    shown = here_session(peer).arrangement.get_active_window_for(client.app)
+    await until(lambda: len(here_session(peer).arrangement.windows) == 4, "the windows arrive here")
+    for name, value in status.items():
+        option = find_option(peer, name, Scope.SESSION)
+        assert option is not None, name
+        option.set_value(peer, value, peer)
+    peer.invalidate()
+    await until(
+        lambda: there.screen.lines == room_for_panes(peer, shown).rows,
+        "the pane there takes the room here",
+        seen=lambda: (there.screen.lines, room_for_panes(peer, shown).rows),
+    )
+    assert client.layout_manager.status.rows() == 1
+    before = there.screen.lines
+
+    message = base64.b64encode(b"x" * 60).decode("ascii")
+    there.terminal.terminal_control.feed_output("\x1b]7501;state=working:msg=%s\x1b\\" % message)
+    status_line = client.layout_manager.status
+    await until(
+        lambda: status_line.rows() > 1,
+        "the window list wraps",
+        seen=lambda: (status_line.left(), status_line.right(), status_line._lines()),
+    )
+    grown = status_line.rows() - 1
+
+    await until(
+        lambda: there.screen.lines == before - grown,
+        "the pane there gives the status line its rows",
+        seen=lambda: (there.screen.lines, before, grown),
+    )
+
+
+async def test_a_status_line_that_time_wraps_here_takes_its_rows_from_the_pane_there(two_servers):
+    """
+    A frame rate, a byte count or the clock in the status line grows by
+    itself, and only the clock's refresh draws it: nothing passes
+    `Pymux.invalidate`. The owner still hears the room left here.
+    Lillecarl/pymux#954.
+    """
+    owner, peer, client = two_servers
+    client.app.output.get_size = lambda: Size(rows=40, columns=120)
+    for number in range(3):
+        owner.handle_command("new-window -d -n window-%d-pane" % number)
+    there, _here = await shown_here(owner, peer, client)
+    shown = here_session(peer).arrangement.get_active_window_for(client.app)
+    await until(lambda: len(here_session(peer).arrangement.windows) == 4, "the windows arrive here")
+    await until(
+        lambda: there.screen.lines == room_for_panes(peer, shown).rows,
+        "the pane there takes the room here",
+        seen=lambda: (there.screen.lines, room_for_panes(peer, shown).rows),
+    )
+    status_line = client.layout_manager.status
+    assert status_line.rows() == 1
+    before = there.screen.lines
+
+    peer.session_defaults.status_right = "x" * 60
+    peer.session_defaults.status_right_length = 110
+    assert status_line.rows() > 1
+    grown = status_line.rows() - 1
+    # The frame the clock's refresh asks for. This client's application
+    # does not run, so its two hooks stand for the render.
+    client.app.before_render.fire()
+    client.app.after_render.fire()
 
     await until(
         lambda: there.screen.lines == before - grown,

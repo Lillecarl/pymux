@@ -262,6 +262,38 @@ async def test_a_status_line_that_wraps_takes_its_rows_from_the_panes(pymux):
         )
 
 
+async def test_a_program_status_that_wraps_the_window_list_takes_its_rows_from_the_panes(pymux):
+    """
+    Carl's case: Claude Code's OSC 7501 lengthens what the status line
+    shows, the window list wraps, and the pane must give up the row.
+    Lillecarl/pymux#954.
+    """
+    async with pymux.running(), attached(pymux) as session:
+        await shows(session, "$")
+        (client,) = pymux.clients
+        with set_app(client.app):
+            pymux.handle_command("set -g status-right '#{pane_program_message}'")
+            pymux.handle_command("set -g status-right-length %d" % COLUMNS)
+            for number in range(3):
+                pymux.handle_command("new-window -d -n window-%d" % number)
+        window = pymux.arrangement.get_active_window()
+        await once(lambda: len(pymux.arrangement.windows) == 4, 5.0, "the windows never came")
+        pane = window.active_pane
+        assert client.layout_manager.status.rows() == 1
+        before = pane.screen.lines
+
+        message = base64.b64encode(b"x" * 30).decode("ascii")
+        pane.terminal.terminal_control.feed_output("\x1b]7501;state=working:msg=%s\x1b\\" % message)
+        await once(lambda: client.layout_manager.status.rows() > 1, 5.0, "the window list never wrapped")
+        grown = client.layout_manager.status.rows() - 1
+
+        await once(
+            lambda: pane.screen.lines == before - grown,
+            5.0,
+            lambda: "the pane kept %d rows under a status line of %d" % (pane.screen.lines, grown + 1),
+        )
+
+
 async def test_a_frame_carries_what_it_drew(pymux):
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
