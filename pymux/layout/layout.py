@@ -997,7 +997,7 @@ def _create_panes(pymux: Pymux, window: window_tree.Window, view: View) -> PlanC
     def tell_its_size(pane: Pane, rect: Rect) -> None:
         if isinstance(pane.terminal, WindowWidget) and holds_window_panes(pymux, window):
             return
-        tell_pane_its_size(pane, rect)
+        tell_pane_its_size(pymux, window, pane, rect)
 
     return PlanContainer(
         layout_of(pymux, window),

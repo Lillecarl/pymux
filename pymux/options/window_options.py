@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..enums import WindowCodec, WindowSize
+from ..enums import MessageRow, WindowCodec, WindowSize
 from ..wayland.wayland_scale import DEFAULT_WAYLAND_SCALE, parse_scale
 from .option_fields import Options, option, options
 
@@ -70,6 +70,20 @@ class WindowOptions(Options):
             "What the bar over each pane says, after its marks and its name: its title, and its "
             "directory the way fish's prompt writes it, which stays after the program ends."
         ),
+        on_set=_redraw,
+    )
+    pane_message_row: MessageRow = option(
+        MessageRow.TAKE,
+        doc=(
+            "Where the message of an agent in the pane shows, on a row under its bar (OSC 7501, such as "
+            '"blocked: Approve edit?"): "take" makes the program one row shorter while it shows, "cover" '
+            'draws it over the first row of the pane, "off" shows none. Lillecarl/pymux#931.'
+        ),
+        on_set=_redraw,
+    )
+    pane_message_format: str = option(
+        "{% if pane_program_message %} {{ pane_program_state }}: {{ pane_program_message }} {% endif %}",
+        doc="What the message row says. It shows only while this draws something.",
         on_set=_redraw,
     )
     monitor_bell: bool = option(

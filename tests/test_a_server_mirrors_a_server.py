@@ -56,7 +56,7 @@ from pymux.core.rich_clipboard import RichClipboardData
 from pymux.core.snapshot.read import load, start
 from pymux.core.snapshot.write import save
 from pymux.core.upgrade import welcome_back
-from pymux.enums import Clipboard, WindowSize
+from pymux.enums import Clipboard, MessageRow, WindowSize
 from pymux.layout.geometry import plan_of, room_for_panes
 from pymux.mirror import link as mirror_link
 from pymux.mirror import peer as mirror_peer
@@ -966,6 +966,10 @@ async def test_a_program_status_that_wraps_the_window_list_here_takes_its_rows_f
     there, _here = await shown_here(owner, peer, client)
     shown = here_session(peer).arrangement.get_active_window_for(client.app)
     await until(lambda: len(here_session(peer).arrangement.windows) == 4, "the windows arrive here")
+    # The message's own row takes one more; this judges the status line's.
+    for server in (owner, peer):
+        for window in server.arrangement.windows:
+            window.options.pane_message_row = MessageRow.OFF
     for name, value in status.items():
         option = find_option(peer, name, Scope.SESSION)
         assert option is not None, name

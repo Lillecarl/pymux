@@ -27,6 +27,7 @@ from prompt_toolkit.layout.containers import (
     WritePosition,
     to_container,
 )
+from prompt_toolkit.layout.controls import FormattedTextControl
 from prompt_toolkit.layout.dimension import Dimension as D
 from prompt_toolkit.layout.mouse_handlers import MouseHandlers
 from prompt_toolkit.layout.screen import Char, Screen
@@ -34,11 +35,11 @@ from prompt_toolkit.layout.screen import Char, Screen
 from pymux.core import window_tree
 from pymux.core.pane import Pane
 
-from ..enums import Woke
+from ..enums import MessageRow, Woke
 from ..format import format_pymux_string
 from ..keys.actions import Kind, Origin, note, started_by
 from .cut_shade import Hidden, lifts, shade
-from .geometry import cut_backdrop, cut_shade_of, hidden_of_pane, pane_beside
+from .geometry import cut_backdrop, cut_shade_of, hidden_of_pane, pane_beside, pane_message
 from .rects import Side
 from .titlebar import PaneTitleBar
 from .widgets import BigClock, PaneNotice, PaneNumber
@@ -274,6 +275,23 @@ def create_container_for_process(
         "The three parts the bar below does not have."
         return []
 
+    def get_message() -> StyleAndTextTuples:
+        return [("class:pane-message", pane_message(pymux, window, arrangement_pane))]
+
+    def message_row(row: MessageRow) -> ConditionalContainer:
+        "The agent's message, under the bar: in the pane's own column, or over its first row."
+        return ConditionalContainer(
+            content=Window(
+                height=1,
+                char=" ",
+                content=FormattedTextControl(get_message),
+                style="class:titlebar class:pane-message",
+            ),
+            filter=Condition(
+                lambda: window.options.pane_message_row is row and bool(pane_message(pymux, window, arrangement_pane))
+            ),
+        )
+
     def on_click() -> None:
         "Click handler for the clock. When clicked, select this pane."
         with started_by(Origin.MOUSE):
@@ -288,11 +306,16 @@ def create_container_for_process(
         FloatContainer(
             HSplit(
                 [
+                    # `geometry.tell_pane_its_size` takes this row off
+                    # the program too, or the plan and the drawing would
+                    # give the pty two heights in turn.
+                    message_row(MessageRow.TAKE),
                     # The terminal.
                     TracePaneWritePosition(pymux, arrangement_pane, content=arrangement_pane.terminal),
                 ]
             ),
             floats=[
+                Float(content=message_row(MessageRow.COVER), left=0, right=0, top=0, height=1),
                 # The title bar: this pane's title in the middle, and
                 # the panes beside it named at the edges.
                 # Lillecarl/pymux#207.

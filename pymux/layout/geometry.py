@@ -17,6 +17,8 @@ from pymux.core import window_tree
 from pymux.core.pane import Pane
 from pymux.core.splits import VSplit, panes_of
 
+from ..enums import MessageRow
+from ..format import format_pymux_string
 from .cut_shade import Hidden, hex_of, hidden_of
 from .divided import Divided
 from .plane import Plan
@@ -37,7 +39,9 @@ __all__ = [
     "gaps_of",
     "hidden_of_pane",
     "layout_of",
+    "message_row_is_taken",
     "pane_beside",
+    "pane_message",
     "plan_of",
     "room_for_panes",
     "size_the_panes_of",
@@ -46,7 +50,32 @@ __all__ = [
 ]
 
 
-def tell_pane_its_size(pane: Pane, rect: Rect) -> None:
+def pane_message(pymux: Pymux, window: window_tree.Window, pane: Pane) -> str:
+    """
+    What the pane's message row says, or nothing when it shows none.
+    Lillecarl/pymux#931.
+
+    **The same for every client.** With `pane-message-row take` the
+    row is a row of the pane, and a pane has one pty and one size, so
+    a client's own chrome (`pane-border-status`, `full-screen`) does not
+    decide it.
+    """
+    options = window.options
+    if options.pane_message_row is MessageRow.OFF:
+        return ""
+    statuses = getattr(pane.screen, "program_status", None)
+    if statuses is None or not statuses.records:
+        return ""
+    text = format_pymux_string(pymux, options.pane_message_format, window=window, pane=pane)
+    return text if text.strip() else ""
+
+
+def message_row_is_taken(pymux: Pymux, window: window_tree.Window, pane: Pane) -> bool:
+    "Whether the pane's program is one row shorter, for its message row."
+    return window.options.pane_message_row is MessageRow.TAKE and bool(pane_message(pymux, window, pane))
+
+
+def tell_pane_its_size(pymux: Pymux, window: window_tree.Window, pane: Pane, rect: Rect) -> None:
     """
     Give a pane the size of its rectangle.
 
@@ -58,7 +87,8 @@ def tell_pane_its_size(pane: Pane, rect: Rect) -> None:
     hears them only here, and the program in it needs them: it writes
     for the screen it thinks it has. Lillecarl/pymux#224.
     """
-    pane.terminal.set_size(rect.width, rect.height)
+    taken = 1 if rect.height > 1 and message_row_is_taken(pymux, window, pane) else 0
+    pane.terminal.set_size(rect.width, rect.height - taken)
 
 
 def layout_of(pymux: Pymux, window: window_tree.Window) -> Divided | Strip | Zoomed:
@@ -230,7 +260,7 @@ def size_the_panes_of(pymux: Pymux, window: window_tree.Window) -> None:
     plan = plan_of(pymux, window)
     for slot, rect in plan.rects.items():
         for pane in slot.panes:
-            tell_pane_its_size(cast(Pane, pane), rect)
+            tell_pane_its_size(pymux, window, cast(Pane, pane), rect)
 
 
 def hidden_of_pane(pymux: Pymux, pane: Pane) -> Hidden | None:

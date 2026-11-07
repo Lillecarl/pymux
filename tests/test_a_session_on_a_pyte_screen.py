@@ -33,6 +33,7 @@ from session import once
 
 from pymux.connection.server import ServerConnection
 from pymux.core.main import Pymux
+from pymux.enums import MessageRow
 from pymux.layout import plan_container
 from pymux.log import logger
 from pymux.pipes.memory import connect_in_memory
@@ -279,6 +280,9 @@ async def test_a_program_status_that_wraps_the_window_list_takes_its_rows_from_t
                 pymux.handle_command("new-window -d -n window-%d" % number)
         window = pymux.arrangement.get_active_window()
         await once(lambda: len(pymux.arrangement.windows) == 4, 5.0, "the windows never came")
+        # The message's own row takes one more; this judges the status line's.
+        for each in pymux.arrangement.windows:
+            each.options.pane_message_row = MessageRow.OFF
         pane = window.active_pane
         assert client.layout_manager.status.rows() == 1
         before = pane.screen.lines

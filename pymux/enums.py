@@ -191,6 +191,16 @@ class WindowScroll(StrEnum):
     NOTCH = "notch"
 
 
+class MessageRow(StrEnum):
+    "Where a pane's agent message goes, under the pane's bar. Lillecarl/pymux#931."
+
+    #: A row of the pane's own, so the program is one row shorter while it shows.
+    TAKE = "take"
+    #: Over the pane's first row, so the program keeps its size.
+    COVER = "cover"
+    OFF = "off"
+
+
 class WindowSize(StrEnum):
     """
     Who decides how big a window's plane is.
