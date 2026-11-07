@@ -67,15 +67,14 @@ regular expression against an item of vttest's main menu, written as
 "N title". `PYMUX_VTTEST_TERMINALS` is a comma separated list of
 terminal names.
 
-**This is not a gate yet, and it should not be made one yet.** The
-chain is proven: two runs of the default item give the same verdicts,
-and the first outing found three faults that no other check here can
-see (Lillecarl/pyterm#117, #118 and #119). The judging is not proven.
-Item 2 of the main menu still flaps, and the reason is #119 itself: it
-is a single change at a fixed moment after a screen is drawn, so
-whether a measurement holds it depends on when the measurement starts.
-A check that flaps is worse than no check, so `checks.all` leaves this
-out and a person runs it.
+**It is a gate for items 4 and 9, which is the default.** Two runs of
+them, built apart, write the same list to the byte, and the first
+outing found three faults that no other check here can see
+(Lillecarl/pyterm#117, #118 and #119). Item 2 of the main menu still
+flaps, and the reason is #119 itself: it is a single change at a fixed
+moment after a screen is drawn, so whether a measurement holds it
+depends on when the measurement starts. A check that flaps is worse
+than no check, so item 2 stays out. Lillecarl/pyterm#374.
 
 **What a difference means here is what it means there.** A pane reads
 what a program asked for and writes the request again in the form the

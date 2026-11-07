@@ -394,12 +394,13 @@ let
   # terminals, for instance
   # `PYMUX_VTTEST_INCLUDE='^9 ' nix build --file . checks.pymux-vttest-pictures.run`.
   # The whole of vttest is five hundred screens and each one is
-  # photographed twice, so the default is one item and one terminal.
+  # photographed twice, so the default is the two items that
+  # `tests/vttest-picture-differences.txt` records, in one terminal.
   vttestInclude =
     let
       value = builtins.getEnv "PYMUX_VTTEST_INCLUDE";
     in
-    if value == "" then "^4 " else value;
+    if value == "" then "^(4|9) " else value;
 
   # Which pictures of pymux's own chrome to take, and in which
   # terminals, for instance
@@ -1454,9 +1455,10 @@ in
   # screen is finished; `ptterm/tests/drive_with_vttest.py` is that
   # walker and `tests/photograph_vttest.py` is the harness around it.
   #
-  # It is not a gate. One item of the main menu, in one terminal, is
-  # what it does by default, because the whole of vttest twice over is
-  # twenty minutes for each terminal.
+  # It is a gate for items 4 and 9 of the main menu, in one terminal:
+  # two runs built apart record them to the byte. Item 2 still flaps
+  # (Lillecarl/pyterm#119), and the whole of vttest twice over is twenty
+  # minutes for each terminal. Lillecarl/pyterm#374.
   vttestPictures =
     runInSandbox
       {
