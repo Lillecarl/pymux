@@ -109,12 +109,24 @@ _CALL: Final = """(async () => {
   return await library.call(%(name)s, %(context)d, %(args)s);
 })()"""
 
+#: How long a browser that has no ready window yet is waited for.
+READY_WITHIN_MS: Final = 10_000
+
 #: Every tab of every browser window, the selected one of the front window
 #: first.
-_TABS: Final = """(() => {
+#:
+#: **A window is listed before it has a `gBrowser`.** Firefox registers a
+#: `navigator:browser` window, then sets `gBrowser` in its startup, and
+#: `browser.open` asked in between: "front.gBrowser is undefined", now
+#: and then, under load. Lillecarl/pyterm#947. So it waits while no
+#: window is ready, and leaves out one that is not.
+_TABS: Final = """(async () => {
+  const ready = () => [...Services.wm.getEnumerator("navigator:browser")].filter(win => win.gBrowser);
+  const deadline = Date.now() + %(ms)d;
+  while (!ready().length && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 50));
   const front = Services.wm.getMostRecentWindow("navigator:browser");
-  const tabs = front ? [front.gBrowser.selectedTab] : [];
-  for (const win of Services.wm.getEnumerator("navigator:browser")) {
+  const tabs = front?.gBrowser ? [front.gBrowser.selectedTab] : [];
+  for (const win of ready()) {
     for (const tab of win.gBrowser.tabs) if (!tabs.includes(tab)) tabs.push(tab);
   }
   return JSON.stringify(tabs.map(tab => {
@@ -127,13 +139,13 @@ _TABS: Final = """(() => {
       url: browser.currentURI?.spec ?? "",
     };
   }));
-})()"""
+})()""" % {"ms": READY_WITHIN_MS}
 
 #: The `<browser>` of a tab by its browser id, `%(browser)d`, and the
-#: `gBrowser` of its window.
+#: `gBrowser` of its window. A window with none yet holds no tab (`_TABS`).
 _BROWSER: Final = """const [gBrowser, browser] = (() => {
     for (const win of Services.wm.getEnumerator("navigator:browser")) {
-      const found = win.gBrowser.browsers.find(one => one.browserId === %(browser)d);
+      const found = win.gBrowser?.browsers.find(one => one.browserId === %(browser)d);
       if (found) return [win.gBrowser, found];
     }
     throw new Error("the tab is gone");

@@ -225,6 +225,31 @@ async def test_firefox_is_reached_from_inside_and_keeps_its_profile(server, tmp_
         await call(server, "browser.close", name="probe")
 
 
+#: A second browser window, held where Firefox's startup has registered it
+#: and not yet given it a `gBrowser`.
+HALF_STARTED = """(async () => {
+  const win = OpenBrowserWindow();
+  await new Promise(resolve => win.addEventListener("load", resolve, {once: true}));
+  Object.defineProperty(win, "gBrowser", {value: undefined, configurable: true, writable: true});
+  return Services.wm.getMostRecentWindow("navigator:browser") === win ? "in front" : "behind";
+})()"""
+
+
+@needs_firefox
+async def test_a_window_firefox_has_not_finished_is_left_out(server):
+    "It is the front window, and its `gBrowser` is undefined: browser.open failed on it. Lillecarl/pyterm#947."
+    await call(server, "browser.open", name="probe", url=PAGE, kind="firefox", seat="headless")
+    try:
+        assert await call(server, "gecko.chrome", name="probe", code=HALF_STARTED) == "in front"
+
+        tabs = await call(server, "browser.tabs", name="probe")
+        assert [tab["url"] for tab in tabs] == [PAGE], tabs
+        went = await call(server, "browser.goto", name="probe", url=PAGE)
+        assert went["loaded"], went
+    finally:
+        await call(server, "browser.close", name="probe")
+
+
 async def test_only_firefox_and_glide_have_a_chrome(server):
     await call(server, "browser.open", name="probe", seat="headless", arguments=ARGUMENTS)
     try:
