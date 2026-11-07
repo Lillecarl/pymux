@@ -17,7 +17,17 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import anyio
 from libpymux.connection import CommandResult, Reply, command_packet
-from libpymux.protocol import OLDEST_PEER_VERSION, PEER_VERSION, Field, Message, Packet, peer_upgrade
+from libpymux.protocol import (
+    OLDEST_PEER_VERSION,
+    PEER_VERSION,
+    Capability,
+    Field,
+    Message,
+    Packet,
+    capabilities_in_common,
+    capabilities_named,
+    peer_upgrade,
+)
 from libpymux.wire import MSGPACK, MSGPACK_ZSTD, PacketReader, encode_json
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.clipboard import ClipboardData
@@ -353,6 +363,7 @@ class Peer:
         "_receive": Keep.DROPPED,
         "accepted": Keep.DROPPED,
         "version": Keep.DROPPED,
+        "capabilities": Keep.DROPPED,
         "stream": Keep.DROPPED,
         "tree": Keep.DROPPED,
         "server": Keep.DROPPED,
@@ -389,6 +400,8 @@ class Peer:
         self.accepted = False
         #: The version of the link both sides speak, once accepted.
         self.version = 0
+        #: What the link carries, once accepted (`capabilities_in_common`).
+        self.capabilities: frozenset[Capability] = frozenset()
         #: What the owner calls itself, as its trees say.
         self.server: str | None = None
         #: The owner said it restarts: why, and until when on the loop's clock.
@@ -510,6 +523,7 @@ class Peer:
                 Field.WIRE: offer,
                 Field.VERSION: PEER_VERSION,
                 Field.OLDEST: OLDEST_PEER_VERSION,
+                Field.CAPABILITIES: capabilities_named(),
                 Field.SERVER: socket.gethostname().partition(".")[0],
             }
         )
@@ -783,7 +797,12 @@ class Peer:
         self.accepted = True
         theirs = packet.get(Field.VERSION)
         self.version = min(PEER_VERSION, theirs if isinstance(theirs, int) else 0)
+        self.capabilities = capabilities_in_common(self.version, packet.get(Field.CAPABILITIES))
         return None
+
+    def can(self, capability: Capability) -> bool:
+        "Whether the link to the owner carries `capability`."
+        return capability in self.capabilities
 
     def _take(self, packet: Message) -> None:
         if packet.get(Field.CMD) == Packet.PING:

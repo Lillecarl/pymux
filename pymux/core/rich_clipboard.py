@@ -36,7 +36,7 @@ import weakref
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, ClassVar, Final
 
-from libpymux.protocol import PEER_RICH_CLIPBOARD, Field, Packet
+from libpymux.protocol import Capability, Field, Packet
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.clipboard import ClipboardData
 from ptterm import Terminal
@@ -301,7 +301,7 @@ class RichClipboard:
             client = None
         if client is None and link is None:
             client_state = self.pymux.outward.download_client(pane)
-            link = self.pymux.outward.peer_used_after(pane, client_state, PEER_RICH_CLIPBOARD)
+            link = self.pymux.outward.peer_used_after(pane, client_state, Capability.RICH_CLIPBOARD)
             client = None if link is not None or client_state is None else client_state.client
         if link is None and (
             client is None or client not in self.pymux._client_states or not client.replies.kitty_clipboard

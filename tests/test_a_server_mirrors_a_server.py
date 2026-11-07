@@ -22,7 +22,7 @@ import anyio
 import anyio.abc
 import apsw
 import pytest
-from libpymux.protocol import Field, Packet
+from libpymux.protocol import Capability, Field, Packet, capabilities_in_common
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.input import create_pipe_input
@@ -146,6 +146,33 @@ async def shown_here(owner, peer, client, link=None):
     peer.attach_client_to(client, session)
     peer.invalidate()
     return there, link.tree.panes[there.pane_id]
+
+
+async def test_both_sides_of_a_link_hold_the_capabilities_both_named(two_servers):
+    "Lillecarl/pymux#959."
+    owner, peer, client = two_servers
+    await shown_here(owner, peer, client)
+    (here,) = peer.peers.by_address.values()
+    (there,) = owner.peer_links()
+    assert here.capabilities == there.capabilities == frozenset(Capability)
+
+
+async def test_a_capability_the_peer_does_not_name_is_not_used(two_servers, monkeypatch):
+    "A side names what it has, and the other uses no more. Lillecarl/pymux#959."
+    owner, peer, client = two_servers
+    monkeypatch.setattr(mirror_peer, "capabilities_named", lambda: [Capability.PINGS.value])
+    await shown_here(owner, peer, client)
+    (there,) = owner.peer_links()
+    assert there.capabilities == {Capability.PINGS}
+    assert not there.can(Capability.FILES)
+
+
+def test_a_side_that_names_nothing_has_what_its_version_reached():
+    "A build from before names, which has every capability its version had. Lillecarl/pymux#959."
+    assert capabilities_in_common(4, None) == {Capability.IMAGES_BY_HASH, Capability.PINGS, Capability.WINDOWS}
+    assert capabilities_in_common(1, None) == frozenset()
+    assert capabilities_in_common(13, None) == frozenset(Capability)
+    assert capabilities_in_common(13, ["files", "a-name-nobody-knows"]) == {Capability.FILES}
 
 
 async def test_a_session_there_shows_here(two_servers):

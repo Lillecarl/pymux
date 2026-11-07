@@ -16,9 +16,10 @@ from argparse import Namespace
 import anyio
 import pytest
 from libpymux.protocol import (
-    IMAGES_BY_HASH,
+    CAPABILITY_SINCE,
     OLDEST_PEER_VERSION,
     PEER_VERSION,
+    Capability,
     Field,
     Message,
     Packet,
@@ -273,7 +274,7 @@ async def test_an_image_back_from_the_alternate_page_crosses_by_hash(pymux, vers
         owner.feed_output("\x1b[?1049l")
         await until(client_end, sink, lambda: bool(graphics.placements))
         (image,) = [image for frame in frames for image in frame[Field.FRAME].get("images", ())]
-        assert ("data" in image) == (version < IMAGES_BY_HASH)
+        assert ("data" in image) == (version < CAPABILITY_SINCE[Capability.IMAGES_BY_HASH])
         assert graphics.images_by_id[7].data == b"\xff\x00\x00"
 
         pymux.stop()

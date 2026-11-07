@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from typing import TYPE_CHECKING
 
-from libpymux.protocol import PEER_RECORDINGS
+from libpymux.protocol import Capability
 
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import the_client
@@ -71,7 +71,7 @@ def _to_the_owner(peer: Peer) -> Callable[[list[Path]], str | None]:
     "What sends a finished recording's files to `peer`'s owner, or None while it cannot take them."
 
     def forward(files: list[Path]) -> str | None:
-        if not peer.connected or peer.version < PEER_RECORDINGS:
+        if not peer.connected or not peer.can(Capability.RECORDINGS):
             return None
         peer.send_recording(files)
         recorded = next((one.name for one in files if one.suffix == ".bin"), files[0].name)

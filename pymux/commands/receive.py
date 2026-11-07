@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from libpymux.protocol import PEER_FILES
+from libpymux.protocol import Capability
 
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import answer, find_pane, refuse_without_a_waiter
@@ -54,7 +54,7 @@ def _sender(pymux: Pymux) -> tuple[Pane, Sender]:
     client = pymux.outward.download_client(pane)
     # The person who used a mirror of this pane last sends, through
     # the peer they attach to. Lillecarl/pymux#947.
-    link = pymux.outward.peer_used_after(pane, client, PEER_FILES)
+    link = pymux.outward.peer_used_after(pane, client, Capability.FILES)
     if link is not None:
         return pane, link.files.sender(pane)
     refused = why_it_sends_no_file(client)

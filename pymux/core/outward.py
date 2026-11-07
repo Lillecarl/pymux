@@ -13,7 +13,7 @@ import base64
 import shlex
 from typing import TYPE_CHECKING, Any
 
-from libpymux.protocol import PEER_ACTS, Field, Message, Packet
+from libpymux.protocol import Capability, Field, Message, Packet
 from prompt_toolkit.application.current import get_app_or_none
 from prompt_toolkit.clipboard import ClipboardData
 from pyte.osc import CLEAR_SCROLLBACK, Osc
@@ -226,25 +226,25 @@ class Outward:
         two servers got the URL twice. The one used last acts: this
         server, or the peer whose person used a mirror after every
         client here. `open-url-target broadcast` lets every server open
-        a URL. A peer older than `PEER_ACTS` acts anyway. Lillecarl/pymux#854.
+        a URL. A peer without `Capability.ACTS` acts anyway. Lillecarl/pymux#854.
         """
         links = [link for link in self.pymux.peer_links() if link.hears(pane)]
         is_url = open_url_of(param) is not None
         if is_url and self.pymux.current_session.options.open_url_target == OpenUrlTarget.BROADCAST:
             return True, links
-        peer = max((link for link in links if link.version >= PEER_ACTS), key=lambda link: link.last_used, default=None)
+        peer = max((link for link in links if link.can(Capability.ACTS)), key=lambda link: link.last_used, default=None)
         latest = self.pymux.latest_client() if is_url else self.download_client(pane)
         if peer is not None and (latest is None or peer.last_used > latest.last_used):
             return False, [peer]
         return True, []
 
-    def peer_used_after(self, pane: Pane, client: ClientState | None, version: int) -> PeerLink | None:
+    def peer_used_after(self, pane: Pane, client: ClientState | None, capability: Capability) -> PeerLink | None:
         """
-        The peer, of `version` or later, whose person used a mirror of
+        The peer whose link carries `capability`, and whose person used a mirror of
         `pane` after `client`: its terminal answers what the pane's
         program asks of one. Lillecarl/pymux#902.
         """
-        links = [link for link in self.pymux.peer_links() if link.hears(pane) and link.version >= version]
+        links = [link for link in self.pymux.peer_links() if link.hears(pane) and link.can(capability)]
         link = max(links, key=lambda link: link.last_used, default=None)
         if link is None or (client is not None and client.last_used >= link.last_used):
             return None

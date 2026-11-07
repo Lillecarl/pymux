@@ -46,7 +46,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, Final
 
 import anyio
-from libpymux.protocol import PEER_FILE_TRANSFER, Field, Packet
+from libpymux.protocol import Capability, Field, Packet
 from ptyhost.process import Process
 from pyte.keep import Keep
 from pyte.osc import Osc
@@ -168,7 +168,7 @@ class KittyTransfers:
         self._prune(now)
         if command.action in (Action.SEND, Action.RECEIVE):
             client = self.pymux.outward.download_client(pane)
-            link = self.pymux.outward.peer_used_after(pane, client, PEER_FILE_TRANSFER)
+            link = self.pymux.outward.peer_used_after(pane, client, Capability.FILE_TRANSFER)
             if link is not None:
                 session = _Session(pane, link.connection, Route.PEER, now)
                 self._sessions[(link.connection, command.id)] = session

@@ -40,7 +40,7 @@ from typing import TYPE_CHECKING, Any
 
 import anyio
 import anyio.abc
-from libpymux.protocol import PEER_IMAGE_PASTE, Field, Packet
+from libpymux.protocol import Capability, Field, Packet
 from prompt_toolkit.application.current import get_app
 from prompt_toolkit.clipboard import ClipboardData
 
@@ -732,7 +732,7 @@ class WaylandServer:
         window = session.arrangement.get_active_window_for(client_state.app) if session is not None else None
         program = window.active_pane.process if window is not None and window.active_pane is not None else None
         if isinstance(program, RemoteProgram):
-            if program.peer.version >= PEER_IMAGE_PASTE:
+            if program.peer.can(Capability.IMAGE_PASTE):
                 program.peer.send({Field.CMD: Packet.MIRROR_CLIPBOARD_IMAGE, Field.DATA: data})
             return
         self.hold_image(image)

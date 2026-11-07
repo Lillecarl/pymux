@@ -11,7 +11,16 @@ from typing import (
 )
 
 import anyio
-from libpymux.protocol import OLDEST_PEER_VERSION, PEER_VERSION, Field, Message, Packet, peer_upgrade, peer_version
+from libpymux.protocol import (
+    OLDEST_PEER_VERSION,
+    PEER_VERSION,
+    Field,
+    Message,
+    Packet,
+    capabilities_in_common,
+    peer_upgrade,
+    peer_version,
+)
 from libpymux.wire import encode_json
 from prompt_toolkit.application.current import create_app_session
 from prompt_toolkit.data_structures import Size
@@ -332,8 +341,16 @@ class ServerConnection:
             self.spawn(refuse())
             return
         host = str(packet.get(Field.SERVER) or "")
-        logger.info("A peer%s links, at version %s.", " on %s" % (host,) if host else "", packet.get(Field.VERSION, 0))
-        link = PeerLink(self, packet.get(Field.WIRE), peer_version(packet.get(Field.VERSION)), host)
+        version = peer_version(packet.get(Field.VERSION))
+        capabilities = capabilities_in_common(version, packet.get(Field.CAPABILITIES))
+        # One number no longer says what the link carries, so the log names it.
+        logger.info(
+            "A peer%s links, at version %s, with %s.",
+            " on %s" % (host,) if host else "",
+            packet.get(Field.VERSION, 0),
+            ", ".join(sorted(capabilities)) or "no capabilities",
+        )
+        link = PeerLink(self, packet.get(Field.WIRE), version, host, capabilities)
         self.role = link
         self.spawn(link.run())
 

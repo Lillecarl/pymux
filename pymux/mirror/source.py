@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from libpymux.protocol import IMAGES_BY_HASH, PEER_DND, Field, Message, Packet
+from libpymux.protocol import Capability, Field, Message, Packet
 from pyte.grid import GridWriter
 
 from ..log import logger
@@ -39,7 +39,7 @@ class MirrorSource:
         self.link = link
         self.pane = pane
         self.control = control
-        self.writer = GridWriter(by_hash=link.version >= IMAGES_BY_HASH)
+        self.writer = GridWriter(by_hash=link.can(Capability.IMAGES_BY_HASH))
         #: The peer said nobody there watches this pane.
         self.paused = False
         #: A frame waits in the link's queue.
@@ -126,7 +126,7 @@ class MirrorSource:
             place = self.copying.place
         frame: dict[str, Any] | None = self.writer.frame(screen)
         owed, self.answer_owed = self.answer_owed, False
-        if self.link.version >= PEER_DND:
+        if self.link.can(Capability.DND):
             # The pane's own screen holds it, and copy mode's holds none.
             registration = self.control.screen.kitty_dnd.registration(
                 self.link.connection.pymux.drag_and_drop.machine_id

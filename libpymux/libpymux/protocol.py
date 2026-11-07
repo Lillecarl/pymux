@@ -32,26 +32,19 @@ from enum import StrEnum
 from typing import Any
 
 __all__ = [
+    "CAPABILITY_SINCE",
     "END",
-    "IMAGES_BY_HASH",
     "OLDEST_PEER_VERSION",
-    "PEER_ACTS",
-    "PEER_DND",
-    "PEER_FILES",
-    "PEER_FILE_TRANSFER",
-    "PEER_IMAGE_PASTE",
-    "PEER_PINGS",
-    "PEER_PROGRAM_STATUS",
-    "PEER_RECORDINGS",
-    "PEER_RICH_CLIPBOARD",
     "PEER_VERSION",
-    "PEER_WINDOWS",
     "READ_SIZE",
+    "Capability",
     "Field",
     "Framer",
     "Message",
     "Mode",
     "Packet",
+    "capabilities_in_common",
+    "capabilities_named",
     "peer_upgrade",
     "peer_version",
 ]
@@ -72,67 +65,103 @@ READ_SIZE = 1 << 20
 #: build still speaks. A build that changes the link so that an older
 #: one misreads it raises `PEER_VERSION`; one that stops speaking the
 #: older form raises `OLDEST_PEER_VERSION` too. Every field is named
-#: and has a default, so most changes need neither. Lillecarl/pymux#759.
+#: and has a default, so most changes need neither, and a change that
+#: only adds is a `Capability`. Lillecarl/pymux#759, Lillecarl/pymux#959.
 PEER_VERSION = 13
 OLDEST_PEER_VERSION = 1
 
-#: From this version a frame may name an image the peer stored by its
-#: hash instead of sending it again (`pyte.grid`).
-IMAGES_BY_HASH = 2
 
-#: From this version a peer answers a ping, so an owner may drop a link
-#: that stops answering. Lillecarl/pymux#877.
-PEER_PINGS = 3
+class Capability(StrEnum):
+    """
+    One thing a peer link carries that an older build does not.
 
-#: From this version an owner lends a Wayland window pane: its pixels as
-#: `mirror-window-frame`s, and the person's input back as
-#: `mirror-window-input`. Lillecarl/pymux#888.
-PEER_WINDOWS = 4
+    **A feature that adds to the link is a capability, not a version.**
+    `PEER_VERSION` moves only when a change would make an older side
+    misread the link. Each side names its capabilities in `peer` and
+    `peer-accepted`, and the link uses those both named. Two workspaces
+    that each add one no longer claim the same number, and one can be
+    dropped alone. Lillecarl/pymux#959.
+    """
 
-#: From this version a `mirror-osc` that opens a URL or saves a download
-#: says under `acts` whether this peer is the one server that does it.
-#: Lillecarl/pymux#854.
-PEER_ACTS = 5
+    #: A frame may name an image the peer stored by its hash instead of
+    #: sending it again (`pyte.grid`).
+    IMAGES_BY_HASH = "images-by-hash"
+    #: A peer answers a ping, so an owner may drop a link that stops
+    #: answering. Lillecarl/pymux#877.
+    PINGS = "pings"
+    #: An owner lends a Wayland window pane: its pixels as
+    #: `mirror-window-frame`s, and the person's input back as
+    #: `mirror-window-input`. Lillecarl/pymux#888.
+    WINDOWS = "windows"
+    #: A `mirror-osc` that opens a URL or saves a download says under
+    #: `acts` whether this peer is the one server that does it.
+    #: Lillecarl/pymux#854.
+    ACTS = "acts"
+    #: A pane's kitty clipboard write reaches a peer whole, as
+    #: `mirror-clipboard-write`, and not only its text as OSC 52; and a
+    #: pane's read may go to a peer's terminal (`mirror-clipboard-read`).
+    #: Lillecarl/pymux#902.
+    RICH_CLIPBOARD = "rich-clipboard"
+    #: A frame carries what a pane's program registered for kitty's drag
+    #: and drop, under `dnd`, and its OSC 72 packets cross as
+    #: `mirror-dnd`. Lillecarl/pymux#903.
+    DND = "dnd"
+    #: A mirrored pane's kitty file transfer (OSC 5113) crosses as
+    #: `mirror-kitty-transfer`, and its pacing as
+    #: `mirror-kitty-transfer-taken`. Lillecarl/pymux#912.
+    FILE_TRANSFER = "file-transfer"
+    #: A pane's OSC 7501 records cross whole, as `mirror-program-status`,
+    #: whenever they change. Lillecarl/pymux#928.
+    PROGRAM_STATUS = "program-status"
+    #: Either side answers `report-log`, and `peer` names the peer's host
+    #: under `server`. Lillecarl/pymux#934.
+    LOGS = "logs"
+    #: A peer sends the owner the files of a client recording made on
+    #: one of the owner's sessions, as `recording`. Lillecarl/pymux#955.
+    RECORDINGS = "recordings"
+    #: A peer passes on what a client's `clipboard-image` says, as
+    #: `mirror-clipboard-image`, for the owner's compositor to offer.
+    #: Lillecarl/pymux#956.
+    IMAGE_PASTE = "image-paste"
+    #: The owner asks a peer for the files of `pymux receive`, as
+    #: `mirror-send-files`, and for the names that complete one, as
+    #: `mirror-list-files`. The peer's client answers, and the peer
+    #: passes each answer back. Lillecarl/pymux#947.
+    FILES = "files"
 
-#: From this version a pane's kitty clipboard write reaches a peer whole,
-#: as `mirror-clipboard-write`, and not only its text as OSC 52; and a
-#: pane's read may go to a peer's terminal (`mirror-clipboard-read`).
-#: Lillecarl/pymux#902.
-PEER_RICH_CLIPBOARD = 6
 
-#: From this version a frame carries what a pane's program registered for
-#: kitty's drag and drop, under `dnd`, and its OSC 72 packets cross as
-#: `mirror-dnd`. Lillecarl/pymux#903.
-PEER_DND = 7
+#: The version each capability came with, while each was a version. A
+#: side that names no capabilities is older than they are, and has every
+#: one its version reaches. A new capability is not added here.
+CAPABILITY_SINCE: dict[Capability, int] = {
+    Capability.IMAGES_BY_HASH: 2,
+    Capability.PINGS: 3,
+    Capability.WINDOWS: 4,
+    Capability.ACTS: 5,
+    Capability.RICH_CLIPBOARD: 6,
+    Capability.DND: 7,
+    Capability.FILE_TRANSFER: 8,
+    Capability.PROGRAM_STATUS: 9,
+    Capability.LOGS: 10,
+    Capability.RECORDINGS: 11,
+    Capability.IMAGE_PASTE: 12,
+    Capability.FILES: 13,
+}
 
-#: From this version a mirrored pane's kitty file transfer (OSC 5113)
-#: crosses as `mirror-kitty-transfer`, and its pacing as
-#: `mirror-kitty-transfer-taken`. Lillecarl/pymux#912.
-PEER_FILE_TRANSFER = 8
 
-#: From this version a pane's OSC 7501 records cross whole, as
-#: `mirror-program-status`, whenever they change. Lillecarl/pymux#928.
-PEER_PROGRAM_STATUS = 9
+def capabilities_named() -> list[str]:
+    "What this side names under `capabilities`."
+    return [capability.value for capability in Capability]
 
-#: From this version either side answers `report-log`, and `peer` names
-#: the peer's host under `server`. Lillecarl/pymux#934.
-PEER_LOGS = 10
 
-#: From this version a peer sends the owner the files of a client
-#: recording made on one of the owner's sessions, as `recording`.
-#: Lillecarl/pymux#955.
-PEER_RECORDINGS = 11
-
-#: From this version a peer passes on what a client's `clipboard-image`
-#: says, as `mirror-clipboard-image`, for the owner's compositor to
-#: offer. Lillecarl/pymux#956.
-PEER_IMAGE_PASTE = 12
-
-#: From this version the owner asks a peer for the files of `pymux
-#: receive`, as `mirror-send-files`, and for the names that complete one,
-#: as `mirror-list-files`. The peer's client answers, and the peer passes
-#: each answer back. Lillecarl/pymux#947.
-PEER_FILES = 13
+def capabilities_in_common(version: int, named: object) -> frozenset[Capability]:
+    """
+    What a link carries, with a side that speaks `version` and named
+    `named` (a list, or nothing from a side older than names).
+    """
+    if isinstance(named, list):
+        return frozenset(capability for capability in Capability if capability.value in named)
+    return frozenset(capability for capability, since in CAPABILITY_SINCE.items() if version >= since)
 
 
 def peer_upgrade(version: object, oldest: object) -> str | None:
@@ -631,6 +660,9 @@ class Field(StrEnum):
     #: a side speaks, and the oldest (`PEER_VERSION`).
     VERSION = "version"
     OLDEST = "oldest"
+    #: In `peer` and `peer-accepted`: what a side's link can carry,
+    #: as `Capability` names. Lillecarl/pymux#959.
+    CAPABILITIES = "capabilities"
     #: In `mirror-key`: what the person's terminal does where terminals
     #: split (`pyte.keys.events.KeyProfile`), by field name. In
     #: `mirror-mouse`: what the mouse did. Lillecarl/pymux#759.

@@ -21,15 +21,13 @@ from typing import TYPE_CHECKING, ClassVar
 import anyio
 from libpymux.protocol import (
     OLDEST_PEER_VERSION,
-    PEER_ACTS,
-    PEER_PINGS,
-    PEER_PROGRAM_STATUS,
-    PEER_RICH_CLIPBOARD,
     PEER_VERSION,
-    PEER_WINDOWS,
+    Capability,
     Field,
     Message,
     Packet,
+    capabilities_in_common,
+    capabilities_named,
 )
 from libpymux.wire import MSGPACK_ZSTD, choose, encode_json, encode_msgpack
 from prompt_toolkit.data_structures import Size
@@ -100,6 +98,7 @@ class PeerLink:
         "terminal": Keep.DROPPED,
         "last_used": Keep.DROPPED,
         "version": Keep.DROPPED,
+        "capabilities": Keep.DROPPED,
         "watching": Keep.DROPPED,
         "_tree_changed": Keep.DROPPED,
         "_tree_sent": Keep.DROPPED,
@@ -110,9 +109,16 @@ class PeerLink:
         "files": Keep.DROPPED,
     }
 
-    def __init__(self, connection: ServerConnection, offered: object, version: int, host: str = "") -> None:
+    def __init__(
+        self,
+        connection: ServerConnection,
+        offered: object,
+        version: int,
+        host: str = "",
+        capabilities: frozenset[Capability] | None = None,
+    ) -> None:
         self.connection = connection
-        #: The machine of the peer, as its `peer` said; "" from one older than `PEER_LOGS`.
+        #: The machine of the peer, as its `peer` said; "" from one without `Capability.LOGS`.
         self.host = host
         #: The `show-log -p` requests that wait for the peer. Lillecarl/pymux#934.
         self.log_asks = LogAsks(self.queue)
@@ -120,6 +126,9 @@ class PeerLink:
         self.files = LinkFiles(self.queue)
         #: The version of the link both sides speak (`peer_version`).
         self.version = version
+        #: What both sides named, or what `version` implies when the
+        #: peer named nothing (`capabilities_in_common`).
+        self.capabilities = capabilities if capabilities is not None else capabilities_in_common(version, None)
         self.sources: dict[PaneId, MirrorSource] = {}
         #: The window panes the peer mirrors. Lillecarl/pymux#888.
         self.windows: dict[PaneId, MirrorWindowSource] = {}
@@ -148,7 +157,18 @@ class PeerLink:
             connection.encode = encode_msgpack
         # The peer checks this side's version against its own before it
         # reads anything else.
-        self.queue({Field.CMD: Packet.PEER_ACCEPTED, Field.VERSION: PEER_VERSION, Field.OLDEST: OLDEST_PEER_VERSION})
+        self.queue(
+            {
+                Field.CMD: Packet.PEER_ACCEPTED,
+                Field.VERSION: PEER_VERSION,
+                Field.OLDEST: OLDEST_PEER_VERSION,
+                Field.CAPABILITIES: capabilities_named(),
+            }
+        )
+
+    def can(self, capability: Capability) -> bool:
+        "Whether the link carries `capability`."
+        return capability in self.capabilities
 
     def queue(self, packet: Message) -> None:
         "Encode a packet now and queue it behind the others."
@@ -166,7 +186,7 @@ class PeerLink:
 
     async def run(self) -> None:
         "Write what is queued until the connection goes, then let every pane go."
-        if self.version >= PEER_PINGS:
+        if self.can(Capability.PINGS):
             # A peer whose machine slept leaves this link a ghost that
             # still sizes the panes it watched. Lillecarl/pymux#877.
             self.connection.spawn(self.connection.watch_liveness(self.ping))
@@ -226,7 +246,7 @@ class PeerLink:
             Field.CODE: code,
             Field.DATA: param,
         }
-        if code == Osc.TERMINAL_EXTENSION and self.version >= PEER_ACTS:
+        if code == Osc.TERMINAL_EXTENSION and self.can(Capability.ACTS):
             packet[Field.ACTS] = acts
         self.queue(packet)
 
@@ -237,7 +257,7 @@ class PeerLink:
         the process drops records with no report. Lillecarl/pymux#928.
         """
         statuses = getattr(pane.screen, "program_status", None)
-        if self.version < PEER_PROGRAM_STATUS or statuses is None or not self.hears(pane):
+        if not self.can(Capability.PROGRAM_STATUS) or statuses is None or not self.hears(pane):
             return
         if self._program_status_sent.get(pane.pane_id, 0) == statuses.version:
             return
@@ -253,10 +273,10 @@ class PeerLink:
     def pane_wrote(self, pane: Pane, write: ClipboardWrite, text: str | None) -> None:
         """
         Pass a pane's kitty clipboard write on to the peer
-        (`RichClipboard.serve_write`). A peer older than
-        `PEER_RICH_CLIPBOARD` gets `text`, the OSC 52 of its text, if any.
+        (`RichClipboard.serve_write`). A peer without
+        `Capability.RICH_CLIPBOARD` gets `text`, the OSC 52 of its text, if any.
         """
-        if self.version < PEER_RICH_CLIPBOARD:
+        if not self.can(Capability.RICH_CLIPBOARD):
             if text is not None:
                 self.pane_said(pane, Osc.CLIPBOARD, text, acts=False)
             return
@@ -507,7 +527,7 @@ class PeerLink:
         if pane_id in self.windows:
             return
         error = None
-        if self.version < PEER_WINDOWS:
+        if not self.can(Capability.WINDOWS):
             error = "it shows a Wayland window, and the server mirroring it needs an upgrade to show one"
         elif widget.host is not self.connection.pymux.wayland:
             error = "it shows a Wayland window that this server mirrors itself"
