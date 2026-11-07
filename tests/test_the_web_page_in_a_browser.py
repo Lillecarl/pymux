@@ -106,6 +106,41 @@ async def test_a_glyph_of_another_width_moves_nothing_after_it(server):
         assert column == pytest.approx(BORDER_COLUMN, abs=0.05), json.dumps(column)
 
 
+#: Two streams, one after the other, that give style 1 two meanings, and
+#: the colour the second stream's run draws in.
+TWO_STREAMS = """
+(() => {
+  const pane = document.createElement("pymux-pane");
+  document.body.append(pane);
+  const welcome = { type: "welcome", revision: 0, writable: false, css: "", size: { rows: 1, columns: 4 } };
+  const frame = (colour, text) => ({
+    type: "frame", revision: 1, styles: { "1": { s: "color: " + colour } }, rows: { "0": [[1, text, 1]] },
+  });
+  pane.receive(welcome);
+  pane.receive(frame("rgb(255, 0, 0)", "a"));
+  pane.receive(welcome);
+  pane.receive(frame("rgb(0, 0, 255)", "b"));
+  const run = pane.shadowRoot.querySelector(".row > span");
+  return [run.textContent, getComputedStyle(run).color];
+})()
+"""
+
+
+async def test_a_new_stream_draws_with_its_own_style_table(server):
+    """
+    A reconnect, after an upgrade or a dropped network, numbers the
+    styles from one again. Lillecarl/pymux#953.
+    """
+    async with a_page(server, "sleep 60"):
+        with anyio.fail_after(20):
+            while not await call(
+                server, "browser.evaluate", name="page", expression="!!customElements.get('pymux-pane')"
+            ):
+                await anyio.sleep(0.1)
+        drawn = await call(server, "browser.evaluate", name="page", expression=TWO_STREAMS)
+        assert drawn == ["b", "rgb(0, 0, 255)"]
+
+
 async def test_the_button_fills_the_screen_with_the_pane(server):
     "Lillecarl/pymux#951."
     async with a_page(server, "sleep 60"):

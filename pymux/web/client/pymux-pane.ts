@@ -785,6 +785,13 @@ export class PymuxPane extends HTMLElement {
       this.#writable = Boolean(frame.writable);
       this.#welcomed = true;
       this.#failures = 0;
+      // **A new stream numbers its styles from one again.** A table kept
+      // from the last stream gave each number its old meaning: after a
+      // reconnect, bold drew on a background and the status line in the
+      // theme before the last. Lillecarl/pymux#953.
+      this.#styles.clear();
+      this.#styleSheet.replaceSync("");
+      this.#cellWidths.clear();
       this.#adopt(this.#themeSheet, frame.css || "");
       this.#resize(frame.size);
       // A new stream has been told nothing yet.
