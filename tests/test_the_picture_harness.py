@@ -9,11 +9,12 @@ and the first of them is the one a burst got wrong.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from pyterm_pytest.seats import (
     APPEAR_TIMEOUT,
     BLINK_FRAMES,
     BLINK_GAP,
-    BLINK_START,
     SETTLE_TIMEOUT,
 )
 from take_picture import BLINK_FIXTURES, HOLD, blink_program
@@ -36,11 +37,15 @@ def test_a_blink_fixture_holds_its_window_past_its_whole_burst():
     that ends inside its own burst reads as a screenshot that timed
     out, which is what `bare.7` of `cursor-blink` did on a loaded
     machine. Lillecarl/pymux#462.
+
+    The burst starts on the fixture's fence, which the seat waits for
+    as long as it waits for a window. Lillecarl/pymux#588.
     """
-    burst = BLINK_START + BLINK_FRAMES * (BLINK_GAP + A_SLOW_PICTURE)
+    burst = APPEAR_TIMEOUT + BLINK_FRAMES * (BLINK_GAP + A_SLOW_PICTURE)
 
     for name in BLINK_FIXTURES:
-        assert holds_for(blink_program(name)) >= burst, "%s holds its window for less than its burst takes" % (name,)
+        program = blink_program(name, Path("/nowhere"), name)
+        assert holds_for(program) >= burst, "%s holds its window for less than its burst takes" % (name,)
 
 
 def test_a_still_fixture_holds_its_window_past_all_three_waits():

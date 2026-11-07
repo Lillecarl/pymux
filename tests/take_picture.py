@@ -142,6 +142,7 @@ from pyterm_pytest.seats import (
     _tail,
     changed_region,
     differences,
+    fence,
     fully_overlaps,
     open_the_seats,
     the_same_drawing,
@@ -568,16 +569,17 @@ FIXTURES.update({name: partial(writer, height=height) for name, (writer, height)
 #:
 #: The longer sleep costs no time. `Seat.running` kills the terminal as
 #: soon as the burst has its frames.
+#:
+#: The burst starts on the fence each one ends its drawing with, not on
+#: the clock. Lillecarl/pymux#588.
 BLINK_FIXTURES = {
-    "cursor-blink": (
-        "printf '\\033[2J\\033[H'\nprintf 'the cursor is after this: '\nprintf '\\033[10;1Hx'\nexec sleep %d\n" % HOLD
-    ),
+    "cursor-blink": "printf '\\033[2J\\033[H'\nprintf 'the cursor is after this: '\nprintf '\\033[10;1Hx'\n",
 }
 
 
-def blink_program(name):
-    "The program of one blink fixture."
-    return BLINK_FIXTURES[name]
+def blink_program(name, work, token):
+    "The program of one blink fixture: its drawing, its fence, and the hold."
+    return BLINK_FIXTURES[name] + fence(work, token) + "exec sleep %d\n" % HOLD
 
 
 # ----------------------------------------------------------------------
@@ -1146,19 +1148,23 @@ def blink_of(terminal, seat, name, work, out):
     room = out / terminal.name / name
     room.mkdir(parents=True, exist_ok=True)
 
-    program_path = work / ("%s.sh" % name)
-    program_path.write_text(blink_program(name))
+    # A token each, so the second side never finds the first one's
+    # fence still in a clipboard the seat kept.
+    programs = {}
+    for side in ("bare", "pymux"):
+        programs[side] = work / ("%s-%s.sh" % (name, side))
+        programs[side].write_text(blink_program(name, work, "%s-%s" % (name, side)))
 
     config_path = work / "full-screen.conf"
     config_path.write_text(PICTURE_CONFIG)
 
     answers = []
     for side, command in (
-        ("bare", bare_command(program_path)),
+        ("bare", bare_command(programs["bare"])),
         (
             "pymux",
             pymux_command(
-                "sh %s" % program_path,
+                "sh %s" % programs["pymux"],
                 work / ("%s-%s.sock" % (terminal.name, name)),
                 config_path,
                 room / "pymux-server.log",
@@ -1174,6 +1180,7 @@ def blink_of(terminal, seat, name, work, out):
                 room / ("%s.png" % side),
                 room / ("%s.log" % side),
                 BLINK_FRAMES,
+                fenced="%s-%s" % (name, side),
             )
         except RuntimeError as reason:
             raise RuntimeError("%s\n%s" % (reason, every_log(room, seat))) from None
