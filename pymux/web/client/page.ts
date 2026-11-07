@@ -34,6 +34,12 @@ const token = asked.get("t");
 // the line below reads `writable` off it.
 const element = needed(document.querySelector("pymux-pane"), "pane");
 const about = needed(document.getElementById("about"), "caption");
+const fullscreen = needed(document.getElementById("fullscreen"), "full screen button");
+
+// The click is the gesture full screen needs. Lillecarl/pymux#951.
+fullscreen.addEventListener("click", () => {
+  void element.fullscreen().catch((error: unknown) => say(`Full screen was refused: ${String(error)}`));
+});
 
 function say(text: string): void {
   about.textContent = text;

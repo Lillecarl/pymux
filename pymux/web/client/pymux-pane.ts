@@ -189,6 +189,19 @@ export type ViewerMessage =
   | SizeMessage
   | MouseMessage;
 
+/** The two calls of the Keyboard Lock API, which TypeScript's DOM types lack. */
+interface KeyboardLock {
+  lock(keys?: string[]): Promise<void>;
+  unlock(): void;
+}
+
+/** The browser's Keyboard Lock, or undefined where it has none. */
+function keyboardLock(): KeyboardLock | undefined {
+  return (navigator as Navigator & { keyboard?: Partial<KeyboardLock> }).keyboard?.lock
+    ? (navigator as Navigator & { keyboard: KeyboardLock }).keyboard
+    : undefined;
+}
+
 /** A browser's `MouseEvent.button`, as the mouse message names it. */
 const BUTTONS: MouseMessage["button"][] = ["left", "middle", "right"];
 
@@ -470,6 +483,10 @@ export class PymuxPane extends HTMLElement {
       this.#sendMouse(event, "move", this.#pressed ? BUTTONS[this.#heldButton(event)] : "none"),
     );
     this.#screen.addEventListener("wheel", (event) => this.#onWheel(event), { passive: false });
+    // Left by Escape or by the browser: the keys go back with it.
+    this.addEventListener("fullscreenchange", () => {
+      if (!this.isFullscreen) keyboardLock()?.unlock();
+    });
     // A right click is the program's or pymux's menu, not the browser's.
     this.#screen.addEventListener("contextmenu", (event) => {
       if (this.#writable) event.preventDefault();
@@ -642,6 +659,37 @@ export class PymuxPane extends HTMLElement {
 
   get socket(): WebSocket | null {
     return this.#socket;
+  }
+
+  /**
+   * Fill the screen with this element, and take every key the browser
+   * lets a page take. Call it from a click or a key: a browser refuses
+   * full screen otherwise.
+   *
+   * **Full screen alone keeps Chromium's own shortcuts** -- Ctrl-W, Ctrl-T,
+   * Ctrl-N -- and the Keyboard Lock API hands them to the page, which
+   * Chromium honours only in full screen. Firefox and Safari have no
+   * Keyboard Lock, so there full screen is the whole gain. Holding Escape
+   * still leaves. Lillecarl/pymux#951.
+   */
+  async fullscreen(): Promise<void> {
+    if (document.fullscreenElement !== this) await this.requestFullscreen();
+    // Best effort: a browser that refuses the lock keeps its shortcuts,
+    // and full screen is still worth having.
+    await keyboardLock()
+      ?.lock()
+      .catch(() => undefined);
+  }
+
+  /** Leave full screen, and give the keys back to the browser. */
+  async exitFullscreen(): Promise<void> {
+    keyboardLock()?.unlock();
+    if (document.fullscreenElement === this) await document.exitFullscreen();
+  }
+
+  /** Whether this element fills the screen. */
+  get isFullscreen(): boolean {
+    return document.fullscreenElement === this;
   }
 
   /** Whether the server said this stream takes input. */

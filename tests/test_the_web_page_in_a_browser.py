@@ -106,6 +106,28 @@ async def test_a_glyph_of_another_width_moves_nothing_after_it(server):
         assert column == pytest.approx(BORDER_COLUMN, abs=0.05), json.dumps(column)
 
 
+async def test_the_button_fills_the_screen_with_the_pane(server):
+    "Lillecarl/pymux#951."
+    async with a_page(server, "sleep 60"):
+        with anyio.fail_after(20):
+            while not await call(
+                server, "browser.evaluate", name="page", expression="!!document.getElementById('fullscreen')"
+            ):
+                await anyio.sleep(0.1)
+        await call(server, "browser.click", name="page", selector="#fullscreen")
+        with anyio.fail_after(10):
+            while (
+                await call(
+                    server, "browser.evaluate", name="page", expression="document.fullscreenElement?.localName ?? ''"
+                )
+                != "pymux-pane"
+            ):
+                await anyio.sleep(0.1)
+        assert "refused" not in await call(
+            server, "browser.evaluate", name="page", expression="document.getElementById('about').textContent"
+        )
+
+
 async def test_a_click_on_the_page_reaches_a_program_that_asked_for_the_mouse(server):
     """
     The whole way: Chromium's click, the element's cell, the server's
