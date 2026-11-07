@@ -38,6 +38,8 @@ from typing import TYPE_CHECKING, Final
 import anyio
 import apsw
 
+from pymux import async_sqlite
+
 if TYPE_CHECKING:
     import argparse
 
@@ -361,7 +363,7 @@ class ActionLog:
 
 async def _open(path: Path) -> apsw.AsyncConnection:
     await anyio.Path(path.parent).mkdir(parents=True, exist_ok=True)
-    db = await apsw.Connection.as_async(str(path))
+    db = await async_sqlite.connect(str(path))
     try:
         version = await db.async_run(_version, db)
         if version is not None and version != SCHEMA_VERSION:
@@ -372,7 +374,7 @@ async def _open(path: Path) -> apsw.AsyncConnection:
             for suffix in ("-wal", "-shm"):
                 with contextlib.suppress(FileNotFoundError):
                     await anyio.Path(str(path) + suffix).unlink()
-            db = await apsw.Connection.as_async(str(path))
+            db = await async_sqlite.connect(str(path))
         await db.async_run(_prepare, db)
     except BaseException:
         await _close(db)

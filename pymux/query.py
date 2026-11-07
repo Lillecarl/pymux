@@ -29,6 +29,8 @@ import anyio
 import apsw
 import apsw.ext
 
+from pymux import async_sqlite
+
 from .options.tables import LIVE_ROWS, JobTagRow, SavedQueryRow, affinity
 
 if TYPE_CHECKING:
@@ -493,7 +495,7 @@ async def ask(pymux: Pymux, query: str, params: dict[str, str], limit: int, time
     Answer one question. A question that outlives `timeout` seconds
     (0: no bound) is interrupted and raises `TimeoutError`.
     """
-    db = await apsw.Connection.as_async(":memory:")
+    db = await async_sqlite.connect(":memory:")
     try:
         await db.async_run(register, db, tables_of(pymux), True)
         bound = anyio.fail_after(timeout) if timeout else nullcontext()
