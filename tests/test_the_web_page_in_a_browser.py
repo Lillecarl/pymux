@@ -21,6 +21,11 @@ from pymux.web.server import a_token, serve
 
 pytestmark = pytest.mark.skipif(CHROMIUM is None, reason="no chromium on the PATH")
 
+#: How long one test of the page may take, from the session to the
+#: browser's close. Each takes under five seconds; a hang fails here and
+#: says where it waited.
+PAGE_DEADLINE = 30
+
 #: Where the border glyph stands in the row: ten narrow letters before it.
 BORDER_COLUMN = 10
 
@@ -58,11 +63,19 @@ def a_free_port() -> int:
 
 
 @asynccontextmanager
-async def a_page(server, command: str, writable: bool = False):
+async def a_page(server, command: str, writable: bool = False, session: bool = False):
     """
     A new session running `command`, and the demo page showing its pane
     in Chromium as the browser named "page". Answers the pane's id.
+    `session` shows the session as a client draws it instead.
     """
+    with anyio.fail_after(PAGE_DEADLINE):
+        async with _a_page(server, command, writable, session) as pane:
+            yield pane
+
+
+@asynccontextmanager
+async def _a_page(server, command: str, writable: bool, session: bool):
     await server.cmd(["new-session", "-d", command])
     # The session this made is the one whose pane shows the row; a server
     # may start with one of its own.
@@ -73,7 +86,10 @@ async def a_page(server, command: str, writable: bool = False):
 
     async with anyio.create_task_group() as tasks:
         tasks.start_soon(lambda: serve(server.connection.socket_path, "127.0.0.1", port, token, writable))
-        url = "http://127.0.0.1:%d/?pane=%s&t=%s" % (port, pane.replace("%", "%25"), token)
+        if session:
+            url = "http://127.0.0.1:%d/?session&t=%s" % (port, token)
+        else:
+            url = "http://127.0.0.1:%d/?pane=%s&t=%s" % (port, pane.replace("%", "%25"), token)
         await call(server, "browser.open", name="page", kind="chromium", seat="headless", url=url, arguments=ARGUMENTS)
         try:
             yield pane
@@ -161,6 +177,79 @@ async def test_the_button_fills_the_screen_with_the_pane(server):
         assert "refused" not in await call(
             server, "browser.evaluate", name="page", expression="document.getElementById('about').textContent"
         )
+
+
+async def test_escape_on_the_page_reaches_the_program(server):
+    "Escape is pymux's abort; the page must not keep it."
+    async with a_page(server, "printf ready; cat -v", writable=True) as pane:
+        with anyio.fail_after(20):
+            while "ready" not in await call(server, "pane.capture", pane=pane):
+                await anyio.sleep(0.1)
+        with anyio.fail_after(20):
+            while not await call(
+                server, "browser.evaluate", name="page", expression="document.querySelector('pymux-pane').writable"
+            ):
+                await anyio.sleep(0.1)
+        # The click puts the keyboard on the element.
+        await call(server, "browser.click", name="page", selector="pymux-pane")
+        await call(server, "browser.press", name="page", key="Escape")
+        await call(server, "browser.press", name="page", key="Enter")
+        with anyio.fail_after(20):
+            while "^[" not in await call(server, "pane.capture", pane=pane):
+                await anyio.sleep(0.1)
+
+
+#: The prefix, which `browser.press` cannot hold Control for. The
+#: element reads the event and not who sent it. A plain character goes
+#: by `beforeinput`, which only a real key fires, so it is pressed.
+PRESS_THE_PREFIX = """
+document.querySelector("pymux-pane").shadowRoot.querySelector(".keyboard")
+  .dispatchEvent(new KeyboardEvent("keydown", { key: "b", ctrlKey: true, bubbles: true, cancelable: true }))
+"""
+
+#: A pointer that moves across the screen, a cell at a time.
+POINTER_MOVES = """
+(() => {
+  const screen = document.querySelector("pymux-pane").shadowRoot.querySelector(".pyte-screen");
+  const box = screen.getBoundingClientRect();
+  for (let x = 5; x < 200; x += 9) {
+    screen.dispatchEvent(new MouseEvent("mousemove", { clientX: box.left + x, clientY: box.top + 40, bubbles: true }));
+  }
+})()
+"""
+
+
+@pytest.mark.parametrize("moving", [False, True])
+async def test_escape_in_the_session_view_leaves_copy_mode(server, moving):
+    """
+    Escape is pymux's abort. A pointer that moves after it sends mouse
+    reports right behind the escape byte.
+    """
+    async with a_page(server, "seq 100; sleep 60", writable=True, session=True):
+        with anyio.fail_after(20):
+            while not await call(
+                server, "browser.evaluate", name="page", expression="document.querySelector('pymux-pane').writable"
+            ):
+                await anyio.sleep(0.1)
+        await call(server, "browser.click", name="page", selector="pymux-pane")
+
+        # Whichever session the client attached to: copy mode on any pane.
+        async def mode() -> str:
+            tree = await call(server, "tree")
+            return "".join(each["mode"] for one in tree for window in one["windows"] for each in window["panes"])
+
+        await call(server, "browser.evaluate", name="page", expression=PRESS_THE_PREFIX)
+        await call(server, "browser.press", name="page", key="[")
+        with anyio.fail_after(20):
+            while not await mode():
+                await anyio.sleep(0.1)
+
+        await call(server, "browser.press", name="page", key="Escape")
+        if moving:
+            await call(server, "browser.evaluate", name="page", expression=POINTER_MOVES)
+        with anyio.fail_after(10):
+            while await mode():
+                await anyio.sleep(0.1)
 
 
 async def test_a_click_on_the_page_reaches_a_program_that_asked_for_the_mouse(server):

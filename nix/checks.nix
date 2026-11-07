@@ -801,7 +801,10 @@ in
         # The build sandbox has no room for Firefox's content sandbox; a
         # job a test starts inherits this.
         export MOZ_DISABLE_CONTENT_SANDBOX=1
-        ${waylandTestEnv}/bin/python -m pytest -q -p no:cacheprovider \
+        # A whole run takes two to five minutes; a hang ends here rather
+        # than holding the gate for ever.
+        timeout --signal=INT --kill-after=10 360 \
+          ${waylandTestEnv}/bin/python -m pytest -q -p no:cacheprovider \
           -o faulthandler_timeout=120 \
           ${lib.optionalString (browsersTests != "") "-k ${lib.escapeShellArg browsersTests}"} \
           tests/test_mcp_browsers.py tests/test_the_web_page_in_a_browser.py
