@@ -51,7 +51,7 @@ from ..connection.log_asks import log_answer
 from ..connection.packet_table import PacketTable
 from .base import Client
 from .browsers import Browsers
-from .clipboard_image import clipboard_image, pastes_an_image
+from .clipboard_image import clipboard_image, clipboard_image_now, pastes_an_image
 from .downloads import save_whole
 from .kitty_terminal import KittyTerminal
 from .sending_files import SendingFiles
@@ -865,21 +865,27 @@ class TerminalClient(Client):
         if self._behind_an_image is not None:
             self._behind_an_image.append(data)
             return
-        if self.tasks is not None and pastes_an_image(data):
-            self._behind_an_image = [data]
-            self.tasks.start_soon(self._send_the_image_then_the_keys)
-            return
+        if pastes_an_image(data):
+            if self.tasks is not None:
+                self._behind_an_image = [data]
+                self.tasks.start_soon(self._send_the_image_then_the_keys)
+                return
+            # The socket client runs no loop: it reads the image here,
+            # and nothing else runs until it has.
+            self._send_image(clipboard_image_now())
         self._send_input(data)
 
     async def _send_the_image_then_the_keys(self) -> None:
-        image = await clipboard_image()
+        self._send_image(await clipboard_image())
+        held, self._behind_an_image = self._behind_an_image or [], None
+        for data in held:
+            self._send_input(data)
+
+    def _send_image(self, image: bytes | None) -> None:
         with contextlib.suppress(BrokenPipeError):
             self.send_packet(
                 {Field.CMD: Packet.CLIPBOARD_IMAGE, Field.DATA: base64.b64encode(image or b"").decode("ascii")}
             )
-        held, self._behind_an_image = self._behind_an_image or [], None
-        for data in held:
-            self._send_input(data)
 
     def _send_input(self, data: str) -> None:
         # Send the input in chunks, so that a long paste reaches the

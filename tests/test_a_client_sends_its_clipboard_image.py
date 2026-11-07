@@ -70,6 +70,20 @@ async def test_no_image_says_so_and_withdraws_the_last_one(client, monkeypatch):
     assert kinds(client) == [(Packet.CLIPBOARD_IMAGE, ""), (Packet.IN, "\x16")]
 
 
+def test_the_socket_client_sends_it_too(client, monkeypatch):
+    """
+    The socket client, which a person on their own machine attaches
+    with, runs no event loop: it has no task group, and sent no image.
+    """
+    monkeypatch.setattr(terminal, "clipboard_image_now", lambda: IMAGE)
+    assert client.tasks is None
+    client._take_input("\x16")
+    assert kinds(client) == [
+        (Packet.CLIPBOARD_IMAGE, base64.b64encode(IMAGE).decode("ascii")),
+        (Packet.IN, "\x16"),
+    ]
+
+
 @pytest.mark.parametrize(
     ("typed", "pastes"),
     [
