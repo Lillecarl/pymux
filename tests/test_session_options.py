@@ -15,7 +15,10 @@ import pytest
 from pymux.answer import Answer
 from pymux.commands import call_command_handler
 from pymux.core.main import Pymux
+from pymux.enums import Clipboard
 from pymux.keys.actions import Origin, started_by
+from pymux.keys.key_spelling import DEFAULT_PREFIX
+from pymux.options.session_options import SessionOptions
 
 ENDS_AT_ONCE = "%s -c pass" % (sys.executable,)
 
@@ -72,6 +75,68 @@ async def test_gg_reaches_every_session(two):
 
     assert right(two, "home") == right(two, "work") == "everyone"
     assert not two.get_session("home").options.holds("status_right")
+
+
+async def test_u_drops_one_session_s_own_value(two):
+    "It reads the default again, and a later -g reaches it. Lillecarl/pyterm#964."
+    await run(two, "set-option", "-t", "home", "status-right", "mine")
+
+    await run(two, "set-option", "-u", "-t", "home", "status-right")
+    assert not two.get_session("home").options.holds("status_right")
+    await run(two, "set-option", "-g", "status-right", "everyone")
+    assert right(two, "home") == "everyone"
+
+
+async def test_gu_puts_back_pymux_s_own_default(two):
+    shipped = SessionOptions.DECLARED["status-right"].default
+    await run(two, "set-option", "-t", "home", "status-right", "mine")
+    await run(two, "set-option", "-g", "status-right", "everyone")
+
+    await run(two, "set-option", "-gu", "status-right")
+
+    assert right(two, "work") == shipped
+    assert right(two, "home") == "mine", "-g leaves a session's own value"
+    await run(two, "set-option", "-ggu", "status-right")
+    assert right(two, "home") == shipped
+
+
+async def test_u_puts_back_a_server_option(two):
+    await run(two, "set-option", "set-clipboard", "on")
+
+    await run(two, "set-option", "-u", "set-clipboard")
+
+    assert two.options.set_clipboard is Clipboard.EXTERNAL
+
+
+async def test_u_puts_back_the_prefix(two):
+    await run(two, "set-option", "prefix", "C-a")
+
+    await run(two, "set-option", "-u", "prefix")
+
+    assert two.key_bindings_manager.prefix_written == DEFAULT_PREFIX
+    assert two.key_bindings_manager.prefix == ("c-b",)
+
+
+async def test_u_gives_a_window_what_a_new_window_starts_with(two):
+    window = two.arrangement.get_active_window()
+    await run(two, "set-window-option", "-g", "monitor-activity", "off")
+    await run(two, "set-window-option", "monitor-activity", "on")
+
+    await run(two, "set-window-option", "-u", "monitor-activity")
+    assert window.options.monitor_activity is False, "what -g says a new window starts with"
+
+    await run(two, "set-window-option", "-gu", "monitor-activity")
+    assert "monitor_activity" not in two.arrangement.window_defaults
+    await run(two, "set-window-option", "-u", "monitor-activity")
+    assert window.options.monitor_activity is True, "pymux's own default"
+
+
+async def test_u_with_a_value_is_refused(two):
+    errors = []
+    two.add_command_error = errors.append
+    call_command_handler("set-option", two, ["-u", "status-right", "mine"])
+
+    assert errors == ["pymux: -u takes no value: it puts back the one status-right had before it was set"]
 
 
 async def test_no_flag_sets_the_caller_s_session(two):

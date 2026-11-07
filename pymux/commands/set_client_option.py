@@ -18,7 +18,7 @@ from pymux.commands import (
     this_client,
 )
 from pymux.commands.common import clients_named
-from pymux.commands.set_option import set_option
+from pymux.commands.set_option import add_unset_argument, set_option
 from pymux.options.options import Scope
 
 
@@ -93,5 +93,6 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
         dest="target_client",
         help="The client of this name, as list-clients prints it.",
     )
+    add_unset_argument(parser)
     parser.add_argument("option", metavar="<option>")
     parser.add_argument("value", metavar="<value>", nargs="?")

@@ -64,6 +64,7 @@ from .names import (
 __all__ = [
     "AFTER",
     "ALIASES",
+    "DEFAULT_PREFIX",
     "MODIFIERS_A_PERSON_WRITES",
     "PREFIX",
     "SAME_MODIFIER",
@@ -106,6 +107,9 @@ AFTER = " "
 #: it go, and then presses the next key, so "prefix b" says what
 #: happens and "prefix+b" does not.
 PREFIX = "prefix"
+
+#: The prefix key a server starts with, and `set-option -u prefix` puts back.
+DEFAULT_PREFIX = "C-b"
 
 
 #: The two modifiers that are not part of a key name.

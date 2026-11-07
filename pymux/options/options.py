@@ -4,6 +4,7 @@ All configurable options which can be changed through "set-option" commands.
 
 from __future__ import annotations
 
+import copy
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from enum import StrEnum
@@ -12,7 +13,7 @@ from typing import TYPE_CHECKING, override
 from ..core.session import OwnOptions
 from ..core.window_tree import Window
 from ..keys.key_mappings import PYMUX_TO_PROMPT_TOOLKIT_KEYS
-from ..keys.key_spelling import key_however_it_is_written
+from ..keys.key_spelling import DEFAULT_PREFIX, key_however_it_is_written
 from .client_options import ClientOptions
 from .option_fields import Declared, Options
 from .server_options import ServerOptions
@@ -160,6 +161,15 @@ class Option(ABC):
         """
         raise SetOptionError("This option belongs to the session, so it is already global.")
 
+    @abstractmethod
+    def unset(self, pymux: Pymux, target: Holder | None = None, *, default: bool = False) -> None:
+        """
+        Put back what the holder reads when nobody set it: `set-option -u`.
+
+        `default` is `-g`: the value every holder falls back to goes back
+        to pymux's own. Lillecarl/pyterm#964.
+        """
+
 
 class SetOptionError(Exception):
     """
@@ -222,6 +232,9 @@ class FieldOption(Option):
         parsed = self._parse(value)
         owner = self.held_by(pymux, target)
         setattr(self._options_of(owner), self.declared.attribute, parsed)
+        self._changed(pymux, owner)
+
+    def _changed(self, pymux: Pymux, owner: Holder | Window | None) -> None:
         if self.declared.on_set is not None:
             self.declared.on_set(pymux, owner)
         if self.scope is Scope.CLIENT:
@@ -236,6 +249,32 @@ class FieldOption(Option):
         if self.scope is not Scope.WINDOW:
             return super().set_default(pymux, value)
         pymux.arrangement.window_defaults[self.declared.attribute] = self._parse(value)
+
+    @override
+    def unset(self, pymux: Pymux, target: Holder | None = None, *, default: bool = False) -> None:
+        """
+        A session's own value goes, so it reads the global one again. A
+        window takes what a new window starts with. A server option, a
+        client option and a `-g` value take the declared default.
+
+        **A copy of the default**: a field with a factory made its
+        default once, and a list two holders share changes for both.
+        """
+        attribute = self.declared.attribute
+        if self.scope is Scope.WINDOW and default:
+            pymux.arrangement.window_defaults.pop(attribute, None)
+            return
+
+        owner = self.held_by(pymux, target)
+        options = self._options_of(owner)
+        if isinstance(options, OwnOptions):
+            options.forget(attribute)
+        elif self.scope is Scope.WINDOW:
+            fallback = pymux.arrangement.window_defaults.get(attribute, self.declared.default)
+            setattr(options, attribute, copy.deepcopy(fallback))
+        else:
+            setattr(options, attribute, copy.deepcopy(self.declared.default))
+        self._changed(pymux, owner)
 
 
 class KeyPrefixOption(Option):
@@ -253,6 +292,10 @@ class KeyPrefixOption(Option):
         else:
             pymux.key_bindings_manager.prefix = keys
             pymux.key_bindings_manager.prefix_written = value
+
+    @override
+    def unset(self, pymux: Pymux, target: Holder | None = None, *, default: bool = False) -> None:
+        self.set_value(pymux, DEFAULT_PREFIX)
 
 
 #: What the process holds, once for every session. Lillecarl/pyterm#759.

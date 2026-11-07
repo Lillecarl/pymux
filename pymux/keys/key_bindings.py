@@ -35,7 +35,7 @@ from ..filters import HasPrefix, KeyTableIs, ModeActive, ModeTakesPrefix, WaitsF
 from ..notify.osc import PASSTHROUGH_VARIABLE, set_user_var
 from ..wayland.window_pane import WindowWidget
 from .actions import Kind, Origin, note, note_keys, started_by
-from .key_spelling import key_however_it_is_written
+from .key_spelling import DEFAULT_PREFIX, key_however_it_is_written
 
 if TYPE_CHECKING:
     from pymux.core.main import Pymux
@@ -229,7 +229,7 @@ class PymuxKeyBindings:
 
         self._prefix: tuple[str, ...] = ("c-b",)
         #: The prefix as the person wrote it, for the listings.
-        self.prefix_written = "C-b"
+        self.prefix_written = DEFAULT_PREFIX
         self._prefix_binding: Callable[[E], None] | None = None
         self._prefix_again_binding: Callable[[E], None] | None = None
 

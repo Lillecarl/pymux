@@ -106,6 +106,13 @@ def set_option(
         without the flag too, as in tmux; Tab with it offers only
         those.
 
+    -u: put back what the option reads when nobody set it. A session's
+        own value goes, so it reads the default again; a window takes
+        what a new window starts with; with -g, or on a server or client
+        option, pymux's own default comes back. tmux's `-u`, and the only
+        way back to a default that changes between versions.
+        Lillecarl/pyterm#964.
+
     With no value, tmux prints what the option holds, and pymux does
     the same. Without it the command line was write-only: a person
     could change `mouse` and had no way to see what it was.
@@ -122,6 +129,16 @@ def set_option(
     if option.scope is Scope.SESSION:
         target = session_holder(pymux, args)
 
+    if args.unset:
+        if value is not None:
+            raise CommandException("-u takes no value: it puts back the one %s had before it was set" % (name,))
+        try:
+            option.unset(pymux, target, default=bool(getattr(args, "g", 0)))
+        except SetOptionError as e:
+            raise CommandException(e.message)
+        _drop_every_own_value(pymux, option, args)
+        return
+
     if value is None:
         answer(pymux, "%s %s" % (name, option_as_written(pymux, option, args, target)))
         return
@@ -136,11 +153,26 @@ def set_option(
             option.set_default(pymux, value)
         else:
             option.set_value(pymux, value, target)
-            if option.scope is Scope.SESSION and args.g > 1 and option.attribute_name is not None:
-                for session in pymux.sessions:
-                    session.options.forget(option.attribute_name)
+            _drop_every_own_value(pymux, option, args)
     except SetOptionError as e:
         raise CommandException(e.message)
+
+
+def _drop_every_own_value(pymux: Pymux, option: Option, args: argparse.Namespace) -> None:
+    "`-gg`: the default reaches every session, so none keeps its own."
+    if option.scope is Scope.SESSION and getattr(args, "g", 0) > 1 and option.attribute_name is not None:
+        for session in pymux.sessions:
+            session.options.forget(option.attribute_name)
+
+
+def add_unset_argument(parser: argparse.ArgumentParser) -> None:
+    "The `-u` every command that sets an option takes."
+    parser.add_argument(
+        "-u",
+        dest="unset",
+        action="store_true",
+        help="Put back what it reads when nobody set it; with -g, pymux's own default.",
+    )
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
@@ -152,6 +184,7 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
         default=0,
         help="The default every session reads; -gg also drops each session's own value.",
     )
+    add_unset_argument(parser)
     parser.add_argument("-s", dest="s", action="store_true", help="A server option.")
     add_target(parser, "-t", kind=Target.SESSION, dest="target_session", help="The session whose own value this is.")
     parser.add_argument("option", metavar="<option>")
