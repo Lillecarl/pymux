@@ -32,8 +32,13 @@ DEFAULT_UPDATE_ENVIRONMENT = (
     "XDG_SESSION_DESKTOP XDG_SESSION_TYPE"
 )
 
-#: tmux's `#I:#W#F`, in jinja. Lillecarl/pymux#960.
-WINDOW_STATUS = "{{ window_index }}:{{ window_name or '(noname)' }}{{ window_status_flags }}"
+#: tmux's `#I:#W#F`, in jinja (Lillecarl/pymux#960), and then what an
+#: agent in the window says it is doing: `blocked`, `working`. Not
+#: `idle`, which needs nothing from the person. Lillecarl/pymux#931.
+WINDOW_STATUS = (
+    "{{ window_index }}:{{ window_name or '(noname)' }}{{ window_status_flags }}"
+    "{% if window_program_state and window_program_state != 'idle' %} {{ window_program_state }}{% endif %}"
+)
 
 
 def _key_profile(value: str) -> str:

@@ -23,6 +23,8 @@ from collections.abc import Callable, Iterable
 from enum import Enum
 from typing import TYPE_CHECKING, NamedTuple
 
+from pyte.program_status import URGENCY
+
 from pymux.commands import CommandException
 from pymux.connection.rate import frames_per_second, per_second
 from pymux.tags import spelled
@@ -547,6 +549,20 @@ def _window_progress(context: FormatContext) -> str:
     return ""
 
 
+def _window_program_state(context: FormatContext) -> str:
+    """
+    The most urgent OSC 7501 state of the window's panes, so two agents in
+    one window show the one that needs the person. Lillecarl/pymux#931.
+    """
+    most: Report | None = None
+    for pane in context.the_window().panes:
+        statuses = getattr(pane.screen, "program_status", None)
+        record = statuses.most_urgent() if statuses is not None else None
+        if record is not None and (most is None or URGENCY.index(record.state) < URGENCY.index(most.state)):
+            most = record
+    return most.state if most is not None else ""
+
+
 def _window_bell_flag(context: FormatContext) -> str:
     return "1" if context.the_window().bell else "0"
 
@@ -937,6 +953,7 @@ tmux_variables: dict[str, Callable[[FormatContext], str]] = {
     # list does not move. Lillecarl/pymux#960.
     "window_status_flags": _symbol_window_flags,
     "window_progress": _window_progress,
+    "window_program_state": _window_program_state,
     "window_bell_flag": _window_bell_flag,
     "window_activity_flag": _window_activity_flag,
     "window_silence_flag": _window_silence_flag,

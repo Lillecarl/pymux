@@ -150,6 +150,26 @@ async def test_the_program_state_is_the_most_urgent_record(pymux):
     assert format_pymux_string(pymux, asked) == "blocked|Approve?"
 
 
+async def test_a_window_shows_the_most_urgent_state_of_its_panes(pymux):
+    "Two agents in one window: the window list names the one that needs the person. Lillecarl/pymux#931."
+    from run_commands import said
+
+    from pymux.options.session_options import WINDOW_STATUS
+
+    first = _context(pymux).pane.screen
+    await said(pymux, "split-window -v")
+    second = _context(pymux).pane.screen
+    assert second is not first
+    plain = format_pymux_string(pymux, "#I:#W#F")
+    first.osc("7501", "state=idle")
+    assert format_pymux_string(pymux, WINDOW_STATUS) == plain
+    second.osc("7501", "state=working")
+    assert format_pymux_string(pymux, WINDOW_STATUS) == plain + " working"
+    first.osc("7501", "state=blocked")
+    assert format_pymux_string(pymux, "#{window_program_state}") == "blocked"
+    assert format_pymux_string(pymux, WINDOW_STATUS) == plain + " blocked"
+
+
 @pytest.mark.parametrize(
     ("path", "compact"),
     [
