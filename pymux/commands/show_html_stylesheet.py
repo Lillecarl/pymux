@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 from pyte.html import CSS, theme_css
 from pyte.osc import ColorOverrides
 
-from pymux.commands import CommandParser, add_command
+from pymux.commands import CommandParser, Target, add_command, add_target
 from pymux.commands.common import show_listing, terminal_of, the_pane
 
 
@@ -46,9 +46,10 @@ def show_html_stylesheet(pymux: Pymux, args: argparse.Namespace) -> None:
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, show_html_stylesheet)
-    parser.add_argument(
+    add_target(
+        parser,
         "-t",
+        kind=Target.PANE,
         dest="target_pane",
-        metavar="<target-pane>",
         help="Answer with this pane's own colours over the conventional ones.",
     )

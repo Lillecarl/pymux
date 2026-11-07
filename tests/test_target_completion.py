@@ -6,14 +6,23 @@ about themselves.
 
 from __future__ import annotations
 
-import re
 import sys
 
 import pytest
 from prompt_toolkit.document import Document
 from run_commands import over_socket
 
-from pymux.commands import parser_tree
+from pymux.commands import (
+    CommandParser,
+    Role,
+    Target,
+    _refuse_undeclared_targets,
+    add_command,
+    add_target,
+    parser_tree,
+    target_of,
+    targets_of,
+)
 from pymux.commands.completer import TARGET_COMPLETERS, create_command_completer
 from pymux.core.main import Pymux
 
@@ -45,18 +54,37 @@ def offered(pymux, line) -> dict[str, str]:
     return out
 
 
-def test_every_target_a_command_spells_completes():
-    "A new command that names a target the tmux way completes it for free, or fails here."
+def test_every_kind_of_target_completes():
+    "A command that declares a target with `add_target` completes it for free."
+    assert set(TARGET_COMPLETERS) == set(Target)
+
+
+def test_a_target_spelled_with_a_plain_argument_fails_the_tree():
+    "It would complete as nothing and reach another server as typed. Lillecarl/pyterm#965."
+    subparsers = CommandParser(add_help=False).add_subparsers(parser_class=CommandParser)
+    parser = add_command(subparsers, test_a_target_spelled_with_a_plain_argument_fails_the_tree, name="moves")
+    add_target(parser, "-s", kind=Target.WINDOW, role=Role.SRC)
+    parser.add_argument("-S", "--session", dest="session", metavar="<target-session>")
+
+    with pytest.raises(TypeError, match=r"moves -S/--session$"):
+        _refuse_undeclared_targets(subparsers.choices)
+
+
+def test_the_tree_declares_every_target_it_spells():
+    "Each metavar a target has is the one its kind gives, and a peer reads the same kind."
     _parser, subparsers = parser_tree()
-    spelled = re.compile(r"<(target|src|dst)-(session|window|pane|client)>|<job>")
-    missing = {
-        (name, action.metavar)
-        for name, parser in subparsers.choices.items()
-        for action in parser._actions
-        if isinstance(action.metavar, str) and spelled.search(action.metavar)
-        if action.metavar not in TARGET_COMPLETERS
+    move_window = subparsers.choices["move-window"]
+    assert targets_of(move_window) == {
+        "src_window": Target.WINDOW,
+        "dst_window": Target.SLOT,
+        "session": Target.SESSION,
     }
-    assert missing == set()
+    spelled = {action.dest: action.metavar for action in move_window._actions if target_of(action)}
+    assert spelled == {
+        "src_window": "<src-window>",
+        "dst_window": "[<dst-session>:]<dst-index>",
+        "session": "<target-session>",
+    }
 
 
 async def test_a_session_target_offers_every_session(pymux):

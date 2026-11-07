@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from pymux.core.main import Pymux
 
 
-from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands import CommandException, CommandParser, Target, add_command, add_target
 
 
 def pane_matches_session_name(pymux: Pymux, target: str) -> bool:
@@ -35,4 +35,4 @@ def has_session(pymux: Pymux, args: argparse.Namespace) -> None:
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, has_session)
-    parser.add_argument("-t", dest="target_session", metavar="<target-session>", help="The session to look for.")
+    add_target(parser, "-t", kind=Target.SESSION, dest="target_session", help="The session to look for.")

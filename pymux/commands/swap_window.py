@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from pymux.core.main import Pymux
 
 
-from pymux.commands import CommandParser, Target, add_command
+from pymux.commands import CommandParser, Role, Target, add_command, add_target
 from pymux.commands.common import find_window, the_window
 
 
@@ -38,17 +38,19 @@ def swap_window(pymux: Pymux, args: argparse.Namespace) -> None:
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    parser = add_command(subparsers, swap_window, acts_on={"dst_window": Target.WINDOW})
+    parser = add_command(subparsers, swap_window, forwards=True)
     parser.add_argument(
         "-d",
         dest="d",
         action="store_true",
         help="Keep the active window active. The windows trade places either way.",
     )
-    parser.add_argument(
+    add_target(
+        parser,
         "-t",
+        kind=Target.WINDOW,
+        role=Role.DST,
         dest="dst_window",
-        metavar="<dst-window>",
         required=True,
         help="The index to swap with. `+1` and `-1` count from the active window.",
     )

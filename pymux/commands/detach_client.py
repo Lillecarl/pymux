@@ -11,7 +11,9 @@ if TYPE_CHECKING:
 from pymux.commands import (
     CommandException,
     CommandParser,
+    Target,
     add_command,
+    add_target,
     not_past_this_client,
     this_client,
 )
@@ -110,13 +112,12 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     # key it needs is the one it cannot press. Lillecarl/pyterm#469.
     parser = add_command(subparsers, detach_client, read_only=True)
     parser.add_argument("-a", dest="all_but_this_one", action="store_true", help="Every client but this one.")
-    parser.add_argument(
-        "-s", dest="target_session", metavar="<target-session>", help="Every client watching this session."
-    )
-    parser.add_argument(
+    add_target(parser, "-s", kind=Target.SESSION, dest="target_session", help="Every client watching this session.")
+    add_target(
+        parser,
         "-t",
+        kind=Target.CLIENT,
         dest="target_client",
-        metavar="<target-client>",
         help="The client of this name, as list-clients prints it.",
     )
     parser.add_argument(

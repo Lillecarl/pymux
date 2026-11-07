@@ -23,4 +23,4 @@ def last_pane(pymux: Pymux, args: argparse.Namespace) -> None:
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    add_command(subparsers, last_pane, acts_on={})
+    add_command(subparsers, last_pane, forwards=True)

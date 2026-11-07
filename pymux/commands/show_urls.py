@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from typing import TYPE_CHECKING
 
-from pymux.commands import CommandParser, add_command
+from pymux.commands import CommandParser, Target, add_command, add_target
 from pymux.commands.common import the_pane
 from pymux.link_rules import rules_for
 from pymux.url_mode import UrlMode
@@ -36,4 +36,4 @@ def show_urls(pymux: Pymux, args: argparse.Namespace) -> None:
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, show_urls)
-    parser.add_argument("-t", dest="target_pane", metavar="<target-pane>", help="The pane to label.")
+    add_target(parser, "-t", kind=Target.PANE, dest="target_pane", help="The pane to label.")

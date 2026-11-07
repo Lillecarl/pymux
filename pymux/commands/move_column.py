@@ -52,7 +52,7 @@ def move_column(pymux: Pymux, args: argparse.Namespace) -> None:
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    parser = add_command(subparsers, move_column, acts_on={})
+    parser = add_command(subparsers, move_column, forwards=True)
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("-L", dest="L", action="store_true", help="Move the column one place to the left.")
     group.add_argument("-R", dest="R", action="store_true", help="Move the column one place to the right.")

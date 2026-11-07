@@ -23,4 +23,4 @@ def clear_history(pymux: Pymux, args: argparse.Namespace) -> None:
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    add_command(subparsers, clear_history, acts_on={})
+    add_command(subparsers, clear_history, forwards=True)

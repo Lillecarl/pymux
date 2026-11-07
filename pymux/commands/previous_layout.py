@@ -17,4 +17,4 @@ def previous_layout(pymux: Pymux, args: argparse.Namespace) -> None:
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    add_command(subparsers, previous_layout, acts_on={})
+    add_command(subparsers, previous_layout, forwards=True)

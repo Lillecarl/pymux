@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from pymux.core.main import Pymux
 
 
-from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands import CommandException, CommandParser, Target, add_command, add_target
 from pymux.commands.common import answer, clients_named, option_as_written
 from pymux.options.options import ALL_CLIENT_OPTIONS
 
@@ -43,10 +43,11 @@ def show_client_options(pymux: Pymux, args: argparse.Namespace) -> None:
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, show_client_options)
-    parser.add_argument(
+    add_target(
+        parser,
         "-t",
+        kind=Target.CLIENT,
         dest="target_client",
-        metavar="<target-client>",
         help="The client of this name, as list-clients prints it.",
     )
     parser.add_argument("option", metavar="<option>", nargs="?")

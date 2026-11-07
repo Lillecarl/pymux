@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from pymux.options.options import Holder
 
 
-from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands import CommandException, CommandParser, Target, add_command, add_target
 from pymux.commands.common import answer, option_as_written, session_of_target
 from pymux.keys.actions import Origin, started_by_now
 from pymux.options.options import Option, Scope, SetOptionError
@@ -153,8 +153,6 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
         help="The default every session reads; -gg also drops each session's own value.",
     )
     parser.add_argument("-s", dest="s", action="store_true", help="A server option.")
-    parser.add_argument(
-        "-t", dest="target_session", metavar="<target-session>", help="The session whose own value this is."
-    )
+    add_target(parser, "-t", kind=Target.SESSION, dest="target_session", help="The session whose own value this is.")
     parser.add_argument("option", metavar="<option>")
     parser.add_argument("value", metavar="<value>", nargs="?")

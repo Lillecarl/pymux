@@ -9,7 +9,15 @@ if TYPE_CHECKING:
 
 from prompt_toolkit.application.current import set_app
 
-from pymux.commands import CommandException, CommandParser, add_command, not_past_this_client, this_client
+from pymux.commands import (
+    CommandException,
+    CommandParser,
+    Target,
+    add_command,
+    add_target,
+    not_past_this_client,
+    this_client,
+)
 from pymux.commands.common import clients_named, the_window
 from pymux.commands.sessions import find_session, move_this_client
 
@@ -67,11 +75,11 @@ def switch_client(pymux: Pymux, args: argparse.Namespace) -> None:
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, switch_client, read_only=True)
-    parser.add_argument(
-        "-t", dest="target_session", metavar="<target-session>", help="The session, or a window of it, to switch to."
+    add_target(
+        parser, "-t", kind=Target.SESSION, dest="target_session", help="The session, or a window of it, to switch to."
     )
-    parser.add_argument(
-        "-c", dest="target_client", metavar="<target-client>", help="The client to move, as list-clients names it."
+    add_target(
+        parser, "-c", kind=Target.CLIENT, dest="target_client", help="The client to move, as list-clients names it."
     )
     parser.add_argument("-n", dest="n", action="store_true", help="The next session.")
     parser.add_argument("-p", dest="p", action="store_true", help="The previous session.")

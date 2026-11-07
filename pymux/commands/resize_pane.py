@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from pymux.core.main import Pymux
 
 
-from pymux.commands import CommandException, CommandParser, Target, add_command
+from pymux.commands import CommandException, CommandParser, Target, add_command, add_target
 from pymux.commands.common import the_pane
 from pymux.layout.geometry import change_pane_size
 
@@ -37,8 +37,8 @@ def resize_pane(pymux: Pymux, args: argparse.Namespace) -> None:
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    parser = add_command(subparsers, resize_pane, acts_on={"target_pane": Target.PANE})
-    parser.add_argument("-t", dest="target_pane", metavar="<target-pane>", help="The pane to resize.")
+    parser = add_command(subparsers, resize_pane, forwards=True)
+    add_target(parser, "-t", kind=Target.PANE, dest="target_pane", help="The pane to resize.")
     parser.add_argument("-L", dest="left", metavar="<left>", help="That many columns narrower.")
     parser.add_argument("-U", dest="up", metavar="<up>", help="That many rows shorter.")
     parser.add_argument("-D", dest="down", metavar="<down>", help="That many rows taller.")

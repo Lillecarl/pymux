@@ -16,7 +16,7 @@ import shlex
 from collections.abc import Awaitable, Callable, Mapping
 from enum import StrEnum
 from importlib import import_module
-from typing import TYPE_CHECKING, Any, NoReturn, overload, override
+from typing import TYPE_CHECKING, Any, Final, NoReturn, overload, override
 
 from pymux.commands.aliases import ALIASES
 from pymux.enums import Woke
@@ -29,14 +29,18 @@ if TYPE_CHECKING:
 
 __all__ = [
     "CommandException",
+    "Role",
     "Target",
     "add_command",
     "add_commands_to",
+    "add_target",
     "build_parser_tree",
     "call_command_handler",
     "handle_command",
     "not_past_this_client",
     "parser_tree",
+    "target_of",
+    "targets_of",
     "this_client",
 ]
 
@@ -247,13 +251,75 @@ class CommandParser(argparse.ArgumentParser):
 
 
 class Target(StrEnum):
-    "What the target of a command names."
+    "What a target argument of a command names (`add_target`)."
 
     PANE = "pane"
     WINDOW = "window"
     SESSION = "session"
     #: A place in a session, `[session:]index`, which may hold no window.
     SLOT = "slot"
+    #: A client of this server. Another server has no name for it.
+    CLIENT = "client"
+    #: A job of this server, by the id `run` answered with. Another
+    #: server has no name for it.
+    JOB = "job"
+
+    @property
+    def crosses(self) -> bool:
+        "Whether a peer can name it to the server that owns it (`mirror.forward`)."
+        return self not in (Target.CLIENT, Target.JOB)
+
+
+class Role(StrEnum):
+    "Which end of a command a target is: the first word of tmux's metavar."
+
+    TARGET = "target"
+    SRC = "src"
+    DST = "dst"
+
+
+def target_metavar(kind: Target, role: Role) -> str:
+    "How tmux spells a target of that kind at that end of a command."
+    if kind is Target.JOB:
+        return "<job>"
+    if kind is Target.SLOT:
+        return "[<%s-session>:]<%s-index>" % (role, role)
+    return "<%s-%s>" % (role, kind)
+
+
+#: Each metavar `target_metavar` spells. `add_commands_to` refuses one
+#: that no `add_target` declared.
+TARGET_METAVARS: Final = frozenset(target_metavar(kind, role) for kind in Target for role in Role)
+
+
+def add_target(
+    parser: argparse._ActionsContainer, *flags: str, kind: Target, role: Role = Role.TARGET, **kwargs: Any
+) -> argparse.Action:
+    """
+    An argument that names a target of the command: a pane, a window,
+    a session, a place, a client or a job.
+
+    **The kind is said once, here, and everything that reads a target
+    reads it from the action**: the metavar the help prints, what Tab
+    offers (`completer.TARGET_COMPLETERS`), and how a peer names it to
+    the server that owns it (`mirror.forward`). A kind said twice was
+    said differently once: `move-window --session` completed as a
+    session and went to the owner as the peer spelled it, a name the
+    owner has no session by. Lillecarl/pyterm#965.
+    """
+    action = parser.add_argument(*flags, metavar=target_metavar(kind, role), **kwargs)
+    action.target = kind  # pyrefly: ignore[missing-attribute]
+    return action
+
+
+def target_of(action: argparse.Action) -> Target | None:
+    "What the argument names, when `add_target` made it."
+    return getattr(action, "target", None)
+
+
+def targets_of(parser: argparse.ArgumentParser) -> dict[str, Target]:
+    "The target arguments of one command, by their dest."
+    return {action.dest: kind for action in parser._actions if (kind := target_of(action)) is not None}
 
 
 def add_command(
@@ -263,7 +329,7 @@ def add_command(
     name: str | None = None,
     aliases: tuple[str, ...] | list[str] = (),
     read_only: bool = False,
-    acts_on: Mapping[str, Target] | None = None,
+    forwards: bool = False,
 ):
     """
     The parser of one command: named after its handler, described by
@@ -276,13 +342,13 @@ def add_command(
     types into somebody else's session. tmux marks five and no more.
     Lillecarl/pyterm#469.
 
-    `acts_on` marks a command that changes or reads a session's
-    windows and panes, with the argparse dest of each target it takes.
-    Such a command runs on the server that owns the session: on a
-    session another server owns (`connect`), that server runs it.
-    Empty is a command that takes no target and acts where its caller
-    is. **None, the default, runs here whatever the session**: a
-    command about this server, or about what one client looks at.
+    `forwards` marks a command that changes or reads a session's
+    windows and panes. It runs on the server that owns the session it
+    acts on: on a session another server owns (`connect`), that server
+    runs it, with each target `add_target` declared named in the
+    owner's ids. A command with no target acts where its caller is.
+    **No, the default, runs here whatever the session**: a command
+    about this server, or about what one client looks at.
     Lillecarl/pyterm#761.
     """
     if name is None:
@@ -301,7 +367,7 @@ def add_command(
         # the shell come from this tree, not from a `-h`.
         add_help=False,
     )
-    parser.set_defaults(_handler=handler, _read_only=read_only, _acts_on=acts_on)
+    parser.set_defaults(_handler=handler, _read_only=read_only, _forwards=forwards)
     return parser
 
 
@@ -333,6 +399,19 @@ def add_commands_to(subparsers: Any) -> None:
         import_module("." + name, __name__).register(subparsers)
 
     import_module("pymux.plugins").register(subparsers)
+    _refuse_undeclared_targets(subparsers.choices)
+
+
+def _refuse_undeclared_targets(parsers: Mapping[str, argparse.ArgumentParser]) -> None:
+    "A target spelled with a plain `add_argument` completes as nothing and forwards as typed."
+    undeclared = sorted(
+        "%s %s" % (name, "/".join(action.option_strings) or action.dest)
+        for name, parser in parsers.items()
+        for action in parser._actions
+        if action.metavar in TARGET_METAVARS and target_of(action) is None
+    )
+    if undeclared:
+        raise TypeError("a target needs add_target, not add_argument: %s" % (", ".join(undeclared),))
 
 
 _parser_tree = None
@@ -501,13 +580,13 @@ def call_command_handler(command: str, pymux: Pymux, arguments: list[str], targe
 
     try:
         if targets:
-            _take_targets(command, namespace, targets)
+            _take_targets(command, parser, namespace, targets)
             answer = namespace._handler(pymux, namespace)
-        elif namespace._acts_on is not None and pymux.peers.by_address:
+        elif namespace._forwards and pymux.peers.by_address:
             # A command on a session another server owns runs there.
             from pymux.mirror.forward import forwarded
 
-            answer = forwarded(pymux, command, arguments, namespace)
+            answer = forwarded(pymux, command, arguments, namespace, targets_of(parser))
             if answer is None:
                 answer = namespace._handler(pymux, namespace)
         else:
@@ -525,11 +604,13 @@ def call_command_handler(command: str, pymux: Pymux, arguments: list[str], targe
     return None
 
 
-def _take_targets(command: str, namespace: argparse.Namespace, targets: Mapping[str, str]) -> None:
+def _take_targets(
+    command: str, parser: argparse.ArgumentParser, namespace: argparse.Namespace, targets: Mapping[str, str]
+) -> None:
     "Put the targets a peer resolved in place of what the words named."
-    acts_on = namespace._acts_on or {}
+    declared: dict[str, Target] = targets_of(parser) if namespace._forwards else {}
     for dest, target in targets.items():
-        if dest not in acts_on:
+        if dest not in declared:
             raise CommandException("%s takes no target %s" % (command, dest))
         setattr(namespace, dest, target)
 

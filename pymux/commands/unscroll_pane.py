@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from typing import TYPE_CHECKING
 
-from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands import CommandException, CommandParser, Target, add_command, add_target
 from pymux.commands.common import find_pane, terminal_of
 
 if TYPE_CHECKING:
@@ -28,4 +28,4 @@ def unscroll_pane(pymux: Pymux, args: argparse.Namespace) -> None:
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, unscroll_pane)
-    parser.add_argument("-t", dest="target_pane", metavar="<target-pane>", help="The pane to unscroll.")
+    add_target(parser, "-t", kind=Target.PANE, dest="target_pane", help="The pane to unscroll.")

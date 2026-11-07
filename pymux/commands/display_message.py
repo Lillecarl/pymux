@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from pymux.core.main import Pymux
 
 
-from pymux.commands import CommandParser, add_command
+from pymux.commands import CommandParser, Target, add_command, add_target
 from pymux.commands.common import answer, clients_named
 from pymux.format import format_pymux_string
 
@@ -53,10 +53,11 @@ def display_message(pymux: Pymux, args: argparse.Namespace) -> None:
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, display_message)
     parser.add_argument("-p", dest="p", action="store_true", help="Print the message instead of showing it.")
-    parser.add_argument(
+    add_target(
+        parser,
         "-c",
+        kind=Target.CLIENT,
         dest="target_client",
-        metavar="<target-client>",
         help="The client to show it to, or to print it as drawn for.",
     )
     parser.add_argument("message", metavar="<message>")

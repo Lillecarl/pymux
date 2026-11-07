@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from pymux.core.main import Pymux
 
 
-from pymux.commands import CommandException, CommandParser, Target, add_command
+from pymux.commands import CommandException, CommandParser, Target, add_command, add_target
 from pymux.commands.sessions import find_session
 
 
@@ -25,6 +25,6 @@ def rename_session(pymux: Pymux, args: argparse.Namespace) -> None:
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    parser = add_command(subparsers, rename_session, acts_on={"target_session": Target.SESSION})
-    parser.add_argument("-t", dest="target_session", metavar="<target-session>", help="The session to rename.")
+    parser = add_command(subparsers, rename_session, forwards=True)
+    add_target(parser, "-t", kind=Target.SESSION, dest="target_session", help="The session to rename.")
     parser.add_argument("name", metavar="<name>", help="The new name of the session.")

@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from pymux.core.main import Pymux
 
 
-from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands import CommandException, CommandParser, Target, add_command, add_target
 from pymux.commands.common import answer
 from pymux.jobs.table import find_job
 
@@ -30,7 +30,7 @@ def kill_job(pymux: Pymux, args: argparse.Namespace):
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, kill_job, name="kill-job")
-    parser.add_argument("job", metavar="<job>", type=int, nargs="?", help="The id `run` answered with.")
+    add_target(parser, "job", kind=Target.JOB, type=int, nargs="?", help="The id `run` answered with.")
     parser.add_argument(
         "--tag",
         "-T",

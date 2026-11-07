@@ -22,5 +22,5 @@ def break_pane(pymux: Pymux, args: argparse.Namespace) -> None:
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    parser = add_command(subparsers, break_pane, acts_on={})
+    parser = add_command(subparsers, break_pane, forwards=True)
     parser.add_argument("-d", dest="d", action="store_true", help="Leave the new window unfocused.")

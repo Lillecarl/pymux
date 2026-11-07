@@ -7,7 +7,7 @@ the words to the owner over a stream of its own: the targets in the
 owner's ids, and the pane the person here is in, which the owner reads
 as the caller's pane, with a target named or not. So a command with no
 target acts where the person is, the same as it does on the owner. Only
-commands marked `acts_on` come here (`commands.add_command`); a command
+commands marked `forwards` come here (`commands.add_command`); a command
 about what one client looks at stays here. Lillecarl/pyterm#761.
 
 The person's client follows a command that moves the owner's caller to
@@ -48,19 +48,25 @@ FOLLOW_WITHIN = 2.0
 
 
 def forwarded(
-    pymux: Pymux, command: str, arguments: list[str], namespace: argparse.Namespace
+    pymux: Pymux, command: str, arguments: list[str], namespace: argparse.Namespace, declared: Mapping[str, Target]
 ) -> Coroutine[Any, Any, None] | None:
     """
     The run of a command on the server that owns the session it acts
     on, or None when that is this server. A target nothing here holds
     is None too, so the command says it cannot find it.
 
+    `declared` is every target the command takes (`commands.add_target`),
+    so each one goes to the owner in the owner's ids. What is not a
+    target goes as typed.
+
     Refused when the command's targets are on two servers: a pane
-    cannot move from one server to another.
+    cannot move from one server to another. Refused as well when it
+    names a client or a job: those are this server's, and the owner has
+    no name for them.
     """
-    acts_on: Mapping[str, Target] = namespace._acts_on
+    crossing = {dest: kind for dest, kind in declared.items() if kind.crosses}
     named: list[tuple[str, Target, object, Session]] = []
-    for dest, kind in acts_on.items():
+    for dest, kind in crossing.items():
         value = getattr(namespace, dest, None)
         if not value:
             continue
@@ -72,7 +78,7 @@ def forwarded(
     sessions = [session for *_, session in named]
     caller = find_pane(pymux, None)
     caller_session = pymux.session_holding(caller) if caller is not None else None
-    if not acts_on or len(named) < len(acts_on):
+    if len(named) < len(crossing) or not crossing:
         # A target left out means the caller's: its pane, or the window
         # or session that holds the pane.
         sessions.append(caller_session or pymux.current_session)
@@ -84,6 +90,9 @@ def forwarded(
         raise CommandException("%s: its targets are on different servers" % (command,))
     (peer,) = owners
     assert peer is not None
+    for dest, kind in declared.items():
+        if not kind.crosses and getattr(namespace, dest, None) is not None:
+            raise CommandException("%s: a %s of this server means nothing to %s" % (command, kind, peer.address))
     if caller_session is None or caller_session.remote is None or caller_session.remote.peer is not peer:
         # The person is on another server: the owner has no pane of theirs.
         caller = None

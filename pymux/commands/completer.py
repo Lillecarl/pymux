@@ -34,7 +34,7 @@ from argcomplete.lexers import split_line
 from prompt_toolkit.completion import CompleteEvent, Completer, Completion
 from prompt_toolkit.document import Document
 
-from pymux.commands import CommandException, CommandParser, build_parser_tree, parser_tree
+from pymux.commands import CommandException, CommandParser, Target, build_parser_tree, parser_tree, target_of
 from pymux.commands.aliases import ALIASES
 from pymux.core.forwarding import Direction
 from pymux.keys.key_spelling import key_completions
@@ -214,19 +214,14 @@ def _tagged(questions: Questions, parsed_args: argparse.Namespace, **_) -> dict[
     return questions.ask("complete-%s" % kind)
 
 
-#: What completes a target, by the metavar that spells its kind. The
-#: metavars are tmux's own, and `test_every_target_a_command_spells_completes`
-#: holds that each one a command spells is here.
+#: What completes a target, by its kind (`commands.add_target`).
 TARGET_COMPLETERS: Final = {
-    "<target-session>": partial(_asked, "complete-session"),
-    "<target-window>": partial(_asked, "complete-window"),
-    "<src-window>": partial(_asked, "complete-window"),
-    "<dst-window>": partial(_asked, "complete-window"),
-    "<target-pane>": partial(_asked, "complete-pane"),
-    "<src-pane>": partial(_asked, "complete-pane"),
-    "<target-client>": partial(_asked, "complete-client"),
-    "<job>": partial(_asked, "complete-job"),
-    "[<dst-session>:]<dst-index>": partial(_asked, "complete-session-end"),
+    Target.SESSION: partial(_asked, "complete-session"),
+    Target.WINDOW: partial(_asked, "complete-window"),
+    Target.PANE: partial(_asked, "complete-pane"),
+    Target.SLOT: partial(_asked, "complete-session-end"),
+    Target.CLIENT: partial(_asked, "complete-client"),
+    Target.JOB: partial(_asked, "complete-job"),
 }
 
 #: What completes a value, by the command and the dest of the argument.
@@ -412,9 +407,15 @@ _finder: FuzzyFinder | None = None
 _completion_tree: tuple[CommandParser, argparse._SubParsersAction[CommandParser]] | None = None
 
 
+def _completer_of(name: str, action: argparse.Action):
+    "What completes this argument of this command, or None."
+    kind = target_of(action)
+    return _VALUE_COMPLETERS.get((name, action.dest)) or (None if kind is None else TARGET_COMPLETERS[kind])
+
+
 def completes_from_the_server(name: str, action: argparse.Action) -> bool:
     "Whether the server knows the values of this argument of this command."
-    return (name, action.dest) in _VALUE_COMPLETERS or str(action.metavar) in TARGET_COMPLETERS
+    return _completer_of(name, action) is not None
 
 
 def values_for(pymux: Pymux, name: str, dest: str, prefix: str, given: dict[str, Any]) -> dict[str, str]:
@@ -433,7 +434,7 @@ def values_for(pymux: Pymux, name: str, dest: str, prefix: str, given: dict[str,
     action = next((a for a in command_parser._actions if a.dest == dest), None)
     if action is None:
         return {}
-    fn = _VALUE_COMPLETERS.get((name, dest)) or TARGET_COMPLETERS.get(str(action.metavar))
+    fn = _completer_of(name, action)
     if fn is None:
         return {}
     parsed = argparse.Namespace(**{a.dest: a.default for a in command_parser._actions})
@@ -473,7 +474,7 @@ def create_command_completer(pymux: Pymux):
             # A custom completer, which is argcomplete's own extension
             # point: it reads `action.completer` when one is set, and
             # argparse never declares it.
-            fn = _VALUE_COMPLETERS.get((name, action.dest)) or TARGET_COMPLETERS.get(str(action.metavar))
+            fn = _completer_of(name, action)
             if fn is not None:
                 action.completer = partial(fn, questions)  # pyrefly: ignore[missing-attribute]
     return CommandCompleter()

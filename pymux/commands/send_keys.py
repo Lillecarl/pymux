@@ -13,7 +13,7 @@ from prompt_toolkit.application.current import set_app
 from pyte.page import RowMark
 
 from pymux.answer import current_answer
-from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands import CommandException, CommandParser, Target, add_command, add_target
 from pymux.commands.common import refuse_without_a_waiter, send_key, terminal_of, the_pane
 from pymux.commands.wait_pane import add_condition_arguments, armed, asks_for_a_wait
 from pymux.keys.key_spelling import event_however_it_is_written
@@ -128,7 +128,7 @@ def _send(pane: Pane, args: argparse.Namespace) -> None:
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, send_keys)
-    parser.add_argument("-t", dest="target_pane", metavar="<target-pane>", help="The pane to send to.")
+    add_target(parser, "-t", kind=Target.PANE, dest="target_pane", help="The pane to send to.")
     parser.add_argument("-l", dest="l", action="store_true", help="Send the keys as text, not key names.")
     parser.add_argument("-R", dest="R", action="store_true", help="Reset the terminal of the pane first.")
     parser.add_argument(

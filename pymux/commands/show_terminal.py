@@ -8,7 +8,7 @@ if TYPE_CHECKING:
     from pymux.core.main import Pymux
 
 
-from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands import CommandException, CommandParser, Target, add_command, add_target
 from pymux.commands.common import clients_named, show_listing
 from pymux.connection.terminal_answers import readable
 
@@ -41,9 +41,10 @@ def show_terminal(pymux: Pymux, args: argparse.Namespace) -> None:
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, show_terminal)
-    parser.add_argument(
+    add_target(
+        parser,
         "-t",
+        kind=Target.CLIENT,
         dest="target_client",
-        metavar="<target-client>",
         help="The client of this name, as list-clients prints it.",
     )

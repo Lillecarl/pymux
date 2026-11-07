@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import anyio
 
 from pymux import log
-from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands import CommandException, CommandParser, Target, add_command, add_target
 from pymux.commands.common import show_listing, the_client
 
 if TYPE_CHECKING:
@@ -84,5 +84,5 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser.add_argument(
         "-n", dest="lines", type=int, default=LINES, metavar="<lines>", help="How many lines, from the end."
     )
-    parser.add_argument("-t", dest="target_client", metavar="<target-client>", help="The client whose machine's log.")
+    add_target(parser, "-t", kind=Target.CLIENT, dest="target_client", help="The client whose machine's log.")
     parser.add_argument("-p", dest="peer", metavar="<peer>", help="The peer link whose machine's log.")

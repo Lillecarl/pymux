@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from pymux.core.main import Pymux
 
 
-from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands import CommandException, CommandParser, Target, add_command, add_target
 from pymux.commands.common import add_format_arguments, chosen_format, show_listing
 from pymux.format import format_pymux_string
 
@@ -70,7 +70,5 @@ def list_clients(pymux: Pymux, args: argparse.Namespace) -> None:
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, list_clients, aliases=("lsc",), read_only=True)
-    parser.add_argument(
-        "-t", dest="target_session", metavar="<target-session>", help="Only the clients of this session."
-    )
+    add_target(parser, "-t", kind=Target.SESSION, dest="target_session", help="Only the clients of this session.")
     add_format_arguments(parser, "Print this format for each client.")

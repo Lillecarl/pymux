@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from pymux.core.main import Pymux
 
 
-from pymux.commands import CommandException, CommandParser, Target, add_command
+from pymux.commands import CommandException, CommandParser, Role, Target, add_command, add_target
 from pymux.commands.common import session_part, the_window
 from pymux.ids import WindowIndex
 
@@ -108,27 +108,29 @@ def move_window(pymux: Pymux, args: argparse.Namespace) -> None:
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    parser = add_command(
-        subparsers,
-        move_window,
-        # `--session` too, or a peer sends the owner a mirrored session's
-        # `server/name`, which the owner has no session by. Lillecarl/pyterm#965.
-        acts_on={"src_window": Target.WINDOW, "dst_window": Target.SLOT, "session": Target.SESSION},
+    parser = add_command(subparsers, move_window, forwards=True)
+    add_target(
+        parser,
+        "-s",
+        kind=Target.WINDOW,
+        role=Role.SRC,
+        dest="src_window",
+        help="The window to move; the active one is the default.",
     )
-    parser.add_argument(
-        "-s", dest="src_window", metavar="<src-window>", help="The window to move; the active one is the default."
-    )
-    parser.add_argument(
+    add_target(
+        parser,
         "-t",
+        kind=Target.SLOT,
+        role=Role.DST,
         dest="dst_window",
-        metavar="[<dst-session>:]<dst-index>",
         help="The index to move to, with an optional session in front (`work:5`). A session alone (`work:`) takes the next free index there.",
     )
-    parser.add_argument(
+    add_target(
+        parser,
         "-S",
         "--session",
+        kind=Target.SESSION,
         dest="session",
-        metavar="<target-session>",
         help="Move the window to this session: after its last window, or at the index -t names.",
     )
     parser.add_argument(

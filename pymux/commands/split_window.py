@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from pymux.tags import Tags
 
 
-from pymux.commands import CommandParser, Target, add_command
+from pymux.commands import CommandParser, Target, add_command, add_target
 from pymux.commands.common import (
     add_format_arguments,
     add_pane_command_argument,
@@ -68,7 +68,7 @@ def add_arguments(parser: argparse.ArgumentParser):
     group = parser.add_mutually_exclusive_group()
     group.add_argument("-v", dest="v", action="store_true", help="Split top over bottom.")
     group.add_argument("-h", dest="h", action="store_true", help="Split side by side.")
-    parser.add_argument("-t", dest="target_window", metavar="<target-window>", help="The window to split.")
+    add_target(parser, "-t", kind=Target.WINDOW, dest="target_window", help="The window to split.")
     parser.add_argument("-c", dest="start_directory", metavar="<start-directory>", help="Where the program starts.")
     parser.add_argument("-d", dest="d", action="store_true", help="Leave the new pane unfocused.")
     parser.add_argument("-P", dest="P", action="store_true", help="Print information about the new pane.")
@@ -79,6 +79,6 @@ def add_arguments(parser: argparse.ArgumentParser):
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    parser = add_command(subparsers, split_window, acts_on={"target_window": Target.WINDOW})
+    parser = add_command(subparsers, split_window, forwards=True)
     add_arguments(parser)
     add_tag_arguments(parser, "pane")

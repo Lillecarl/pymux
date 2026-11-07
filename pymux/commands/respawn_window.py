@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from pymux.core.main import Pymux
 
 
-from pymux.commands import CommandException, CommandParser, Target, add_command
+from pymux.commands import CommandException, CommandParser, Target, add_command, add_target
 from pymux.commands.common import add_pane_command_argument, the_window
 from pymux.commands.respawn_pane import replace_pane_program
 
@@ -34,11 +34,9 @@ def respawn_window(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None]:
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    parser = add_command(subparsers, respawn_window, acts_on={"target_window": Target.WINDOW})
+    parser = add_command(subparsers, respawn_window, forwards=True)
     parser.add_argument("-k", dest="k", action="store_true", help="Kill a program that still runs.")
-    parser.add_argument(
-        "-t", dest="target_window", metavar="<target-window>", help="The window whose active pane respawns."
-    )
+    add_target(parser, "-t", kind=Target.WINDOW, dest="target_window", help="The window whose active pane respawns.")
     add_pane_command_argument(
         parser, "What to run instead of the default shell: one string through it, or a program and its arguments."
     )

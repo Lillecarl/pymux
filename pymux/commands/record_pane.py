@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from ptyhost.process import Process
 
-from pymux.commands import CommandException, CommandParser, Target, add_command
+from pymux.commands import CommandException, CommandParser, Target, add_command, add_target
 from pymux.commands.common import terminal_of, the_pane
 from pymux.connection.recording import recording_of_process, recordings_directory
 
@@ -60,8 +60,8 @@ def record_pane(pymux: Pymux, args: argparse.Namespace) -> None:
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    parser = add_command(subparsers, record_pane, acts_on={"target_pane": Target.PANE})
-    parser.add_argument("-t", dest="target_pane", metavar="<target-pane>", help="The pane to record.")
+    parser = add_command(subparsers, record_pane, forwards=True)
+    add_target(parser, "-t", kind=Target.PANE, dest="target_pane", help="The pane to record.")
     parser.add_argument(
         "-i", dest="idle_time_limit", type=seconds, metavar="<seconds>", help="The longest pause a player shows."
     )

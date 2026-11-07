@@ -19,7 +19,7 @@ from pyte.osc import ColorOverrides
 from pyte.screen import Page, Screen
 
 from pymux import screenshot
-from pymux.commands import CommandException, CommandParser, Target, add_command
+from pymux.commands import CommandException, CommandParser, Target, add_command, add_target
 from pymux.commands.common import show_listing, terminal_of, the_pane
 from pymux.commands.pictures import (
     FRAME_WAIT,
@@ -279,7 +279,7 @@ def capture_pane(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None] | No
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    parser = add_command(subparsers, capture_pane, acts_on={"target_pane": Target.PANE})
+    parser = add_command(subparsers, capture_pane, forwards=True)
     parser.add_argument(
         "-p", dest="p", action="store_true", help="Print to the output of the command line, not a pop-up."
     )
@@ -293,7 +293,7 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
         help="With -H: HTML for a reader, not a browser. Colours as they look, no stylesheet.",
     )
     add_picture_arguments(parser, "pane; the default range is the visible pane")
-    parser.add_argument("-t", dest="target_pane", metavar="<target-pane>", help="The pane to capture.")
+    add_target(parser, "-t", kind=Target.PANE, dest="target_pane", help="The pane to capture.")
     parser.add_argument(
         "-S", dest="start", metavar="<start>", help="The first line. 0 is the top of the pane, negative is history."
     )

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from libpymux.protocol import Capability
 
-from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands import CommandException, CommandParser, Target, add_command, add_target
 from pymux.commands.common import the_client
 from pymux.commands.record_pane import seconds
 from pymux.connection.recording import Recording, a_name, recordings_directory
@@ -82,7 +82,7 @@ def _to_the_owner(peer: Peer) -> Callable[[list[Path]], str | None]:
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, record_client)
-    parser.add_argument("-t", dest="target_client", metavar="<target-client>", help="The client to record.")
+    add_target(parser, "-t", kind=Target.CLIENT, dest="target_client", help="The client to record.")
     parser.add_argument(
         "-i", dest="idle_time_limit", type=seconds, metavar="<seconds>", help="The longest pause a player shows."
     )

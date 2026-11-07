@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from pymux.wayland.wayland import Launch
 
 
-from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands import CommandException, CommandParser, Target, add_command, add_target
 from pymux.commands.common import answer, the_pane
 
 
@@ -68,7 +68,7 @@ async def _opened_or_exited(launch: Launch) -> None:
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, wl)
-    parser.add_argument("-t", dest="target_pane", metavar="<target-pane>", help="The pane the window takes.")
+    add_target(parser, "-t", kind=Target.PANE, dest="target_pane", help="The pane the window takes.")
     parser.add_argument(
         "program",
         nargs=argparse.REMAINDER,

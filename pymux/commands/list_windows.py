@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from pymux.core.session import Session
 
 
-from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands import CommandException, CommandParser, Target, add_command, add_target
 from pymux.commands.common import (
     add_format_arguments,
     add_tag_filter,
@@ -102,8 +102,6 @@ def list_windows(pymux: Pymux, args: argparse.Namespace) -> None:
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, list_windows)
     parser.add_argument("-a", dest="a", action="store_true", help="Every window of every session.")
-    parser.add_argument(
-        "-t", dest="target_session", metavar="<target-session>", help="The session whose windows to list."
-    )
+    add_target(parser, "-t", kind=Target.SESSION, dest="target_session", help="The session whose windows to list.")
     add_format_arguments(parser, "Print this format for every window.")
     add_tag_filter(parser, "windows")

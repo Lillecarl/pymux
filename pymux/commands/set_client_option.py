@@ -8,7 +8,15 @@ if TYPE_CHECKING:
 
 
 from pymux.client.uploads import LOCAL_CLIENT_OPTIONS
-from pymux.commands import CommandException, CommandParser, add_command, not_past_this_client, this_client
+from pymux.commands import (
+    CommandException,
+    CommandParser,
+    Target,
+    add_command,
+    add_target,
+    not_past_this_client,
+    this_client,
+)
 from pymux.commands.common import clients_named
 from pymux.commands.set_option import set_option
 from pymux.options.options import Scope
@@ -78,10 +86,11 @@ def set_client_option(pymux: Pymux, args: argparse.Namespace) -> None:
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, set_client_option, read_only=True)
-    parser.add_argument(
+    add_target(
+        parser,
         "-t",
+        kind=Target.CLIENT,
         dest="target_client",
-        metavar="<target-client>",
         help="The client of this name, as list-clients prints it.",
     )
     parser.add_argument("option", metavar="<option>")

@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from pymux.core.main import Pymux
 
 
-from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands import CommandException, CommandParser, Target, add_command, add_target
 from pymux.commands.common import answer, option_as_written
 from pymux.commands.set_option import find_option, session_holder
 from pymux.core.session import OwnOptions
@@ -71,5 +71,5 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser.add_argument(
         "-A", dest="A", action="store_true", help="Mark with * a value the session reads from the default."
     )
-    parser.add_argument("-t", dest="target_session", metavar="<target-session>", help="The session to read.")
+    add_target(parser, "-t", kind=Target.SESSION, dest="target_session", help="The session to read.")
     parser.add_argument("option", metavar="<option>", nargs="?")

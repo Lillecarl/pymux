@@ -8,7 +8,7 @@ if TYPE_CHECKING:
     from pymux.core.window_tree import Window
 
 
-from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands import CommandException, CommandParser, Target, add_command, add_target
 from pymux.commands.common import (
     add_format_arguments,
     add_tag_filter,
@@ -101,6 +101,6 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, list_panes)
     parser.add_argument("-a", dest="a", action="store_true", help="The panes of every window of every session.")
     parser.add_argument("-s", dest="s", action="store_true", help="The panes of every window of this session.")
-    parser.add_argument("-t", dest="target_pane", metavar="<target-pane>", help="The pane whose window to list.")
+    add_target(parser, "-t", kind=Target.PANE, dest="target_pane", help="The pane whose window to list.")
     add_format_arguments(parser, "Print this format for every pane.")
     add_tag_filter(parser, "panes")

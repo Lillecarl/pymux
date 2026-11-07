@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from pymux.jobs.job import Job
 
 
-from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands import CommandException, CommandParser, Target, add_command, add_target
 from pymux.commands.common import the_pane
 from pymux.enums import Woke
 from pymux.jobs.feed import JobFeed
@@ -55,8 +55,8 @@ async def _replace(pymux: Pymux, pane: Pane, job: Job, args: argparse.Namespace)
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, view_job, name="view-job")
     parser.add_argument("-k", dest="k", action="store_true", help="Kill a program that still runs.")
-    parser.add_argument("-t", dest="target_pane", metavar="<target-pane>", help="The pane to replace.")
-    parser.add_argument("job", metavar="<job>", type=int, nargs="?", help="The id `run` answered with.")
+    add_target(parser, "-t", kind=Target.PANE, dest="target_pane", help="The pane to replace.")
+    add_target(parser, "job", kind=Target.JOB, type=int, nargs="?", help="The id `run` answered with.")
     parser.add_argument(
         "--tag",
         "-T",

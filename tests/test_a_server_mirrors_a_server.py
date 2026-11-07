@@ -46,7 +46,7 @@ from test_ssh_client import create_ssh_server
 from pymux.answer import Answer, current_answer
 from pymux.client import reconnect as reconnect_module
 from pymux.client import relink
-from pymux.commands import handle_command
+from pymux.commands import Target, add_command, add_target, handle_command, parser_tree
 from pymux.commands.set_option import find_option
 from pymux.connection import server as server_module
 from pymux.core import kitty_transfers
@@ -882,6 +882,25 @@ async def test_move_window_takes_a_mirrored_sessions_name_here(two_servers):
 
     await run_as(peer, client, "move-window --session %s" % (here,))
     await until(lambda: len(other.arrangement.windows) == before + 1, "the window moves into the other session")
+
+
+async def test_a_client_never_goes_to_the_owner(two_servers):
+    "The owner has no name for a client of this server, so the command is refused, not sent as typed."
+    owner, peer, client = two_servers
+    await shown_here(owner, peer, client)
+    ran = []
+    _parser, subparsers = parser_tree()
+    parser = add_command(subparsers, lambda pymux, args: ran.append(pymux), name="test-names-a-client", forwards=True)
+    add_target(parser, "-c", kind=Target.CLIENT, dest="target_client")
+    try:
+        assert run_as(peer, client, "test-names-a-client -c here") is None
+    finally:
+        subparsers.choices.pop("test-names-a-client")
+        subparsers._name_parser_map.pop("test-names-a-client", None)
+        subparsers._choices_actions = [a for a in subparsers._choices_actions if a.metavar != "test-names-a-client"]
+
+    assert ran == []
+    assert "test-names-a-client: a client of this server means nothing to " in peer.message_log[-1]
 
 
 async def test_the_focus_here_follows_a_pane_selected_there(two_servers):

@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from pymux.core.main import Pymux
 
 
-from pymux.commands import CommandParser, Target, add_command
+from pymux.commands import CommandParser, Target, add_command, add_target
 from pymux.commands.common import the_window
 
 
@@ -19,6 +19,6 @@ def rename_window(pymux: Pymux, args: argparse.Namespace) -> None:
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    parser = add_command(subparsers, rename_window, acts_on={"target_window": Target.WINDOW})
-    parser.add_argument("-t", dest="target_window", metavar="<target-window>", help="The window to rename.")
+    parser = add_command(subparsers, rename_window, forwards=True)
+    add_target(parser, "-t", kind=Target.WINDOW, dest="target_window", help="The window to rename.")
     parser.add_argument("name", metavar="<name>", help="The new name of the window.")

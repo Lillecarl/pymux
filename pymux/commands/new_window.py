@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from pymux.tags import Tags
 
 
-from pymux.commands import CommandException, CommandParser, Target, add_command
+from pymux.commands import CommandException, CommandParser, Target, add_command, add_target
 from pymux.commands.common import (
     add_format_arguments,
     add_pane_command_argument,
@@ -206,13 +206,14 @@ async def _open(
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    parser = add_command(subparsers, new_window, acts_on={"target_window": Target.SLOT})
+    parser = add_command(subparsers, new_window, forwards=True)
     parser.add_argument("-a", dest="a", action="store_true", help="After the target window.")
     parser.add_argument("-b", dest="b", action="store_true", help="Before the target window.")
-    parser.add_argument(
+    add_target(
+        parser,
         "-t",
+        kind=Target.SLOT,
         dest="target_window",
-        metavar="<target-window>",
         help="The window to sit next to, or the index to create at.",
     )
     parser.add_argument("-n", dest="name", metavar="<name>", help="The name of the window.")

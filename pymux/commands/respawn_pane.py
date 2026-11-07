@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from pymux.core.pane import Pane
 
 
-from pymux.commands import CommandException, CommandParser, Target, add_command
+from pymux.commands import CommandException, CommandParser, Target, add_command, add_target
 from pymux.commands.common import add_pane_command_argument, the_pane
 from pymux.enums import Woke
 from pymux.pane_command import pane_command
@@ -57,9 +57,9 @@ async def replace_pane_program(pymux: Pymux, pane: Pane, args: argparse.Namespac
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    parser = add_command(subparsers, respawn_pane, acts_on={"target_pane": Target.PANE})
+    parser = add_command(subparsers, respawn_pane, forwards=True)
     parser.add_argument("-k", dest="k", action="store_true", help="Kill a program that still runs.")
-    parser.add_argument("-t", dest="target_pane", metavar="<target-pane>", help="The pane to respawn.")
+    add_target(parser, "-t", kind=Target.PANE, dest="target_pane", help="The pane to respawn.")
     add_pane_command_argument(
         parser, "What to run instead of the default shell: one string through it, or a program and its arguments."
     )

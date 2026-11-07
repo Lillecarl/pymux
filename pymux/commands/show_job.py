@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from pymux.core.main import Pymux
 
 
-from pymux.commands import CommandParser, add_command
+from pymux.commands import CommandParser, Target, add_command, add_target
 from pymux.commands.common import answer
 from pymux.jobs.job import Job, decode
 from pymux.jobs.table import find_job
@@ -46,7 +46,7 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
         action="store_true",
         help="Show stderr. Stdout otherwise.",
     )
-    parser.add_argument("job", metavar="<job>", type=int, nargs="?", help="The id `run` answered with.")
+    add_target(parser, "job", kind=Target.JOB, type=int, nargs="?", help="The id `run` answered with.")
     parser.add_argument(
         "--tag",
         "-T",

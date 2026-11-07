@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from pymux.core.main import Pymux
 
 
-from pymux.commands import CommandParser, Target, add_command
+from pymux.commands import CommandParser, Role, Target, add_command, add_target
 from pymux.commands.common import the_pane, the_window
 
 
@@ -39,9 +39,9 @@ def add_arguments(parser: argparse.ArgumentParser):
     group.add_argument("-v", dest="v", action="store_true", help="Stack the panes.")
     group.add_argument("-h", dest="h", action="store_true", help="Lay the panes side by side.")
     parser.add_argument("-d", dest="d", action="store_true", help="Leave the focus where it was.")
-    parser.add_argument("-s", dest="s", metavar="<src-pane>", help="The pane to move.")
-    parser.add_argument("-t", dest="t", metavar="<dst-window>", help="The window the pane goes to.")
+    add_target(parser, "-s", kind=Target.PANE, role=Role.SRC, dest="s", help="The pane to move.")
+    add_target(parser, "-t", kind=Target.WINDOW, role=Role.DST, dest="t", help="The window the pane goes to.")
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    add_arguments(add_command(subparsers, move_pane, acts_on={"s": Target.PANE, "t": Target.WINDOW}))
+    add_arguments(add_command(subparsers, move_pane, forwards=True))

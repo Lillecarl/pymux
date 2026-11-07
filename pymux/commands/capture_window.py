@@ -7,7 +7,7 @@ import anyio
 from pyte.screen import Screen
 
 from pymux import screenshot
-from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands import CommandException, CommandParser, Target, add_command, add_target
 from pymux.commands.common import the_window
 from pymux.commands.pictures import (
     FRAME_WAIT,
@@ -105,4 +105,4 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser.add_argument("-p", dest="p", action="store_true", help="Print to the output of the command line.")
     add_output_argument(parser)
     add_picture_arguments(parser, "window")
-    parser.add_argument("-t", dest="target_window", metavar="<target-window>", help="The window to capture.")
+    add_target(parser, "-t", kind=Target.WINDOW, dest="target_window", help="The window to capture.")

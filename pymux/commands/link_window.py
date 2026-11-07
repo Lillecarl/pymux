@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from pymux.core.main import Pymux
 
 
-from pymux.commands import CommandException, CommandParser, Target, add_command
+from pymux.commands import CommandException, CommandParser, Role, Target, add_command, add_target
 from pymux.commands.common import find_window, session_part
 from pymux.ids import WindowId, WindowIndex
 
@@ -78,8 +78,13 @@ def link_window(pymux: Pymux, args: argparse.Namespace) -> None:
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    parser = add_command(subparsers, link_window, acts_on={"s": Target.WINDOW, "t": Target.SLOT})
-    parser.add_argument(
-        "-s", dest="s", metavar="<src-window>", help="The window to link; the active one is the default."
+    parser = add_command(subparsers, link_window, forwards=True)
+    add_target(
+        parser,
+        "-s",
+        kind=Target.WINDOW,
+        role=Role.SRC,
+        dest="s",
+        help="The window to link; the active one is the default.",
     )
-    parser.add_argument("-t", dest="t", metavar="[<dst-session>:]<dst-index>", help="The index to put it at.")
+    add_target(parser, "-t", kind=Target.SLOT, role=Role.DST, dest="t", help="The index to put it at.")

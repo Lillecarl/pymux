@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from pymux.core.main import Pymux
 
 
-from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands import CommandException, CommandParser, Target, add_command, add_target
 from pymux.commands.common import answer, the_pane
 
 
@@ -31,10 +31,5 @@ def get(pymux: Pymux, args: argparse.Namespace) -> None:
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, get)
-    parser.add_argument(
-        "-t",
-        dest="target_pane",
-        metavar="<target-pane>",
-        help="The pane to read, rather than the active one.",
-    )
+    add_target(parser, "-t", kind=Target.PANE, dest="target_pane", help="The pane to read, rather than the active one.")
     parser.add_argument("what", metavar="<what>")
