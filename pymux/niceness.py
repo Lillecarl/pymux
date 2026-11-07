@@ -26,7 +26,8 @@ import contextlib
 import os
 import subprocess
 import sys
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
+from functools import partial
 from typing import TYPE_CHECKING, NamedTuple
 
 if TYPE_CHECKING:
@@ -113,15 +114,18 @@ def renice(socket_names: Sequence[str], niceness: int) -> int:
             print("Run it as the user of the servers: it asks sudo itself.", file=sys.stderr)
         return 1
 
-    refused = []
-    for ids in threads.values():
-        for thread in ids:
-            try:
-                os.setpriority(os.PRIO_PROCESS, thread, niceness)
-            except PermissionError:
-                refused.append(thread)
-            except ProcessLookupError:
-                pass  # A thread that ended.
+    refused: list[int] = []
+
+    def set_one(thread: int) -> None:
+        try:
+            os.setpriority(os.PRIO_PROCESS, thread, niceness)
+        except PermissionError:
+            refused.append(thread)
+        except ProcessLookupError:
+            pass  # A thread that ended.
+
+    for pid, ids in threads.items():
+        reach_every_thread(ids, partial(_threads_now, pid, psutil), set_one)
     if refused:
         # `renice PRIORITY -p ID...`: an absolute niceness for util-linux
         # and for BSD alike. `-n` is an increment on BSD.
@@ -146,6 +150,44 @@ def _with_children(targets: list[Target], psutil: ModuleType) -> list[Target]:
         with contextlib.suppress(psutil.Error):
             found.extend(Target("client", child.pid) for child in psutil.Process(target.pid).children(recursive=True))
     return found
+
+
+#: How many times `reach_every_thread` lists the threads again. A server
+#: starts a thread or two at a time, so this ends long before the limit.
+MOST_PASSES = 10
+
+
+def reach_every_thread(
+    first: Iterable[int], threads_now: Callable[[], Iterable[int]], set_one: Callable[[int], None]
+) -> None:
+    """
+    Set each thread, then list them again and set the new ones, until a
+    list holds no thread it has not set.
+
+    **One list is not enough.** A thread takes the niceness of the
+    thread that starts it, so one started between the list and the set
+    of its starter keeps the old niceness. A server answering
+    `list-processes` starts worker threads just then, and under load the
+    check saw one left at 0. Once every thread that exists is set, each
+    new one inherits the niceness.
+    """
+    done: set[int] = set()
+    pending = list(first)
+    for _ in range(MOST_PASSES):
+        if not pending:
+            return
+        for thread in pending:
+            set_one(thread)
+            done.add(thread)
+        pending = [thread for thread in threads_now() if thread not in done]
+
+
+def _threads_now(pid: int, psutil: ModuleType) -> list[int]:
+    "`pid`'s threads now, or none when it ended."
+    try:
+        return _threads_of(psutil.Process(pid))
+    except psutil.Error:
+        return []
 
 
 def _threads_of(process: psutil.Process) -> list[int]:

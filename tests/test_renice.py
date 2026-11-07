@@ -21,7 +21,7 @@ from session import create_session
 
 from pymux.answer import Answer
 from pymux.commands import handle_command
-from pymux.niceness import Target, as_a_person_runs, targets_of
+from pymux.niceness import MOST_PASSES, Target, as_a_person_runs, reach_every_thread, targets_of
 
 
 async def _run_answering(pymux, state, command) -> list[str]:
@@ -89,6 +89,31 @@ def test_renice_reaches_every_thread_of_the_server(tmp_path):
             [*pymux, "kill-server"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30
         )
         server.wait(timeout=30)
+
+
+def test_a_thread_started_during_the_renice_is_reached():
+    "It took the niceness of a starter not yet set, and kept it: the gate saw `{0, 7}`."
+    threads = [1, 2]
+    niceness = {}
+
+    def set_one(thread):
+        niceness[thread] = 7
+        if thread == 1 and 3 not in threads:
+            threads.append(3)  # Thread 2 starts it, and 2 is not set yet.
+            niceness[3] = 0
+
+    reach_every_thread(list(threads), lambda: list(threads), set_one)
+
+    assert niceness == {1: 7, 2: 7, 3: 7}
+
+
+def test_renice_stops_listing_when_threads_never_stop_starting():
+    started = iter(range(100, 10_000))
+    asked = []
+
+    reach_every_thread([1], lambda: [next(started)], asked.append)
+
+    assert len(asked) == MOST_PASSES
 
 
 def test_renice_refuses_a_niceness_out_of_range():
