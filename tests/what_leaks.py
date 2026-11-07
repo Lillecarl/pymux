@@ -67,7 +67,7 @@ that only one route has shows up as the same round passing on one and
 failing on the other. The connection route is where the one leak this
 repository has already had lived -- `test_server_tasks.py` exists
 because a `ServerConnection` task was collected while still pending.
-Lillecarl/pymux#226.
+Lillecarl/pyterm#228.
 
 ## What it answers with
 
@@ -135,7 +135,7 @@ DEFAULT_TOLERANCE = 64
 
 #: The client this drives. Two of them, of different sizes, because a
 #: view is per client and a client that sees part of the plane runs
-#: different code (slice 5 of Lillecarl/pymux#217).
+#: different code (slice 5 of Lillecarl/pyterm#219).
 BIG = Size(rows=24, columns=100)
 SMALL = Size(rows=14, columns=48)
 

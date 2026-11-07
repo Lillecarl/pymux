@@ -17,7 +17,7 @@ for this on purpose: every answer carries the identifier.
 A notification with no identifier gets one too, and every notification
 asks the terminal to report a click (`a=report`): the click shows the
 pane it came from, on the client whose terminal was clicked. The
-program is told of the click only when it asked itself. Lillecarl/pymux#779.
+program is told of the click only when it asked itself. Lillecarl/pyterm#781.
 """
 
 from __future__ import annotations
@@ -85,7 +85,7 @@ def read_payload_type(metadata: str) -> str:
 class NotificationSource(StrEnum):
     """
     What a notification came through, so the hub can say it: which
-    programs use which is still being learned. Lillecarl/pymux#768.
+    programs use which is still being learned. Lillecarl/pyterm#770.
     """
 
     #: A record from before the hub kept this.
@@ -128,7 +128,7 @@ class NotificationCenter:
         self._records: list[Notification] = []
         self._pending: dict[tuple[PaneId | None, str], Notification] = {}
         #: Called with each finished record, which is what marks the
-        #: window it came from. Lillecarl/pymux#767.
+        #: window it came from. Lillecarl/pyterm#769.
         self.on_added: Callable[[Notification], None] | None = None
 
     def add(
@@ -227,7 +227,7 @@ class NotificationCenter:
         """
         Mark what `seen_of` says was seen, and forget what was seen more
         than `keep` seconds ago. An unseen one stays, until the cap. Zero
-        keeps every one. Lillecarl/pymux#780.
+        keeps every one. Lillecarl/pyterm#782.
         """
         records = []
         for record in self._records:
@@ -381,7 +381,7 @@ class NotificationRoutes:
         # Ours, while more chunks of the notification follow.
         self._open: set[str] = set()
         # Ours, shown on the terminals and not yet seen in pymux, and
-        # their panes. Lillecarl/pymux#799.
+        # their panes. Lillecarl/pyterm#801.
         self._shown: dict[str, PaneId] = {}
 
     def outgoing(self, pane_id: PaneId, param: str) -> str:

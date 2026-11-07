@@ -1,6 +1,6 @@
 """
 A server about to start from a login's scope runs again inside a scope
-of the person's systemd, so a logout cannot end it. Lillecarl/pymux#736.
+of the person's systemd, so a logout cannot end it. Lillecarl/pyterm#738.
 
 The build sandbox has no systemd, so these hold the decision; the move
 itself was measured on a host: the server and its pane both landed in

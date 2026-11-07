@@ -50,7 +50,7 @@ class Requests:
         #: The pane this connection is streaming, when it asked for one.
         #: A connection streams at most one pane: a caller that watches
         #: two opens two, so one slow viewer never holds up another.
-        #: Lillecarl/pymux#461.
+        #: Lillecarl/pyterm#463.
         self.stream: PaneStream | None = None
 
     async def stream_pane(self, packet: dict[str, Any]) -> None:
@@ -59,7 +59,7 @@ class Requests:
 
         **The frames are the protocol and this envelope is not.** A relay
         passes `data` on without reading it, so the packet names here stay
-        ours to change. Lillecarl/pymux#461.
+        ours to change. Lillecarl/pyterm#463.
         """
         from pymux.web.stream import PaneStream
 
@@ -103,7 +103,7 @@ class Requests:
             # The session of the pane the command was typed in. Without
             # it the fake client lands on the session a person looked at
             # last, so `pymux new-window` typed in a pane of one session
-            # would open the window in another. Lillecarl/pymux#323.
+            # would open the window in another. Lillecarl/pyterm#325.
             session = self.connection.pymux.session_holding(pane) if pane is not None else None
 
             client_state = create_app(ClientRole(self.connection), start=False, session=session)
@@ -142,7 +142,7 @@ class Requests:
                 # and this route is the one that awaits it: the person
                 # who typed `pymux wait-for done` waits for it, while
                 # every other client of this server keeps running.
-                # Lillecarl/pymux#87.
+                # Lillecarl/pyterm#89.
                 with started_by(Origin.SOCKET):
                     answer = handle_command(pymux, packet[Field.DATA], packet.get(Field.TARGETS))
                     if answer is not None:
@@ -151,7 +151,7 @@ class Requests:
                 if reply.forwarded:
                     # A peer ran this and previews what it did: the tree
                     # it gets next says what came of it, changed or not.
-                    # Lillecarl/pymux#873.
+                    # Lillecarl/pyterm#875.
                     for link in pymux.peer_links():
                         if link.watching:
                             link.answer()
@@ -159,7 +159,7 @@ class Requests:
                 # that watches syncs its focus only after its own keys:
                 # a wheel over the pane a split just made would be over
                 # an unfocused pane. Before the exit, so a script that
-                # scrolls next finds it synced. Lillecarl/pymux#507.
+                # scrolls next finds it synced. Lillecarl/pyterm#509.
                 pymux.focus.sync_clients()
                 # Send the output of the command back to the client, and
                 # close the connection.

@@ -47,7 +47,7 @@ def main() -> None:
         # pty and a socket until somebody notices. Four of them were sitting
         # on a machine after one afternoon of failed runs, which is what
         # sent me looking for a bug in `kill-server` that was not there.
-        # Lillecarl/pymux#322.
+        # Lillecarl/pyterm#324.
         if server.is_alive():
             server.kill()
 

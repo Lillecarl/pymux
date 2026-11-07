@@ -5,7 +5,7 @@ Sound arrives in bursts and leaves at the speaker's clock. The buffer
 holds `target` frames before it plays, so a late burst does not stop
 the sound. Its size is the round trip times a multiplier, which the
 server measures on the client's connection (`audio.py`).
-Lillecarl/pymux#657.
+Lillecarl/pyterm#659.
 
 A frame is any size Opus encodes, which each client chooses
 (`audio-frame`). So every tuning here is in milliseconds, and turns into
@@ -69,7 +69,7 @@ RAMP_LOW_MS = 10
 MAX_CORRECTION = 1000e-6
 
 #: The least a buffer holds, however short the round trip: two frames,
-#: so one late packet on a local link is not a gap. Lillecarl/pymux#661.
+#: so one late packet on a local link is not a gap. Lillecarl/pyterm#663.
 FLOOR_FRAMES = 2
 #: And the most, so a link that stalled once does not keep a second of
 #: delay for ever.
@@ -148,7 +148,7 @@ class JitterBuffer:
     million, and 350 at 60 ms frames, where that is one sample a frame.
     Real clocks drift under a hundred, and a sample a thousand is not
     heard. It is how other players keep two clocks together without a
-    resampler. Lillecarl/pymux#660.
+    resampler. Lillecarl/pyterm#662.
 
     It judges the fill on an average of about a second, so a burst off
     the network moves nothing: only a fill that stays off its target is

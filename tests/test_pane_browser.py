@@ -1,6 +1,6 @@
 """
 `pane-browser`: which programs in a pane find `pymux-browser` as their
-browser. Lillecarl/pymux#653.
+browser. Lillecarl/pyterm#655.
 """
 
 from __future__ import annotations

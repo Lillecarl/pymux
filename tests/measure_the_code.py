@@ -1,7 +1,7 @@
 """
 How big a source tree is, and where: its code, docstring, comment and
 blank lines, and its biggest classes and functions. Tests are left out.
-Lillecarl/pymux#775 measures against it.
+Lillecarl/pyterm#777 measures against it.
 
     python tests/measure_the_code.py pymux ../pyte/pyte
 """

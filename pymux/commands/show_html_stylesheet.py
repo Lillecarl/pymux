@@ -29,7 +29,7 @@ def show_html_stylesheet(pymux: Pymux, args: argparse.Namespace) -> None:
     the conventional palette, which is the right answer for a caller
     that serves one stylesheet for every pane.
 
-    Lillecarl/pymux#452.
+    Lillecarl/pyterm#454.
     """
     if not args.target_pane:
         show_listing(pymux, "show-html-stylesheet", CSS)

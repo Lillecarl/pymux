@@ -33,7 +33,7 @@ _WENT_AS_IT_CAME = frozenset(
 )
 
 #: How many notification boxes one client stacks; a new one pushes the
-#: oldest off. Lillecarl/pymux#826.
+#: oldest off. Lillecarl/pyterm#828.
 MAX_POPUPS = 5
 
 
@@ -44,7 +44,7 @@ class Notifier:
         self.pymux = pymux
 
     def notified(self, record: Notification) -> None:
-        "Mark the window a notification came from, and tell each client. Lillecarl/pymux#767."
+        "Mark the window a notification came from, and tell each client. Lillecarl/pyterm#769."
         self._pop_up(record)
         self._emit(record)
         found = self.pymux.place_of_pane_id(record.pane_id)
@@ -59,7 +59,7 @@ class Notifier:
         Show a notification as a box on each client that asks for one,
         for `notification-popup-seconds`. Not for a pane a client with
         the focus already shows, as a desktop notification is not.
-        Lillecarl/pymux#826.
+        Lillecarl/pyterm#828.
         """
         if record.pane_id is not None and record.pane_id in self.panes_in_sight():
             return
@@ -107,10 +107,10 @@ class Notifier:
         in the OSC that terminal shows, whichever OSC the program used.
         OSC 99 to an OSC 99 terminal already went as it came, chunk by
         chunk, with everything the program asked of it; and iTerm2 got
-        an attention request as it came. Lillecarl/pymux#497.
+        an attention request as it came. Lillecarl/pyterm#499.
 
         As OSC 99 it carries an identifier of pymux's own, so a click
-        shows the pane. Lillecarl/pymux#779.
+        shows the pane. Lillecarl/pyterm#781.
         """
         if record.pane_id is not None and record.pane_id in self.panes_in_sight():
             return
@@ -162,7 +162,7 @@ class Notifier:
         """
         Take the desktop notifications of a window off each terminal that
         can close one, once a client whose terminal has the focus shows
-        that window. Lillecarl/pymux#799.
+        that window. Lillecarl/pyterm#801.
         """
         if not self.pymux.notifications.any_shown:
             return

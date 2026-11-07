@@ -20,7 +20,7 @@ def move_pane(pymux: Pymux, args: argparse.Namespace) -> None:
     window that holds the pane already answers nothing, the way
     tmux's does. -h lays the panes side by side and -v stacks them;
     -d leaves the focus where it was. A window the pane leaves empty
-    is gone. Lillecarl/pymux#297.
+    is gone. Lillecarl/pyterm#299.
     """
     pane = the_pane(pymux, args.s)
     window = the_window(pymux, args.t)

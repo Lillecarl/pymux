@@ -1,7 +1,7 @@
 Head-to-head probes of the divergences in
 tests/reference/tmux_compat/divergences.toml, against the pinned tmux
 oracle. One block per entry: the transcript of the probe that proved
-what tmux does, run by hand until #384's harness carries it.
+what tmux does, run by hand until #386's harness carries it.
 
 == swap-pane -U and -D directions (tmux 3.7c)
 

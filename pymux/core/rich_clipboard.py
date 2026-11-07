@@ -1,6 +1,6 @@
 """
 kitty's clipboard protocol (OSC 5522) between the panes and the
-terminals of the clients. Lillecarl/pymux#893.
+terminals of the clients. Lillecarl/pyterm#895.
 
 A pane's write holds any MIME type. It goes into the paste buffer of
 the session with all of them, and to every client's terminal: as OSC
@@ -22,7 +22,7 @@ without the mode is read as text by pymux and pasted.
 A mirrored pane's read goes to a peer when a person there was last on
 the pane, or when its password came from a paste event there. The
 frames carry the pane's mode, so a peer's terminal sends paste events
-too. Lillecarl/pymux#902.
+too. Lillecarl/pyterm#904.
 
 Every packet pymux sends a terminal carries an id of pymux's own, so
 that an answer is known for pymux's and never reaches a pane as keys.

@@ -2,7 +2,7 @@
 The named buffers: `set-buffer`, `show-buffer -b`, `list-buffers`,
 `delete-buffer`, `load-buffer` and `save-buffer`.
 
-The rules this judges, Lillecarl/pymux#303: a `-b` name reaches a
+The rules this judges, Lillecarl/pyterm#305: a `-b` name reaches a
 store of its own on the server; without one the session's one buffer
 is the buffer, and `paste-buffer` pastes it. A name nothing holds is
 an error on every read and write of it.

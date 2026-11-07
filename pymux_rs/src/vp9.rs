@@ -1,7 +1,7 @@
 //! The client's half of a window pane in VP9: libvpx decodes each frame,
 //! and the rectangles that changed go back out as RGB rows, the way the
 //! terminal reads them. pysmithay holds the encoder, on the server.
-//! Lillecarl/pymux#639.
+//! Lillecarl/pyterm#641.
 
 use std::ffi::CStr;
 use std::sync::Mutex;

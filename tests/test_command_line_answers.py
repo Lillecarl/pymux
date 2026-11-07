@@ -4,7 +4,7 @@ The command line gets answers.
 A command that runs from the command line runs on a client that draws
 nothing, and the answers it asks for -- a listing, a value, an id --
 have to come back on stdout. They used to go to a popup on that
-client, which went nowhere. Lillecarl/pymux#288, #289, #292.
+client, which went nowhere. Lillecarl/pyterm#290, #291, #294.
 """
 
 from __future__ import annotations
@@ -66,7 +66,7 @@ async def test_capture_pane_p_answers_one_entry_per_call():
 
     What `capture-pane -p` really printed one character per line is in
     `tests/drive_with_pty.py`, and it was never this: a detached pane
-    parsed at zero columns. Lillecarl/pymux#321.
+    parsed at zero columns. Lillecarl/pyterm#323.
     """
     async with create_session() as (pymux, state):
         pymux.answer = Answer()

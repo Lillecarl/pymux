@@ -5,14 +5,14 @@ A bar in three parts: this pane's title, and its neighbours' names.
 
 The middle is the pane's own title, centred over the pane. The two
 edges name the pane to the left and the pane to the right, and each one
-is absent when there is no such pane. Lillecarl/pymux#207.
+is absent when there is no such pane. Lillecarl/pyterm#209.
 
 **This is the navigation of a strip.** A strip runs past the edge of
 the screen, so a person has to know what is out there. The answer used
 to be a peek: two cells of the next column showed at the edge, which
 says that something is there and nothing about what. A name says what.
 The peek is gone, so the bar is now the only answer.
-Lillecarl/pymux#198, Lillecarl/pymux#209.
+Lillecarl/pyterm#200, Lillecarl/pyterm#211.
 
 **The width is why this is a control and not three windows.** Three
 `Window`s in a `VSplit` would each need a width before any of them
@@ -95,7 +95,7 @@ class PaneTitleBar(UIControl):
     def content_version(self, width: int, height: int) -> Hashable:
         """
         The parts and the width: a bar that reads the same writes the
-        cells it wrote before. Lillecarl/pymux#578.
+        cells it wrote before. Lillecarl/pyterm#580.
 
         **Not kept for `create_content`.** A frame that does not ask
         for a version would lay out the parts of an older one.

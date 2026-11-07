@@ -5,7 +5,7 @@ tmux's `swap-pane -U` swaps with the pane above; pymux's swaps with
 the pane below. The difference is deliberate and lives in the ledger
 (`tests/reference/tmux_compat/divergences.toml`), with the tmux 3.7c
 probe beside it. The name ends in `_product_divergence` so the ledger
-and the tests can find each other. Lillecarl/pymux#400.
+and the tests can find each other. Lillecarl/pyterm#402.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ async def test_swap_pane_swaps_the_other_way_from_tmux_product_divergence(pymux)
     """
     -U takes the pane below and -D the one above, where tmux's -U is
     up and -D down. The pair is one divergence, recorded under one
-    entry, with the tmux 3.7c probe beside it. Lillecarl/pymux#400.
+    entry, with the tmux 3.7c probe beside it. Lillecarl/pyterm#402.
     """
     await said(pymux, "split-window -v")
     await said(pymux, "split-window -v")

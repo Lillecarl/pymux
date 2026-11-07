@@ -7,7 +7,7 @@ screen of the pane's size, and the mirror sends frames of that screen
 in place of the pane's (`MirrorSource.frame`). The keys and the mouse
 of the person at the peer go to that application while it runs. Each
 peer has a copy mode of its own, as each client has.
-Lillecarl/pymux#759.
+Lillecarl/pyterm#761.
 """
 
 from __future__ import annotations

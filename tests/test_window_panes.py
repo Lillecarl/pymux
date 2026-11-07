@@ -2,7 +2,7 @@
 A Wayland window in a pane, end to end: the window opens a pane, a kitty
 client is sent the whole frame and then only the damage, the keyboard
 and the mouse reach the window, and the pane goes when the window does.
-Needs the `wayland` extra. Lillecarl/pymux#620.
+Needs the `wayland` extra. Lillecarl/pyterm#622.
 """
 
 from __future__ import annotations
@@ -167,7 +167,7 @@ async def test_a_redraw_places_the_window_again(tmp_path, frames):
 
 
 async def test_the_picture_goes_under_what_pymux_draws_over_the_pane(tmp_path):
-    "Under every cell with a colour, so a prompt or a message covers it. Lillecarl/pymux#647."
+    "Under every cell with a colour, so a prompt or a message covers it. Lillecarl/pyterm#649."
     async with with_a_window(tmp_path) as (_pymux, _state, pane, recorder, _log, _probe):
         await once(lambda: "\x1b_Ga=p," in recorder.out, 10.0, "the window was never placed")
         put = recorder.out[recorder.out.index("\x1b_Ga=p,") :].split("\x1b\\", 1)[0]
@@ -188,7 +188,7 @@ def frames_of(recorder: Recorder) -> list[list[dict]]:
 
 
 async def test_a_client_that_encodes_frames_gets_raw_pixels(tmp_path):
-    "The whole frame, then the square alone, as RGB bands. Lillecarl/pymux#634."
+    "The whole frame, then the square alone, as RGB bands. Lillecarl/pyterm#636."
     async with with_a_window(tmp_path, frames=True) as (_pymux, _state, _pane, recorder, log, _probe):
         await once(lambda: "drew" in logged(log), 10.0, "the window never drew its second frame")
         square = [[10, 5, 4, 4, bytes([0xFF, 0, 0]) * 16]]
@@ -210,7 +210,7 @@ async def test_a_client_that_encodes_frames_gets_raw_pixels(tmp_path):
 
 
 async def test_a_client_that_decodes_vp9_gets_the_window_in_it(tmp_path):
-    "A keyframe, then the block around the square. Lillecarl/pymux#639."
+    "A keyframe, then the block around the square. Lillecarl/pyterm#641."
     pymux_rs = pytest.importorskip("pymux_rs")
     async with with_a_window(tmp_path, frames=True, codecs=("vp9",), codec=WindowCodec.VP9) as (
         _pymux,
@@ -263,7 +263,7 @@ async def test_a_client_that_answers_frames_has_one_unanswered_at_most(tmp_path)
     """
     The next frame waits for the client to say it wrote the last one: a
     socket that drained says only that the kernel took it, and over SSH
-    the frames piled up past it. Lillecarl/pymux#641.
+    the frames piled up past it. Lillecarl/pyterm#643.
     """
     async with with_a_window(tmp_path, animate=True, frames=True, shows=True) as (
         _pymux,
@@ -294,7 +294,7 @@ async def test_the_terminals_answer_lets_the_next_frame_go(tmp_path):
     """
     The last part asks the client to let its terminal answer, and that
     answer, arriving as terminal input, counts as the frame shown.
-    Lillecarl/pymux#643.
+    Lillecarl/pyterm#645.
     """
     async with with_a_window(tmp_path, animate=True, frames=True, shows=True) as (
         _pymux,
@@ -318,7 +318,7 @@ async def test_the_terminals_answer_lets_the_next_frame_go(tmp_path):
 
 
 async def test_a_terminal_that_never_answers_costs_frames_not_the_window(tmp_path, monkeypatch):
-    "Lillecarl/pymux#643."
+    "Lillecarl/pyterm#645."
     monkeypatch.setattr("pymux.connection.pacing.FRAME_ANSWER_SECONDS", 0.3)
     async with with_a_window(tmp_path, animate=True, frames=True, shows=True) as (
         _pymux,
@@ -388,7 +388,7 @@ async def test_a_window_draws_no_faster_than_a_frame_rate_chosen_for_it(tmp_path
 
 
 async def test_a_window_with_no_frame_rate_chosen_goes_at_the_links_pace(tmp_path):
-    "The default thirty paces the cells, not a window. Lillecarl/pymux#636."
+    "The default thirty paces the cells, not a window. Lillecarl/pyterm#638."
     async with with_a_window(tmp_path, animate=True) as (pymux, state, _pane, _recorder, log, _probe):
         assert not state.session.arrangement.get_active_window().frame_rate_set
         await once(lambda: logged(log).count("frame") >= 3, 10.0, "the window never drew again")
@@ -404,7 +404,7 @@ async def test_a_commit_that_draws_nothing_is_answered_at_the_outputs_refresh(tm
     Firefox commits a frame callback with no buffer and paints nothing
     until it is answered: the window stood still, and so did every
     click. With nothing sent, no link paces it, so the 60 Hz the output
-    says it has does. Lillecarl/pymux#638.
+    says it has does. Lillecarl/pyterm#640.
     """
     async with with_a_window(tmp_path, idle=True) as (_pymux, _state, _pane, _recorder, log, _probe):
         await once(lambda: logged(log).count("idle") >= 3, 10.0, lambda: "answered %d" % logged(log).count("idle"))
@@ -503,7 +503,7 @@ async def test_a_capture_lets_a_window_nobody_shows_draw_what_it_waits_to(tmp_pa
     """
     A client with no kitty graphics shows no window, so the probe waits
     after its first frame. What a capture asks for first lets it draw
-    on to the square. Lillecarl/pymux#822.
+    on to the square. Lillecarl/pyterm#824.
     """
     async with with_a_window(tmp_path, kitty=False) as (pymux, _state, pane, _recorder, log, _probe):
         toplevel = pane.terminal.toplevel
@@ -525,7 +525,7 @@ async def test_a_window_that_never_stops_drawing_costs_a_capture_its_timeout(tmp
 
 
 async def test_capture_pane_png_of_a_window_pane_is_the_windows_frame(tmp_path, monkeypatch):
-    "Lillecarl/pymux#809."
+    "Lillecarl/pyterm#811."
     log = tmp_path / "probe.log"
     log.touch()
     async with with_a_shell(tmp_path, monkeypatch) as (pymux, session, _window, shell):
@@ -558,7 +558,7 @@ async def test_capture_pane_png_of_a_window_pane_is_the_windows_frame(tmp_path, 
 
 @pytest.mark.parametrize("command", ["capture-client", "capture-window"])
 async def test_a_picture_of_the_whole_shows_the_windows_frame_in_its_pane(tmp_path, monkeypatch, command):
-    "Lillecarl/pymux#814."
+    "Lillecarl/pyterm#816."
     log = tmp_path / "probe.log"
     log.touch()
     async with with_a_shell(tmp_path, monkeypatch) as (pymux, session, _window, shell):
@@ -655,7 +655,7 @@ async def test_keys_reach_the_window(tmp_path):
 
 
 async def test_a_key_pymux_cannot_name_reaches_the_window(tmp_path):
-    "ctrl+=, foot's zoom, as the client's terminal sends it. Lillecarl/pymux#627."
+    "ctrl+=, foot's zoom, as the client's terminal sends it. Lillecarl/pyterm#629."
     async with with_a_window(tmp_path) as (_pymux, state, _pane, _recorder, log, _probe):
         await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
         state.client.connection._process({"cmd": "in", "data": "\x1b[61;5u"})
@@ -665,7 +665,7 @@ async def test_a_key_pymux_cannot_name_reaches_the_window(tmp_path):
 
 
 async def test_text_no_key_types_reaches_the_window(tmp_path):
-    "é and an emoji, which no key of the US keymap types, arrive as text. Lillecarl/pymux#624."
+    "é and an emoji, which no key of the US keymap types, arrive as text. Lillecarl/pyterm#626."
     async with with_a_window(tmp_path, text=True) as (_pymux, state, _pane, _recorder, log, _probe):
         await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
         state.client.connection._process({"cmd": "in", "data": "é"})
@@ -675,7 +675,7 @@ async def test_text_no_key_types_reaches_the_window(tmp_path):
 
 
 async def test_kill_server_stops_with_a_window_open(tmp_path):
-    "A window pane has no reap to wait for. Lillecarl/pymux#679."
+    "A window pane has no reap to wait for. Lillecarl/pyterm#681."
     async with with_a_window(tmp_path) as (pymux, _state, _pane, _recorder, _log, _probe):
         with anyio.fail_after(10):
             await pymux.hang_up_and_stop()
@@ -692,7 +692,7 @@ async def test_a_click_from_the_terminal_reaches_the_window(tmp_path):
         )
         # Not the pane's first cell, where every click once landed, and
         # inside the probe's 64x32 buffer, which is all the window
-        # takes pointer events on. Lillecarl/pymux#645.
+        # takes pointer events on. Lillecarl/pyterm#647.
         column, row = 3, 1
         x, y = where.xpos + column, where.ypos + row
         for end in ("M", "m"):
@@ -709,7 +709,7 @@ async def test_a_click_from_the_terminal_reaches_the_window(tmp_path):
 
 
 async def test_a_terminal_that_reports_pixels_puts_the_pointer_on_the_pixel(tmp_path):
-    "SGR pixel mouse: the cell, and where in it. Lillecarl/pymux#648."
+    "SGR pixel mouse: the cell, and where in it. Lillecarl/pyterm#650."
     async with with_a_window(tmp_path, cell=(10, 20)) as (pymux, state, pane, recorder, log, _probe):
         await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
         # kitty, which numbers its first pixel 0.
@@ -745,7 +745,7 @@ async def test_a_terminal_that_can_never_report_pixels_keeps_the_mouse_in_cells(
 
 
 async def test_a_terminal_that_keeps_its_cell_size_keeps_the_mouse_in_cells(tmp_path):
-    "xterm answers 1016 and not the cell size query: a pixel would be read as a cell. Lillecarl/pymux#651."
+    "xterm answers 1016 and not the cell size query: a pixel would be read as a cell. Lillecarl/pyterm#653."
     async with with_a_window(tmp_path) as (pymux, state, pane, _recorder, log, _probe):
         await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
         pymux.session_defaults.mouse = True
@@ -767,7 +767,7 @@ async def test_a_terminal_that_keeps_its_cell_size_keeps_the_mouse_in_cells(tmp_
 
 
 async def test_the_terminal_shows_the_pointer_the_window_asks_for(tmp_path):
-    "Lillecarl/pymux#650."
+    "Lillecarl/pyterm#652."
     async with with_a_window(tmp_path) as (pymux, state, pane, recorder, log, _probe):
         await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
         pymux.session_defaults.mouse = True
@@ -780,7 +780,7 @@ async def test_the_terminal_shows_the_pointer_the_window_asks_for(tmp_path):
 
 
 async def test_a_pointer_that_moves_off_the_pane_leaves_the_window(tmp_path):
-    "Lillecarl/pymux#899."
+    "Lillecarl/pyterm#901."
     async with with_a_window(tmp_path) as (pymux, state, pane, _recorder, log, _probe):
         await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
         pymux.session_defaults.mouse = True
@@ -800,7 +800,7 @@ async def test_a_pointer_that_moves_off_the_pane_leaves_the_window(tmp_path):
 
 
 async def test_a_pointer_that_leaves_the_terminal_leaves_the_window(tmp_path):
-    "kitty's leave report, in SGR pixel mode. Lillecarl/pymux#899."
+    "kitty's leave report, in SGR pixel mode. Lillecarl/pyterm#901."
     async with with_a_window(tmp_path, cell=(10, 20)) as (pymux, state, pane, recorder, log, _probe):
         await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
         pymux.session_defaults.mouse = True
@@ -828,7 +828,7 @@ async def test_a_pointer_that_leaves_the_terminal_leaves_the_window(tmp_path):
 
 @pytest.mark.parametrize("scroll", list(WindowScroll))
 async def test_a_scroll_reaches_the_window_as_the_client_says(tmp_path, scroll):
-    "One cell of pixels for `smooth`, one wheel notch for `notch`. Lillecarl/pymux#652."
+    "One cell of pixels for `smooth`, one wheel notch for `notch`. Lillecarl/pyterm#654."
     async with with_a_window(tmp_path) as (pymux, state, pane, _recorder, log, _probe):
         await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
         pymux.session_defaults.mouse = True

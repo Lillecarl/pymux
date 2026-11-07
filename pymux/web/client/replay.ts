@@ -1,6 +1,6 @@
 /**
  * A player for `record-export -F web`: the frames of a recording, handed
- * to `<pymux-pane>` at the times they came. Lillecarl/pymux#610.
+ * to `<pymux-pane>` at the times they came. Lillecarl/pyterm#612.
  *
  * It takes a parsed file and an element, and nothing about where either
  * came from, so a page that fetched the file, a page that read one off

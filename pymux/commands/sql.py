@@ -27,7 +27,7 @@ def sql(pymux: Pymux, args: argparse.Namespace):
     The jobs are there, and so are the sessions, windows, panes and
     clients, by the snapshot's names under `live`: `live.windows`.
     Every table reads the server's objects as the question starts, and
-    nothing is stored (Lillecarl/pymux#722). Free-form: `sql SELECT id, command
+    nothing is stored (Lillecarl/pyterm#724). Free-form: `sql SELECT id, command
     FROM jobs WHERE status = 'running'` answers with a table, `--json`
     with objects. `sql
     --save NAME` keeps the question on the server under a name, with

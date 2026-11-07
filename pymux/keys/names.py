@@ -159,7 +159,7 @@ def name_of(base: str, mods: int) -> KeyName:
 #: ctrl and shift on a letter. prompt_toolkit names these, and only a
 #: terminal that says more than the legacy encoding sends one: there,
 #: ctrl+a and ctrl+shift+a are the same control code.
-#: Lillecarl/pymux#168.
+#: Lillecarl/pyterm#170.
 _CTRL_SHIFT_LETTERS = {chr(ord("a") + i): getattr(Keys, "ControlShift%s" % chr(ord("A") + i)) for i in range(26)}
 
 
@@ -201,12 +201,12 @@ TILDE_KEYS = {
 #:
 #: **These are the keys a keyboard can leave out.** A laptop with no
 #: Home key cannot make one, and a program that asks for it then cannot
-#: be answered at all. That is what Lillecarl/pymux#220 is for, so a
+#: be answered at all. That is what Lillecarl/pyterm#222 is for, so a
 #: completer offers these first.
 #:
 #: It is the two tables above, read for their keys. A list written
 #: beside them would be a second list to keep right, which is what
-#: Lillecarl/pymux#234 cost ctrl+Home.
+#: Lillecarl/pyterm#236 cost ctrl+Home.
 KEYS_A_KEYBOARD_SPELLS_OUT = frozenset(str.__str__(key) for key in (*TILDE_KEYS.values(), *LETTER_KEYS.values()))
 
 
@@ -244,7 +244,7 @@ class Unnamed:
 
     It carries why, because a key no binding of pymux's can take gives
     a person no way to find out what happened. The parser writes the
-    reason and the sequence to the log. Lillecarl/pymux#167.
+    reason and the sequence to the log. Lillecarl/pyterm#169.
 
     **Not a tuple.** A tuple is how the parser spells a key that
     arrives as several, so an `Unnamed` that was one would be taken
@@ -334,7 +334,7 @@ def _modified_form_of(key: Keys, ctrl: bool, shift: bool) -> Keys | None:
     member is built rather than looked up: `Keys.ControlShiftLeft`,
     `Keys.ControlF13`, `Keys.ShiftDelete`. A table of the combinations
     was here instead, it named twenty-two, and it left out the whole
-    of shift and everything above F12. Lillecarl/pymux#234.
+    of shift and everything above F12. Lillecarl/pyterm#236.
 
     The order is the most it can carry first. A key that has no form
     for both keeps the ctrl and drops the shift, which is the trade the
@@ -401,7 +401,7 @@ def event_named(base: str, mods: int) -> KeyEvent:
     **A name goes to a pane as an event, never as bytes.** The round
     trip through the legacy encoding dropped whatever that encoding
     cannot carry, and a key with no legacy form came out as its own
-    name. Lillecarl/pymux#237.
+    name. Lillecarl/pyterm#239.
 
     Raises `ValueError` for a name that no key has.
     """
@@ -457,15 +457,15 @@ def key_named(base: str, mods: int) -> Key:
     sequence and hands over the base and the bits. A key a person
     writes comes here through `key_spelling.py`, which reads the name
     and hands over the same two. Two translations of the same thing is
-    what Lillecarl/pymux#119 cost 52 wrong keys, and what
-    Lillecarl/pymux#234 cost ctrl+Home: the written form had a table of
+    what Lillecarl/pyterm#121 cost 52 wrong keys, and what
+    Lillecarl/pyterm#236 cost ctrl+Home: the written form had a table of
     its own, and the table stopped at the four arrows.
     """
     if mods & MODIFIERS_WITH_NO_MEMBER:
         # super, hyper or meta. No `Keys` member names one of these and
         # no list could: five modifiers over every key is more
         # combinations than anybody would write down. So the name is
-        # built, which is what `KeyName` is for. Lillecarl/pymux#181.
+        # built, which is what `KeyName` is for. Lillecarl/pyterm#183.
         return with_alt(name_of(base, mods & ~Modifier.ALT), mods)
 
     if base == "escape":
@@ -494,7 +494,7 @@ def key_named(base: str, mods: int) -> Key:
             # Only a terminal that says more than the legacy encoding
             # can tell these apart: ctrl+a and ctrl+shift+a are one
             # control code there. Dropping the shift would leave a
-            # person able to bind neither on its own. Lillecarl/pymux#168.
+            # person able to bind neither on its own. Lillecarl/pyterm#170.
             both = _CTRL_SHIFT_LETTERS.get(base.lower())
             if both is not None:
                 return with_alt(both, mods)

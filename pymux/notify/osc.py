@@ -187,7 +187,7 @@ def set_user_var_of(rest: str) -> tuple[str, str] | None:
 #: The user variable passthrough sets on the client's own terminal, so
 #: that the terminal can let go of its shortcuts too. In kitty:
 #: `map --when-focus-on var:pymux_passthrough kitty_mod+t`.
-#: Lillecarl/pymux#530.
+#: Lillecarl/pyterm#532.
 PASSTHROUGH_VARIABLE = "pymux_passthrough"
 
 
@@ -324,7 +324,7 @@ NO_PROGRESS: Final = Progress(0, 0)
 
 
 def progress_of(param: str) -> Progress | None:
-    "The progress of `OSC 9 ; 4 ; state ; percent`, or None for any other OSC 9. Lillecarl/pymux#788."
+    "The progress of `OSC 9 ; 4 ; state ; percent`, or None for any other OSC 9. Lillecarl/pyterm#790."
     fields = param.split(";")
     if fields[0] != "4" or len(fields) < 2 or not fields[1].isdigit() or int(fields[1]) > 4:
         return None
@@ -383,7 +383,7 @@ def ftcs_of(param: str) -> tuple[str, int | None] | None:
 
     **Options after the mark are read past**, `A;cl=m` and `D;0;aid=7`
     alike: shell integrations send them, and WezTerm documents both.
-    tmux's `input_osc_133` reads the letter alone. Lillecarl/pymux#720.
+    tmux's `input_osc_133` reads the letter alone. Lillecarl/pyterm#722.
     """
     letter, sep, rest = param.partition(";")
     if letter not in _FTCS_MARKS:

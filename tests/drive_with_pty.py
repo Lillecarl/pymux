@@ -88,7 +88,7 @@ DETACH = b"\x02d"
 
 #: What ends a frame that hid the cursor to draw. Without synchronised
 #: output every frame does, so this is how a check waits for one to
-#: finish rather than for a length of time. Lillecarl/pymux#187.
+#: finish rather than for a length of time. Lillecarl/pyterm#189.
 SHOW_CURSOR = set_mode(PrivateMode.SHOW_CURSOR).encode("ascii")
 
 # "\x1b[97;5u" — kitty ctrl+a — as the pane reads it.
@@ -268,7 +268,7 @@ out = sys.stdout
 
 # SIGWINCH waits while one draw runs: a draw interrupted after it read
 # the size would finish the old corners over the new ones.
-# Lillecarl/pymux#545.
+# Lillecarl/pyterm#547.
 def draw(*_):
     signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGWINCH})
     try:
@@ -359,7 +359,7 @@ def first_alone(pool: ThreadPoolExecutor, work, items) -> list[Future]:
     deferimport rewrites each module once and caches the result, and a
     sandbox starts with no cache: forty pymux started together each
     rewrote everything they import, about 4 CPU seconds apiece. The first
-    fills the cache for the rest. Lillecarl/pymux#579.
+    fills the cache for the rest. Lillecarl/pyterm#581.
     """
     first = [pool.submit(work, item) for item in items[:1]]
     wait(first)
@@ -419,7 +419,7 @@ def on_pty(argv, stderr_path, env=None, rows=24, columns=80):
     `run_on_pty` is this with pymux's own argv and environment.
     Anything that wants to put the *same* program on a bare pty, with
     no pymux between it and the master, comes here instead: that is
-    what a measurement compares against. Lillecarl/pymux#140.
+    what a measurement compares against. Lillecarl/pyterm#142.
     """
     master_fd, slave_fd = os.openpty()
     fcntl.ioctl(slave_fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, columns, 0, 0))
@@ -470,8 +470,8 @@ def attach_client(sock_path, stderr_path, colorterm="", rows=24, columns=80, con
     nicety: a client option lives on the terminal a person is sitting
     at, so a `set-client-option` line reaches it only through the
     client's own reading of the file. The server's reading of the same
-    line is a no-op, on purpose. Lillecarl/pymux#223,
-    Lillecarl/pymux#471.
+    line is a no-op, on purpose. Lillecarl/pyterm#225,
+    Lillecarl/pyterm#473.
     """
     return run_on_pty(
         ["-S", sock_path, *[str(a) for a in configuration], "attach"],
@@ -562,7 +562,7 @@ class Attached:
         fails on bytes it did not want has to say when they arrived:
         the server log names what woke a client at the moment it did,
         and without a time nobody can line the two up.
-        Lillecarl/pymux#180.
+        Lillecarl/pyterm#182.
         """
         readable, _, _ = select.select([self.master_fd], [], [], 0.1)
         if not readable:
@@ -660,7 +660,7 @@ class Attached:
         which bytes it saw, and bytes alone do not say which of the
         things that ask for a frame asked for this one. This lines the
         two up: when each read landed, and what the server logged
-        around it. Lillecarl/pymux#180.
+        around it. Lillecarl/pyterm#182.
         """
         print("--- what arrived, and when (from %s) ---" % _clock(start))
         for at, data in self.arrivals_since(mark, start):
@@ -703,12 +703,12 @@ class SecondClient(Attached):
 
     It attaches over the socket, so it runs on the socket route only.
     An integrated server refuses an attach over its socket with
-    `CANNOT_ATTACH` (Lillecarl/pymux#159), so a check with two
+    `CANNOT_ATTACH` (Lillecarl/pyterm#161), so a check with two
     terminals returns early under `PYMUX_ROUTE=integrated`.
     """
 
     def __init__(self, tmp, sock_path, name, colorterm="", bare=False):
-        "`bare` runs `pymux -S <socket>` and not `attach`: attach or create. Lillecarl/pymux#417."
+        "`bare` runs `pymux -S <socket>` and not `attach`: attach or create. Lillecarl/pyterm#419."
         self.sock_path = sock_path
         self.stderr_path = tmp / ("%s-stderr.log" % name)
         if bare:
@@ -849,7 +849,7 @@ class Terminal(Attached):
 
 #: What kitty 0.49.2 answers pymux's OSC 99 query. A check says it for
 #: the terminal it plays, because pymux passes an OSC 99 on as it came
-#: only to a terminal that shows OSC 99. Lillecarl/pymux#497.
+#: only to a terminal that shows OSC 99. Lillecarl/pyterm#499.
 SHOWS_OSC_99 = (
     b"\x1b]99;i=%s:p=?;a=focus,report:o=always,unfocused,invisible:u=0,1,2:p=title,body,?,close,icon,alive,buttons\x1b\\"
     % QUERY_IDENTIFIER.encode()
@@ -864,14 +864,14 @@ def check_osc_sequences(terminal, mark):
     **The notification waits until the terminal loses the focus.** One
     from the window a person looks at stays inside pymux, and a terminal
     is taken to have the focus until it says otherwise. So the check
-    looks away first, and the pane writes it on "N". Lillecarl/pymux#799.
+    looks away first, and the pane writes it on "N". Lillecarl/pyterm#801.
 
     **The clipboard write is one of the two.** `set-clipboard` ships as
     tmux ships it, "external", where a copy the person makes goes out
     and a program in a pane is refused: a program on the far side of an
     ssh connection would otherwise write what that person pastes next.
     `check_a_pane_reaches_the_clipboard_when_told_to` turns it on.
-    Lillecarl/pymux#378.
+    Lillecarl/pyterm#380.
     """
     tail = terminal.since(mark)
     assert OSC_POINTER.encode() in tail, "the pointer shape did not arrive"
@@ -901,7 +901,7 @@ def check_hyperlink(terminal):
     assert b"\x1b]8;;\x1b\\" in after, "the hyperlink never closed"
     # A repaint writes the cells again, so the target legitimately
     # arrives more than once; what must never happen is the target
-    # outside the sequence that opens it. Lillecarl/pymux#346.
+    # outside the sequence that opens it. Lillecarl/pyterm#348.
     assert HYPERLINK_TARGET.encode() not in terminal.seen.replace(opened, b""), "the target travelled as text"
     print("hyperlink: ok")
 
@@ -952,7 +952,7 @@ def check_kitty_terminal(tmp):
         #    the client pushes both on the outer terminal. The first
         #    enable is a push, the protocol's own way to hold the state
         #    that was there -- a shell's, or a nested pymux's.
-        #    Lillecarl/pymux#403.
+        #    Lillecarl/pyterm#405.
         terminal.wait_for(b"\x1b[>3u")
 
         #    Its environment describes the pane, not the terminal that
@@ -1057,7 +1057,7 @@ def check_kitty_terminal(tmp):
         #    replies tell the server what this terminal draws with, so
         #    the client's theme is matched again and every client
         #    repaints -- and a repaint redraws the pane, "<<" blocks of
-        #    earlier steps included. Lillecarl/pymux#346.
+        #    earlier steps included. Lillecarl/pyterm#348.
         terminal.drain(0.5)
         quiet = terminal.mark()
         background = b"\x1b]11;rgb:dead/beef/cafe\x1b\\"
@@ -1101,8 +1101,8 @@ def check_sixel_terminal(tmp):
         # `ceil(20/8)` by `ceil(12/17)` cells for the 20 by 12 image:
         # three columns and one row, which is 24 by 17 pixels. The image
         # fits inside that, so nothing resamples it and the sixel that
-        # goes out is 20 by 12. Lillecarl/pymux#369. It is the pane
-        # child's own sequence, header and all. Lillecarl/pymux#603.
+        # goes out is 20 by 12. Lillecarl/pyterm#371. It is the pane
+        # child's own sequence, header and all. Lillecarl/pyterm#605.
         terminal.wait_for(b"\x1bP0;0;0q")
 
         # The sixel that the pane child drew must not reach the screen
@@ -1112,7 +1112,7 @@ def check_sixel_terminal(tmp):
         # at its own pixels goes out as the pane child sent it, so the
         # body that goes out is the body that came in, byte for byte.
         # Asking whether the body is anywhere in what the terminal saw
-        # was a race that the answer to #369 decided: the assertion
+        # was a race that the answer to #371 decided: the assertion
         # stood before the image was drawn and passed on timing alone.
         before_the_image = terminal.seen.split(b"\x1bP0;0;0q")[0]
         assert b"!20~" not in before_the_image, "sixel body leaked as text"
@@ -1433,7 +1433,7 @@ def check_two_terminals_of_different_abilities(tmp):
     **Not on the integrated route.** That server draws on the one
     terminal it runs in and refuses an attach over its socket, so two
     terminals of one session cannot exist there.
-    `check_second_terminal` is what says so. Lillecarl/pymux#159.
+    `check_second_terminal` is what says so. Lillecarl/pyterm#161.
     """
     if ROUTE == "integrated":
         print("two terminals of different abilities: one terminal on this route")
@@ -1538,7 +1538,7 @@ def check_second_terminal(tmp):
 
     **This is what the refusal is for.** Two terminals of an integrated
     session share a process that only one of them holds, so `ctrl+b d`
-    in that one ends the session for both. Lillecarl/pymux#159.
+    in that one ends the session for both. Lillecarl/pyterm#161.
     """
     terminal = Terminal(tmp, "kitty")
     second = None
@@ -1559,7 +1559,7 @@ def check_second_terminal(tmp):
             except subprocess.TimeoutExpired:
                 raise AssertionError("the refused client is still running")
             # A refusal is not a detach, and a script has only the code
-            # to tell them apart. Lillecarl/pymux#332.
+            # to tell them apart. Lillecarl/pyterm#334.
             assert code == 1, "the refused client left with %r" % (code,)
 
             # And the server kept serving: the first terminal still has
@@ -1606,7 +1606,7 @@ def check_full_screen_pane(tmp):
     config = tmp / "full-screen.conf"
     # `set-client-option`, because full screen belongs to the terminal
     # a person is sitting at. The client reads this file for itself and
-    # announces the line when it attaches. Lillecarl/pymux#471.
+    # announces the line when it attaches. Lillecarl/pyterm#473.
     config.write_text("set-client-option full-screen on\n")
 
     child_path = tmp / "corner_child.py"
@@ -1674,7 +1674,7 @@ def check_strip_follows_resize(tmp):
     Carl: "The strip window mode doesn't react when i resize the
     outside terminal." The resize was a font size change in kitty,
     which is a new number of rows and columns and nothing else.
-    Lillecarl/pymux#208.
+    Lillecarl/pyterm#210.
 
     **The unit harness cannot see this.**
     `tests/test_strip_resizes.py` holds a size a test can change,
@@ -1702,7 +1702,7 @@ def check_strip_follows_resize(tmp):
     config = tmp / "strip.conf"
     # A window option cannot be set for a window that does not exist
     # yet, and a configuration file is read before the first one. `-g`
-    # says what every new window starts with. Lillecarl/pymux#199.
+    # says what every new window starts with. Lillecarl/pyterm#201.
     config.write_text("set-option pane-border-status on\nset-window-option -g strip on\n")
 
     def every_column_at(wide, high):
@@ -1710,7 +1710,7 @@ def check_strip_follows_resize(tmp):
         What every column of the strip is at that terminal size.
 
         Half of the window less the border the column owns
-        (Lillecarl/pymux#206), and two rows shorter than the terminal:
+        (Lillecarl/pyterm#208), and two rows shorter than the terminal:
         one for the status line and one for the pane's title bar.
         """
         return ["%dx%d" % (wide // 2 - 1, high - 2)] * HOW_MANY
@@ -1810,7 +1810,7 @@ def check_quoted_argument(tmp):
     what says where one argument ends. `PaneMaker.create_pane` used to
     split it on whitespace, so `sh -c 'echo one two'` became seven words
     and `sh` read `'echo` as the whole of its script. The pane then died
-    at once and took the window with it. Lillecarl/pymux#39.
+    at once and took the window with it. Lillecarl/pyterm#41.
 
     The route matters here, so this runs on both. The integrated route
     builds the argument vector and lets `run_pymux` quote it again; the
@@ -1918,7 +1918,7 @@ def check_cursor_of_drawing_pane(tmp):
     # One cell, and it really changes: a frame that changes nothing is
     # written no longer, so a pane that draws the same character would
     # make the client say nothing at all. That is the check below this
-    # one. Lillecarl/pymux#117.
+    # one. Lillecarl/pyterm#119.
     program.write_text(
         "printf '\\033[2J\\033[H'\n"
         "printf ANIMATING\n"
@@ -2058,7 +2058,7 @@ def check_switch_window_under_flood(tmp):
     generous on purpose -- this pins that a switch lands at all under
     a flood, not how fast. Measured here at a sixtieth of a second;
     without the urgent frame after input it waits out the postpone
-    behind the flood, a quarter of one. Lillecarl/pymux#524.
+    behind the flood, a quarter of one. Lillecarl/pyterm#526.
     """
     config = tmp / "bare.conf"
     config.write_text("set-option status on\nset-option pane-border-status off\n")
@@ -2126,7 +2126,7 @@ def check_pane_that_changes_nothing(tmp):
     terminal, and a terminal does more on a read than draw what
     arrived: xterm advances the phase of its blinking text, so the
     blinking rows of a pane appeared or disappeared with nothing on
-    screen to explain it. Lillecarl/pymux#117.
+    screen to explain it. Lillecarl/pyterm#119.
 
     The session is full screen, so nothing but the pane can draw and
     the clock is not on the screen to move.
@@ -2163,7 +2163,7 @@ def check_pane_that_changes_nothing(tmp):
         # reset and a show, and no drawing at all.
         #
         # A wait and not a sleep. The bytes say when the frame ended,
-        # so nothing here races. Lillecarl/pymux#187.
+        # so nothing here races. Lillecarl/pyterm#189.
         terminal.wait_for(SHOW_CURSOR)
 
         mark = terminal.mark()
@@ -2181,7 +2181,7 @@ def check_pane_that_changes_nothing(tmp):
             # bytes went out and nothing else. So it says when they
             # went out and what the server was doing at that moment.
             # `Woke` names every reason but one, and the one it cannot
-            # name is a pane writing. Lillecarl/pymux#180.
+            # name is a pane writing. Lillecarl/pyterm#182.
             terminal.report_window(mark, log_mark, started)
             raise Failed("the client wrote %r for a screen that did not change" % since)
 
@@ -2200,7 +2200,7 @@ def check_command_palette(tmp):
     A float that renders in the wrong place is a wrong screen, and no
     unit test sees it. This reads the cells: the ":" has to land inside
     the box and nowhere near the bottom row, where the bar draws it.
-    Lillecarl/pymux#158.
+    Lillecarl/pyterm#160.
 
     The box takes the inset of the keys pop-up beside it: three columns
     and five rows on every side. On a screen of 24 by 80 that is rows 5
@@ -2270,7 +2270,7 @@ def check_detach_ends_client(tmp):
     which raised `ValueError` on top of the prompt. And nothing stopped
     the server, so a pane held a `waitpid` in the executor of the loop
     and the interpreter could not exit. The person saw their shell
-    again with no prompt under it. Lillecarl/pymux#109.
+    again with no prompt under it. Lillecarl/pyterm#111.
 
     The pane holds a program that outlives the check, on purpose. A
     pane that ends on its own would end the session for another reason
@@ -2343,7 +2343,7 @@ def check_a_restarted_server_gets_the_same_client(tmp):
     attached client waits for it rather than leaving. When the new one
     listens, the client attaches to it with the same terminal: it asks
     the terminal's abilities again and draws the new server's pane.
-    Lillecarl/pymux#409.
+    Lillecarl/pyterm#411.
 
     On the integrated route the client and the server are one process,
     so nothing outlives the server and there is nothing to check.
@@ -2382,8 +2382,8 @@ def check_an_upgraded_server_keeps_the_client_and_the_pane(tmp):
     `upgrade-server` execs a new build over the same panes. The client
     is told to wait, attaches again with the same id, and draws the
     pane the new build thawed: the old program's text, which no
-    program wrote again. Lillecarl/pymux#408. Its message comes back
-    with it. Lillecarl/pymux#409.
+    program wrote again. Lillecarl/pyterm#410. Its message comes back
+    with it. Lillecarl/pyterm#411.
     """
     if ROUTE == "integrated":
         print("an upgraded server keeps the client and the pane: not on this route")
@@ -2425,7 +2425,7 @@ def check_a_server_that_ends_unannounced_ends_the_client(tmp):
     """
     Without `-r` nothing follows, so the client leaves at once, as it
     always did. Waiting here would make a crash look like a restart.
-    Lillecarl/pymux#409.
+    Lillecarl/pyterm#411.
     """
     if ROUTE == "integrated":
         print("an unannounced end ends the client: not on this route")
@@ -2455,7 +2455,7 @@ def check_a_server_that_ends_unannounced_ends_the_client(tmp):
 
 
 def check_q_leaves_a_client_waiting_for_a_restart(tmp):
-    "The wait is the person's to end: q leaves at once. Lillecarl/pymux#409."
+    "The wait is the person's to end: q leaves at once. Lillecarl/pyterm#411."
     if ROUTE == "integrated":
         print("q leaves a waiting client: not on this route")
         return
@@ -2490,7 +2490,7 @@ def check_a_stopped_client_does_not_stop_the_server(tmp):
     hangs, a new attach connects and draws nothing, panes stop being
     parsed. When the stopped client dies the send fails, the loop
     comes back, and the fault reads as "attach is broken" and then,
-    unaccountably, as "it works again". Lillecarl/pymux#418.
+    unaccountably, as "it works again". Lillecarl/pyterm#420.
 
     So: stop the client, let a pane write past the size of the
     kernel's buffer, and ask the server for something. It must answer,
@@ -2580,7 +2580,7 @@ def check_bare_pymux_attaches_to_the_server_it_finds(tmp):
     `pymux -S <socket>` with no command attaches to the server there,
     and starts one only when none answers. It printed "Invalid command."
     and bare `pymux` started a second server each time. tmux attaches
-    or creates. Lillecarl/pymux#417.
+    or creates. Lillecarl/pyterm#419.
     """
     if ROUTE == "integrated":
         print("bare pymux finds its server: socket route only")
@@ -2627,7 +2627,7 @@ def check_an_integrated_server_answers_while_its_terminal_reads_nothing(tmp):
     included. The client writes from a task now, and the server skips
     this client's frames while its terminal is behind, so nothing piles
     up either. Once the terminal reads again, what it draws must be the
-    screen as it is. Lillecarl/pymux#585.
+    screen as it is. Lillecarl/pyterm#587.
     """
     if ROUTE != "integrated":
         print("a terminal that reads nothing: integrated route only")
@@ -2681,7 +2681,7 @@ def check_a_client_whose_stdin_ends_leaves(tmp):
     readable forever, the loop then read empty packets from it at the
     full rate of the machine, and the client sat in the alternate
     screen burning a core and never left. tmux ends the client when
-    its stdin closes; this one does too now. Lillecarl/pymux#419.
+    its stdin closes; this one does too now. Lillecarl/pyterm#421.
 
     The subject runs with its stdin at /dev/null, which answers end of
     file on the first read. Before the fix it never left, so the
@@ -3021,7 +3021,7 @@ def check_detached_pane_has_a_width(tmp):
 
     It showed as `capture-pane -p` printing one character per line.
     `-J` read correctly throughout, because it joins wrapped rows back
-    together, which is what hid this. Lillecarl/pymux#321.
+    together, which is what hid this. Lillecarl/pyterm#323.
 
     No terminal here: a client is the one thing this must run without.
     """
@@ -3107,7 +3107,7 @@ def check_relative_socket_name_survives_the_daemon(tmp):
       could not find the server it runs in from any other directory.
       tmux writes `TMUX` absolute for that reason.
 
-    Lillecarl/pymux#322.
+    Lillecarl/pyterm#324.
 
     The command runs from `tmp`, so the name is relative to a directory
     that is not `/` and not the repository.
@@ -3253,7 +3253,7 @@ def _two_cats_side_by_side(tmp, mode):
 
 
 def _until(condition, what: str, timeout: float = 10.0) -> None:
-    "Poll `condition` until it holds; a fixed wait stood here. Lillecarl/pymux#579."
+    "Poll `condition` until it holds; a fixed wait stood here. Lillecarl/pyterm#581."
     deadline = time.monotonic() + timeout
     while not condition():
         assert time.monotonic() < deadline, what
@@ -3286,7 +3286,7 @@ def check_click_in_unfocused_pane_selects_it(tmp):
     the release focuses instead of forwarding. What the click moves
     is the arrangement as well as the layout focus: without it the
     next keypress would sync the layout straight back to the pane
-    that is active. Lillecarl/pymux#527.
+    that is active. Lillecarl/pyterm#529.
     """
     terminal, ids = _two_cats_side_by_side(tmp, "click-selects")
     try:
@@ -3320,7 +3320,7 @@ def check_wheel_over_unfocused_pane_does_nothing(tmp):
     No copy mode, no focus, no bytes to the program: scrolling
     belongs to the pane under the focus, and a wheel that also
     selected would scroll one pane while looking at another.
-    Lillecarl/pymux#527.
+    Lillecarl/pyterm#529.
     """
     terminal, ids = _two_cats_side_by_side(tmp, "wheel-unfocused")
     try:
@@ -3389,7 +3389,7 @@ def chosen_checks():
 
     A whole run takes minutes and starts seventeen servers. One of
     these checks is red about one run in thirteen, and hunting that
-    means running the one check many times. Lillecarl/pymux#180.
+    means running the one check many times. Lillecarl/pyterm#182.
 
     A name nobody knows is an error and not an empty run, because an
     empty run passes and says the wrong thing.
@@ -3447,7 +3447,7 @@ def main() -> None:
                 failed.append(name)
                 print("%s FAILED:\n%s" % (name, traceback.format_exc()), flush=True)
                 continue
-            # What each check costs, so a slow one has a name. Lillecarl/pymux#579.
+            # What each check costs, so a slow one has a name. Lillecarl/pyterm#581.
             print("    %s took %.1f s" % (name, took), flush=True)
 
     if failed:

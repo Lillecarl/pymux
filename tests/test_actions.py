@@ -130,7 +130,7 @@ async def test_the_outermost_origin_wins(tmp_path):
 
 
 async def test_a_key_that_runs_no_command_is_written(tmp_path):
-    "Moving through a chooser and leaving it. Lillecarl/pymux#755."
+    "Moving through a chooser and leaving it. Lillecarl/pyterm#757."
     async with create_session() as (pymux, state):
         pymux.actions.path = tmp_path / "actions.db"
         pymux.options.action_log = True
@@ -159,7 +159,7 @@ async def test_a_key_that_runs_no_command_is_written(tmp_path):
 
 
 async def test_a_helix_command_is_written_by_its_keys_and_never_the_text(tmp_path):
-    "Copy mode's and the prompt's. Lillecarl/pymux#755."
+    "Copy mode's and the prompt's. Lillecarl/pyterm#757."
     async with create_session() as (pymux, state):
         pymux.actions.path = tmp_path / "actions.db"
         pymux.options.action_log = True
@@ -187,7 +187,7 @@ async def test_a_helix_command_is_written_by_its_keys_and_never_the_text(tmp_pat
     ],
 )
 async def test_copy_mode_s_vi_and_emacs_keys_are_written_and_never_the_search(tmp_path, mode_keys, presses, expected):
-    "Lillecarl/pymux#773."
+    "Lillecarl/pyterm#775."
     async with create_session() as (pymux, state):
         pymux.actions.path = tmp_path / "actions.db"
         pymux.options.action_log = True
@@ -236,7 +236,7 @@ async def test_the_upkeep_keeps_the_newest(tmp_path):
 def test_the_upkeep_gives_every_free_page_back(tmp_path):
     """
     `PRAGMA incremental_vacuum` returns a row per page it frees. Dropped
-    at the first row, it freed one page per upkeep. Lillecarl/pymux#941.
+    at the first row, it freed one page per upkeep. Lillecarl/pyterm#943.
     """
     db = apsw.Connection(str(tmp_path / "actions.db"))
     try:

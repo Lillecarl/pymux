@@ -17,7 +17,7 @@ def select_window(pymux: Pymux, args: argparse.Namespace) -> None:
     E.g:  select-window -t :3  or  select-window -t @1001
 
     A window of another session takes the client with it, which is
-    what tmux does for a target that names one. Lillecarl/pymux#323.
+    what tmux does for a target that names one. Lillecarl/pyterm#325.
     """
     window_id = args.target_window
 

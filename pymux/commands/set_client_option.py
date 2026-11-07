@@ -22,7 +22,7 @@ def set_client_option(pymux: Pymux, args: argparse.Namespace) -> None:
         Without it, the client this command came from -- and a command
         typed in a pane comes from the client that owns the pane, not
         from the temporary one the server made to run it.
-        Lillecarl/pymux#272.
+        Lillecarl/pyterm#274.
 
     **A configuration file sets these too, and the client reads it.** A
     client option belongs to the terminal a person is sitting at, so
@@ -34,12 +34,12 @@ def set_client_option(pymux: Pymux, args: argparse.Namespace) -> None:
     So a `set-client-option` line the server reads is not an error and
     does nothing: the server is reading a file for a client that does
     not exist yet, and that client will read the same kind of line
-    itself. Lillecarl/pymux#223.
+    itself. Lillecarl/pyterm#225.
 
     **What this sets dies with the attachment.** A client announces its
     configuration every time it attaches, a reconnect included, so a
     value set here lasts as long as the terminal stays connected.
-    Lillecarl/pymux#256, Lillecarl/pymux#340.
+    Lillecarl/pyterm#258, Lillecarl/pyterm#342.
 
     **A client that only watches may set its own.** All three of these
     options are facts of the terminal a person is sitting at -- what
@@ -47,11 +47,11 @@ def set_client_option(pymux: Pymux, args: argparse.Namespace) -> None:
     other way round -- so refusing them costs a watcher their screen
     and protects nobody. tmux has no per-client option to compare
     with. `-t` is the part that reaches somebody else.
-    Lillecarl/pymux#467.
+    Lillecarl/pyterm#469.
     """
     if pymux.sourcing and pymux.the_client_to_tell() is None:
         # The server, reading a configuration file with nobody
-        # attached. #199 is the same shape: a command that raises here
+        # attached. #201 is the same shape: a command that raises here
         # takes `source-file` with it, and pymux draws nothing at all.
         return
 
@@ -60,7 +60,7 @@ def set_client_option(pymux: Pymux, args: argparse.Namespace) -> None:
     # is the side a program in a pane can control. The option system
     # has no "only from the client's own file", so they never reach it:
     # the client reads them itself and does not announce them.
-    # Lillecarl/pymux#743.
+    # Lillecarl/pyterm#745.
     if args.option in LOCAL_CLIENT_OPTIONS:
         if pymux.sourcing:
             return

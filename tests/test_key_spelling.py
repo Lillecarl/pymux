@@ -5,8 +5,8 @@ Two things this has to get right, and they pull against each other. It
 has to read everything the tmux spelling already reads, because a
 person who knows "C-a" should not have to learn a second name for the
 same key. And it has to read what the tmux spelling cannot: ctrl+Home
-is the key Lillecarl/pymux#220 is named for, and
-Lillecarl/pymux#234 found that `send-keys C-Home` types the six
+is the key Lillecarl/pyterm#222 is named for, and
+Lillecarl/pyterm#236 found that `send-keys C-Home` types the six
 letters into the pane, because the table stops at the four arrows.
 
 So the parity test below is mechanical. Every entry of
@@ -87,7 +87,7 @@ def test_tmux_modifier_is_not_chord():
 
 
 # ----------------------------------------------------------------------
-# What the older spelling cannot reach. Lillecarl/pymux#234.
+# What the older spelling cannot reach. Lillecarl/pyterm#236.
 
 
 @pytest.mark.parametrize(
@@ -158,7 +158,7 @@ def test_meta_is_not_alt():
 
 
 def test_super_hyper_and_meta_get_built_name():
-    "No `Keys` member names one of these. Lillecarl/pymux#181."
+    "No `Keys` member names one of these. Lillecarl/pyterm#183."
     assert chord("super+a") == ("super-a",)
     assert chord("hyper+shift+up") == ("s-hyper-up",)
 
@@ -259,7 +259,7 @@ def test_alt_flattens_same_way_sequence_does():
 def test_what_it_cannot_read_it_says_why(written, said):
     """
     A name that goes nowhere with no reason given is what
-    Lillecarl/pymux#167 is about, one layer down.
+    Lillecarl/pyterm#169 is about, one layer down.
     """
     with pytest.raises(ValueError, match=said):
         keys_of(written)
@@ -278,7 +278,7 @@ def test_keys_keyboard_can_leave_out_come_first():
     """
     **The order is the feature.** A laptop has no Home key and no
     function row, so those are the names a person opens this for.
-    Lillecarl/pymux#220.
+    Lillecarl/pyterm#222.
     """
     names = [completion.text for completion in offered("")]
     assert names[0] == PREFIX
@@ -346,7 +346,7 @@ def test_it_offers_no_name_that_carries_its_own_modifier():
 
 
 # ----------------------------------------------------------------------
-# Saying why a key did not fit. Lillecarl/pymux#238.
+# Saying why a key did not fit. Lillecarl/pyterm#240.
 
 
 @pytest.mark.parametrize(
@@ -384,7 +384,7 @@ def test_reason_for_key_with_no_form_says_so():
 
 
 # ----------------------------------------------------------------------
-# Reading a key in whichever spelling it came in. Lillecarl/pymux#234.
+# Reading a key in whichever spelling it came in. Lillecarl/pyterm#236.
 
 
 @pytest.mark.parametrize("name", sorted(PYMUX_TO_PROMPT_TOOLKIT_KEYS))
@@ -410,7 +410,7 @@ def test_tmux_vocabulary_reads_unchanged(name):
 )
 def test_tmux_name_that_no_table_holds(name, key):
     """
-    The bug Lillecarl/pymux#234 names. `send-keys C-Home` typed the six
+    The bug Lillecarl/pyterm#236 names. `send-keys C-Home` typed the six
     letters into the pane, because the tmux table stops at the four
     arrows and `send-keys` sends what it cannot read as literal text.
 

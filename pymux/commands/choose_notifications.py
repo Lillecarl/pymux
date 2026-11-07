@@ -23,7 +23,7 @@ def choose_notifications(pymux: Pymux, args: argparse.Namespace) -> None:
 
     The command line has no view to open a chooser on, so an asker
     that reads stdout gets nothing -- the same shape as the pop-ups.
-    Lillecarl/pymux#272.
+    Lillecarl/pyterm#274.
     """
     if pymux.answer is not None:
         return

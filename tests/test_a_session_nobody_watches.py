@@ -17,7 +17,7 @@ afterwards.
 same two flags the same way and calls the result `default-size`
 (`cmd-new-session.c`). It is not `resize-window`, which says a person
 means a size to stay -- this one gives way to a client that attaches.
-Lillecarl/pymux#459.
+Lillecarl/pyterm#461.
 """
 
 from __future__ import annotations
@@ -81,7 +81,7 @@ def size_of(pane):
 
 
 async def test_a_session_nobody_named_a_size_for_is_the_standing_answer(pymux):
-    "With no client on the server, nothing else can say. Lillecarl/pymux#817."
+    "With no client on the server, nothing else can say. Lillecarl/pyterm#819."
     await new_session(pymux)
     session, pane = one_pane(pymux)
 
@@ -106,7 +106,7 @@ async def test_the_screen_is_sized_and_not_only_the_pty(pymux):
     """
     `TerminalControl.set_size` tells both. Sizing the pty alone left the
     screen at nought columns, and every character wrapped onto a row of
-    its own. Lillecarl/pymux#321.
+    its own. Lillecarl/pyterm#323.
     """
     await new_session(pymux, "-x", "120", "-y", "40")
     _session, pane = one_pane(pymux)
@@ -280,7 +280,7 @@ async def test_a_dash_with_no_client_watching_is_the_standing_answer(pymux):
 # means to stay, on a window nobody is looking at. It needs a target,
 # because there is no client to take the window from.
 #
-# Lillecarl/pymux#459.
+# Lillecarl/pyterm#461.
 
 
 def resize_window(pymux, *arguments) -> list:
@@ -342,7 +342,7 @@ async def test_every_pane_of_the_window_hears_it(pymux):
 
 
 async def test_a_target_nothing_holds_says_so(pymux):
-    "A silent no-op is what this command used to be. Lillecarl/pymux#458."
+    "A silent no-op is what this command used to be. Lillecarl/pyterm#460."
     await new_session(pymux)
 
     assert resize_window(pymux, "-t", "@9999", "-x", "200") == ["pymux: can't find window: @9999"]
@@ -357,7 +357,7 @@ async def test_the_titlebar_row_comes_out_of_the_size_that_was_named(pymux):
 
     **The row is reserved although nobody draws it.** A window no
     client watches has no titlebar on any screen, so the plan keeps a
-    row that stays empty. Lillecarl/pymux#474.
+    row that stays empty. Lillecarl/pyterm#476.
     """
     await new_session(pymux)
     window = window_of(pymux)

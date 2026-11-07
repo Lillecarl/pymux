@@ -35,13 +35,13 @@ def link_window(pymux: Pymux, args: argparse.Namespace) -> None:
     order already, which moves it: tmux's link-window and move-window
     answer the same ask here, because a window belongs to one order
     and linking it elsewhere takes it out of its own.
-    Lillecarl/pymux#297.
+    Lillecarl/pyterm#299.
 
     `-t` takes an optional session in front of the index, and the
     window moves across when it names another one:
     `link-window -s 2 -t work:` parks window 2 after the last window
     of `work`. Without a session part the window lands in the
-    session of the client that asks. Lillecarl/pymux#533.
+    session of the client that asks. Lillecarl/pyterm#535.
     """
     window = _find_anywhere(pymux, args.s)
     if window is None:

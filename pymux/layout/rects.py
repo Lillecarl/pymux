@@ -174,7 +174,7 @@ class Rect(NamedTuple):
         nothing when they cover it whole. `_without` takes each one out.
 
         Rectangles, not cells, so it costs the number of rectangles and
-        not the area. Lillecarl/pymux#355.
+        not the area. Lillecarl/pyterm#357.
         """
         left: list[Rect] = [self]
         for one in others:
@@ -191,7 +191,7 @@ def towards(at: int, size: int, start: int, end: int) -> int:
     As little as it takes: a band past the far edge lines its end up
     with the view's, so what the view showed beside it stays. Snapping
     its start to the near edge threw away a whole neighbour to bring in
-    one cell of border. Lillecarl/pymux#614.
+    one cell of border. Lillecarl/pyterm#616.
     """
     if start < at or end - start > size:
         return start

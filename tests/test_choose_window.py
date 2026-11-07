@@ -2,7 +2,7 @@
 `choose-window`: prefix w opens a bar across the top of the screen,
 and what is under it is the window it points at, running.
 
-The rules this judges, Lillecarl/pymux#295 and Lillecarl/pymux#327:
+The rules this judges, Lillecarl/pyterm#297 and Lillecarl/pyterm#329:
 
 - The bar sits at the very top and covers as few rows as its entries
   need. The windows flow across it like words and wrap.
@@ -387,7 +387,7 @@ async def test_escape_in_the_search_keeps_the_chooser():
 # the narrowing and proves nothing about the road a key takes to it.
 # A picture of the chooser with "bui" typed at it showed an unnarrowed
 # list and an empty search line, and no cell test could see that.
-# Lillecarl/pymux#161.
+# Lillecarl/pyterm#163.
 
 
 def type_bytes(state, data: str) -> None:
@@ -438,7 +438,7 @@ async def test_the_keyboard_stays_with_the_chooser_after_a_key():
     `ClientState.sync_focus` runs after every key press, and it used to
     hand the keyboard back to the active pane whatever was showing. So
     the search line took the focus and lost it in the same key press.
-    Lillecarl/pymux#337.
+    Lillecarl/pyterm#339.
     """
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -658,7 +658,7 @@ async def test_the_window_draws_under_the_bar():
         # A pane's screen has no size until a render gives it one, and
         # text written to a screen of no width wraps one character to a
         # row. Sizing the control sizes the screen with it.
-        # Lillecarl/pymux#321.
+        # Lillecarl/pyterm#323.
         window.active_pane.terminal.set_size(78, 18)
         Stream(window.active_pane.screen).feed("\r\n" * 5 + "a line of output")
 

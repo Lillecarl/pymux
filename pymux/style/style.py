@@ -11,7 +11,7 @@ the roles are what a scheme really chooses: one colour per meaning, in
 `ROLES`. A theme is written as the roles it differs in, and the rules
 are derived from them, so a new theme cannot forget a rule or leave a
 loud colour behind: it names colours, and every rule follows.
-Lillecarl/pymux#194.
+Lillecarl/pyterm#196.
 
 A role that stays outside `derive` is a warning, not chrome: the
 copy-mode cursor keeps its ANSI colours in every theme, because a
@@ -87,7 +87,7 @@ def tinted(background: str, lift: float) -> str:
     colour lifts a dark screen and darkens a light one by the same
     amount, so it is right on one of them; this moves away from
     whatever is behind it, which is up on a dark screen and down on a
-    light one. Lillecarl/pymux#222, Lillecarl/pymux#352.
+    light one. Lillecarl/pyterm#224, Lillecarl/pyterm#354.
 
     It moves towards black or white and not towards the scheme's text,
     because a scheme whose text sits close to its background would give
@@ -95,7 +95,7 @@ def tinted(background: str, lift: float) -> str:
     pane" has to be visible in every scheme or it says nothing.
 
     `lift` is how far, from 0 to 1: `cut-shade-strength` at the cut
-    edge, less inward. Lillecarl/pymux#616.
+    edge, less inward. Lillecarl/pyterm#618.
     """
     return _blend(background, _readable(background), lift)
 
@@ -121,7 +121,7 @@ def derive(r: dict[str, str]) -> dict[str, str]:
         "terminal.focused titlebar paneindex": "bg:%s" % (r["alarm"],),
         # The names of the panes on either side, which a title bar carries
         # so that a strip can be navigated. They are not this pane, so they
-        # are dimmer than its own title. Lillecarl/pymux#207.
+        # are dimmer than its own title. Lillecarl/pyterm#209.
         "titlebar neighbour": r["soft"],
         "commandline": "bg:%s %s" % (r["command"], r["text-bright"]),
         "commandline.command": "bold",
@@ -129,10 +129,10 @@ def derive(r: dict[str, str]) -> dict[str, str]:
         # Which vi mode the command line is in, when `status-keys vi`
         # says there is more than one. It reads as a block rather than
         # as more of the line, because it is not what a person typed.
-        # Lillecarl/pymux#255.
+        # Lillecarl/pyterm#257.
         "commandline.mode": "bold bg:%s %s" % (r["accent"], r["text-bright"]),
         # What Helix keys hold half typed: a count, a menu key, the
-        # regex of `s`. Lillecarl/pymux#749.
+        # regex of `s`. Lillecarl/pyterm#751.
         "commandline.pending": "italic",
         # The fill of the layout behind the panes, which shows where
         # nothing else draws.
@@ -141,10 +141,10 @@ def derive(r: dict[str, str]) -> dict[str, str]:
         "statusbar window": r["text-bright"],
         "statusbar window.current": "bg:%s %s" % (r["signal-bright"], r["signal-text"]),
         # A window whose bell rang unseen, reversed as tmux's
-        # `window-status-bell-style` is. Lillecarl/pymux#501.
+        # `window-status-bell-style` is. Lillecarl/pyterm#503.
         "statusbar window.bell": "reverse",
         # Output or quiet is news, not a call: quieter than a bell, so
-        # a window that keeps writing does not shout. Lillecarl/pymux#767.
+        # a window that keeps writing does not shout. Lillecarl/pyterm#769.
         "statusbar window.activity": "underline",
         "auto-suggestion": "bg:%s %s" % (r["suggestion"], r["suggestion-text"]),
         "message": "bg:%s %s" % (r["notice"], r["notice-text"]),
@@ -156,7 +156,7 @@ def derive(r: dict[str, str]) -> dict[str, str]:
         # terminal does by itself: foot's `selection-background`
         # documents its default as "inverse", and an inverse of an
         # inverted screen is the screen. `Terminal._copy_style` puts
-        # the class on. Lillecarl/pymux#99.
+        # the class on. Lillecarl/pyterm#101.
         "reversed-pane selected": "noreverse",
         "reversed-pane incsearch.current": "noreverse",
         # The pane painted with the theme's own background, which
@@ -165,17 +165,17 @@ def derive(r: dict[str, str]) -> dict[str, str]:
         # program left at a default background -- the same mechanism
         # that once drew a slab of chrome behind an overlay pane's
         # output, wanted this time. A program that names its own
-        # colours everywhere never sees it. Lillecarl/pymux#273.
+        # colours everywhere never sees it. Lillecarl/pyterm#275.
         "painted": "bg:%s" % (r["pane"],),
         "clock": "bg:%s" % (r["warn-bright"],),
         # The number a display-panes puts in the middle of each pane.
         # The active pane's is the loud one: the class it resolves
         # under is the one the focused pane's own chrome wears, so
         # `terminal.focused` is what says which pane the mode's keys
-        # will hit. #161 chose the loud colour for it; this rule used
+        # will hit. #163 chose the loud colour for it; this rule used
         # to be keyed `panenumber focused`, a class nothing added, so
         # every number drew the same and the mark said nothing.
-        # Lillecarl/pymux#161. Lillecarl/pymux#395.
+        # Lillecarl/pyterm#163. Lillecarl/pyterm#397.
         "panenumber": "bg:%s" % (r["border"],),
         "terminal.focused panenumber": "bg:%s" % (r["warn"],),
         "terminated": "bg:%s %s" % (r["danger"], r["text-bright"]),
@@ -208,7 +208,7 @@ def derive(r: dict[str, str]) -> dict[str, str]:
         "scrollbar.button": "bg:%s" % (r["accent"],),
         # The ":" command line as a box in the middle of the screen.
         # It borrows the shape of the overlay pane below: a title row
-        # over a body. Lillecarl/pymux#158.
+        # over a body. Lillecarl/pyterm#160.
         "commandpalette": "bg:%s" % (r["surface"],),
         "commandpalette.titlebar": "bg:%s %s" % (r["accent"], r["text-bright"]),
         # The background is named again here. A fragment style is more
@@ -218,23 +218,23 @@ def derive(r: dict[str, str]) -> dict[str, str]:
         "commandpalette.title": "bold bg:%s %s" % (r["accent"], r["text-bright"]),
         # The keys a prefix leads to. The key column stands out from
         # the meanings behind it, on the same surface the box has.
-        # Lillecarl/pymux#29.
+        # Lillecarl/pyterm#31.
         "which-key.key": "bold %s" % (r["text-bright"],),
         # A notification as a box: the frame in the accent, the title
-        # bright, on the surface the other boxes have. Lillecarl/pymux#826.
+        # bright, on the surface the other boxes have. Lillecarl/pyterm#828.
         "notification-popup": "bg:%s %s" % (r["surface"], r["text"]),
         "notification-popup.border": "%s" % (r["accent"],),
         "notification-popup.title": "bold %s" % (r["text-bright"],),
         # The row the window chooser points at. It borrows the title
         # bar's colours, so the selection reads the way a title does.
-        # Lillecarl/pymux#295.
+        # Lillecarl/pyterm#297.
         "chooser.selected": "bg:%s %s" % (r["accent"], r["text-bright"]),
         # The search row of the chooser, and its empty answer.
-        # Lillecarl/pymux#295.
+        # Lillecarl/pyterm#297.
         "chooser.hint": "%s" % (r["text"],),
         # The session name at the start of a line of the window
         # chooser. It is not an entry, so it reads as a heading.
-        # Lillecarl/pymux#765.
+        # Lillecarl/pyterm#767.
         "chooser.session": "bold %s" % (r["text-bright"],),
         # The overlay pane, which floats over the layout. Its body draws
         # like any pane: a cell the program left at the default background
@@ -280,7 +280,7 @@ ROLES = {
     # The background a pane draws behind its cells when `paint-screen`
     # is on: the scheme's own colour, so the terminal's background is
     # never seen and a theme is the colour of the whole screen.
-    # Lillecarl/pymux#273.
+    # Lillecarl/pyterm#275.
     "pane": PANE,
     # A focused pane's title bar, and its name inside it. `alarm` is
     # the pane index, the loudest thing on the screen.
@@ -328,7 +328,7 @@ ROLES = {
 #: terminal -- the same ones `pyte.colors` reports -- and they are
 #: roles so that a theme can own them: with `paint-screen` on, the
 #: theme colours the whole screen, and a program that asks what red
-#: is hears the theme's red, not the terminal's. Lillecarl/pymux#283.
+#: is hears the theme's red, not the terminal's. Lillecarl/pyterm#285.
 ANSI_ROLES = {
     "color-0": "#000000",
     "color-1": "#cd0000",
@@ -370,7 +370,7 @@ DEFAULT = create_theme(derive(DEFAULT_ROLES))
 #: focused pane still on pure red and its number on orange: the two
 #: loudest things on the screen, in a scheme whose whole point is that
 #: it is quiet. Neither is green, so neither was on the first list.
-#: Lillecarl/pymux#161.
+#: Lillecarl/pyterm#163.
 #:
 #: What stays coloured is what carries a meaning rather than a mood: a
 #: pane that has ended is still on red, a confirmation is still on

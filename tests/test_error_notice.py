@@ -1,6 +1,6 @@
 """
 A corner that says an error was logged, and where to read it, for a
-few seconds. Lillecarl/pymux#241.
+few seconds. Lillecarl/pyterm#243.
 """
 
 from __future__ import annotations

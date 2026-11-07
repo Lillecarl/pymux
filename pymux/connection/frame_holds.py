@@ -8,7 +8,7 @@ command line and a lookup finds the next; a window a person switches to
 shows a mirror's old page until the owner's catch-up frame comes. Each
 of them holds the client's frames here until the new result is in, or
 until a deadline passes, so a result that never comes costs one wait
-and no more. Lillecarl/pymux#759.
+and no more. Lillecarl/pyterm#761.
 
 The barrier is per client: a person on another window has nothing to
 wait for.

@@ -64,7 +64,7 @@ reports both. Read them together:
 see**: the socket, the loop's turns, and every moment nothing is
 running. If they are close, counting instructions is a fair proxy for
 latency and this gate protects it. If they are far apart, the
-difference is waiting, and Lillecarl/pymux#232 is the measurement for
+difference is waiting, and Lillecarl/pyterm#234 is the measurement for
 that.
 
     nix build --file . checks.pymux-keystroke.run
@@ -136,7 +136,7 @@ CALLERS = os.environ.get("PYMUX_KEYSTROKE_CALLERS", "")
 #: on every key press, to ask whether the set of controls is still the
 #: one it cached against. That walk is the largest single item in the
 #: key stage, and what it costs is the size of the tree rather than
-#: anything a person did. Lillecarl/pymux#317.
+#: anything a person did. Lillecarl/pyterm#319.
 #:
 #: `tree` prints the shape as well as the counts, which is what says
 #: *where* a container sits rather than how many there are.
@@ -154,7 +154,7 @@ CENSUS = os.environ.get("PYMUX_KEYSTROKE_CENSUS", "")
 #: a frame of 80x24 takes 6.9 ms and a frame of 342x74 takes 22.2 ms,
 #: and four panes at 342x74 take 19.5 ms -- the same screen divided
 #: differently costs the same, because the cells are what is paid for.
-#: Lillecarl/pymux#434.
+#: Lillecarl/pyterm#436.
 SIZES = {
     "": Size(rows=24, columns=80),
     "wide": Size(rows=74, columns=342),
@@ -281,7 +281,7 @@ def settle(state, stages):
     import registers 14 classes with ABCs (`abc.get_cache_token()` goes
     from 18 to 32), which empties every ABC's cache, so the press after it
     asks `isinstance(x, Awaitable)` from the start: 621 instructions, on
-    the first terminal only. Lillecarl/pymux#960.
+    the first terminal only. Lillecarl/pyterm#962.
     """
     with set_app(state.app):
         for _ in range(2):
@@ -332,7 +332,7 @@ def who_calls(work, target: str, most=WHERE):
     sampler.** The instruction count is keyed by the code object that
     *runs*, so it says `enum.Flag.__and__` costs 533 and never says who
     asked. `checks.pymux-profile` samples a wall clock, and a function
-    this small never lands in a sample. Lillecarl/pymux#359.
+    this small never lands in a sample. Lillecarl/pyterm#361.
 
     It watches `PY_START`, which fires as the matching function begins,
     and reads the caller off the stack.
@@ -421,7 +421,7 @@ def timed(state, stages, rounds):
     **A whole cycle each round, in the order a keystroke happens in.**
     This ran each stage three hundred times in a row at first, and the
     key came out ten times cheaper than the instruction count said it
-    was. The reason is the answer to Lillecarl/pymux#233:
+    was. The reason is the answer to Lillecarl/pyterm#235:
     `_CombinedRegistry` caches the merged key bindings under the
     controls of the layout, and a render rebuilds those, so the press
     after a render pays for the merge and the press after a press does
@@ -474,7 +474,7 @@ def the_tree_a_key_press_walks(layout):
     repeated here rather than called, because the question is what the
     walk crosses and not what it returns: a container that holds no
     window costs the walk exactly as much as one that does.
-    Lillecarl/pymux#317.
+    Lillecarl/pyterm#319.
     """
     counted = Counter()
     childless = Counter()
@@ -576,7 +576,7 @@ async def main() -> int:
         "\n**The in-process time is not the latency.** It holds no socket,"
         "\nno client process and no turn of the event loop. What"
         "\n`checks.pymux-latency` measures across three processes minus this"
-        "\nis what an instruction count cannot see. Lillecarl/pymux#232."
+        "\nis what an instruction count cannot see. Lillecarl/pyterm#234."
     )
 
     write_budgets(counts)

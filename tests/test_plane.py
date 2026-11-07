@@ -7,7 +7,7 @@ promise here is written against *any* plan, so the classes that lay
 one out (`Strip`, `Divided`, `Masonry`) import
 `every_promise_holds` and hold their own `measure` to it, and a
 layout that breaks one fails here rather than on somebody's screen.
-Lillecarl/pymux#217, and `docs/layout-engine-plan.md`.
+Lillecarl/pyterm#219, and `docs/layout-engine-plan.md`.
 
 **Two promises are false and are written down as false**, because a
 plausible one that nobody checked is how a suite starts lying:
@@ -667,7 +667,7 @@ def test_last_pane_of_slot_leaves_with_slot():
 
 
 # ----------------------------------------------------------------------
-# The stack of planes. Lillecarl/pymux#228.
+# The stack of planes. Lillecarl/pyterm#230.
 
 
 def test_plane_above_may_cover_one_below():
@@ -750,7 +750,7 @@ def test_at_answers_the_topmost_slot():
     """
     What a person points at is what they can see, which is the slot on
     the highest plane that covers the cell. A float nobody can click is
-    not a float. Lillecarl/pymux#356.
+    not a float. Lillecarl/pyterm#358.
     """
     plan = Plan({GROUND: on_plane(under=Rect(0, 0, 4, 4)), 1: on_plane(over=Rect(0, 0, 4, 4))})
 
@@ -802,7 +802,7 @@ def covered_a_cell_at_a_time(rect: Rect, over) -> bool:
 
     It is obviously right and too slow to run on a frame, which is why
     it was replaced by subtracting rectangles. It stays here as the
-    thing the replacement is measured against. Lillecarl/pymux#355.
+    thing the replacement is measured against. Lillecarl/pyterm#357.
     """
     over = list(over)
     if not over:
@@ -832,7 +832,7 @@ def test_what_is_left_holds_exactly_the_cells_nothing_covered(rect, over):
     uncovered cells, no more and no less. A piece that overlapped
     another would double-count, and one that ran outside `rect` would
     claim a cell nobody asked about. A pane's image is cut this way
-    around a float. Lillecarl/pymux#816.
+    around a float. Lillecarl/pyterm#818.
     """
     left = rect.minus(over)
 
@@ -990,7 +990,7 @@ def test_property_test_of_this_suite_inherits_profile():
     every property test on hypothesis's own default, and nothing says
     so: the suite still passes, and it goes back to drawing a
     different test every run. `pyte` has the same guard, for the same
-    reason. Lillecarl/pymux#180.
+    reason. Lillecarl/pyterm#182.
     """
     drawn = test_plan_keeps_every_promise._hypothesis_internal_use_settings
 

@@ -1,7 +1,7 @@
 """
 Output, a quiet spell and a notification mark a window nobody looks
 at, each with a symbol of its own, and looking at the window clears
-them. Lillecarl/pymux#767.
+them. Lillecarl/pyterm#769.
 
 The stand-in clients are objects of our own, as in `test_bell_flags`.
 """

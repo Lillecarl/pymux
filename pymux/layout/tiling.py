@@ -6,7 +6,7 @@ which is what every layout pymux had before the strip does, and `Strip`
 gives each column a width of its own and lets the row run past the
 edge. Both are trees of splits underneath, so both divide a rectangle
 between the children of a split, and both leave a gap between one child
-and the next for the chrome that goes there. Lillecarl/pymux#217.
+and the next for the chrome that goes there. Lillecarl/pyterm#219.
 
 **A gap is a hole in the plan, not a thinner pane.** A layout says what
 fills it (`Line`), and `PlanContainer` paints it. A pane knows nothing

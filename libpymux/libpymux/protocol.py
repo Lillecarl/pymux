@@ -7,10 +7,10 @@ the reader are almost never in the same file -- a client writes
 `server.py` -- and nothing checks the two agree. A typo on either side
 matches nothing, raises nothing, and drops the packet: the feature
 simply does not happen. Three packet kinds were added in one sitting
-for Lillecarl/pymux#436 and #446, each spelled by hand in two files.
+for Lillecarl/pyterm#438 and #448, each spelled by hand in two files.
 
 So the name lives here once, and every side imports it.
-Lillecarl/pymux#447.
+Lillecarl/pyterm#449.
 
 **It lives in the client library and not in pymux.** pymux takes
 libpymux, and nothing here takes pymux, so a name in pymux could not
@@ -58,7 +58,7 @@ END = b"\0"
 #: The most one read of a pymux connection takes: more than a unix
 #: socket holds (208 KB here), so a read takes whatever is there. Measured:
 #: a 1 MB frame takes 977 reads at 1 KiB and 18 at this size, and only
-#: past 4 MiB does the allocation slow a small read. Lillecarl/pymux#633.
+#: past 4 MiB does the allocation slow a small read. Lillecarl/pyterm#635.
 READ_SIZE = 1 << 20
 
 #: The version of what a peer link carries, and the oldest one this
@@ -66,7 +66,7 @@ READ_SIZE = 1 << 20
 #: one misreads it raises `PEER_VERSION`; one that stops speaking the
 #: older form raises `OLDEST_PEER_VERSION` too. Every field is named
 #: and has a default, so most changes need neither, and a change that
-#: only adds is a `Capability`. Lillecarl/pymux#759, Lillecarl/pymux#959.
+#: only adds is a `Capability`. Lillecarl/pyterm#761, Lillecarl/pyterm#961.
 PEER_VERSION = 13
 OLDEST_PEER_VERSION = 1
 
@@ -80,53 +80,53 @@ class Capability(StrEnum):
     misread the link. Each side names its capabilities in `peer` and
     `peer-accepted`, and the link uses those both named. Two workspaces
     that each add one no longer claim the same number, and one can be
-    dropped alone. Lillecarl/pymux#959.
+    dropped alone. Lillecarl/pyterm#961.
     """
 
     #: A frame may name an image the peer stored by its hash instead of
     #: sending it again (`pyte.grid`).
     IMAGES_BY_HASH = "images-by-hash"
     #: A peer answers a ping, so an owner may drop a link that stops
-    #: answering. Lillecarl/pymux#877.
+    #: answering. Lillecarl/pyterm#879.
     PINGS = "pings"
     #: An owner lends a Wayland window pane: its pixels as
     #: `mirror-window-frame`s, and the person's input back as
-    #: `mirror-window-input`. Lillecarl/pymux#888.
+    #: `mirror-window-input`. Lillecarl/pyterm#890.
     WINDOWS = "windows"
     #: A `mirror-osc` that opens a URL or saves a download says under
     #: `acts` whether this peer is the one server that does it.
-    #: Lillecarl/pymux#854.
+    #: Lillecarl/pyterm#856.
     ACTS = "acts"
     #: A pane's kitty clipboard write reaches a peer whole, as
     #: `mirror-clipboard-write`, and not only its text as OSC 52; and a
     #: pane's read may go to a peer's terminal (`mirror-clipboard-read`).
-    #: Lillecarl/pymux#902.
+    #: Lillecarl/pyterm#904.
     RICH_CLIPBOARD = "rich-clipboard"
     #: A frame carries what a pane's program registered for kitty's drag
     #: and drop, under `dnd`, and its OSC 72 packets cross as
-    #: `mirror-dnd`. Lillecarl/pymux#903.
+    #: `mirror-dnd`. Lillecarl/pyterm#905.
     DND = "dnd"
     #: A mirrored pane's kitty file transfer (OSC 5113) crosses as
     #: `mirror-kitty-transfer`, and its pacing as
-    #: `mirror-kitty-transfer-taken`. Lillecarl/pymux#912.
+    #: `mirror-kitty-transfer-taken`. Lillecarl/pyterm#914.
     FILE_TRANSFER = "file-transfer"
     #: A pane's OSC 7501 records cross whole, as `mirror-program-status`,
-    #: whenever they change. Lillecarl/pymux#928.
+    #: whenever they change. Lillecarl/pyterm#930.
     PROGRAM_STATUS = "program-status"
     #: Either side answers `report-log`, and `peer` names the peer's host
-    #: under `server`. Lillecarl/pymux#934.
+    #: under `server`. Lillecarl/pyterm#936.
     LOGS = "logs"
     #: A peer sends the owner the files of a client recording made on
-    #: one of the owner's sessions, as `recording`. Lillecarl/pymux#955.
+    #: one of the owner's sessions, as `recording`. Lillecarl/pyterm#957.
     RECORDINGS = "recordings"
     #: A peer passes on what a client's `clipboard-image` says, as
     #: `mirror-clipboard-image`, for the owner's compositor to offer.
-    #: Lillecarl/pymux#956.
+    #: Lillecarl/pyterm#958.
     IMAGE_PASTE = "image-paste"
     #: The owner asks a peer for the files of `pymux receive`, as
     #: `mirror-send-files`, and for the names that complete one, as
     #: `mirror-list-files`. The peer's client answers, and the peer
-    #: passes each answer back. Lillecarl/pymux#947.
+    #: passes each answer back. Lillecarl/pyterm#949.
     FILES = "files"
 
 
@@ -198,7 +198,7 @@ class Framer:
         **Appended, and split only when `data` ends a message.** Joining
         what is held with each read copied the whole held part every
         time: a 1 MB window pane frame read 1 KB at a time cost 1.3 s of
-        copying for 5 s of video. Lillecarl/pymux#633.
+        copying for 5 s of video. Lillecarl/pyterm#635.
         """
         self._held += data
         if END not in data:
@@ -228,29 +228,29 @@ class Packet(StrEnum):
     DETECT = "kitty-detect"
     # "Send me this pane as frames, and take what I send as input." A
     # stream is not a command that prints: it holds the connection and
-    # writes many packets. Lillecarl/pymux#461.
+    # writes many packets. Lillecarl/pyterm#463.
     STREAM_PANE = "stream-pane"
     STREAM_IN = "stream-in"
     # The client answers the server's `echo` with it, unchanged and at
     # once: the server measures the round trip that sizes the sound
-    # buffers. Lillecarl/pymux#657.
+    # buffers. Lillecarl/pyterm#659.
     ECHO = "echo"
 
     # The client answers.
     PONG = "pong"
     # "I wrote the last `window-frame` to my terminal." The server sends
     # the next frame of any window pane only after this, so frames never
-    # pile up in the buffers of an SSH link between. Lillecarl/pymux#641.
+    # pile up in the buffers of an SSH link between. Lillecarl/pyterm#643.
     FRAME_SHOWN = "frame-shown"
     OPEN_FAILED = "open-failed"
     FORWARDS = "forwards"
     # "The browser of `browser` listens", with the path of its endpoint,
     # or `error` when it did not start; and later "it ended".
-    # Lillecarl/pymux#653.
+    # Lillecarl/pyterm#655.
     BROWSER_STARTED = "browser-started"
     BROWSER_ENDED = "browser-ended"
     # "I saved the file of `file`", or why not, under `message`.
-    # Lillecarl/pymux#743.
+    # Lillecarl/pyterm#745.
     FILE_SAVED = "file-saved"
     # One part of a file that `send-files` asked for, in the fields of
     # `file` plus `request` and the `path` it answers; or, with `error`
@@ -274,25 +274,25 @@ class Packet(StrEnum):
     KITTY_KEYBOARD = "kitty-keyboard"
     # "This server is going, and another will listen on the same
     # socket": wait `wait` seconds for it instead of leaving.
-    # Lillecarl/pymux#409.
+    # Lillecarl/pyterm#411.
     RESTARTING = "restarting"
     # Every client option a person set on this client, as `[name, value]`
     # under `client-options`, each time one changes: to a client that
     # said `keeps-options`, so it can name them in its next `start-gui`.
-    # Lillecarl/pymux#957.
+    # Lillecarl/pyterm#959.
     CLIENT_OPTIONS = "client-options"
     # One frame of a pane a client is streaming, under `data`. A relay
     # passes `data` on without reading it: the frames are the protocol
-    # and this envelope is ours to change. Lillecarl/pymux#461.
+    # and this envelope is ours to change. Lillecarl/pyterm#463.
     STREAM_OUT = "stream-out"
     # Part of a window pane's frame as raw pixels, which the client
     # encodes for its terminal itself (`pymux/kitty_frames.py`). A frame
     # goes in parts, so a key or a line of text is never queued behind
     # all of it; the part with `last` carries the placement, `after`.
-    # Lillecarl/pymux#634.
+    # Lillecarl/pyterm#636.
     WINDOW_FRAME = "window-frame"
     # "Your terminal read the shared memory probe": carry frames in POSIX
-    # shared memory from here on. Lillecarl/pymux#634.
+    # shared memory from here on. Lillecarl/pyterm#636.
     SHM = "shm"
 
     # The server asks, and the machine the person sits at acts.
@@ -300,21 +300,21 @@ class Packet(StrEnum):
     FORWARD = "forward"
     # "Send `forwards` again, now." What a forward pymux made has left
     # before it is reaped moves between the reports a change sends, so
-    # `list-forwards` asks. Lillecarl/pymux#487.
+    # `list-forwards` asks. Lillecarl/pyterm#489.
     REPORT_FORWARDS = "report-forwards"
     PING = "ping"
     # Start a browser a program on the server drives, or stop it.
-    # Lillecarl/pymux#653.
+    # Lillecarl/pyterm#655.
     BROWSER = "browser"
     BROWSER_STOP = "browser-stop"
     # Save a file that a pane sent, on the machine the person sits at:
     # one part of it as base64 under `data`, with its `name`, the
     # `transfer` the parts share, and `last` on the final part. Base64,
-    # because a JSON connection carries no bytes. Lillecarl/pymux#743.
+    # because a JSON connection carries no bytes. Lillecarl/pyterm#745.
     FILE = "file"
     # "Send these files from the person's machine": `pymux receive` in
     # the pane `pane` asked, under the id `request`, for `paths`. The
-    # client asks the person first. Lillecarl/pymux#743.
+    # client asks the person first. Lillecarl/pyterm#745.
     SEND_FILES = "send-files"
     # "Nobody waits for `request` any more": the `pymux receive` that
     # asked was stopped. The client takes its question down.
@@ -326,22 +326,22 @@ class Packet(StrEnum):
     # Either side: one command of kitty's file transfer, OSC 5113, as it
     # stands after `5113;`, under `data`. The server sends what the
     # program in the pane `pane` said, and the client answers as the
-    # terminal. Lillecarl/pymux#912.
+    # terminal. Lillecarl/pyterm#914.
     KITTY_TRANSFER = "kitty-transfer"
     # Either side, with a session's id under `data`. The client sends it
     # after a part of a file the program reads, and the server sends it
     # back once the pane's program has taken that part. The client sends
-    # no more of the file before the answer. Lillecarl/pymux#914.
+    # no more of the file before the answer. Lillecarl/pyterm#916.
     KITTY_TRANSFER_TAKEN = "kitty-transfer-taken"
     # Server: stop reading the terminal, and start again. A file that the
     # client's terminal sends a pane through kitty's file transfer
     # waits, in the terminal, for the pane's program to read what came
-    # before. Lillecarl/pymux#915.
+    # before. Lillecarl/pyterm#917.
     HOLD_INPUT = "hold-input"
     RELEASE_INPUT = "release-input"
 
     # Sound, on the attached connection of a client that said `audio` in
-    # `start-gui`. Lillecarl/pymux#657.
+    # `start-gui`. Lillecarl/pyterm#659.
     #
     # Either side: 20 ms of Opus under `data`. The server sends what
     # panes play; the client sends what its microphone hears.
@@ -363,7 +363,7 @@ class Packet(StrEnum):
 
     # A peer link: another server shows panes of this one, and may be
     # shown panes of a third the same way. Each mirror names its pane
-    # by `pane_id`. Lillecarl/pymux#759.
+    # by `pane_id`. Lillecarl/pyterm#761.
     #
     # The peer asks. `peer` opens the link, with the `wire` formats the
     # peer reads, and the `version` and `oldest` of the link it speaks;
@@ -407,7 +407,7 @@ class Packet(StrEnum):
     # `{"kind": "key", "modifiers": [...], "code": n}` in evdev codes,
     # `{"kind": "text", "text": ...}`, or `{"kind": "pointer" | "scroll",
     # "x", "y"}` in cells with the fraction of the cell, plus `button`
-    # and `pressed`, or `steps`. Lillecarl/pymux#888.
+    # and `pressed`, or `steps`. Lillecarl/pyterm#890.
     MIRROR_WINDOW_INPUT = "mirror-window-input"
     # "I took the window frame you sent": the owner reads the next one.
     MIRROR_WINDOW_SHOWN = "mirror-window-shown"
@@ -428,7 +428,7 @@ class Packet(StrEnum):
     # `dest_host:dest_port` on the machine pane `pane_id` runs on". A
     # server that only mirrors the pane asks its own owner the same.
     # Then `tunnel-data` both ways, the bytes under `data`, until either
-    # end closes the stream. Lillecarl/pymux#853.
+    # end closes the stream. Lillecarl/pyterm#855.
     TUNNEL = "tunnel"
     TUNNEL_DATA = "tunnel-data"
     # This server tells.
@@ -443,7 +443,7 @@ class Packet(StrEnum):
     MIRROR_FRAME = "mirror-frame"
     # A window pane's frame, as `window-frame` carries one, under
     # `pane_id` and not `image`. One is in flight per pane until
-    # `mirror-window-shown`. Lillecarl/pymux#888.
+    # `mirror-window-shown`. Lillecarl/pyterm#890.
     MIRROR_WINDOW_FRAME = "mirror-window-frame"
     # An OSC sequence a pane wrote for the terminal of a person, under
     # `code` and `data`: the clipboard, a notification, the directory.
@@ -484,23 +484,23 @@ class Packet(StrEnum):
     MIRROR_REFUSED = "mirror-refused"
 
     # Either side: "every packet I write after this one is in `wire`".
-    # `wire.py` holds the format. Lillecarl/pymux#633.
+    # `wire.py` holds the format. Lillecarl/pyterm#635.
     WIRE = "wire"
     # Either side, on an attached client's connection and on a peer link:
     # "send the last `lines` lines of your machine's pymux log", under
     # the id `request`. The answer is `log`, with the text under `data`,
-    # or `error`. Lillecarl/pymux#934.
+    # or `error`. Lillecarl/pyterm#936.
     REPORT_LOG = "report-log"
     LOG = "log"
     # Peer to owner: a piece of one file of a client recording made on
     # one of the owner's sessions, under `name` and `data` (base64),
     # at byte `offset`, with `last` on the final piece of that file.
-    # Lillecarl/pymux#955.
+    # Lillecarl/pyterm#957.
     RECORDING = "recording"
     # Client to server, ahead of the Ctrl-V that pastes it: the image
     # the person's machine holds on its clipboard, as base64 PNG under
     # `data`, or "" for none. A peer passes it to the owner of the pane
-    # the key goes to as `mirror-clipboard-image`. Lillecarl/pymux#956.
+    # the key goes to as `mirror-clipboard-image`. Lillecarl/pyterm#958.
     CLIPBOARD_IMAGE = "clipboard-image"
     MIRROR_CLIPBOARD_IMAGE = "mirror-clipboard-image"
     # Owner to peer: `send-files` and `list-files` for a person who
@@ -508,7 +508,7 @@ class Packet(StrEnum):
     # `pane_id`; and `files-withdrawn` when `pymux receive` stops
     # waiting. Peer to owner: each `upload` and `upload-done` of the
     # peer's client, whole under `data`, and the names it listed.
-    # Lillecarl/pymux#947.
+    # Lillecarl/pyterm#949.
     MIRROR_SEND_FILES = "mirror-send-files"
     MIRROR_FILES_WITHDRAWN = "mirror-files-withdrawn"
     MIRROR_LIST_FILES = "mirror-list-files"
@@ -524,7 +524,7 @@ class Field(StrEnum):
     its keys carry the payload, and both sides read and write them. A
     key one side spells wrong matches nothing and raises nothing, the
     same silent drop a command name has, so they live here once.
-    Lillecarl/pymux#447.
+    Lillecarl/pyterm#449.
     """
 
     CMD = "cmd"
@@ -583,12 +583,12 @@ class Field(StrEnum):
     SHOWS = "shows"
     #: In `start-gui`: this client's terminal answers a status report,
     #: so the server may ask one after a frame and draw the next only
-    #: once the terminal answered. Lillecarl/pymux#259.
+    #: once the terminal answered. Lillecarl/pyterm#261.
     PACED = "paced"
     #: In the last part of a `window-frame`: let the terminal answer the
     #: frame's last command, which the server counts as `frame-shown`.
     #: kitty answers once it processed the command, and the client's
-    #: write says only that kitty read it. Lillecarl/pymux#643.
+    #: write says only that kitty read it. Lillecarl/pyterm#645.
     ANSWER = "answer"
     #: In `window-frame`: the outer image id, whether the parts make the
     #: whole frame, its size, the bands of this part as `[x, y, w, h,
@@ -605,18 +605,18 @@ class Field(StrEnum):
     #: listens on, on both machines, the program and profile the person
     #: chose ("" for the default), the arguments the program on the
     #: server passed, the endpoint's path and the protocol it speaks
-    #: ("cdp" or "bidi"), and why it did not start. Lillecarl/pymux#653.
+    #: ("cdp" or "bidi"), and why it did not start. Lillecarl/pyterm#655.
     BROWSER = "browser"
     #: In `start-gui`: this client starts browsers.
     BROWSERS = "browsers"
     #: In `start-gui`: this client saves the files `file` packets carry.
-    #: An older one drops them unread. Lillecarl/pymux#745.
+    #: An older one drops them unread. Lillecarl/pyterm#747.
     SAVES_FILES = "saves-files"
     #: In `start-gui`: this client answers `send-files`. An older one
     #: drops it unread, and `pymux receive` would wait for ever.
     SENDS_FILES = "sends-files"
     #: In `start-gui`: this client answers `kitty-transfer` as the
-    #: terminal. An older one drops it unread. Lillecarl/pymux#912.
+    #: terminal. An older one drops it unread. Lillecarl/pyterm#914.
     KITTY_TRANSFERS = "kitty-transfers"
     #: In `send-files` and its answers: the id of the request, and the
     #: paths it asks for.
@@ -634,24 +634,24 @@ class Field(StrEnum):
     #: In `start-gui`, the `Codec`s a client decodes. In `window-frame`,
     #: the one the frame is in, its encoded bytes in parts under `video`,
     #: and `rects` as `[x, y, w, h]` with no pixels: what changed, which
-    #: the client takes from the decoded frame. Lillecarl/pymux#639.
+    #: the client takes from the decoded frame. Lillecarl/pyterm#641.
     CODECS = "codecs"
     CODEC = "codec"
     VIDEO = "video"
     #: In `start-gui`: this client plays sound. In `echo`, the server's
     #: clock when it sent it, which comes back unchanged. In `latency`,
     #: milliseconds of buffer. In `sound`, the channels of the frame.
-    #: Lillecarl/pymux#657.
+    #: Lillecarl/pyterm#659.
     AUDIO = "audio"
     TIME = "time"
     BUFFER = "buffer"
     CHANNELS = "channels"
     FRAME = "frame"
     #: In `audio`, the bits a second the client's microphone encodes
-    #: at. Lillecarl/pymux#674.
+    #: at. Lillecarl/pyterm#676.
     BITRATE = "bitrate"
     #: In `file`: the name the pane gave the file, and the id its parts
-    #: share. Lillecarl/pymux#743.
+    #: share. Lillecarl/pyterm#745.
     NAME = "name"
     #: In `recording`: where in its file a piece starts.
     OFFSET = "offset"
@@ -661,11 +661,11 @@ class Field(StrEnum):
     VERSION = "version"
     OLDEST = "oldest"
     #: In `peer` and `peer-accepted`: what a side's link can carry,
-    #: as `Capability` names. Lillecarl/pymux#959.
+    #: as `Capability` names. Lillecarl/pyterm#961.
     CAPABILITIES = "capabilities"
     #: In `mirror-key`: what the person's terminal does where terminals
     #: split (`pyte.keys.events.KeyProfile`), by field name. In
-    #: `mirror-mouse`: what the mouse did. Lillecarl/pymux#759.
+    #: `mirror-mouse`: what the mouse did. Lillecarl/pyterm#761.
     KEY_PROFILE = "key-profile"
     MOUSE = "mouse"
     #: In `peer-terminal`: the cell in pixels as `[width, height]` or

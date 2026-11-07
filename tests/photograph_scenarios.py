@@ -1,6 +1,6 @@
 """
 Unmodified TUI applications, driven step by step, each shown at once by
-two terminals of one kind: one bare, one through pymux. Lillecarl/pymux#593.
+two terminals of one kind: one bare, one through pymux. Lillecarl/pyterm#595.
 
 A scenario is steps: keys, a wait until some text is on the screen, and
 a picture of both terminals. The waits read the pyte screen the proxy
@@ -160,7 +160,7 @@ class ClaudeCode:
         twins.press("\r")
         twins.shows("Counted to forty")
         photograph("long")
-        # The clear that left a row of the old background. Lillecarl/pymux#582.
+        # The clear that left a row of the old background. Lillecarl/pyterm#584.
         twins.press("/clear")
         twins.shows("/clear")
         twins.press("\r")

@@ -50,7 +50,7 @@ LIES = (
             "kitty's brand gets Kgp, Unicode placeholders; an unknown brand that answers "
             "both kitty graphics and sixel gets Sixel first, so the same yazi drew "
             "differently in kitty and in pymux in kitty. checks.pymux-scenarios, "
-            "yazi-images. Lillecarl/pymux#593."
+            "yazi-images. Lillecarl/pyterm#595."
         ),
     ),
 )

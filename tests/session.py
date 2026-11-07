@@ -14,7 +14,7 @@ windows and the layout, which is where the objects and the bytes are.
 background tasks, its `ClientInput` and the `ClientState` the server
 makes for it are all the real ones, and a detach is what a person
 walking away is -- the client end closes and the server tears its side
-down. Lillecarl/pymux#226.
+down. Lillecarl/pyterm#228.
 
 `what_leaks.py` drives both and asks what survived. `count_turns.py`
 drives the connection route and counts what the event loop did.
@@ -111,7 +111,7 @@ class _Transport:
         self.client: Client | None = client
         #: The server to leave, for `detach_and_close`. A stub built
         #: without one cannot be detached, which is every stub that
-        #: nothing detaches. Lillecarl/pymux#335.
+        #: nothing detaches. Lillecarl/pyterm#337.
         self._pymux = pymux
         self.pipe_connection = _NoPipe()
         self.size = DEFAULT_SIZE
@@ -134,7 +134,7 @@ class _Transport:
         The real one also ends the application and closes two pipes,
         and neither exists here. `hang_up` is the `attach -x` packet,
         which needs a transport to arrive over and so is judged in
-        `test_the_others_are_hung_up.py`. Lillecarl/pymux#347.
+        `test_the_others_are_hung_up.py`. Lillecarl/pyterm#349.
         """
         if self._pymux is not None:
             self._pymux.remove_client(self)
@@ -162,7 +162,7 @@ class Client:
     #: What a client on a unix socket reports: it holds no SSH
     #: connection, so it can forward nothing and has nothing to list.
     #: A test that wants the other answer sets them.
-    #: Lillecarl/pymux#436.
+    #: Lillecarl/pyterm#438.
     can_forward = False
     #: A tuple, because a class attribute every stub shares must not be
     #: something a test can append to.
@@ -178,19 +178,19 @@ class Client:
         self.hostname = hostname
         #: What `detach-client -t` selects this client by, built the
         #: way `ServerConnection.name` builds it.
-        #: Lillecarl/pymux#335.
+        #: Lillecarl/pyterm#337.
         self.ttyname = ttyname
         self.created = time.time()
         self.activity = self.created
         #: What a client reports of the machine it runs on.
-        #: Lillecarl/pymux#271.
+        #: Lillecarl/pyterm#273.
         self.environment = environment or {}
         #: What the terminal at the other end said it draws with. A
         #: stub answers nothing, which is what a terminal that never
-        #: replied is. Lillecarl/pymux#223.
+        #: replied is. Lillecarl/pyterm#225.
         self.default_colors = DefaultColors()
         #: The graphics of a terminal that answered no query: no
-        #: protocol, no cell size. It writes nowhere. Lillecarl/pymux#726.
+        #: protocol, no cell size. It writes nowhere. Lillecarl/pyterm#728.
         self.graphics = ClientGraphics(lambda data: None, lambda: None)
         # What a `ClientRole` holds that production reads, each as a
         # client that never answered.
@@ -221,7 +221,7 @@ class Client:
         pass
 
     def tell_options(self):
-        "A stub keeps no options between attaches. Lillecarl/pymux#957."
+        "A stub keeps no options between attaches. Lillecarl/pyterm#959."
 
 
 #: The size a temporary client reports. Nothing draws in it; a window that
@@ -230,7 +230,7 @@ DEFAULT_SIZE = Size(rows=24, columns=80)
 
 #: The machine an attached client says it runs on. **Not the machine
 #: the test runs on**, so a server that answered `gethostname()` by
-#: itself would fail rather than pass by accident. Lillecarl/pymux#287.
+#: itself would fail rather than pass by accident. Lillecarl/pyterm#289.
 OTHER_MACHINE = "buildbox-3"
 
 #: A command whose pane ends at once and holds a real screen while it
@@ -241,7 +241,7 @@ NOTHING = "%s -c pass" % (sys.executable,)
 #: thousand turns is five seconds of a loop that runs freely. Under
 #: the gate's load the attach's time ran out before the server had a
 #: turn, in pymux-busy, pymux-turns and test_kitty_frames.
-#: Lillecarl/pymux#621.
+#: Lillecarl/pyterm#623.
 ATTACH_POLLS = 1000
 
 
@@ -334,7 +334,7 @@ async def once(question, seconds: float, complaint: str | Callable[[], str], pol
     as well. A loop starved by a loaded machine asks rarely, and its
     time runs out while the server never had a turn to answer; a loop
     that runs freely asks a thousand times in five seconds, so a real
-    "never" still fails in the time. Lillecarl/pymux#621.
+    "never" still fails in the time. Lillecarl/pyterm#623.
     """
     deadline = time.monotonic() + seconds
     asked = 0
@@ -360,7 +360,7 @@ async def in_this_process(pymux=None):
     It still runs in `Pymux.running`, because that is the scope a
     server serves in: the task group and the clock. A route that made
     its own would be a route that is not the server.
-    Lillecarl/pymux#87.
+    Lillecarl/pyterm#89.
     """
     pymux = pymux if pymux is not None else Pymux()
     # The clock a screen shows is pinned, so no test races the minute
@@ -401,12 +401,12 @@ async def in_this_process(pymux=None):
             # application, so the new pane is focused where it looks.
             # In a session of its own, as the server's connections are:
             # two attaches at once would save and restore each other's
-            # application. Lillecarl/pymux#230.
+            # application. Lillecarl/pyterm#232.
             with create_app_session(), set_app(state.app):
                 await pymux.startup()
             # The socket route takes these from the `start-gui` packet.
             # This route has no packet, so the attach is here.
-            # Lillecarl/pymux#271.
+            # Lillecarl/pyterm#273.
             take_environment_from(pymux, state)
             watch("%s client" % name, state)
             watch("%s application" % name, state.app)
@@ -482,7 +482,7 @@ async def over_connection(pymux=None, read_packet=None):
     socket route is the real thing -- the `ServerConnection`, its
     background tasks, its `ClientInput` and the `ClientState` the
     server makes for it -- and none of an operating system's is, so
-    this runs in a build sandbox. Lillecarl/pymux#226.
+    this runs in a build sandbox. Lillecarl/pyterm#228.
 
     Three things live here that the other route never makes, and each
     one could keep a client alive after it detached:
@@ -557,24 +557,24 @@ async def over_connection(pymux=None, read_packet=None):
         """
         `forwards` is what `SshClient` says and no other client does:
         it came over SSH, so it can forward a port and is on another
-        machine. Lillecarl/pymux#436, Lillecarl/pymux#743.
+        machine. Lillecarl/pyterm#438, Lillecarl/pyterm#745.
 
         `paced` says its terminal answers a status report, which the
-        test answers itself with `typed`. Lillecarl/pymux#259.
+        test answers itself with `typed`. Lillecarl/pyterm#261.
 
         `read_only` is `pymux attach -r`: the flag rides on the
         `start-gui` packet, so this is the only route that can ask for
-        it the way a person does. Lillecarl/pymux#467.
+        it the way a person does. Lillecarl/pyterm#469.
 
         `frames` offers msgpack and window frames as raw pixels, as a
         real client does; the packets this client reads stay dicts.
-        Lillecarl/pymux#634. `codecs` are the ones it says it decodes.
-        Lillecarl/pymux#639. `shows` says it answers each frame with
-        `frame-shown`, which the test sends itself. Lillecarl/pymux#641.
+        Lillecarl/pyterm#636. `codecs` are the ones it says it decodes.
+        Lillecarl/pyterm#641. `shows` says it answers each frame with
+        `frame-shown`, which the test sends itself. Lillecarl/pyterm#643.
 
         `pings` says this client answers the server's ping, which is
         what lets the server drop it for not answering
-        (Lillecarl/pymux#446). It is off by default because nothing
+        (Lillecarl/pyterm#448). It is off by default because nothing
         here answers one: a test that turns it on is a test about
         being dropped.
         """
@@ -616,8 +616,8 @@ async def over_connection(pymux=None, read_packet=None):
                     "ttyname": next(ttys) if ttyname is None else ttyname,
                     "pid": 4242,
                     # What a client's own configuration file and its
-                    # command line said about it. Lillecarl/pymux#223,
-                    # Lillecarl/pymux#340.
+                    # command line said about it. Lillecarl/pyterm#225,
+                    # Lillecarl/pyterm#342.
                     "client-options": client_options or [],
                     "pings": pings,
                     "paced": paced,

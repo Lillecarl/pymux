@@ -1,7 +1,7 @@
 """
 The hooks of the server: an event's name, and the commands it runs.
 `set-hook` adds to them, and every wake that is an event fires one.
-Lillecarl/pymux#297.
+Lillecarl/pyterm#299.
 """
 
 from __future__ import annotations

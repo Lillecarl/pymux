@@ -1,7 +1,7 @@
 """
 OSC 7501 through a server: a client's terminal that answers the query
 holds every pane's records, each under the pane it came from.
-Lillecarl/pymux#927.
+Lillecarl/pyterm#929.
 """
 
 from __future__ import annotations

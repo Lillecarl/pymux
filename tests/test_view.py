@@ -4,14 +4,14 @@ What a view promises: where it goes, and where it refuses to go.
 `pymux/layout/plane.py` holds `View`, the part of the plane one client sees.
 A plan is shared between the clients and a view is not, so this is the
 one place a client of its own size is answered. Decision 10 of
-`docs/layout-engine-plan.md`, and slice 5 of Lillecarl/pymux#217.
+`docs/layout-engine-plan.md`, and slice 5 of Lillecarl/pyterm#219.
 
 Three promises, and every layout leans on all three:
 
 - **A rectangle already wholly in the view moves nothing.** Walking to
-  a pane and back is a round trip. Lillecarl/pymux#207.
+  a pane and back is a round trip. Lillecarl/pyterm#209.
 - **A rectangle too big to show whole shows its start**, left and top.
-  Lillecarl/pymux#218.
+  Lillecarl/pyterm#220.
 - **The view stays on the plane**, whatever the focus asks for.
 
 The strip owned all three before, for one axis. They are here so that
@@ -65,7 +65,7 @@ def test_view_shows_nothing_it_only_touches():
 def test_rectangle_already_in_view_moves_nothing():
     """
     The property the strip was built around. A pane the person can
-    already see is not a reason to scroll. Lillecarl/pymux#207.
+    already see is not a reason to scroll. Lillecarl/pyterm#209.
     """
     view = create_view(x=10)
     assert view.moved_onto(Rect(x=12, y=1, width=4, height=2), PLANE) == Point(x=10, y=0)
@@ -76,7 +76,7 @@ def test_rectangle_off_right_brings_its_right_edge_in():
     Only as far as it has to, so the column beside it stays. Carl's
     strip of two half-width columns sticks out by one cell, and moving
     onto the second one threw the first off the screen.
-    Lillecarl/pymux#614.
+    Lillecarl/pyterm#616.
     """
     view = create_view(x=0)
     assert view.moved_onto(Rect(x=25, y=0, width=8, height=5), PLANE) == Point(x=13, y=0)
@@ -92,7 +92,7 @@ def test_rectangle_wider_than_view_shows_its_left_edge():
     """
     It cannot be shown whole, so one end is cut, and it is the right
     one. Carl: applications begin writing text at the left, so a
-    missing right column is likely to miss nothing. Lillecarl/pymux#218.
+    missing right column is likely to miss nothing. Lillecarl/pyterm#220.
     """
     view = create_view(x=0)
     assert view.moved_onto(Rect(x=25, y=0, width=30, height=5), PLANE).x == 25

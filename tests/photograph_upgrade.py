@@ -7,7 +7,7 @@ emulator's idea of the bytes; a terminal is stateful, and a redraw that
 leaves a stale cell, a lost colour or a cursor in the wrong place shows
 only in its pixels. So this runs one terminal for the whole check and
 takes a picture of each view on both sides of the upgrade, and fails
-unless every pair is the same pixels. Lillecarl/pymux#408.
+unless every pair is the same pixels. Lillecarl/pyterm#410.
 
 What it builds, under one attached client:
 
@@ -18,7 +18,7 @@ What it builds, under one attached client:
 * a pane in copy mode;
 * a message on the client, and the view it is on at the upgrade, which
   the client has to come back to without being moved
-  (Lillecarl/pymux#409).
+  (Lillecarl/pyterm#411).
 
 The setup is typed at the client's prompt, because most of those
 commands act on the window of the client that runs them. The views are
@@ -242,7 +242,7 @@ def upgrade_in(terminal, seat, work, out):
         pid = answer(socket_path, "display-message", "-p", "#{pid}")
         jobs = what_the_jobs_say(socket_path)
         # Only a key clears a message or answers a question, so every
-        # view on both sides has them. Lillecarl/pymux#551.
+        # view on both sides has them. Lillecarl/pyterm#553.
         answer(socket_path, "display-message", "kept across the upgrade")
         answer(socket_path, "confirm-before", "-p", "Still asking? (y/n)", "display-message answered")
         # The client reads the history of the active pane of its window,

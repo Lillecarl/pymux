@@ -19,7 +19,7 @@ def lock_client(pymux: Pymux, args: argparse.Namespace):
 
     The overlay belongs to the session, so the other clients of that
     session see it too -- which is what lock-session says; there is no
-    per-client screen to cover alone. Lillecarl/pymux#324.
+    per-client screen to cover alone. Lillecarl/pyterm#326.
     """
     return lock(pymux, args)
 

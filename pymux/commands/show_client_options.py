@@ -20,7 +20,7 @@ def show_client_options(pymux: Pymux, args: argparse.Namespace) -> None:
     `name value` line per option, sorted. `-t` names the client, and
     without it this is the client the command came from. Nobody
     attached reads as not set, the way a window option with no window
-    does. Lillecarl/pymux#223, Lillecarl/pymux#298.
+    does. Lillecarl/pyterm#225, Lillecarl/pyterm#300.
     """
     target = None
     if args.target_client is not None:

@@ -103,7 +103,7 @@ class PaneFields(Record):
         **Not copy mode alone.** `#{pane_in_mode}` counts every mode
         the server draws, the clock among them, so a name saying copy
         mode said the wrong thing for one of the two.
-        `mode` is which one. Lillecarl/pymux#363.
+        `mode` is which one. Lillecarl/pyterm#365.
         """
         return _as_bool(self._values.get("pane_in_mode", ""))
 
@@ -131,7 +131,7 @@ class PaneFields(Record):
         program, whatever the bytes were.
 
         `-1` from a server too old to answer the field.
-        Lillecarl/pymux#387.
+        Lillecarl/pyterm#389.
         """
         return as_int(self._values.get("pane_revision", ""), -1)
 

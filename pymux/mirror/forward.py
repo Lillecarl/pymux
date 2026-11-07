@@ -8,7 +8,7 @@ owner's ids, and the pane the person here is in, which the owner reads
 as the caller's pane, with a target named or not. So a command with no
 target acts where the person is, the same as it does on the owner. Only
 commands marked `acts_on` come here (`commands.add_command`); a command
-about what one client looks at stays here. Lillecarl/pymux#759.
+about what one client looks at stays here. Lillecarl/pyterm#761.
 
 The person's client follows a command that moves the owner's caller to
 another window, the way `new-window` moves the client that runs it. The

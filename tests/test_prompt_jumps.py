@@ -1,6 +1,6 @@
 """
 `send-keys -X previous-prompt` and `next-prompt` move copy mode between
-the rows a shell marked with "OSC 133", as tmux's do. Lillecarl/pymux#500.
+the rows a shell marked with "OSC 133", as tmux's do. Lillecarl/pyterm#502.
 """
 
 from __future__ import annotations

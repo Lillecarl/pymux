@@ -30,11 +30,11 @@ def forward_port(pymux: Pymux, args: argparse.Namespace) -> None:
 
     **The server forwards nothing itself.** It holds no SSH connection;
     the client does. So this asks the client, and the client answers
-    with what it is forwarding. Lillecarl/pymux#436.
+    with what it is forwarding. Lillecarl/pyterm#438.
 
     `forward-mode` says whether it is confirmed first. A forward that
     binds off loopback, and one a program in a pane asked for, are
-    confirmed whatever the option says. Lillecarl/pymux#440.
+    confirmed whatever the option says. Lillecarl/pyterm#442.
     """
     if args.local and args.remote:
         raise CommandException("Give -L or -R, not both.")
@@ -65,12 +65,12 @@ def forward_port(pymux: Pymux, args: argparse.Namespace) -> None:
         # The question names both ends. "Forward a port?" is not enough
         # to answer safely: what matters is where it listens and what it
         # reaches. A yes runs this same command with -c, so it is asked
-        # once. Lillecarl/pymux#440.
+        # once. Lillecarl/pyterm#442.
         #
         # **And it says where the answer is not ours to give.** The one
         # bind worth confirming is the one openssh may quietly narrow,
         # so a question that did not say so would be asking about
-        # something that may not happen. Lillecarl/pymux#444.
+        # something that may not happen. Lillecarl/pyterm#446.
         caveat = " -- %s" % (MAY_NARROW,) if the_far_side_may_narrow(forward) else ""
         asker.client_state.ask(
             "Forward %s%s? (y/n)" % (forward.spell(), caveat),

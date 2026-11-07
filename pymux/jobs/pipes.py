@@ -24,7 +24,7 @@ class JobPipes:
     The pipes of a job on pipes: the read ends of its stdout and stderr,
     and its pid. `parent` says whether this process forked it, and so
     can wait for it: an upgrade's exec keeps the pid, and a job another
-    process forked never is its child. Lillecarl/pymux#736.
+    process forked never is its child. Lillecarl/pyterm#738.
 
     A read parks while paused, as `PosixBackend._pump` does, so that an
     upgrade reads nothing after the snapshot that describes the job.

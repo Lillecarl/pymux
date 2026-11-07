@@ -1,6 +1,6 @@
 """
 `set-option status-keys helix`: Helix's keys on the ":" line and on a
-`command-prompt`, through ptkhx. Lillecarl/pymux#749.
+`command-prompt`, through ptkhx. Lillecarl/pyterm#751.
 
 Escape works as it does with vi status keys: the first leaves insert
 mode and the line stays open, and Escape in normal mode closes it.

@@ -25,11 +25,11 @@ terminal to do. Then it compares them.
 *what pymux asked for* -- the crop rectangle, the cell box, the
 position, and which images are drawn at all. It cannot catch a terminal
 that scales differently from `scale_rgba`, because the terminal is not
-here; that is what the picture fixture in Lillecarl/pymux#262 is for.
+here; that is what the picture fixture in Lillecarl/pyterm#264 is for.
 
 Sixel holds a colour as three percentages, so every channel is
 approximated and the comparison allows the same 3 that
-`test_graphics_fallback.py` allows. Lillecarl/pymux#262.
+`test_graphics_fallback.py` allows. Lillecarl/pyterm#264.
 """
 
 from __future__ import annotations

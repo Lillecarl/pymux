@@ -1,7 +1,7 @@
 """
 `compose-key` sends a key this keyboard cannot type.
 
-Carl's words on Lillecarl/pymux#220: "claude code wants me to press
+Carl's words on Lillecarl/pyterm#222: "claude code wants me to press
 `ctrl+home` to scroll down to the bottom, I have a macbook without a
 home key and I don't want to learn this machine's stupid keymap
 always."
@@ -9,7 +9,7 @@ always."
 A laptop with no Home key, no Insert and no function row cannot answer
 a program that asks for one, and the fn chords differ per machine and
 per external keyboard. pymux is the layer in the middle, and
-`send-keys` could do it all along -- once Lillecarl/pymux#234 made the
+`send-keys` could do it all along -- once Lillecarl/pyterm#236 made the
 key nameable. What was missing is a way to reach it without knowing the
 spelling.
 

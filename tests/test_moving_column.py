@@ -1,5 +1,5 @@
 """
-Moving a column along the row of a strip. Lillecarl/pymux#202.
+Moving a column along the row of a strip. Lillecarl/pyterm#204.
 
 niri binds this beside the movement keys, and it is half of why the
 model works: a person puts related columns next to each other without
@@ -10,7 +10,7 @@ renegotiation a strip exists to avoid.
 **Two claims, and the second is the one worth a real render.** The
 order of `window.root` is a list reorder, and the tests for that need
 no layout at all. What a person sees is the title bars: each one names
-the panes on either side (Lillecarl/pymux#207), so a move renames
+the panes on either side (Lillecarl/pyterm#209), so a move renames
 three bars, and nothing in the move says so.
 """
 
@@ -152,7 +152,7 @@ async def test_moving_column_renames_title_bars():
     """
     The bar of a pane names the panes on either side, so a move
     renames them. Nothing in the move does that: the names are read
-    off the tree on every render. Lillecarl/pymux#207.
+    off the tree on every render. Lillecarl/pyterm#209.
     """
     async with create_client(STRIP, columns=COLUMNS) as (pymux, draw):
         panes = await create_row_of_named_panes(pymux)

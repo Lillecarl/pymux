@@ -3,7 +3,7 @@ Where a person types: the ":" command line and the answer to a
 `command-prompt`, each drawn as a bar at the bottom or as a box in the
 middle of the screen, and the mode tag in front of them. Each window is
 built once and kept: the layout focuses a control, and a fresh one is
-a control it never focused. Lillecarl/pymux#158, Lillecarl/pymux#220.
+a control it never focused. Lillecarl/pyterm#160, Lillecarl/pyterm#222.
 """
 
 from __future__ import annotations
@@ -59,12 +59,12 @@ class CommandLine:
         # holds it when the palette is on. Both are built once and kept.
         # A fresh `BufferControl` on every render is one that the layout
         # never focused, so the cursor is drawn nowhere and the person
-        # cannot see where they are typing. Lillecarl/pymux#158.
+        # cannot see where they are typing. Lillecarl/pyterm#160.
         self._window: Window | None = None
         self._palette: Container | None = None
         # And the same two for the prompt: the line a person answers a
         # question on, and the box that holds it when the question
-        # knows its answers. Lillecarl/pymux#220.
+        # knows its answers. Lillecarl/pyterm#222.
         self._prompt_window: Window | None = None
         self._key_box: Container | None = None
 
@@ -78,7 +78,7 @@ class CommandLine:
         **With vi status keys the mode decides what a key does**, and
         Escape most of all: the first one leaves insert mode and the
         second closes the line. A person has to be able to see which
-        press they are about to make. Lillecarl/pymux#255.
+        press they are about to make. Lillecarl/pyterm#257.
 
         The tag is one width whatever it says, so the line a person is
         typing on never moves under them.
@@ -107,7 +107,7 @@ class CommandLine:
         Helix's mode, as Helix spells it, and what is half typed: a
         count, a menu key, or the regex `s` reads, which shows nowhere
         else. The mode is one width; the half-typed part grows only
-        while it is typed. Lillecarl/pymux#749.
+        while it is typed. Lillecarl/pyterm#751.
         """
         helix = self.manager.pymux.key_bindings_manager.helix
         buffer = get_app().current_buffer
@@ -125,7 +125,7 @@ class CommandLine:
         if self.manager.client_state.prompt_completer is not None:
             # The box says what it is asking for, on the row above the
             # line. Saying it twice is one row wasted and one thing to
-            # read. Lillecarl/pymux#220.
+            # read. Lillecarl/pyterm#222.
             return []
         return [*self.mode_tokens(), ("class:commandline.prompt", "%s " % (self.manager.client_state.prompt_text,))]
 
@@ -136,7 +136,7 @@ class CommandLine:
         The bar at the bottom and the palette in the middle draw the
         same window. Only where it is drawn differs, so the key
         bindings of command mode and everything that reads the buffer
-        stay as they were. Lillecarl/pymux#158.
+        stay as they were. Lillecarl/pyterm#160.
 
         **It is built once.** The layout focuses a control, and a fresh
         one on every render is one it never focused: the cursor lands
@@ -207,7 +207,7 @@ class CommandLine:
 
         A title row says what the box is, the way the overlay pane says
         what it holds. tmux has no such thing; this is the room that
-        Lillecarl/pymux#147, #148 and #48 are asking for.
+        Lillecarl/pyterm#149, #150 and #50 are asking for.
 
         Built once, for the reason `CommandLine.window` gives.
         """
@@ -225,7 +225,7 @@ class CommandLine:
         Two things draw one. The ":" command line does, when a person
         asked for a palette; and a prompt that knows its answers does,
         which today is the box that composes a key.
-        Lillecarl/pymux#220.
+        Lillecarl/pyterm#222.
 
         `title` is asked each frame, so a box can say what it is asking
         for rather than what kind of box it is.

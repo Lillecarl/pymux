@@ -30,7 +30,7 @@ def select_pane(pymux: Pymux, args: argparse.Namespace) -> None:
             if pane is None or window is None:
                 raise CommandException("can't find pane: %s" % (pane_id,))
             # Its own window's: the window a person used last may not
-            # hold it. Lillecarl/pymux#506.
+            # hold it. Lillecarl/pyterm#508.
             window.active_pane = pane
 
     elif args.l:
@@ -48,7 +48,7 @@ def select_pane(pymux: Pymux, args: argparse.Namespace) -> None:
 
         # From the pane the command came from: a forwarded command
         # names the person's pane, which the owner may not hold active.
-        # Lillecarl/pymux#872.
+        # Lillecarl/pyterm#874.
         move_focus(pymux, side, find_pane(pymux, None))
 
 

@@ -11,7 +11,7 @@ one name, and the directory it stands in under `Field.CWD`.
 
 The names live here once, and both sides import them: a wire name
 spelled by hand in two files matches nothing when it drifts, raises
-nothing, and drops the meaning silently. Lillecarl/pymux#447. That is
+nothing, and drops the meaning silently. Lillecarl/pyterm#449. That is
 why this is in the client library and not in pymux: the server, the
 command line and `libpymux.Connection` all send or read these fields.
 

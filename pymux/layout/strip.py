@@ -2,7 +2,7 @@
 A row of panes that can be wider than the screen.
 
 Every other layout pymux has divides a fixed budget, so adding a pane
-makes every other pane smaller. Lillecarl/pymux#198 asks for the
+makes every other pane smaller. Lillecarl/pyterm#200 asks for the
 opposite, the way niri's scrollable tiling works: a pane keeps its
 width, the row grows past the edge of the screen, and the view scrolls
 to the pane a person is on.
@@ -10,7 +10,7 @@ to the pane a person is on.
 **This file says where the panes are, and nothing draws here.**
 `Strip.measure` hands over a plan with the lines in its gaps, and
 `Strip.look_at` says where the view goes.
-`PlanContainer` draws all three. Lillecarl/pymux#217.
+`PlanContainer` draws all three. Lillecarl/pyterm#219.
 
 **The row is drawn straight onto the real screen, at a negative
 offset.** `Screen.data_buffer` is a sparse dictionary of rows of cells,
@@ -42,11 +42,11 @@ view alone, so walking right and back again is a round trip. The policy
 before it was a clamp recomputed from the focused pane every frame,
 with a peek offset on each side, and the offset dragged the view two
 cells sideways every time the focus landed on a column that was already
-perfectly visible. Lillecarl/pymux#209.
+perfectly visible. Lillecarl/pyterm#211.
 
 There are no peek offsets now. A sliver of the next column said that
 something was out there and nothing about what; the title bar names it
-instead. Lillecarl/pymux#207.
+instead. Lillecarl/pyterm#209.
 """
 
 from __future__ import annotations
@@ -72,7 +72,7 @@ class Strip:
     This is the first layout that answers with a `Plan`, and it is the
     hardest one pymux has: the row may be wider than the view, so
     "which pane is beside this one" cannot be answered by the screen.
-    Lillecarl/pymux#217, and `docs/layout-engine-plan.md`.
+    Lillecarl/pyterm#219, and `docs/layout-engine-plan.md`.
 
     **It reads the arrangement, for now.** The tree, the column widths
     and the weights still live in `window_tree.Window`, so this
@@ -94,7 +94,7 @@ class Strip:
         Where each column's share of the row ends, in cells.
 
         The fraction is of the window, and the border the column owns
-        comes out of that share. Lillecarl/pymux#206 says why the
+        comes out of that share. Lillecarl/pyterm#208 says why the
         border is inside the share.
 
         **Each edge is rounded from the running total**, so shares that
@@ -102,7 +102,7 @@ class Strip:
         made two halves of 187 cells 94 each: 188, one cell past the
         screen, so the view scrolled a cell and tinted the column it cut.
         A column may then differ from its twin by one cell, and that is
-        the price. Lillecarl/pymux#615.
+        the price. Lillecarl/pyterm#617.
         """
         total = 0.0
         answer = []
@@ -121,7 +121,7 @@ class Strip:
         comes later.
 
         Each column owns the line down its right, paid for out of its
-        own share (Lillecarl/pymux#206), and the walk inside a column
+        own share (Lillecarl/pyterm#208), and the walk inside a column
         draws the lines across its gaps.
         """
         rects: list[tuple[Slot, Rect]] = []
@@ -156,7 +156,7 @@ class Strip:
         # Insertion order is reading order here, because the columns go
         # on left to right and a column's panes go on top to bottom.
         # Decision 9: a strip numbers its panes the way a person reads
-        # them. Lillecarl/pymux#210.
+        # them. Lillecarl/pyterm#212.
         return Plan({GROUND: rects}, lines)
 
     def look_at(self, plan: Plan, view: View, focus: Pane | None) -> Point:
@@ -173,10 +173,10 @@ class Strip:
 
         Two of them matter most here. A column already wholly on screen
         leaves the view alone, which is what makes moving the focus a
-        round trip (Lillecarl/pymux#207). A column wider than the view
+        round trip (Lillecarl/pyterm#209). A column wider than the view
         shows its left edge and the right of it is cut, because that is
-        where applications write (Lillecarl/pymux#218); nothing on the
-        screen says the column is cut, which is Lillecarl/pymux#222.
+        where applications write (Lillecarl/pyterm#220); nothing on the
+        screen says the column is cut, which is Lillecarl/pyterm#224.
         """
         gap = self.gaps().between_columns
         box = plan.bounds
@@ -190,7 +190,7 @@ class Strip:
             # the view a cell to show that line only cut the column on
             # the other side. Carl: "we don't want to move and show the
             # extra border unless there's another column to the
-            # left/right as a hint". Lillecarl/pymux#617.
+            # left/right as a hint". Lillecarl/pyterm#619.
             beyond = gap if rect.right < box.right else 0
             column = Rect(x=rect.x, y=rect.y, width=rect.width + beyond, height=rect.height)
 

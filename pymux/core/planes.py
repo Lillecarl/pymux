@@ -41,7 +41,7 @@ def _any_of_them_wants_chrome(watchers: Iterable[ClientState]) -> bool:
     changing it moves the size of every detached pane in the
     collection: measured, and `pymux-vterm`, `pymux-alacritty` and
     `pymux-pictures` all read a different screen. That is its own
-    question, and it is Lillecarl/pymux#474.
+    question, and it is Lillecarl/pyterm#476.
     """
     return not watchers or any(not one.options.full_screen for one in watchers)
 
@@ -51,7 +51,7 @@ def remember_the_size_made_at(window: Window, pane: Pane) -> None:
     Keep the size a new window's one pane was given as the window's own
     while nobody watches it. `size_with_no_client` gave the pane the
     whole plane, so the two are the same number, and the window keeps it
-    whatever the clients do after. Lillecarl/pymux#817.
+    whatever the clients do after. Lillecarl/pyterm#819.
     """
     terminal = pane.terminal
     assert isinstance(terminal, Terminal), "`_create_pane` builds a terminal pane"
@@ -67,14 +67,14 @@ def _plane_of_clients(clients: Sequence[ClientState], rule: WindowSize) -> Size:
     they all are** -- then they decide it between them, because the
     alternative is a plane no terminal here can show. tmux does the
     same, and for the same reason (`resize.c:95-107`).
-    Lillecarl/pymux#467.
+    Lillecarl/pyterm#469.
 
     **Every client, and not the ones that size it**, gives status rows.
     A read-only client still draws its own status line, so the rows it
     needs come off the plane even while its columns do not. The tallest
     one decides: a phone whose window list wraps to three rows takes
     three off everybody's plane, and the others draw background there.
-    Lillecarl/pymux#723.
+    Lillecarl/pyterm#725.
     """
     sizing = [one for one in clients if not one.ignore_size] or list(clients)
     if rule is WindowSize.LATEST:
@@ -94,7 +94,7 @@ class Planes:
         self.pymux = pymux
         #: The room each server that mirrors windows of this one has for
         #: them, by window id. A link with none is not here, so a frame
-        #: on a server nobody mirrors pays one test. Lillecarl/pymux#759.
+        #: on a server nobody mirrors pays one test. Lillecarl/pyterm#761.
         self.peer_rooms: dict[PeerLink, dict[WindowId, Size]] = {}
 
     def _anyone_is_full_screen(self) -> bool:
@@ -108,7 +108,7 @@ class Planes:
         a plan asks the question four times per pane: measured at +128
         bytecode instructions each, which `checks.pymux-frame` read as
         10% of a one-pane window's neighbour cost.
-        Lillecarl/pymux#471.
+        Lillecarl/pyterm#473.
         """
         return any(one.options.full_screen for one in self.pymux._client_states.values())
 
@@ -129,7 +129,7 @@ class Planes:
         **Nobody watching is yes**, which is what the plane was
         measured with before this question existed.
         `_any_of_them_wants_chrome` says why it is not the other
-        answer. Lillecarl/pymux#471.
+        answer. Lillecarl/pyterm#473.
         """
         session = self.pymux.session_of_window(window) if window is not None else None
         wanted = (session or self.pymux.current_session).options.pane_border_status
@@ -165,13 +165,13 @@ class Planes:
         status row comes off it. A window exists before a client
         attaches to it, and the program in a pane needs a size from the
         first byte it writes. `new-session -x -y` is what names that
-        size. Lillecarl/pymux#459.
+        size. Lillecarl/pyterm#461.
 
         **A session nobody named a size for takes the clients' size**,
         by the same `window-size` rule, once: when the window is made.
         An agent's window is then the size the person's would be, and a
         program in it is never resized behind its back.
-        Lillecarl/pymux#817. **A window somebody watched keeps the size
+        Lillecarl/pyterm#819. **A window somebody watched keeps the size
         it had then**, so looking away resizes nothing either.
         """
         if window is None:
@@ -230,7 +230,7 @@ class Planes:
         The room each server that mirrors this window has for it, and
         when a person there last used a mirror here. A peer counts as a
         client does, and its room is what its own clients give the
-        window. Lillecarl/pymux#759.
+        window. Lillecarl/pyterm#761.
         """
         if not self.peer_rooms:
             return []

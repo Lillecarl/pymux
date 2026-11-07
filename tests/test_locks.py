@@ -4,7 +4,7 @@ The locks: `lock-client`, `lock-session` and `lock-server`.
 All three cover the screen with what `lock-command` names, through
 the overlay, which belongs to the session -- so the tests say the
 overlay opened, and that `lock-command` is what runs in it.
-Lillecarl/pymux#297.
+Lillecarl/pyterm#299.
 """
 
 from __future__ import annotations

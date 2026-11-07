@@ -1,4 +1,4 @@
-"Box drawing and block elements, drawn from the cell as foot draws them. Lillecarl/pymux#778."
+"Box drawing and block elements, drawn from the cell as foot draws them. Lillecarl/pyterm#780."
 
 from __future__ import annotations
 

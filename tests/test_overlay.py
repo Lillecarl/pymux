@@ -100,7 +100,7 @@ async def test_every_client_of_the_session_looks_at_overlay():
     """
     The overlay belongs to the session, so it has the focus for every
     client on that session -- and for no client on another.
-    Lillecarl/pymux#324.
+    Lillecarl/pyterm#326.
     """
 
     class FakeClientState:
@@ -116,7 +116,7 @@ async def test_every_client_of_the_session_looks_at_overlay():
     # The overlay lands on the session a command with no client means,
     # and that is the newest session on the server: nothing has looked
     # at either of these, so `last_used_session` answers with the one
-    # made last. Lillecarl/pymux#473.
+    # made last. Lillecarl/pyterm#475.
     elsewhere = pymux.current_session
     here = pymux.create_session(name="here")
 

@@ -18,7 +18,7 @@ def get(pymux: Pymux, args: argparse.Namespace) -> None:
     `get paneid` says the id of the pane a target names, or of the
     active one. The id is the handle every targeted command accepts
     as `%<id>`, and unlike the window and pane indexes it does not
-    move when panes open and close. Lillecarl/pymux#291.
+    move when panes open and close. Lillecarl/pyterm#293.
     """
     what = args.what
     if what != "paneid":

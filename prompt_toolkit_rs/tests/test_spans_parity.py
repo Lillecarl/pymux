@@ -4,7 +4,7 @@
 Both walk the same two rows and have to agree on the spans, and on
 what the walk left in each row: a defaultdict stores its default for
 a column it is asked about, and the rest of the diff reads the cells
-the walk stored. Lillecarl/pymux#566.
+the walk stored. Lillecarl/pyterm#568.
 """
 
 from __future__ import annotations

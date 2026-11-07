@@ -8,7 +8,7 @@ those bindings do decides whether the promise holds.
 
 The tests are coroutines, for the reason `test_command_mode.py` gives:
 the key processor starts a background task and asks the running loop
-for one. Lillecarl/pymux#214.
+for one. Lillecarl/pyterm#216.
 """
 
 from __future__ import annotations
@@ -93,7 +93,7 @@ def in_copy_mode(pymux, state):
 
     Copy mode is `ptterm`'s, and it is built from the same read-only
     buffer and `SearchToolbar` as the popup. So the same keys reach it,
-    and Lillecarl/pymux#214 says so too.
+    and Lillecarl/pyterm#216 says so too.
     """
     with set_app(state.app):
         pymux.handle_command("copy-mode")
@@ -203,7 +203,7 @@ async def test_copy_mode_holds_its_scrollback_read_only():
     `/`, `n` and `N` are bound against `is_read_only`
     (`prompt-toolkit/src/prompt_toolkit/key_binding/bindings/emacs.py`),
     so a read-only buffer gets all three and copy mode gets them for
-    the same reason the popup does. Lillecarl/pymux#214.
+    the same reason the popup does. Lillecarl/pyterm#216.
 
     **Walking the matches in copy mode is not measured here.** It needs
     a pane that wrote text worth searching, and the pane in this

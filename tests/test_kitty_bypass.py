@@ -1,6 +1,6 @@
 """
 kitty's bypass password for its file transfer: the server's key, its
-reading of an encrypted bypass, and the client's check. Lillecarl/pymux#917.
+reading of an encrypted bypass, and the client's check. Lillecarl/pyterm#919.
 """
 
 from __future__ import annotations

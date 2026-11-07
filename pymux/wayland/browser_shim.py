@@ -1,6 +1,6 @@
 """
 `pymux-browser`: a Chromium for a program in a pane, which runs on the
-machine of the person instead. Lillecarl/pymux#653.
+machine of the person instead. Lillecarl/pyterm#655.
 
 Name it as the browser to launch -- `PUPPETEER_EXECUTABLE_PATH`, or
 chromedriver's binary -- or run it bare and give a tool the endpoint it
@@ -22,7 +22,7 @@ the browser, because the server stops a browser whose hold went.
 **Playwright's `launch()` talks over a pipe** (`--remote-debugging-pipe`):
 NUL-terminated CDP messages on fd 3 in, fd 4 out. Then this carries each
 message to the browser's WebSocket and back, for as long as both stay.
-A Firefox has no CDP, so that needs a Chromium. Lillecarl/pymux#655.
+A Firefox has no CDP, so that needs a Chromium. Lillecarl/pyterm#657.
 """
 
 from __future__ import annotations

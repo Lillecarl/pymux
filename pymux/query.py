@@ -9,7 +9,7 @@ server's records in `live`, by the snapshot's names
 (`tables.LIVE_ROWS`), with the columns a person sees beside them
 (`tables.shown`). The connection closes with the answer. So typing, a
 frame or a pane's output never touches SQLite, and two questions never
-lock each other. Lillecarl/pymux#722.
+lock each other. Lillecarl/pyterm#724.
 
 **The rows are built on the loop, and SQLite runs on a worker.** An
 async apsw connection runs SQLite in a thread of its own, which is
@@ -308,7 +308,7 @@ def _forwards(pymux: Pymux) -> Iterator[ForwardView]:
                 client.client_id or "",
                 one.get("direction", ""),
                 # The port really bound, which is what `list-forwards`
-                # shows and so what a person can name. Lillecarl/pymux#441.
+                # shows and so what a person can name. Lillecarl/pyterm#443.
                 "%s:%s" % (one.get("listen_host", ""), one.get("port", "")),
                 one.get("dest", ""),
             )

@@ -7,7 +7,7 @@ ctrl+f, under a filter that wants the cursor at the end of the line --
 and loads it from `PromptSession` alone. An application that builds
 its own key bindings gets the grey text and no way to accept it.
 
-Lillecarl/pymux#163.
+Lillecarl/pyterm#165.
 """
 
 from __future__ import annotations

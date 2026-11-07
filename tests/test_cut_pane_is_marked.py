@@ -1,9 +1,9 @@
 """
-The shade that says a pane runs off the edge. Lillecarl/pymux#222,
-Lillecarl/pymux#616.
+The shade that says a pane runs off the edge. Lillecarl/pyterm#224,
+Lillecarl/pyterm#618.
 
 A strip is a row that may be wider than the view, so a column can be
-cut, and Lillecarl/pymux#218 settled which end is shown. **That leaves
+cut, and Lillecarl/pyterm#220 settled which end is shown. **That leaves
 the other half of the question.** The cells a person sees are the
 ordinary cells of that pane, so a pane whose program wrote nothing past
 the cut looks exactly like a pane that ends there.
@@ -202,7 +202,7 @@ async def test_the_shade_moves_the_terminals_own_background():
     """
     With `paint-screen` off, a default cell shows the terminal's own
     background, so the shade starts from what the terminal answered.
-    Lillecarl/pymux#352.
+    Lillecarl/pyterm#354.
     """
     async with create_client([*STRIP, PAINT_SCREEN_OFF]) as (pymux, state, draw):
         state.client.default_colors.background = parse_color("#404040")

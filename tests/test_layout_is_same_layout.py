@@ -9,7 +9,7 @@ a key that never matches, so every key press rebuilt every binding.
 
 `checks.pymux-keystroke` holds the total, and a total says a stage grew
 without saying why. This says which invariant the number rests on.
-Lillecarl/pymux#233.
+Lillecarl/pyterm#235.
 """
 
 from __future__ import annotations

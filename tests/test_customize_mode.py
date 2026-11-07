@@ -4,7 +4,7 @@ from.
 
 The rows are the options with what they hold; the search narrows
 them; taking a row opens the command prompt with the option named
-and what it holds as the default answer. Lillecarl/pymux#297.
+and what it holds as the default answer. Lillecarl/pyterm#299.
 """
 
 from __future__ import annotations
@@ -67,7 +67,7 @@ async def test_value_shown_is_what_option_holds():
 async def test_a_client_option_is_listed():
     """
     A client option is one of the three scopes, and the chooser is
-    where a person browses what pymux can do. Lillecarl/pymux#472.
+    where a person browses what pymux can do. Lillecarl/pyterm#474.
     """
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -83,7 +83,7 @@ async def test_a_client_option_is_listed():
 async def test_a_client_option_is_set_by_its_own_command():
     """
     Taking a client row asks on the prompt with `set-client-option`,
-    not `set-option`, which refuses the name. Lillecarl/pymux#472.
+    not `set-option`, which refuses the name. Lillecarl/pyterm#474.
     """
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -102,7 +102,7 @@ async def test_taking_a_client_row_changes_this_client():
     The whole path: the row, the prompt's command, and the set. A
     client option has to reach the client the chooser is drawn on, so
     the command it builds runs against nobody else.
-    Lillecarl/pymux#472.
+    Lillecarl/pyterm#474.
     """
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -120,7 +120,7 @@ async def test_a_window_option_is_set_by_its_own_command():
     """
     The chooser listed a window option but set it with `set-option`,
     which takes only the session's, so the row was a name that errored
-    when a person took it. Lillecarl/pymux#472.
+    when a person took it. Lillecarl/pyterm#474.
     """
     async with create_session() as (pymux, state):
         with set_app(state.app):

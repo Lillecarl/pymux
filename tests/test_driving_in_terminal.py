@@ -6,7 +6,7 @@ program on a pty of its own, copies what the program writes to the
 terminal's tty, and writes scripted keys into the pty. That is how a
 check presses a key at pymux: a headless compositor owns no input
 device, and the terminal's own pty belongs to the terminal.
-Lillecarl/pymux#161.
+Lillecarl/pyterm#163.
 
 **These tests need no display.** The relay's job is bytes in one
 direction and keys in the other, and a pty of the test's own is a
@@ -58,7 +58,7 @@ def run(keys, argv, rows=24, columns=80, hold=HOLD, wanted=b"", answer=b""):
 
     `answer` is what this terminal says back, written once the relay
     has drawn something: it stands for the reply a real terminal sends
-    when the program asks it a question. Lillecarl/pymux#350.
+    when the program asks it a question. Lillecarl/pyterm#352.
     """
     master, slave = create_terminal(rows, columns)
     process = subprocess.Popen(
@@ -173,7 +173,7 @@ def test_what_the_terminal_answers_reaches_the_program(tmp_path):
     A program asks its terminal what it draws with, and the answer
     arrives on this process's stdin rather than the program's. Nothing
     read it before, so pymux in a picture heard nothing back from a
-    terminal that had answered. Lillecarl/pymux#350.
+    terminal that had answered. Lillecarl/pyterm#352.
     """
     keys = create_keys_file(tmp_path, "")
 
@@ -377,7 +377,7 @@ def test_fence_comes_back_and_is_taken_out(tmp_path):
     """
     The fence proves the keys were consumed, and the terminal never
     sees it: what the relay copies is the frame, and not the
-    scaffolding. Lillecarl/pymux#275.
+    scaffolding. Lillecarl/pyterm#277.
     """
     from drive_in_terminal import BOOT_TOKEN, KEYS_TOKEN
 
@@ -402,7 +402,7 @@ def test_a_terminal_answer_is_not_the_program_going_quiet():
     terminal answers them, and the first frame is called finished after
     256 bytes of questions -- the timeline of a real run has the fifo,
     the frame and the prefix all at 0.401s. The keys then go into a
-    pymux that has not drawn. Lillecarl/pymux#353.
+    pymux that has not drawn. Lillecarl/pyterm#355.
     """
     import io
     import socket
@@ -419,7 +419,7 @@ def test_a_terminal_answer_is_not_the_program_going_quiet():
         settle(ours.fileno(), bytearray(), io.BytesIO(), 0, answered)
         took = time.monotonic() - started
         # And it still reached the program, which is the whole point of
-        # reading the terminal at all. Lillecarl/pymux#350.
+        # reading the terminal at all. Lillecarl/pyterm#352.
         theirs.settimeout(1.0)
         assert theirs.recv(64).startswith(b"\x1b]11;")
     finally:
@@ -438,7 +438,7 @@ def test_a_step_that_presses_nothing_is_a_wait_and_still_fences(tmp_path):
     The mark was taken on that step, and the fence then waited for one
     byte past a frame that had already arrived. `foot which-key` never
     produced a picture, in five runs across two trees.
-    Lillecarl/pymux#364.
+    Lillecarl/pyterm#366.
     """
     pane = "stty -echo; printf 'up.'; exec python3 %s %s %s"
     _, fence_seen, error = run_fenced(tmp_path, '0.1 b"k"\n0.3 b""\n', pane)
@@ -452,7 +452,7 @@ def test_no_key_is_pressed_before_the_boot_fence_comes_back(tmp_path):
     not its frame. pymux writes 256 bytes of them and then waits for
     the answers, and a key pressed there reaches a program that is not
     reading keys yet: one run of `cut-follows-the-terminal` lost its
-    split exactly so. Lillecarl/pymux#353.
+    split exactly so. Lillecarl/pyterm#355.
 
     So the boot is fenced too, and the keys are counted from the fence
     coming back rather than from the first bytes. The round trip is the
@@ -481,7 +481,7 @@ def test_the_timeline_says_what_happened_and_when(tmp_path):
     A run that photographed the wrong state leaves this file and the
     program's own log beside it, and the two read together say which
     key the program never acted on. It was empty before, and a lost
-    key was a guess. Lillecarl/pymux#353.
+    key was a guess. Lillecarl/pyterm#355.
     """
     _, fence_seen, error = run_fenced(tmp_path, '0.1 b"hello\\n"\n', ANSWERS_THE_KEY)
 

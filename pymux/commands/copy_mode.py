@@ -19,7 +19,7 @@ def copy_mode(pymux: Pymux, args: argparse.Namespace) -> None:
     **Over the socket it opens for the client a person used last**, as
     `display-message` shows there. The client a command arrives under
     then is temporary and draws nothing, and copy mode is a client's, so
-    one opened for it is one nobody sees. Lillecarl/pymux#470.
+    one opened for it is one nobody sees. Lillecarl/pyterm#472.
     """
     # TODO: handle '-u' (go in copy mode and page-up directly).
 
@@ -45,6 +45,6 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     # anybody. Its keys are the copy buffer's and `may_type` does not
     # reach them, so that person can scroll and leave. tmux marks the
     # command and then drops every key of such a client, so a read-only
-    # tmux client that enters is stuck. Lillecarl/pymux#470.
+    # tmux client that enters is stuck. Lillecarl/pyterm#472.
     parser = add_command(subparsers, copy_mode, read_only=True)
     parser.add_argument("-u", dest="u", action="store_true", help="Accepted for tmux. Pymux does not page up yet.")

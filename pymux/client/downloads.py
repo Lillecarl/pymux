@@ -1,6 +1,6 @@
 """
 The files a server sends this client to save: a pane's download, when
-`file-transfer` says the pymux client saves it. Lillecarl/pymux#743.
+`file-transfer` says the pymux client saves it. Lillecarl/pyterm#745.
 
 `pymux.files` joins the parts and writes the file. This module picks
 the directory on this machine.
@@ -51,7 +51,7 @@ def save_whole(whole: Whole) -> str:
     Write a file that arrived whole, and say where it went or why not.
 
     **Never on a loop that draws.** 64 MiB stopped drawing and typing
-    for as long as the write took. Lillecarl/pymux#747.
+    for as long as the write took. Lillecarl/pyterm#749.
     """
     directory = download_directory(os.environ, Path.home(), Path.cwd())
     try:

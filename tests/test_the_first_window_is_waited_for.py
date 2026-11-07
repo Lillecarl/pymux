@@ -1,7 +1,7 @@
 """
 A caller that arrives while the first window opens waits for it, where
 it found no window and a command answered "no current window".
-Lillecarl/pymux#571.
+Lillecarl/pyterm#573.
 """
 
 from __future__ import annotations

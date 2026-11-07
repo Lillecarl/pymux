@@ -1,6 +1,6 @@
 """
 `list-panes -s -t <session>` lists the panes of that session: with `-s`
-the target is a session, as tmux reads it. Lillecarl/pymux#808.
+the target is a session, as tmux reads it. Lillecarl/pyterm#810.
 """
 
 from __future__ import annotations

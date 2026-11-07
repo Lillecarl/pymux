@@ -7,7 +7,7 @@ second, so sending the screen is the thing to avoid. pyte counts writes
 per row and the count only goes up, so the whole diff is a comparison of
 numbers -- and the state of that comparison belongs to the viewer, not to
 the screen, because one pane has several viewers and none of them may
-empty a set the others read. Lillecarl/pymux#126.
+empty a set the others read. Lillecarl/pyterm#128.
 
 **A cell's spelling is sent once, not once per run.** A frame holds a
 style table: the first time a way of drawing appears, its CSS
@@ -28,10 +28,10 @@ whose placements moved carries the whole list of them, in cells of the
 screen and with the pixels of the image each one shows. The list is the
 only truth about images: an image no placement names is dropped by both
 ends, so the two never disagree about what the other holds.
-Lillecarl/pymux#480.
+Lillecarl/pyterm#482.
 
 Nothing here does any I/O, imports no transport and holds no socket.
-Lillecarl/pymux#461.
+Lillecarl/pyterm#463.
 """
 
 from __future__ import annotations
@@ -282,7 +282,7 @@ class PaneView:
         # of a rendition carries no value, and the stylesheet the client
         # already fetched answers every one of those, so the wire holds
         # a word rather than the declarations again.
-        # Lillecarl/pymux#460.
+        # Lillecarl/pyterm#462.
         entry: dict[str, str] = {}
         if key[0]:
             entry["c"] = key[0]
@@ -394,7 +394,7 @@ async def encode_unsent(view: PaneView, screen: Screen) -> None:
     A zlib pass over a large sixel holds the loop, and every client of the
     server waits for it. The loop repeats for an image that arrived while
     a thread ran, and nothing awaits between the last pass and the frame.
-    Lillecarl/pymux#719.
+    Lillecarl/pyterm#721.
     """
     done: list[Any] = []
     while todo := [image for image in view.unsent(screen) if not any(image.data is data for data in done)]:
@@ -472,7 +472,7 @@ def typed_of(message: dict[str, Any]) -> Typed:
     raise ValueError("%r is not something a client may say" % (kind,))
 
 
-#: What a viewer says the mouse did. Lillecarl/pymux#950.
+#: What a viewer says the mouse did. Lillecarl/pyterm#952.
 MOUSE = "mouse"
 
 _MOUSE_ACTIONS = {

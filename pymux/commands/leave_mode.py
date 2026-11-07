@@ -14,7 +14,7 @@ def leave_mode(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Leave the innermost mode, and put back what entering it changed.
 
-    Lillecarl/pymux#394.
+    Lillecarl/pyterm#396.
     """
     try:
         pymux.key_bindings_manager.leave_mode()

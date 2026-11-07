@@ -9,7 +9,7 @@ as "the default", the way xdg-desktop-portal answers it.
 
 dbus-fast reads each signature by evaluating the annotation against
 this module, so every name an annotation uses is imported at runtime.
-Lillecarl/pymux#812.
+Lillecarl/pyterm#814.
 """
 
 from __future__ import annotations

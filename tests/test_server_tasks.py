@@ -19,7 +19,7 @@ terminal of every client without end.
 task group an exception cancels the siblings and goes up, and up from a
 connection is every other client of the server. The work a connection
 spawns answers one client, so it is logged there and the connection
-lives on. Lillecarl/pymux#87.
+lives on. Lillecarl/pyterm#89.
 """
 
 from __future__ import annotations
@@ -66,7 +66,7 @@ class FailingPipe(FakePipe):
 
     Not pymux's `BrokenPipeError`, which is the end of a connection,
     but the kind of fault a descriptor the kernel has taken back gives
-    back. It counts how many times it was asked. Lillecarl/pymux#329.
+    back. It counts how many times it was asked. Lillecarl/pyterm#331.
     """
 
     def __init__(self):
@@ -200,7 +200,7 @@ async def test_a_task_spawned_before_the_connection_serves_runs():
     """
     The server starts `serve` with `start_soon`, so a packet can be sent
     before its scope opens. Each upgrade lost one to a resumed client.
-    Lillecarl/pymux#937.
+    Lillecarl/pyterm#939.
     """
     ran = []
 
@@ -237,7 +237,7 @@ async def test_a_task_spawned_on_a_closed_connection_says_so(caplog):
 
 async def test_a_read_that_keeps_failing_ends_the_connection():
     """
-    **The spin, and the whole of Lillecarl/pymux#329.**
+    **The spin, and the whole of Lillecarl/pyterm#331.**
 
     A read that fails and is not the transport saying the connection
     ended was logged and retried at once. A read that keeps failing

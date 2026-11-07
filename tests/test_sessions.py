@@ -1,5 +1,5 @@
 """
-Many sessions in one server. Lillecarl/pymux#323.
+Many sessions in one server. Lillecarl/pyterm#325.
 
 tmux says of itself: "all sessions are managed by a single server".
 pymux held one, and the whole surface -- new-, attach-, kill-, rename-,
@@ -187,7 +187,7 @@ async def test_list_sessions_names_every_session():
 
 
 async def test_a_question_leaves_the_keyboard_on_the_window_switched_to():
-    "A question takes no focus, so the window under it has its pane focused. Lillecarl/pymux#551."
+    "A question takes no focus, so the window under it has its pane focused. Lillecarl/pyterm#553."
     async with in_this_process(_server()) as session:
         pymux = session.pymux
         here, _ = await session.attach("here", SIZE)
@@ -205,7 +205,7 @@ async def test_a_question_leaves_the_keyboard_on_the_window_switched_to():
 
 
 async def test_list_windows_t_names_a_session():
-    "tmux's target-session: a bare name is not a window of this session. Lillecarl/pymux#550."
+    "tmux's target-session: a bare name is not a window of this session. Lillecarl/pyterm#552."
     async with in_this_process(_server()) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
@@ -383,7 +383,7 @@ async def test_the_chooser_lists_every_session():
 
 
 async def test_a_session_line_names_its_session_once():
-    "Lillecarl/pymux#765: a label at the start of the line, not on each entry."
+    "Lillecarl/pyterm#767: a label at the start of the line, not on each entry."
     async with in_this_process(_server()) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
@@ -433,7 +433,7 @@ def _sessions_of_lines(pymux, state) -> list[set]:
 
 
 async def test_each_session_starts_a_line_of_the_chooser():
-    "Lillecarl/pymux#531: the sessions read as groups."
+    "Lillecarl/pyterm#533: the sessions read as groups."
     async with in_this_process(_server()) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
@@ -532,7 +532,7 @@ async def test_an_overlay_stays_in_its_own_session():
     """
     `display-popup` and the three lock commands open an overlay. It
     belonged to the server, so a popup opened in one session covered
-    the screen of every client of the process. Lillecarl/pymux#324.
+    the screen of every client of the process. Lillecarl/pyterm#326.
     """
     async with in_this_process(_server()) as session:
         pymux = session.pymux
@@ -560,7 +560,7 @@ async def test_lock_server_covers_every_session():
     """
     An overlay is one session's, so "the server" means one on each.
     lock-session and lock-client cover the asking client's session
-    alone. Lillecarl/pymux#324.
+    alone. Lillecarl/pyterm#326.
     """
     async with in_this_process(_server()) as session:
         pymux = session.pymux

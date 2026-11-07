@@ -2,7 +2,7 @@
 The frame rates a status line shows: `client_fps`, the frames a second
 this client gets, and `client_window_fps`, a window pane's own, which go
 out apart from them. There is no option for either; a template puts them
-where a person wants them, per client. Lillecarl/pymux#596.
+where a person wants them, per client. Lillecarl/pyterm#598.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ async def test_a_template_shows_the_frame_rates_where_it_says():
             )
             right = connection.client.state.layout_manager.status.right
             # The rate's own clock, so a stall between two lines moves
-            # nothing. Lillecarl/pymux#844.
+            # nothing. Lillecarl/pyterm#846.
             now = [1000.0]
             window_frames = connection.client.pacing.rate_window_frames
             window_frames.clock = lambda: now[0]

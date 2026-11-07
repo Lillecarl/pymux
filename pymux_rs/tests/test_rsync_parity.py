@@ -4,7 +4,7 @@ gives, byte for byte, and the delta patches the old file into the new.
 
 Files that share blocks and files that share none, blocks that repeat so
 the first in the signature has to win, and a run of new bytes past
-`DELTA_BYTES`, where a data operation ends. Lillecarl/pymux#916.
+`DELTA_BYTES`, where a data operation ends. Lillecarl/pyterm#918.
 """
 
 from __future__ import annotations
@@ -95,7 +95,7 @@ def test_unrelated_files_split_their_data_the_same():
 @given(st.binary(max_size=3000), st.integers(1, 700), st.integers(0, 2**40))
 @settings(max_examples=1500, deadline=None)
 def test_the_same_signature_is_written(run, block_size, first):
-    "Lillecarl/pymux#921."
+    "Lillecarl/pyterm#923."
     assert pymux_rs.rsync_records(run, block_size, first) == PURE_RECORDS(run, block_size, first)
 
 

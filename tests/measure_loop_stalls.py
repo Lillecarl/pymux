@@ -1,6 +1,6 @@
 """
 How long the event loop stalls while a window pane plays video, and
-what it was running when it did. Lillecarl/pymux#632.
+what it was running when it did. Lillecarl/pyterm#634.
 
 mpv plays `testsrc2` at 60 frames a second in a window pane, for one
 client at a kitty terminal. A ticker on the loop sleeps `TICK` again
@@ -56,7 +56,7 @@ TICK = 0.005
 STALL = float(os.environ.get("PYMUX_STALL_MS") or 10) / 1000
 CALIBRATION = 0.030
 #: Cells of 10 by 20 pixels: the window pane beside the first pane is
-#: about 1600 by 900, the size #632 measured.
+#: about 1600 by 900, the size #634 measured.
 SIZE = Size(rows=46, columns=322)
 CELL = (10, 20)
 SECONDS = float(os.environ.get("PYMUX_STALL_SECONDS") or 20)

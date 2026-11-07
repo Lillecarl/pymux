@@ -19,7 +19,7 @@ def show_window_options(pymux: Pymux, args: argparse.Namespace) -> None:
     A name says what the active window holds; `-g` reads what every
     new window starts with, where a default nobody set reads as not
     set and shows as such. Without a name, one `name value` line per
-    option, sorted. Lillecarl/pymux#298.
+    option, sorted. Lillecarl/pyterm#300.
     """
     name = args.option
     if name:

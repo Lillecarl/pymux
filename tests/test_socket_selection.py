@@ -49,7 +49,7 @@ def sockets(tmp_path, monkeypatch):
             # `nobody_answers` connects once per candidate per call, so
             # a queue of one parks the second probe until it times out.
             # A real server accepts at once, which is why its own
-            # `listen(0)` is enough there. Lillecarl/pymux#454.
+            # `listen(0)` is enough there. Lillecarl/pyterm#456.
             listener.listen(64)
             open_sockets.append(listener)
             time.sleep(gap)
@@ -117,7 +117,7 @@ def test_the_room_and_the_flat_place_are_one_list(sockets, tmp_path):
 # one away. The file is a socket by every test the filesystem has, so
 # both readers offered it -- and `attach` offers the newest first, so
 # the dead one went in front of a live server that was one entry down.
-# Lillecarl/pymux#454.
+# Lillecarl/pyterm#456.
 
 
 @pytest.fixture
@@ -160,7 +160,7 @@ def test_the_lock_a_bind_takes_is_not_a_server(sockets, tmp_path):
 
 
 def test_a_peer_that_closes_with_no_answer_is_an_error(tmp_path, capsys):
-    "A peer that is no pymux server reads the command and closes. Lillecarl/pymux#606."
+    "A peer that is no pymux server reads the command and closes. Lillecarl/pyterm#608."
     from pymux.client.command import CommandClient
 
     path = str(tmp_path / "pymux.sock.someone.0")
@@ -198,7 +198,7 @@ def test_the_two_orders_are_two_orders_of_one_set(sockets):
     They globbed the same two patterns in two places and answered one
     question twice, and only one of them asked whether a name was a
     socket. The order is the whole difference now.
-    Lillecarl/pymux#451.
+    Lillecarl/pyterm#453.
     """
     from libpymux.sockets import socket_paths
 

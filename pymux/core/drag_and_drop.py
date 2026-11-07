@@ -1,7 +1,7 @@
 """
 kitty's drag and drop protocol (OSC 72) between the panes and the
 terminals of the clients. https://sw.kovidgoyal.net/kitty/dnd-protocol/.
-Lillecarl/pymux#892.
+Lillecarl/pyterm#894.
 
 **Drops.** pymux registers as a drop target with every terminal that
 answers the query, so that a drop anywhere reaches it. It maps the cell
@@ -26,7 +26,7 @@ registered in the frames (`KittyDnd.registration`), so the peer registers
 with its terminals for it. The peer serves a drop or drag over the pane
 as over its own, and its packets for the program cross as `mirror-dnd`.
 The owner gives them to the program and keeps the link that sent them,
-which then gets the program's answers. Lillecarl/pymux#903.
+which then gets the program's answers. Lillecarl/pyterm#905.
 """
 
 from __future__ import annotations
@@ -112,7 +112,7 @@ def server_machine_id() -> str:
 
 
 def _platform_uuid() -> str:
-    'This Mac\'s `IOPlatformUUID`, read as kitty reads it, or "". Lillecarl/pymux#905.'
+    'This Mac\'s `IOPlatformUUID`, read as kitty reads it, or "". Lillecarl/pyterm#907.'
     try:
         iokit = ctypes.CDLL(_IOKIT)
         cf = ctypes.CDLL(_CORE_FOUNDATION)

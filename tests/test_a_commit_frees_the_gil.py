@@ -6,15 +6,15 @@ apsw from the `async-gil-release-v2` branch of Lillecarl/apsw, which
 releases it (`nix/python-pins.nix`).
 
 apsw's `with db:` commits through `sqlite3_exec`, so one slow fsync of
-the action log froze the server for 39s. Lillecarl/pymux#936.
+the action log froze the server for 39s. Lillecarl/pyterm#938.
 
 A cursor dropped at a row commits too: its reset halts the statement.
 The action log's upkeep dropped its `PRAGMA incremental_vacuum` at the
 first row, and the commit of that row froze the server for 22s.
-Lillecarl/pymux#940.
+Lillecarl/pyterm#942.
 
 The close of the last connection checkpoints the WAL.
-Lillecarl/pymux#939.
+Lillecarl/pyterm#941.
 """
 
 from __future__ import annotations

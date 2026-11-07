@@ -6,11 +6,11 @@ anything draws and after the toolkit is loaded anyway. Not in the
 package's `__init__`: `prompt_toolkit_rs` imports prompt_toolkit, and a
 detached command such as `pymux ls` must not pay for the toolkit.
 `PYTERM_PURE=1` keeps the Python, and so does a build without the
-kernels: the answers are the same either way. Lillecarl/pymux#566.
+kernels: the answers are the same either way. Lillecarl/pyterm#568.
 
 pymux's own image kernels are put in place here and not by their
 package, because pymux depends on `pymux_rs` and so it cannot import
-pymux. Lillecarl/pymux#574.
+pymux. Lillecarl/pyterm#576.
 """
 
 from __future__ import annotations
@@ -61,7 +61,7 @@ def install_rsync() -> None:
     """
     `pymux.client.kitty_rsync`'s block search and signature in Rust. A call of its own:
     a client process never imports `pymux.core.main`, so the client calls
-    this when a transfer first wants a delta. Lillecarl/pymux#916.
+    this when a transfer first wants a delta. Lillecarl/pyterm#918.
     """
     if os.environ.get(PURE, "") not in ("", "0"):
         return

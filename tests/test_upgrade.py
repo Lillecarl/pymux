@@ -5,7 +5,7 @@ A real daemon on a socket, upgraded by `upgrade-server`: the exec is the
 subject, and only a process of its own can exec. A new build that fails
 its check is refused with the reason, and one that passes it and then
 crashes leaves a report that holds enough to fix it.
-Lillecarl/pymux#408, Lillecarl/pymux#736.
+Lillecarl/pyterm#410, Lillecarl/pyterm#738.
 """
 
 from __future__ import annotations
@@ -182,7 +182,7 @@ def _gone(pid: int) -> bool:
 
 
 def test_kill_server_ends_its_programs(server):
-    "A server that ends on purpose takes its programs along. Lillecarl/pymux#736."
+    "A server that ends on purpose takes its programs along. Lillecarl/pyterm#738."
     pids = [int(one) for one in _answer(server, "list-panes", "-F", "#{pane_pid}").split()]
 
     cli(server, "kill-server")
@@ -266,7 +266,7 @@ def test_an_upgrade_keeps_every_pane_and_its_program(server, tmp_path, new_build
     said = cli(server, "upgrade-server", shlex.join(command))
     if new_build == "same":
         # The server answers before the exec. A client that reads no
-        # answer says so and fails. Lillecarl/pymux#606.
+        # answer says so and fails. Lillecarl/pyterm#608.
         assert said.returncode == 0, said.stderr.decode()
     else:
         # Refused, with the reason, and the log holds the whole of it.
@@ -345,7 +345,7 @@ def _job_count(sock) -> str:
 
 @pytest.mark.parametrize("streams", [["--pty"], []], ids=["on a terminal", "on pipes"])
 def test_an_upgrade_keeps_a_running_job(server, streams):
-    "The exec keeps it a child, so the new image reads it on and hears its end. Lillecarl/pymux#736."
+    "The exec keeps it a child, so the new image reads it on and hears its end. Lillecarl/pyterm#738."
     job = _answer(server, "run", *streams, _job_count(server)).strip()
     said = cli(server, "upgrade-server", shlex.join([sys.executable, "-m", "pymux"]))
     assert said.returncode == 0, said.stderr.decode()
@@ -362,7 +362,7 @@ def _pane_ids(sock) -> set[str]:
 
 
 def test_an_upgrade_keeps_a_pane_that_views_a_job(server):
-    "The new server views the job again, and says once how it ended. Lillecarl/pymux#715."
+    "The new server views the job again, and says once how it ended. Lillecarl/pyterm#717."
     job = _answer(server, "run", _job_count(server)).strip()
     split = _answer(server, "split-window", "-d", "-P", "-F", "#{pane_id}").strip()
     before = _pane_ids(server)
@@ -415,7 +415,7 @@ def _dead(sock, pane: str) -> str:
 
 
 def test_an_upgrade_keeps_a_pane_whose_program_ended(server):
-    "remain-on-exit keeps it, with its screen and no program to carry. Lillecarl/pymux#738."
+    "remain-on-exit keeps it, with its screen and no program to carry. Lillecarl/pyterm#740."
     _answer(server, "set-option", "-g", "remain-on-exit", "on")
     pane = _answer(server, "split-window", "-d", "-P", "-F", "#{pane_id}", "sh -c 'echo last words; exit 3'").strip()
     deadline = time.monotonic() + CLI_TIMEOUT

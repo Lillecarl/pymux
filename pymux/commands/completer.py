@@ -4,7 +4,7 @@ What completes a command as it is typed: argcomplete, in process.
 argcomplete completes a command line for a shell by parsing the line
 against the parser tree. The same move works in process: the bar
 hands over the line and the cursor, argcomplete hands back the words
-and their help, and nothing leaves the process. Lillecarl/pymux#307.
+and their help, and nothing leaves the process. Lillecarl/pyterm#309.
 
 **The commands and their flags come from the parser tree, and every
 value comes from SQL.** A value -- a session, a pane, an option, a
@@ -82,7 +82,7 @@ def _keys(questions: Questions, prefix: str, **_) -> dict[str, str]:
 
     Both read a chord as well as a tmux name, so both offer the chord:
     a list of the older spelling beside a command that takes either is a
-    person never finding out about ctrl+Home. Lillecarl/pymux#234.
+    person never finding out about ctrl+Home. Lillecarl/pyterm#236.
 
     Not the prefix. `bind-key` says whether a binding needs it with
     `-n`, and `send-keys` sends to a pane, where `send-prefix` is the
@@ -318,7 +318,7 @@ def matches_loosely(word: str, candidate: str) -> bool:
     The command bar is where the tmux spellings live, and
     remembering them exactly is the failure mode: `option` reaches
     `set-option` without the set, `vert` reaches `even-vertical`
-    without the even. Lillecarl/pymux#269.
+    without the even. Lillecarl/pyterm#271.
     """
     return word.lower() in candidate.lower()
 
@@ -338,7 +338,7 @@ class FuzzyFinder(argcomplete.ExclusiveCompletionFinder):
     `matches_loosely` where they said `startswith`.
 
     A flag also matches what its help says, when the word does not
-    start with a dash: the ask of Lillecarl/pymux#148 was that a
+    start with a dash: the ask of Lillecarl/pyterm#150 was that a
     flag lists without the dash at all, and "-d" says nothing about
     itself, while "Leave the new window unfocused" says plenty.
 

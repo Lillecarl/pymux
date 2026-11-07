@@ -19,7 +19,7 @@ def list_processes(pymux: Pymux, args: argparse.Namespace) -> None:
     One to a line: a role, then a pid. `server` is this process, `sound` each program sound runs, and
     `client` each client on this machine. A program a pane, a job or
     `run-shell` runs is a person's and is never listed. `pymux renice`
-    reads this. Lillecarl/pymux#673.
+    reads this. Lillecarl/pyterm#675.
     """
     here = socket.gethostname()
     lines = ["server %d" % os.getpid()]

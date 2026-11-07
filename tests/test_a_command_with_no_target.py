@@ -7,7 +7,7 @@ there is no such window, and the answer used to be invented:
 `windows[0]` of whichever session the temporary client landed on, or an
 `IndexError` out of the handler where the session held no window at
 all. An `IndexError` is not a `CommandException`, so nothing turned it
-into a message. Lillecarl/pymux#473.
+into a message. Lillecarl/pyterm#475.
 """
 
 from __future__ import annotations

@@ -1,7 +1,7 @@
 """
 `#{client_activity}`: when a person last pressed a key or used the mouse
 at a client. tmux's own variable. pymux-mcp reads it to tell a browser
-window somebody uses from one nobody does. Lillecarl/pymux#822.
+window somebody uses from one nobody does. Lillecarl/pyterm#824.
 """
 
 from __future__ import annotations

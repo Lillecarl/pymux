@@ -4,7 +4,7 @@ A legacy program gets the answer of the terminal the key came from.
 Where the terminals split on a key, pyte holds one `KeyProfile` for
 each, and pymux picks the profile of the client that pressed it: by
 its terminal's XTVERSION answer, then by its TERM, then by the
-"key-profile" option. Lillecarl/pymux#706.
+"key-profile" option. Lillecarl/pyterm#708.
 """
 
 from __future__ import annotations
@@ -55,7 +55,7 @@ async def test_a_client_in_wezterm_sends_what_wezterm_sends():
 
 
 async def test_f13_from_wezterm_reaches_a_legacy_pane_as_rxvt_writes_it():
-    "A key prompt_toolkit has no name for still reaches the pane. Lillecarl/pymux#707."
+    "A key prompt_toolkit has no name for still reaches the pane. Lillecarl/pyterm#709."
     async with over_connection() as session:
         await session.pymux.panes.create_window(WAITS)
         state, _ = await session.attach("one", SIZE)
@@ -75,7 +75,7 @@ async def test_the_key_profile_is_the_identity_of_the_terminal(monkeypatch):
     """
     One place names a client's terminal. A client that reports no TERM,
     as an integrated server's own does, is named by the server's TERM,
-    and the key profile reads that same name. Lillecarl/pymux#841.
+    and the key profile reads that same name. Lillecarl/pyterm#843.
     """
     monkeypatch.setenv("TERM", "wezterm")
     async with over_connection() as session:

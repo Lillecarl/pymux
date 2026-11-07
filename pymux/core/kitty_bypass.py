@@ -1,6 +1,6 @@
 """
 The key a pane's `kitten transfer --permissions-bypass` encrypts its
-password to, and the server's reading of what it sent. Lillecarl/pymux#917.
+password to, and the server's reading of what it sent. Lillecarl/pyterm#919.
 
 The kitten sends a password only encrypted, as kitty's `kitty-1`: X25519
 with the key in `KITTY_PUBLIC_KEY`, SHA-256 of the shared secret as an

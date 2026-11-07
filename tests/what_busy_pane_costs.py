@@ -5,7 +5,7 @@ What a pane that animates costs, when nobody is looking at it.
 It is not free -- the bytes still reach a pty and a parser -- but the
 cost should be the parsing and nothing else. cmatrix in a background
 window pegged a core and drew almost nothing while it did
-(Lillecarl/pymux#253).
+(Lillecarl/pyterm#255).
 
 The fault was `ptyhost`'s deferral polling for an idle loop. An idle
 loop never comes while anything animates: a prompt_toolkit redraw

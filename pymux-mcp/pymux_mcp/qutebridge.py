@@ -2,7 +2,7 @@
 A socket inside qutebrowser: an agent runs Python or a qutebrowser
 command on the browser's own loop, and reads back the value, what it
 printed, and every message the browser showed meanwhile.
-Lillecarl/pymux#942.
+Lillecarl/pyterm#944.
 
 qutebrowser runs its config.py inside the browser, so the snippet that
 `loader()` writes, put in a config.py, is the whole installation. A

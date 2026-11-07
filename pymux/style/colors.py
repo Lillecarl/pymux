@@ -32,7 +32,7 @@ choose, so what that background is decides whether its own colours
 land on it or fight it.
 
 **Only a client can find this out**, and that is the whole shape of
-Lillecarl/pymux#223: the theme is one attribute of the server today,
+Lillecarl/pyterm#225: the theme is one attribute of the server today,
 so two people on one session get the same colours whatever their
 terminals are. This module answers the factual half -- what this
 terminal is -- and nothing here decides what to do about it.
@@ -86,7 +86,7 @@ _COLOR_CODES = tuple(code for code, name in DYNAMIC_COLOR_CODES.items() if name 
 #: terminal that numbers 256 colours paints them the same way, so they
 #: are not asked about. The sixteen ANSI colours are the ones a theme
 #: decides, and they are what a pane has to know to answer its
-#: programs with what the person sees. Lillecarl/pymux#283.
+#: programs with what the person sees. Lillecarl/pyterm#285.
 #:
 #: A terminal that does not answer says nothing and holds nothing up:
 #: the device attributes reply closes the detection, and these go out
@@ -194,7 +194,7 @@ class DefaultColors:
 
     **This is a fact about a terminal, not a preference of a person.**
     Which theme somebody chose is the other half of
-    Lillecarl/pymux#223, and nothing here has an opinion about it.
+    Lillecarl/pyterm#225, and nothing here has an opinion about it.
     """
 
     def __init__(self) -> None:
@@ -269,7 +269,7 @@ class DefaultColors:
 
         This is the answer a pane gives a program that asks, and it
         describes the theme that the person in front of this terminal
-        is looking at. Lillecarl/pymux#283.
+        is looking at. Lillecarl/pyterm#285.
         """
         palette = [learned or PALETTE[index] for index, learned in enumerate(self.ansi)] + list(PALETTE[16:])
         defaults = dict(DEFAULT_COLORS)
@@ -291,7 +291,7 @@ def theme_color_base(name: str) -> ColorBase:
     not name leaves the conventional one standing.
 
     A name nobody offers raises `KeyError`, as `theme` does.
-    Lillecarl/pymux#283.
+    Lillecarl/pyterm#285.
     """
     from pymux.style.style import roles_of
 

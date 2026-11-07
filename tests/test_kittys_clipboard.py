@@ -3,7 +3,7 @@ kitty's clipboard protocol (OSC 5522) through pymux: a pane's write
 reaches the paste buffer with every MIME type, a terminal that speaks
 OSC 5522 gets it again under pymux's own id, any other terminal gets the
 text as OSC 52, and the pane hears DONE with its own id.
-Lillecarl/pymux#893.
+Lillecarl/pyterm#895.
 """
 
 from __future__ import annotations

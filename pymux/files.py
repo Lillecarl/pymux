@@ -2,7 +2,7 @@
 A file that arrives over a pymux connection, and the write that keeps it.
 
 Both directions use this. The pymux client takes a pane's download
-(Lillecarl/pymux#743, phase 1), and the server takes a file the client
+(Lillecarl/pyterm#745, phase 1), and the server takes a file the client
 sends for `pymux receive` (phase 2). The parts arrive as `file` or
 `upload` packets with the same fields, and `ArrivingFiles` joins them.
 

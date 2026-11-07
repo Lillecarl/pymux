@@ -1,7 +1,7 @@
 """
 Passthrough: every key goes to the pane, the prefix too, until the key
 that leaves. For a tmux or a pymux inside a pane, which wants the
-prefix for itself. Lillecarl/pymux#530.
+prefix for itself. Lillecarl/pyterm#532.
 
 F12 enters and F12 leaves. The status line says so while it lasts, and
 the client's own terminal gets a user variable it may release its own

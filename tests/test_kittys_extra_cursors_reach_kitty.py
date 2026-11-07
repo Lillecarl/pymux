@@ -1,7 +1,7 @@
 """
 A client whose terminal draws kitty's extra cursors gets the focused
 pane's as its own, moved to where the pane is drawn, and the pane draws
-no cells for them on that client. Lillecarl/pymux#891.
+no cells for them on that client. Lillecarl/pyterm#893.
 """
 
 from __future__ import annotations

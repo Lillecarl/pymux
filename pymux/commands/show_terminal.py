@@ -20,7 +20,7 @@ def show_terminal(pymux: Pymux, args: argparse.Namespace) -> None:
     TERM and COLORTERM as the client reported them, then every reply
     the terminal gave, in the order it first said each: how often, and
     when last. `-t` names the client; without it this is the client a
-    person used last. Lillecarl/pymux#725.
+    person used last. Lillecarl/pyterm#727.
     """
     if args.target_client is not None:
         client = clients_named(pymux, args.target_client)[0]

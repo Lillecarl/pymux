@@ -1,5 +1,5 @@
 """
-Files a pane asks for on this machine: `pymux receive`. Lillecarl/pymux#743.
+Files a pane asks for on this machine: `pymux receive`. Lillecarl/pyterm#745.
 
 The client looks at the paths and its own settings off the loop. It
 sends what a grant or `upload-paths` lets pass, and asks the person

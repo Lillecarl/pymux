@@ -1,7 +1,7 @@
 """
 The notifications a client shows as boxes in a corner of its screen,
 newest on top. A click on one shows the pane it came from and closes
-it. Lillecarl/pymux#826.
+it. Lillecarl/pyterm#828.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 __all__ = ["Popups"]
 
 #: A notification box, in cells: a width that fits a title, and the
-#: rows of body it shows. Lillecarl/pymux#826.
+#: rows of body it shows. Lillecarl/pyterm#828.
 POPUP_WIDTH = 44
 MIN_POPUP_WIDTH = 12
 POPUP_BODY_ROWS = 3
@@ -49,7 +49,7 @@ class Popups:
         """
         The notifications this client shows as boxes, newest on top.
         Built once, for the reason `CommandLine.window` gives.
-        Lillecarl/pymux#826.
+        Lillecarl/pyterm#828.
         """
         if self._box is None:
             self._box = Window(

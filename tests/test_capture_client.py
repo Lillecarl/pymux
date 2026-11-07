@@ -89,7 +89,7 @@ async def test_a_capture_from_the_command_line_shows_it_closed(pymux):
     """
     The key that runs a command also closes the command line, and the
     frame without it comes after: the capture waits for that frame.
-    Lillecarl/pymux#820.
+    Lillecarl/pyterm#822.
     """
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
@@ -120,7 +120,7 @@ async def test_an_image_goes_under_a_menu_drawn_over_it(pymux):
     """
     A red image over the whole pane, and a menu over that: the cells of
     the menu show the menu, and the image keeps the cells around it.
-    Lillecarl/pymux#816.
+    Lillecarl/pyterm#818.
     """
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
@@ -184,7 +184,7 @@ def pictures(tmp_path, monkeypatch):
 
 
 async def test_o_saves_a_new_picture_in_the_pictures_directory(pymux, pictures):
-    "Lillecarl/pymux#813."
+    "Lillecarl/pyterm#815."
     fonts = [word for path in FONTS for word in ("--font", path)]
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")

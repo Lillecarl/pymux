@@ -24,14 +24,14 @@ def run_shell(pymux: Pymux, args: argparse.Namespace):
     is the same view, drawn when the command is done. A command that
     came over the command line is waited for, the way tmux's CLI
     waits, and its output goes back on the channel the client reads.
-    Lillecarl/pymux#297.
+    Lillecarl/pyterm#299.
 
     **The server does not wait, and the client does.** This is a
     handler that answers later: the shell runs in a task, so every
     pane keeps reading its pty and every other client keeps getting
     frames while it does. Run in the handler itself, `pymux run-shell
     'sleep 30'` would stop all of that for thirty seconds.
-    Lillecarl/pymux#311.
+    Lillecarl/pyterm#313.
     """
     # The command is the rest of the line, whatever words it holds:
     # they go back together, with the quoting the shell read. A
@@ -59,7 +59,7 @@ def run_shell(pymux: Pymux, args: argparse.Namespace):
             # A shell that is not there raises OSError. Say so where
             # the output would have gone: a person who saw an empty
             # listing and no reason for it learned nothing.
-            # Lillecarl/pymux#311.
+            # Lillecarl/pyterm#313.
             out = "run-shell: %s: %s\n" % (shell_command, e)
 
         show(out)

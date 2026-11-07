@@ -60,7 +60,7 @@ def _the_rows_of(screen: Screen, page: Page) -> tuple[int, int]:
     the pane: a fresh pane running `sleep 60` answered one row, where
     tmux answers twenty-four. tmux runs its loop over `hsize .. hsize +
     sy - 1` and writes a line for each of them with no trimming
-    (`cmd-capture-pane.c:311-325, 349`). Lillecarl/pymux#476.
+    (`cmd-capture-pane.c:311-325, 349`). Lillecarl/pyterm#478.
 
     A row outside both the buffer and the screen is nothing at all, so
     "-E 100000" may not answer with a hundred thousand blank lines.
@@ -88,7 +88,7 @@ def _drawn_rows(screen: Screen, page: Page, args: argparse.Namespace) -> tuple[i
     pane a few times a second, and a screenful is what it draws; ten
     thousand rows of history per frame is not a default anybody wants.
     "-S -" still reaches as far back as the buffer goes.
-    Lillecarl/pymux#457 holds the same question for the text.
+    Lillecarl/pyterm#459 holds the same question for the text.
     """
     line_offset = screen.line_offset
     top = line_offset
@@ -119,7 +119,7 @@ async def _print_window_png(pymux: Pymux, widget: WindowWidget, args: argparse.N
     The window's frame, as a PNG in base64: its own pixels, with no cell
     and no font. `--fit` shrinks it. The program draws what it waits to
     draw first, which a window no client shows is not let do otherwise.
-    Lillecarl/pymux#809, Lillecarl/pymux#822.
+    Lillecarl/pyterm#811, Lillecarl/pyterm#824.
     """
     if args.fonts or args.fallbacks or args.cell or args.start is not None or args.end is not None:
         raise CommandException(
@@ -167,18 +167,18 @@ def capture_pane(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None] | No
     wrote.** The pane cuts a line to fit its width, so a path or a
     compiler message comes out in pieces without it. With `-J` the
     pieces are joined and the numbers count the joined lines, which is
-    a different line 100 in the history. Lillecarl/pymux#135.
+    a different line 100 in the history. Lillecarl/pyterm#137.
 
     **`-H` answers HTML instead of text**, so that a caller with no
     terminal can draw the pane: the colours, the renditions and the
     hyperlinks that the text drops. `show-html-stylesheet` is the other
-    half of it. Lillecarl/pymux#452. `--compact` spells it for a
+    half of it. Lillecarl/pyterm#454. `--compact` spells it for a
     reader with no stylesheet, an agent: `pyte.compact_html`. `--png`
     draws the pane as a picture instead: `pymux.screenshot`.
 
     **The range is the visible pane, and `-S -` is the history.** A
     caller that asks for a pane means the screenful it draws, not the
-    ten thousand rows behind it. Lillecarl/pymux#457.
+    ten thousand rows behind it. Lillecarl/pyterm#459.
     """
     pane = the_pane(pymux, args.target_pane)
     if isinstance(pane.terminal, WindowWidget) and args.png:
@@ -215,7 +215,7 @@ def capture_pane(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None] | No
         # 60` answered one line where tmux answers twenty-four. A
         # caller drawing a pane could not use the count and had to
         # learn the height another way and pad. `_the_rows_of` says
-        # what tmux does. Lillecarl/pymux#476.
+        # what tmux does. Lillecarl/pyterm#478.
         first_row, last_row = _the_rows_of(screen, page)
 
         if args.J:
@@ -249,7 +249,7 @@ def capture_pane(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None] | No
         # `history-limit` rows and nothing said so. tmux reads a missing
         # `-S` as the first visible row (`cmd-capture-pane.c:298-306`,
         # where no value leaves `top = gd->hsize`) and keeps `-` for the
-        # top of the history. Lillecarl/pymux#457.
+        # top of the history. Lillecarl/pyterm#459.
         if start_str == "-":
             first_index = 0
         elif start_str in (None, ""):

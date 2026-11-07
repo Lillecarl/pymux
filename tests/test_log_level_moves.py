@@ -4,7 +4,7 @@ Changing how much a server logs, while it runs.
 `--log-level` is read once, before the server starts. That is the wrong
 moment: a person turns debug logging on because a server is already
 misbehaving, and a restart takes the thing they wanted to look at with
-it. Lillecarl/pymux#252.
+it. Lillecarl/pyterm#254.
 """
 
 from __future__ import annotations

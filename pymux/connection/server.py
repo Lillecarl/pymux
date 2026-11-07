@@ -50,7 +50,7 @@ __all__ = ["Role", "ServerConnection"]
 #: How many reads in a row may fail before a connection is closed.
 #: A packet that cannot be read is answered and the next one is taken,
 #: which is what makes one bad packet harmless; a read that fails again
-#: and again is a connection nothing can use. Lillecarl/pymux#329.
+#: and again is a connection nothing can use. Lillecarl/pyterm#331.
 FAILURES_THAT_END_A_CONNECTION = 5
 
 #: How often to ask the far end of a connection whether it is still
@@ -58,10 +58,10 @@ FAILURES_THAT_END_A_CONNECTION = 5
 #:
 #: Thirty seconds of a ghost, and one small packet per fifteen seconds
 #: per attached client or peer link. It is a backstop and not the first line: over
-#: SSH the client notices its own machine woke (Lillecarl/pymux#445)
+#: SSH the client notices its own machine woke (Lillecarl/pyterm#447)
 #: and a server's sshd may reap the session too. This is what covers
 #: the cases neither does -- a client process that was stopped, or a
-#: transport with no liveness of its own. Lillecarl/pymux#446.
+#: transport with no liveness of its own. Lillecarl/pyterm#448.
 PING_INTERVAL = 15.0
 PING_MISSES = 2
 
@@ -75,7 +75,7 @@ class Role(Protocol):
     link (`PeerLink`) or a tunnel (`OwnerTunnel`). The first packet that
     chooses it is `start-gui`, `run-command`, `peer` or `tunnel`, and
     from then on every packet but the transport's own goes to it.
-    Lillecarl/pymux#882, Lillecarl/pymux#886.
+    Lillecarl/pyterm#884, Lillecarl/pyterm#888.
     """
 
     def handle(self, packet: Message) -> None: ...
@@ -92,7 +92,7 @@ class ServerConnection:
 
     #: What a hot upgrade does with each attribute; `pyte.keep` says.
     #: The socket ends with the old server and the client reconnects
-    #: (Lillecarl/pymux#409), so the attach handshake rebuilds most of
+    #: (Lillecarl/pyterm#411), so the attach handshake rebuilds most of
     #: this. Saved: the client's own record and when it came.
     KEEP: ClassVar[dict[str, Keep]] = {
         # `ClientRole.KEEP` says what of it.
@@ -124,50 +124,50 @@ class ServerConnection:
 
         self.pipe_connection = pipe_connection
         #: How a packet to this client is encoded: JSON until the client
-        #: offers msgpack in `start-gui`. Lillecarl/pymux#633.
+        #: offers msgpack in `start-gui`. Lillecarl/pyterm#635.
         self.encode = encode_json
 
         #: Whether a client on this connection may ask for the user
         #: interface. False for a connection that arrived over the
         #: socket of an integrated server: that server draws on the one
         #: terminal it runs in, and commands are all it serves to
-        #: anybody else. Lillecarl/pymux#159.
+        #: anybody else. Lillecarl/pyterm#161.
         self.may_attach = may_attach
 
         self.size = Size(rows=20, columns=80)
         self.closed = False
 
         #: What `#{client_rate_down}` and `#{client_rate_up}` read, off
-        #: the pipe's counts. Lillecarl/pymux#678.
+        #: the pipe's counts. Lillecarl/pyterm#680.
         self.rate_down = Rate()
         self.rate_up = Rate()
         #: The scope the background work of this connection runs in.
         #: `serve()` opens it, so every task of a client ends when that
         #: client goes, and none of them can outlive the server: the
-        #: group is a child of `Pymux.running`'s. Lillecarl/pymux#87.
+        #: group is a child of `Pymux.running`'s. Lillecarl/pyterm#89.
         self._tasks: anyio.abc.TaskGroup | None = None
         #: What was spawned before `serve()` opened that scope, started
         #: there in order; `None` once it opened. A connection the
         #: server made is served by a `start_soon`, so it can be sent
         #: to before its scope exists: a resumed client lost a packet
-        #: at upgrades that way. Lillecarl/pymux#937.
+        #: at upgrades that way. Lillecarl/pyterm#939.
         self._before_serving: list[Coroutine[Any, Any, object]] | None = []
 
         self.requests = Requests(self)
 
         #: The client attached on this connection, from `create_app` on
         #: until the connection closes. A socket command makes a
-        #: temporary one. Lillecarl/pymux#886.
+        #: temporary one. Lillecarl/pyterm#888.
         self.client: ClientRole | None = None
         #: What this connection is for: its client, the link of a server
-        #: that mirrors panes of this one (Lillecarl/pymux#759), or a
-        #: tunnel (Lillecarl/pymux#853).
+        #: that mirrors panes of this one (Lillecarl/pyterm#761), or a
+        #: tunnel (Lillecarl/pyterm#855).
         self.role: Role | None = None
 
         #: Whether this client answers a ping, and how many pings to
         #: this connection have gone unanswered. Only a far end that
         #: said it answers is ever dropped for not answering.
-        #: Lillecarl/pymux#446.
+        #: Lillecarl/pyterm#448.
         self.answers_ping = False
         self._unanswered = 0
 
@@ -204,7 +204,7 @@ class ServerConnection:
         every other client of this server. The work a connection spawns
         is the work that answers one client, so the honest blast radius
         is that client: the failure is logged and the connection goes on.
-        Lillecarl/pymux#87.
+        Lillecarl/pyterm#89.
         """
         try:
             await coro
@@ -227,7 +227,7 @@ class ServerConnection:
         that is two attachments stale, and the application it names is
         then held by a module-level `ContextVar` for as long as the
         server runs, with its layout, its panes and their scrollbacks
-        behind it. Lillecarl/pymux#230.
+        behind it. Lillecarl/pyterm#232.
 
         A session of its own is what prompt_toolkit does for the same
         job -- `contrib/ssh/server.py` wraps each client the same way.
@@ -275,7 +275,7 @@ class ServerConnection:
                     # whole processor and a traceback in the log on
                     # every turn, for as long as the server runs.
                     # Measured at millions of tracebacks in eighteen
-                    # minutes. Lillecarl/pymux#329.
+                    # minutes. Lillecarl/pyterm#331.
                     logger.error(
                         "This client failed %d reads in a row. Closing it.",
                         failures,
@@ -376,7 +376,7 @@ class ServerConnection:
         rows, columns = packet[Field.DATA]
         self.resized(Size(rows=rows, columns=columns))
         # A SIGWINCH comes for pixels alone too: the terminal moved
-        # to a display of another density. Lillecarl/pymux#774. A
+        # to a display of another density. Lillecarl/pyterm#776. A
         # terminal that reports its size in band says the pixels too.
         client = self.client
         if client is not None and client.graphics.cell_size_known and not client.replies.sizes_in_band:
@@ -421,13 +421,13 @@ class ServerConnection:
         Tell this client that the next server comes on the same socket,
         how many seconds to wait for it, and why, for the screen it
         draws meanwhile. Awaited, so the packet is written before the
-        server stops. Lillecarl/pymux#409.
+        server stops. Lillecarl/pyterm#411.
         """
         await self.write_packet({Field.CMD: Packet.RESTARTING, Field.WAIT: wait, Field.MESSAGE: why})
         if self.closed:
             # `_write` lets a client go on a broken pipe or a full
             # buffer, and that client leaves for good instead of
-            # waiting. Lillecarl/pymux#766.
+            # waiting. Lillecarl/pyterm#768.
             logger.warning(
                 "Client %s went before the restart notice reached it.",
                 (self.client.client_id if self.client is not None else "") or "?",
@@ -491,7 +491,7 @@ class ServerConnection:
         same with the machine in front. **The machine is always
         there**, because a pymux client can be on another one: two
         people can each be on their own `/dev/pts/3`, and a tty path
-        alone would name them both. Lillecarl/pymux#335.
+        alone would name them both. Lillecarl/pyterm#337.
 
         A terminal keeps its tty for as long as it is open, so a person
         who detaches and attaches again from the same window types the
@@ -528,7 +528,7 @@ class ServerConnection:
         What the ghost costs is not the socket. `window-size smallest`
         is the default, so a client holding a stale terminal size
         keeps the window that size for whoever is really looking at
-        it. Lillecarl/pymux#446.
+        it. Lillecarl/pyterm#448.
 
         **Only a client that said it answers is ever dropped.**
         `start-gui` carries that, the way it carries whether the
@@ -562,8 +562,8 @@ class ServerConnection:
         The client hears that in the `exit` packet, which is the one
         packet that already means "the server let you go" -- so the
         SSH client reads it as an ending and not as a link that went,
-        and does not come back. Lillecarl/pymux#332,
-        Lillecarl/pymux#347.
+        and does not come back. Lillecarl/pyterm#334,
+        Lillecarl/pyterm#349.
 
         **The packet has to be written before the close.**
         `send_packet` spawns the write into the scope of this

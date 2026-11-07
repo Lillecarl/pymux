@@ -1,6 +1,6 @@
 """
 Files a pane asks for from this machine: the client's half of
-`pymux receive`. Lillecarl/pymux#743, phase 2.
+`pymux receive`. Lillecarl/pyterm#745, phase 2.
 
 **This side is the authority.** The server runs on the far machine with
 whatever runs in its panes, so this client trusts nothing it sends but

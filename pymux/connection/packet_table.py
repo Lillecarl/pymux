@@ -1,7 +1,7 @@
 """
 Which method handles each kind of packet, for both ends of a connection.
 A method says what it handles with `@table.handles(Packet.X)`, and the
-reader hands each packet to `table.handle`. Lillecarl/pymux#775.
+reader hands each packet to `table.handle`. Lillecarl/pyterm#777.
 """
 
 from __future__ import annotations

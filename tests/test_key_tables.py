@@ -6,9 +6,9 @@ next mode would have repeated all of it. Now it is a named table a
 client sits in: `bind-key -T <table>` fills it, `enter-mode` puts the
 client in it, and while it is on top its bindings answer and the root
 table holds nothing. The prefix works inside a mode, one key at a
-time, the way it does in tmux's own modes. Lillecarl/pymux#394.
+time, the way it does in tmux's own modes. Lillecarl/pyterm#396.
 
-Pane-management is the first mode in the table. Lillecarl/pymux#395.
+Pane-management is the first mode in the table. Lillecarl/pyterm#397.
 """
 
 from __future__ import annotations
@@ -163,7 +163,7 @@ async def test_a_prefix_pressed_inside_a_mode_sits_on_top_of_it():
     """
     The prefix works inside a mode, one key at a time: after the key
     is read, the mode is still there. The window the key made counts
-    for it. Lillecarl/pymux#394, decision 2.
+    for it. Lillecarl/pyterm#396, decision 2.
     """
     async with create_session() as (pymux, state):
         before = len(pymux.arrangement.windows)

@@ -6,7 +6,7 @@ A pane that shows a Wayland window instead of a terminal.
 status line, the formats. A window pane answers those with what a
 window has -- its title, its app id -- and with nothing where a window
 has nothing, so none of them needs to know. The few places that must
-act differently ask `is_window_pane`. Lillecarl/pymux#620.
+act differently ask `is_window_pane`. Lillecarl/pyterm#622.
 
 The pixels never come here. A kitty client gets them from
 `ClientGraphics.render_windows`, as commands Rust built; this draws the
@@ -49,7 +49,7 @@ class WindowHost(Protocol):
     Where a window pane's window lives: this server's compositor
     (`WaylandServer`), or another server that lends it over a peer link
     (`RemoteWindow`). `toplevel` is the host's own name for the window.
-    Lillecarl/pymux#888.
+    Lillecarl/pyterm#890.
     """
 
     def configure(self, toplevel: int, columns: int, rows: int) -> None: ...
@@ -162,7 +162,7 @@ def evdev_of_event(event: KeyEvent) -> tuple[tuple[int, ...], int] | None:
 
     pymux has no name for ctrl with a character that has no control
     code, so such a key comes as raw data. foot zooms on ctrl+=, ctrl+-
-    and ctrl+0. Lillecarl/pymux#627.
+    and ctrl+0. Lillecarl/pyterm#629.
     """
     if event.final != "u" or event.event == EventType.RELEASE or not 0 <= event.code < 0x110000:
         return None
@@ -309,7 +309,7 @@ class WindowControl(UIControl):
     @override
     def mouse_handler(self, mouse_event: MouseEvent) -> None:
         # A click in a pane that had no focus selects it, as a terminal
-        # pane's does (Lillecarl/pymux#527), and still goes to the window.
+        # pane's does (Lillecarl/pyterm#529), and still goes to the window.
         if mouse_event.event_type == MouseEventType.MOUSE_DOWN:
             layout = get_app().layout
             if not layout.has_focus(self):
@@ -326,7 +326,7 @@ class _PaneWindow(Window):
 
     prompt_toolkit's `Window` maps a click through the rows and columns
     its content drew, and this content draws nothing where the picture
-    is: every click came to the first cell. Lillecarl/pymux#645.
+    is: every click came to the first cell. Lillecarl/pyterm#647.
     """
 
     @override
@@ -355,7 +355,7 @@ class _PaneHandler:
     """
     The mouse handler of a window pane: an event goes to the control at
     its cell in the pane. `Terminals.pointer_moved` calls `pointer_left`
-    when the pointer moves off the pane. Lillecarl/pymux#899.
+    when the pointer moves off the pane. Lillecarl/pyterm#901.
     """
 
     __slots__ = ("control", "left", "pointer_left", "top")
@@ -432,7 +432,7 @@ class WindowWidget:
         if found is None:
             # A character no key types on the client's keymap goes as
             # text; a named key with no evdev code goes nowhere.
-            # Lillecarl/pymux#624.
+            # Lillecarl/pyterm#626.
             if not isinstance(key, Keys) and key.isprintable():
                 self.host.type_text(self.toplevel, key)
             return

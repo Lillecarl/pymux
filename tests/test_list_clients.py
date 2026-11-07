@@ -2,11 +2,11 @@
 `list-clients` says who is attached, and from where.
 
 Nothing listed the clients of a server. The hostname each client
-reports when it attaches (Lillecarl/pymux#287) had no reader, and
+reports when it attaches (Lillecarl/pyterm#289) had no reader, and
 `detach-client -a` was a blanket loop with nothing to name. This is the
 reader: one line per client, tmux's shape, with the machine in place of
 the tty -- a pymux client can be on another machine, and a tty path of
-a machine you are not on names nothing. Lillecarl/pymux#330.
+a machine you are not on names nothing. Lillecarl/pyterm#332.
 """
 
 from __future__ import annotations
@@ -112,7 +112,7 @@ async def test_a_command_of_its_own_is_not_a_client():
 
 
 async def test_a_session_with_no_window_answers_with_an_error():
-    "Not with a ValueError out of the handler. Lillecarl/pymux#552."
+    "Not with a ValueError out of the handler. Lillecarl/pyterm#554."
     async with create_session() as (pymux, state):
         arrangement = pymux.arrangement
         windows, arrangement.windows = arrangement.windows, []
@@ -128,7 +128,7 @@ async def test_a_session_with_no_window_answers_with_an_error():
 
 
 async def test_a_listing_takes_a_template_too():
-    "`-J`, like every other listing. Lillecarl/pymux#333."
+    "`-J`, like every other listing. Lillecarl/pyterm#335."
     async with over_connection() as session:
         await session.attach("the client", SIZE)
 

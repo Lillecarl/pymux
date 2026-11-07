@@ -1,5 +1,5 @@
 """
-A grapheme cluster fitted to the outer terminal. Lillecarl/pymux#798.
+A grapheme cluster fitted to the outer terminal. Lillecarl/pyterm#800.
 
 The XTVERSION answers are the ones four real terminals gave pymux.
 """

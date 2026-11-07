@@ -8,7 +8,7 @@ themselves or kill the server.
 
 These two select clients without naming one, which is why they are
 here and `-t <client>` is not: a client has no name yet, and what it
-should be called is Lillecarl/pymux#335.
+should be called is Lillecarl/pyterm#337.
 
 tmux's rules, from `cmd-detach-client.c`:
 
@@ -70,7 +70,7 @@ async def test_a_from_a_pane_keeps_the_terminal_a_person_is_at():
     A command from a pane's CLI runs under a temporary client that
     draws nothing. Keeping *that* one would detach every real
     terminal, so the target is the client a person used last.
-    Lillecarl/pymux#272 is the same rule for dialogs.
+    Lillecarl/pyterm#274 is the same rule for dialogs.
     """
     async with in_this_process() as session:
         pymux = session.pymux
@@ -146,7 +146,7 @@ async def test_with_no_argument_it_still_detaches_only_the_caller():
 
 
 async def test_with_no_argument_from_another_shell_it_detaches_the_latest_client():
-    "Not the shell's own connection, which closed unanswered. Lillecarl/pymux#804."
+    "Not the shell's own connection, which closed unanswered. Lillecarl/pyterm#806."
     async with over_connection() as session:
         pymux = session.pymux
         await session.attach("only", SIZE)
@@ -157,7 +157,7 @@ async def test_with_no_argument_from_another_shell_it_detaches_the_latest_client
 
 
 async def test_t_detaches_the_client_of_that_name():
-    "The command the listing exists for. Lillecarl/pymux#335."
+    "The command the listing exists for. Lillecarl/pyterm#337."
     async with in_this_process() as session:
         pymux = session.pymux
         here, _ = await session.attach("here", SIZE)

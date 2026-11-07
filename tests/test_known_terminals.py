@@ -1,5 +1,5 @@
 """
-What pymux knows about a terminal by its name. Lillecarl/pymux#827.
+What pymux knows about a terminal by its name. Lillecarl/pyterm#829.
 
 The XTVERSION answers are the ones real terminals gave pymux.
 """
@@ -127,7 +127,7 @@ def test_the_wcwidth_table_is_named_by_the_answer_and_then_by_term(version, term
 
 # ----------------------------------------------------------------------
 # A person's own terminals, from `$XDG_CONFIG_HOME/pymux/terminals.py`.
-# Lillecarl/pymux#828.
+# Lillecarl/pyterm#830.
 
 
 @pytest.fixture

@@ -1,6 +1,6 @@
 """
 `pymux-browser`'s pipe mode: Playwright's NUL-terminated CDP messages,
-carried to a browser's WebSocket and back. Lillecarl/pymux#655.
+carried to a browser's WebSocket and back. Lillecarl/pyterm#657.
 """
 
 from __future__ import annotations

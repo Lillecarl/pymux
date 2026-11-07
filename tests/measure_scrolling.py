@@ -2,8 +2,8 @@
 How long a wheel step takes to show, down and up, beside a pane that streams.
 
 Two reports wait on this number. Scrolling in opencode lagged the
-whole session while an agent streamed (Lillecarl/pymux#507), and
-scrolling down was slower than scrolling up (Lillecarl/pymux#512).
+whole session while an agent streamed (Lillecarl/pyterm#509), and
+scrolling down was slower than scrolling up (Lillecarl/pyterm#514).
 Neither had a reproducer that a person can run without opencode and an
 agent.
 
@@ -24,8 +24,8 @@ The viewer draws the way `tests/scroll_app.py` draws, in two modes:
   that renders a whole frame and lets a diff decide.
 
 Each mode runs four ways: down then up, with the agent quiet and with
-it streaming. The asymmetry of #512 is the difference between the
-first two columns; the lag of #507 is the difference between the two
+it streaming. The asymmetry of #514 is the difference between the
+first two columns; the lag of #509 is the difference between the two
 halves.
 
 ## Why the marker alternates

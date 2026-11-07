@@ -1,5 +1,5 @@
 """
-A pane, lent to a peer over a peer link. Lillecarl/pymux#759.
+A pane, lent to a peer over a peer link. Lillecarl/pyterm#761.
 
 The peer here is a bare mirrored control fed by `MirrorSink`, which is
 what a peer server puts behind its pane. It has to end up with the
@@ -185,7 +185,7 @@ async def test_a_peer_takes_the_title_and_the_pointer(pymux):
 
 
 async def test_text_at_another_size_reaches_the_peer(pymux):
-    "Lillecarl/pymux#910."
+    "Lillecarl/pyterm#912."
     pane, owner = the_control(pymux)
 
     async with pymux.running():

@@ -12,7 +12,7 @@ muted tone, base05 the foreground, base08 the red, and so on. That
 is the whole of what a theme reads in it -- the chrome derives from
 the anchors, and the palette a pane answers a program with is the
 sixteen verbatim, in the order the spec's own templates number them.
-Lillecarl/pymux#282, Lillecarl/pymux#283.
+Lillecarl/pyterm#284, Lillecarl/pyterm#285.
 
 The collection also says, per scheme, whether it is a dark one or a
 light one; nothing here needs that, because the roles say so by
@@ -83,7 +83,7 @@ def base16_roles(name: str) -> dict[str, str]:
     letter: the suggestion, the bright of a signal.
     The palette a pane answers a program with is the sixteen in the
     order the spec's own terminal template numbers them.
-    Lillecarl/pymux#285.
+    Lillecarl/pyterm#287.
 
     A name the collection does not hold raises `KeyError`, which is
     what the option turns into an error a person can read.

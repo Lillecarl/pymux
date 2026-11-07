@@ -16,7 +16,7 @@ def enter_mode(pymux: Pymux, args: argparse.Namespace) -> None:
 
     A key the table does not name goes to the pane, so the mode is
     transparent unless it binds `Any` itself. The name is the one
-    `bind-key -T <name>` binds into. Lillecarl/pymux#394.
+    `bind-key -T <name>` binds into. Lillecarl/pyterm#396.
     """
     try:
         pymux.key_bindings_manager.enter_mode(args.table)

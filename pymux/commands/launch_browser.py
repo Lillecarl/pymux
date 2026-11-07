@@ -1,6 +1,6 @@
 """
 `launch-browser` and `hold-browser`: the server's half of `pymux-browser`.
-Lillecarl/pymux#653.
+Lillecarl/pyterm#655.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ def launch_browser(pymux: Pymux, args: argparse.Namespace):
     The answer is "<port> <path> <launch> <remote>" once the browser
     listens: <remote> is "cdp" for a Chromium, "bidi" for a Firefox.
     "-c <launch>" is the answer of the question, and counts only when a
-    person typed it. Lillecarl/pymux#653.
+    person typed it. Lillecarl/pyterm#655.
     """
     if args.c is not None:
         if not pymux.a_person_asked():

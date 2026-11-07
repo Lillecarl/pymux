@@ -127,7 +127,7 @@ class Program(NamedTuple):
 class Takeover:
     """
     How a load comes by the programs that still run: a pane's pty, and a
-    running job's pty or pipes. Lillecarl/pymux#736.
+    running job's pty or pipes. Lillecarl/pyterm#738.
 
     This one is the dry run's (`upgrade.check`): it adopts nothing and
     starts nothing, in a process that holds none of the fds. The new

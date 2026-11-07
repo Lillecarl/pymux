@@ -2,7 +2,7 @@
 The files a client sends from the person's machine for `pymux receive`,
 the directories it lists for completing one, and where it saved a
 pane's download. Only the client can reach that machine, so the server
-asks and waits. Lillecarl/pymux#743, Lillecarl/pymux#745.
+asks and waits. Lillecarl/pyterm#745, Lillecarl/pyterm#747.
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ class Files:
 
     def saved(self, packet: Message) -> None:
         # Where the client saved a pane's download, or why it did not.
-        # Only the client knows the path. Lillecarl/pymux#743.
+        # Only the client knows the path. Lillecarl/pyterm#745.
         if self.client.state is not None:
             self.client.state.message = str(packet.get(Field.MESSAGE) or "")
             self.client.state.app.invalidate()
@@ -66,7 +66,7 @@ class Files:
     def took_part(self, packet: Message) -> None:
         # A file `pymux receive` asked this client for, a part at a
         # time. Only the connection that was asked holds the request,
-        # so another client cannot answer it. Lillecarl/pymux#743.
+        # so another client cannot answer it. Lillecarl/pyterm#745.
         upload = self.uploads.get(str(packet.get(Field.REQUEST)))
         if upload is not None:
             upload.take(packet)
@@ -80,7 +80,7 @@ class Files:
         """
         Ask this client for files on the person's machine, for
         `pymux receive` in `pane`. The caller removes the request from
-        `uploads` when it stops waiting. Lillecarl/pymux#743.
+        `uploads` when it stops waiting. Lillecarl/pyterm#745.
         """
         upload = Upload(paths)
         if self.client.connection.closed:
@@ -91,7 +91,7 @@ class Files:
         return upload
 
     def ask_for_a_peer(self, relay: Relay, pane: str) -> None:
-        "Ask this client for the files an owner's `pymux receive` wants, through `relay`. Lillecarl/pymux#947."
+        "Ask this client for the files an owner's `pymux receive` wants, through `relay`. Lillecarl/pyterm#949."
         if self.client.connection.closed:
             relay.end("the client went before it answered")
             return

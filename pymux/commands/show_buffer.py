@@ -17,7 +17,7 @@ def show_buffer(pymux: Pymux, args: argparse.Namespace) -> None:
     Display the content of a buffer.
 
     `-b` names one of the named buffers; without it the session's one
-    buffer shows. Lillecarl/pymux#303.
+    buffer shows. Lillecarl/pyterm#305.
     """
     name = args.buffer_name
     if name:

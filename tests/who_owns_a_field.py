@@ -5,7 +5,7 @@ group touches, and the methods outside it that touch that field too.
 A group leaves the class as an object only when it owns its fields.
 A field marked SHARED is read or written elsewhere; when the others
 only read the server's registry (sessions, clients, options), a
-reference to the server is enough. Lillecarl/pymux#775.
+reference to the server is enough. Lillecarl/pyterm#777.
 
     python tests/who_owns_a_field.py pymux/core/main.py Pymux \\
         commands=handle_command,show_message,add_command_error

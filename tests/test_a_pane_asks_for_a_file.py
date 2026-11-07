@@ -1,7 +1,7 @@
 """
 A file that a pane asks for from the person's machine: `pymux receive`.
 The pymux client there asks the person, holds the grant, and reads its
-allow-list from its own configuration file. Lillecarl/pymux#743.
+allow-list from its own configuration file. Lillecarl/pyterm#745.
 """
 
 from __future__ import annotations

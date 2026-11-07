@@ -11,7 +11,7 @@ of slack -- and then neither path has anything to resample:
   image at its own size and counts the cells itself;
 * the sixel path encodes the pixels without `scale_rgba`.
 
-That is Lillecarl/pymux#369. Before it, the box was always sent and
+That is Lillecarl/pyterm#371. Before it, the box was always sent and
 always filled, so every client whose cell was not the ten by twenty
 that `pyte` assumed drew a resampled picture.
 
@@ -178,7 +178,7 @@ PROGRAM_SIXEL = '0;1;0q"1;1;40;36#1;2;100;0;0#2;2;99;0;0' + ("#1!20~#2!20~-" * 6
 
 
 def test_a_whole_sixel_at_its_own_size_goes_out_as_the_program_sent_it():
-    "Encoding it again picks another palette. Lillecarl/pymux#603."
+    "Encoding it again picks another palette. Lillecarl/pyterm#605."
     graphics, written = client(sixel=True)
     graphics.render([view(sixel_state(PROGRAM_SIXEL))])
 
@@ -197,7 +197,7 @@ def test_a_sixel_that_holds_an_escape_is_encoded_again():
 
 
 def test_a_piece_of_a_sixel_image_shows_its_part_of_the_pixels():
-    "Text cut the top row away; the piece left is the bottom half. Lillecarl/pymux#598."
+    "Text cut the top row away; the piece left is the bottom half. Lillecarl/pyterm#600."
     pane = state(columns=4, rows=2)
     pane.placements = [pane.placements[0].piece(0, 1, 4, 1)]
     ((_placement, _image, columns, rows, x, y, source),) = visible_placements(view(pane))

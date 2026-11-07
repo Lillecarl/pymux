@@ -1,7 +1,7 @@
 """
 A file that a program in a pane sends to the person: iTerm2's download
 sequences, which client gets the file, and how the pymux client saves
-it. Lillecarl/pymux#743.
+it. Lillecarl/pyterm#745.
 """
 
 from __future__ import annotations
@@ -113,7 +113,7 @@ def test_parts_need_not_be_whole_base64():
 
 
 def test_an_inline_file_is_an_image_and_no_download():
-    "The pane draws it. Lillecarl/pymux#789."
+    "The pane draws it. Lillecarl/pyterm#791."
     reader = DownloadReader()
     got = reader.read("File", "name=%s;inline=1;width=10:%s" % (b64(NAME), b64(DATA)))
     assert got == FinishedDownload(NAME, DATA, multipart=False, inline=True)
@@ -175,7 +175,7 @@ def test_a_multipart_file_too_large_is_refused_and_its_rest_dropped(monkeypatch)
     [
         (FileTransfer.AUTO, False, True, FileTransfer.PASSTHROUGH),
         # A local terminal that saves no download: the pymux client
-        # writes to this machine's downloads directory. Lillecarl/pymux#746.
+        # writes to this machine's downloads directory. Lillecarl/pyterm#748.
         (FileTransfer.AUTO, False, False, FileTransfer.PYMUX),
         (FileTransfer.AUTO, True, True, FileTransfer.PYMUX),
         (FileTransfer.PYMUX, False, True, FileTransfer.PYMUX),
@@ -303,7 +303,7 @@ async def test_the_option_wins_over_auto(chosen, remote, packets):
 
 
 async def test_a_local_terminal_that_saves_no_download_gets_the_file_from_pymux():
-    "auto: the pymux client writes to this machine's downloads directory. Lillecarl/pymux#746."
+    "auto: the pymux client writes to this machine's downloads directory. Lillecarl/pyterm#748."
     async with in_this_process() as session:
         state, _ = await session.attach("local", SIZE)
         state.client.graphics.terminal_version = "kitty(0.49.2)"
@@ -317,7 +317,7 @@ async def test_a_local_terminal_that_saves_no_download_gets_the_file_from_pymux(
 
 
 async def test_passthrough_to_a_terminal_that_saves_no_download_is_refused():
-    "It would draw nothing, or the base64. The person is told why. Lillecarl/pymux#746."
+    "It would draw nothing, or the base64. The person is told why. Lillecarl/pyterm#748."
     async with in_this_process() as session:
         state, _ = await session.attach("local", SIZE)
         ALL_CLIENT_OPTIONS["file-transfer"].set_value(session.pymux, "passthrough", target=state)
@@ -332,7 +332,7 @@ async def test_passthrough_to_a_terminal_that_saves_no_download_is_refused():
 
 
 async def test_a_client_too_old_to_save_a_file_is_told_so():
-    "It drops `file` packets unread, and the person never learned. Lillecarl/pymux#745."
+    "It drops `file` packets unread, and the person never learned. Lillecarl/pyterm#747."
     async with in_this_process() as session:
         state, _ = await session.attach("old", SIZE)
         state.client.can_forward = True
@@ -521,7 +521,7 @@ def test_the_client_says_where_the_file_went(tmp_path, monkeypatch):
 
 
 async def test_a_client_on_a_loop_draws_on_while_a_file_is_written(tmp_path, monkeypatch):
-    "A write of 64 MiB on the loop stopped drawing and typing. Lillecarl/pymux#747."
+    "A write of 64 MiB on the loop stopped drawing and typing. Lillecarl/pyterm#749."
     monkeypatch.setenv("XDG_DOWNLOAD_DIR", str(tmp_path))
     written = threading.Event()
     real = client_downloads.save

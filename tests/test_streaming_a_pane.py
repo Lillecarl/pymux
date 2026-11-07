@@ -8,7 +8,7 @@ read-only stream refuses it.
 
 **The frames are the protocol and the packet is not.** A relay passes
 `data` on without reading it, so `stream-out` and `stream-in` stay ours to
-change while the frames inside them do not. Lillecarl/pymux#461.
+change while the frames inside them do not. Lillecarl/pyterm#463.
 
 The in-memory pipe is what makes this a test rather than a timing
 experiment: it is the server's own dispatch, with no socket and no sleep.
@@ -385,7 +385,7 @@ async def test_a_paste_is_bracketed_when_the_program_asked(pymux):
 
 
 async def test_a_click_reaches_a_program_that_asked_for_the_mouse(pymux):
-    "Spelled by the pane, in the modes the program set. Lillecarl/pymux#950."
+    "Spelled by the pane, in the modes the program set. Lillecarl/pyterm#952."
     pane = the_pane(pymux)
     written = []
     pane.process.write_input = written.append

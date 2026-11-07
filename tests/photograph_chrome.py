@@ -14,7 +14,7 @@ the terminal's pty belongs to the terminal, so nothing could press a
 key at pymux to open any of it. `drive_in_terminal.py` is the way
 round: it runs as the terminal's child, runs pymux on a pty of its own,
 copies what pymux writes to the terminal's tty, and types the keys.
-Lillecarl/pymux#161.
+Lillecarl/pyterm#163.
 
     the keys ──▶ the relay's pty ──▶ pymux ──▶ the terminal's tty
                                                      │
@@ -24,7 +24,7 @@ The keys are fenced the way `middleman.py` fences a write. The pane
 runs the forwarder, the fence goes down the fifo behind the keys, and
 the relay touches the fence file when the fence comes back. The
 picture waits for that file: it is of a frame pymux finished, and not
-of a moment that happened to be quiet. Lillecarl/pymux#275.
+of a moment that happened to be quiet. Lillecarl/pyterm#277.
 
 **This does not judge what the chrome draws.** It keeps a picture of
 each fixture for a person to read, the way `photograph_vttest.py`
@@ -39,7 +39,7 @@ with, what is drawn over the active pane, and whether the client still
 holds the prefix. The server is asked before the picture is kept, so a
 run whose split never landed leaves no picture. The fence cannot say
 any of this -- it proves pymux finished the keys, not that a key
-arrived. Lillecarl/pymux#353, Lillecarl/pymux#363.
+arrived. Lillecarl/pyterm#355, Lillecarl/pyterm#365.
 
     PYMUX_CHROME=palette nix build --file . checks.pymux-chrome-pictures
 
@@ -97,10 +97,10 @@ from pymux.wayland import wayland
 #:
 #: kitty was the first to show it: `chooser-search`, the first chrome
 #: fixture to leave a cursor on the screen, never settled there and
-#: took no picture at all (Lillecarl/pymux#338). foot was the same
+#: took no picture at all (Lillecarl/pyterm#340). foot was the same
 #: fault and it cost far more, because every chrome fixture leaves a
 #: cursor somewhere: 16 of 20 pictures lost in one measured run.
-#: Lillecarl/pymux#362.
+#: Lillecarl/pyterm#364.
 STILL = ("kitty", "foot")
 
 
@@ -132,11 +132,11 @@ def exact_list(env):
     The gallery builds in pieces, one derivation per terminal and per
     batch of themes, and a piece names what it holds exactly: a
     substring would run a theme in every combo that holds a piece of
-    its name. Lillecarl/pymux#284.
+    its name. Lillecarl/pyterm#286.
 
     A person reaches for it too, and for the other reason: a probe of
     the judge wants `which-key,clock,copy-mode`, three fixtures that
-    share no substring. Lillecarl/pymux#365.
+    share no substring. Lillecarl/pyterm#367.
     """
     value = os.environ.get(env, "")
     names = [one for one in value.split(",") if one]
@@ -182,7 +182,7 @@ DEMO = Path(__file__).parent / "demo_application.py"
 #: `photograph_themes.py` set it on two fixtures by hand before this,
 #: which is the same thing said once.
 #: The relay's fences are OSC 99 notifications, so popups are off but
-#: where a fixture asks for them. Lillecarl/pymux#826.
+#: where a fixture asks for them. Lillecarl/pyterm#828.
 CHROME = (
     "set-option status on\nset-option pane-border-status on\nset-option test-mode on\nset-option paint-screen on\n"
     "set-client-option notification-popups off\n"
@@ -218,7 +218,7 @@ class Fixture(NamedTuple):
     whose `%` reached nothing comes back fenced, settles on a still
     screen and keeps a picture of one pane. One run of
     `cut-follows-the-terminal` did exactly that, and its server log has
-    no second process in it. Lillecarl/pymux#353.
+    no second process in it. Lillecarl/pyterm#355.
 
     An overlay pane is not counted. It belongs to the session and not
     to a window's arrangement, so `list-panes` never lists it.
@@ -227,7 +227,7 @@ class Fixture(NamedTuple):
     whether they leave the client waiting for the key after the prefix.
     Both default to the quiet answer, so **every fixture is judged on
     them**: a run that opened copy mode where none was asked for goes
-    red too. Lillecarl/pymux#363.
+    red too. Lillecarl/pyterm#365.
 
     Only the two modes tmux names belong in `mode`. pymux draws more
     over a pane than tmux does -- the chooser, the command palette, the
@@ -260,7 +260,7 @@ def answers_to(socket_path, argv):
 
     The server answers over its own socket. An integrated server
     refuses an attach and answers a command, and this is a command.
-    Lillecarl/pymux#159.
+    Lillecarl/pyterm#161.
     """
     done = run_cli(socket_path, argv)
     if done.returncode != 0:
@@ -327,7 +327,7 @@ def create_command(text):
 
     A window option cannot be set from a configuration file: that file
     is read before the first window is made, and a window option
-    belongs to a window. Lillecarl/pymux#199.
+    belongs to a window. Lillecarl/pyterm#201.
     """
     return [
         (0.6, PREFIX),
@@ -470,14 +470,14 @@ FIXTURES = {
         CHROME,
         keys((0.0, PREFIX), (0.4, b":"), (0.4, b"list-panes")),
     ),
-    # And as a box in the middle of the screen. Lillecarl/pymux#158
+    # And as a box in the middle of the screen. Lillecarl/pyterm#160
     # built it, and a picture of it is what found four faults in it.
     "command-palette": Fixture(
         CHROME + "set-option command-palette on\n",
         keys((0.0, PREFIX), (0.4, b":"), (0.4, b"list-panes")),
     ),
     # The box that composes a key, with a modifier written and the keys
-    # a keyboard leaves out under it. Lillecarl/pymux#220.
+    # a keyboard leaves out under it. Lillecarl/pyterm#222.
     "compose-a-key": Fixture(
         CHROME,
         keys(*create_command("compose-key"), (0.8, b"ctrl+")),
@@ -488,7 +488,7 @@ FIXTURES = {
     # runs the whole height because the split that left it does, and
     # the border across the right column, which stops where that
     # column does. The stack also means every pane draws the bar below
-    # it. Lillecarl/pymux#217, Lillecarl/pymux#211.
+    # it. Lillecarl/pyterm#219, Lillecarl/pyterm#213.
     "divided": Fixture(
         CHROME,
         keys(
@@ -502,7 +502,7 @@ FIXTURES = {
     # One pane filling the window, with the other two behind it. Zoom
     # is a layout that wraps the layout underneath, so the pane keeps
     # the row its title bar hangs in and the bar carries the "Z".
-    # Lillecarl/pymux#215.
+    # Lillecarl/pyterm#217.
     # Zoom is a flag on the window and not a layout that drops the
     # others, so both panes are still in the arrangement.
     "zoomed": Fixture(
@@ -514,7 +514,7 @@ FIXTURES = {
     # focus on the first. The pair does not fit, so the second one runs
     # off the right edge and is tinted: **the one case where what a
     # person sees is not what the program wrote**, and the only thing
-    # on the screen that says so. Lillecarl/pymux#222.
+    # on the screen that says so. Lillecarl/pyterm#224.
     #
     # The `strip` fixture below cuts nothing. Half a window each means
     # two columns fit exactly, which is why a half is the default.
@@ -529,11 +529,11 @@ FIXTURES = {
         (2,),
     ),
     # A strip of three columns, which runs past the edge of the screen.
-    # Lillecarl/pymux#198.
+    # Lillecarl/pyterm#200.
     "strip": Fixture(
         # `-g` says what every new window starts with, and it is the
         # only way a configuration file can set a window option: the
-        # file is read before there is a window. Lillecarl/pymux#199.
+        # file is read before there is a window. Lillecarl/pyterm#201.
         CHROME + "set-window-option -g strip on\n",
         keys(
             (0.0, PREFIX),
@@ -566,7 +566,7 @@ FIXTURES = {
     # left and the box belongs at the bottom right. The empty step
     # after the prefix is a wait, so the frame the prefix asked for is
     # on the screen before the fence comes back.
-    # Lillecarl/pymux#29.
+    # Lillecarl/pyterm#31.
     "which-key": Fixture(
         CHROME + "set-option which-key on\n",
         keys((0.0, PREFIX), (0.8, b"")),
@@ -576,7 +576,7 @@ FIXTURES = {
     # corner away from the cursor, newest on top. The cursor is at the
     # top left, so the boxes go top right. The boxes "Ym9vdA==" and
     # "a2V5cw==" are the relay's own fences, sent after the option is
-    # on. Lillecarl/pymux#826.
+    # on. Lillecarl/pyterm#828.
     "notification-popups": Fixture(
         CHROME + "set-client-option notification-popups on\nset-client-option notification-popup-seconds 60\n",
         keys(
@@ -588,8 +588,8 @@ FIXTURES = {
     # The window chooser: a bar across the top, over the window it
     # points at. It is not a box, and the preview is the switch itself
     # -- the rows under the bar are the real window, drawn by the
-    # layout that owns it. Lillecarl/pymux#325, Lillecarl/pymux#326,
-    # Lillecarl/pymux#327.
+    # layout that owns it. Lillecarl/pyterm#327, Lillecarl/pyterm#328,
+    # Lillecarl/pyterm#329.
     #
     # Three windows, so the bar has a list to wrap, and the one it
     # opens on is split in two, so the preview is a layout and not an
@@ -629,7 +629,7 @@ FIXTURES = {
     # wraps onto more rows, a whole window at a time, and the pane and
     # the question above the status line move up with it. `-d` keeps
     # the client on window 0, where the forwarder runs.
-    # Lillecarl/pymux#723.
+    # Lillecarl/pyterm#725.
     "status-wraps": Fixture(
         CHROME,
         keys(
@@ -675,7 +675,7 @@ FIXTURES = {
         mode="copy-mode",
     ),
     # Copy mode over a pane that writes again after it opened: the
-    # corner says the copy is older than the pane. Lillecarl/pymux#714.
+    # corner says the copy is older than the pane. Lillecarl/pyterm#716.
     "copy-mode-newer": Fixture(
         CHROME,
         keys(
@@ -693,7 +693,7 @@ FIXTURES = {
     # panes. Its body runs a program, so its default-background cells
     # have to show the terminal's own background, the way a normal
     # pane does: a rule that named a colour behind it drew a slab of
-    # chrome over the layout instead. Lillecarl/pymux#223.
+    # chrome over the layout instead. Lillecarl/pyterm#225.
     # The overlay itself is not among the counted panes: it belongs to
     # the session and not to a window's arrangement.
     "overlay": Fixture(
@@ -714,7 +714,7 @@ FIXTURES = {
     # two could not be read: a person fixed the one they could see and
     # met the other on the next run. It wraps now, and no keys are
     # pressed here because the message is up before anything is.
-    # Lillecarl/pymux#205, Lillecarl/pymux#38.
+    # Lillecarl/pyterm#207, Lillecarl/pyterm#40.
     "startup-errors": Fixture(
         CHROME + "not-a-command-alpha\nnot-a-command-beta\n",
     ),
@@ -727,7 +727,7 @@ FIXTURES = {
 # to foot, whose `cat` writes it back. A kitty client shows the
 # window's pixels, every other terminal a notice. Only where pysmithay
 # loads, which `checks.pymux-window-pane-pictures` sees to.
-# Lillecarl/pymux#620.
+# Lillecarl/pyterm#622.
 def window_keys(program="", typed=b""):
     """
     Split, run `program` on the server's compositor from the new pane,
@@ -760,7 +760,7 @@ if wayland.available():
     )
     FIXTURES["window-pane-wev"] = Fixture(CHROME, window_keys("wev", typed=b"wev"), (3,))
     # Firefox on a red page, then a new window and back: the pane has to
-    # be red again, not dark. Lillecarl/pymux#753.
+    # be red again, not dark. Lillecarl/pyterm#755.
     if shutil.which("firefox"):
         FIXTURES["window-pane-firefox-return"] = Fixture(
             CHROME,
@@ -779,7 +779,7 @@ if wayland.available():
             (3, 1),
         )
     # `pymux wl` in the new pane: foot takes that pane's place, so the
-    # window holds two panes and not three. Lillecarl/pymux#630.
+    # window holds two panes and not three. Lillecarl/pyterm#632.
     FIXTURES["window-pane-wl"] = Fixture(
         CHROME,
         keys(
@@ -821,7 +821,7 @@ def chrome_command(
     pymux runs through `sh -c` so that its own stderr goes to a file.
     It shares a terminal with the client in the integrated mode, so
     anything it writes there lands in the picture
-    (Lillecarl/pymux#36), and the relay would copy a traceback onto
+    (Lillecarl/pyterm#38), and the relay would copy a traceback onto
     the screen along with everything else. The relay's stderr goes to
     a file for the same reason, and the file is in the room, where
     `every_log` reads it.
@@ -873,7 +873,7 @@ def chrome_command(
 #: one run and 14 in the next. Measured over three runs and five
 #: fixtures, every differing xterm pixel had x % 10 == 0. A cell drawn
 #: wrong or in the wrong place changes pixels inside cells, which still
-#: count. This is the seam of Lillecarl/pymux#371. kitty and foot show
+#: count. This is the seam of Lillecarl/pyterm#373. kitty and foot show
 #: no such difference.
 INK_PAST_THE_CELL = {"xterm": 10}
 
@@ -995,7 +995,7 @@ def picture_of(terminal, seat, name, work, out, fixtures=None, render_mode=None)
             # keys and calls it finished.
             not_before=fence,
             # And the fence cannot say a key arrived, so the server is
-            # asked what the keys built. Lillecarl/pymux#353.
+            # asked what the keys built. Lillecarl/pyterm#355.
             judge=partial(judge_the_fixture, socket_path, fixture),
         )
     finally:
@@ -1008,7 +1008,7 @@ def _dump_while_unfenced(room, fence, done) -> None:
     """
     SIGUSR1 to the server every few seconds until the keys are fenced: a
     run that never fences then leaves the stacks of a server stuck after
-    them, which the seat kills before anyone can ask. Lillecarl/pymux#753.
+    them, which the seat kills before anyone can ask. Lillecarl/pyterm#755.
     """
     while not done.wait(4.0):
         if fence.exists():
@@ -1019,7 +1019,7 @@ def _dump_while_unfenced(room, fence, done) -> None:
 
 
 #: What the server log says when a terminal has a window pane feature,
-#: by the feature's name. Lillecarl/pymux#651.
+#: by the feature's name. Lillecarl/pyterm#653.
 SUPPORT = {
     "kitty graphics": "kitty graphics yes",
     "shared memory": "reads window frames from shared memory",
@@ -1124,7 +1124,7 @@ def main(
                     # **Ask the seat before blaming the fixture.** A
                     # display server that went away makes every picture
                     # after it fail, and there is no answer in that.
-                    # Lillecarl/pymux#216.
+                    # Lillecarl/pyterm#218.
                     try:
                         seats[terminal.seat].still_there()
                     except TheSeatIsGone as gone:

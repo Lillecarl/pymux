@@ -1,5 +1,5 @@
 """
-The commands of the batch Lillecarl/pymux#297 added with the message
+The commands of the batch Lillecarl/pyterm#299 added with the message
 log: `new-pane`, `show-messages`, `attach-session` and
 `switch-client`.
 """

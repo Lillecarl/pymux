@@ -249,7 +249,7 @@ class CellImages:
         """
         The program's own sixel sequence, for an image drawn whole at its
         own size. Encoding it again changes the palette, so a gradient
-        gains pixels the program never drew. Lillecarl/pymux#603.
+        gains pixels the program never drew. Lillecarl/pyterm#605.
 
         None when the payload holds anything but sixel characters: those
         bytes go to the client's terminal, and must not end the sequence.
@@ -269,7 +269,7 @@ class CellImages:
         With `spawn` a miss answers None, and a worker thread does the
         work: the cells of the placement stay blank until the next
         frame after it is done. The kernels release the GIL, so the
-        event loop keeps running beside it. Lillecarl/pymux#575.
+        event loop keeps running beside it. Lillecarl/pyterm#577.
         """
         known = self._cache.get(key)
         if known is not None and known[0] is image:

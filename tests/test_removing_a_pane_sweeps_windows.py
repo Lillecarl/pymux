@@ -7,7 +7,7 @@ A window whose last pane went is taken out of `self.windows` inside a
 it would have been asked about belongs to one window, so the skipped
 call does nothing -- but the same pass also sweeps up a window that is
 already empty, and that sweep is what the skip loses.
-Lillecarl/pymux#351.
+Lillecarl/pyterm#353.
 """
 
 from __future__ import annotations

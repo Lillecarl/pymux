@@ -35,7 +35,7 @@ class Pane:
     #: What a hot upgrade does with each attribute; `pyte.keep` says.
     #: The counters of panes, windows and splits are class attributes,
     #: so no instance walk sees them: a snapshot saves them too, or a
-    #: new id collides with one that survived. Lillecarl/pymux#399.
+    #: new id collides with one that survived. Lillecarl/pyterm#401.
     KEEP: ClassVar[dict[str, Keep]] = {
         "pane_id": Keep.SAVED,
         "terminal": Keep.SAVED,
@@ -101,7 +101,7 @@ class Pane:
         #: the program -- each of which changes what a reader draws. A
         #: reader inside the server compares those itself, the way
         #: `ptterm` compares reverse video; a reader that has only this
-        #: number cannot. Lillecarl/pymux#387.
+        #: number cannot. Lillecarl/pyterm#389.
         self.revision = 0
 
         #: Where the program says it is, from "OSC 7" or "OSC 1337 ;
@@ -118,12 +118,12 @@ class Pane:
         self.current_user: str | None = None
 
         #: The shell and the version of its iTerm2 integration, from
-        #: "OSC 1337 ; ShellIntegrationVersion". Lillecarl/pymux#784.
+        #: "OSC 1337 ; ShellIntegrationVersion". Lillecarl/pyterm#786.
         self.shell: str | None = None
         self.shell_integration_version: str | None = None
 
         #: What the program says of its progress, from "OSC 9 ; 4".
-        #: Lillecarl/pymux#788.
+        #: Lillecarl/pyterm#790.
         self.progress = NO_PROGRESS
 
         #: What the shell published about itself, from "OSC 1337 ;
@@ -148,14 +148,14 @@ class Pane:
         #: The program rang the bell where nobody saw it: in a pane that
         #: was not the active one of a window a client looks at. Making
         #: the pane active clears it. `#{pane_bell_flag}` is it.
-        #: Lillecarl/pymux#501.
+        #: Lillecarl/pyterm#503.
         self.bell = False
 
         #: What `record-pane` is recording of this pane, or None.
         self.recording: Recording | None = None
 
         #: The files this pane sends to the person, as their parts
-        #: arrive. Lillecarl/pymux#743.
+        #: arrive. Lillecarl/pyterm#745.
         self.downloads = DownloadReader()
 
     def content_changed(self) -> None:
@@ -170,11 +170,11 @@ class Pane:
 
         **The widget knows, and a pane asks it.** A flag of the pane's
         own went out of step with the widget once, and five readers of
-        it all answered "no". Lillecarl/pymux#133.
+        it all answered "no". Lillecarl/pyterm#135.
 
         **Copy mode is a client's, not the pane's.** Each client that
         shows the pane is an application of its own, and the program
-        runs on under all of them. Lillecarl/pymux#470.
+        runs on under all of them. Lillecarl/pyterm#472.
         """
         return self.terminal.is_copying
 

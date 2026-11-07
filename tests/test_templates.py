@@ -1,5 +1,5 @@
 """
-The template language a person writes. Lillecarl/pymux#333.
+The template language a person writes. Lillecarl/pyterm#335.
 
 A string holding `{{` or `{%` is a jinja2 template and everything else
 is a tmux format, so a `.tmux.conf` carried over keeps working and a
@@ -79,7 +79,7 @@ async def test_a_template_has_jinjas_globals_and_its_own_names(pymux):
     ],
 )
 async def test_each_default_template_draws_what_its_tmux_format_did(pymux, option, tmux):
-    "Every default is jinja, and looks as tmux's spelling did. Lillecarl/pymux#960."
+    "Every default is jinja, and looks as tmux's spelling did. Lillecarl/pyterm#962."
     pymux.options.test_mode = True
     window = pymux.current_session.arrangement.get_active_window()
     owner = window.options if option == "pane_title_format" else pymux.session_defaults
@@ -180,7 +180,7 @@ async def test_only_the_facts_a_template_asks_for_are_read(pymux, monkeypatch):
 
 
 async def test_a_template_reads_the_user_variables_of_the_pane(pymux):
-    "What a shell publishes with SetUserVar, for a status line. Lillecarl/pymux#499."
+    "What a shell publishes with SetUserVar, for a status line. Lillecarl/pyterm#501."
     window = pymux.current_session.arrangement.get_active_window()
     window.active_pane.user_vars = {"git_branch": "main"}
 
@@ -201,7 +201,7 @@ async def test_a_template_is_compiled_once(pymux):
 def test_a_listing_asks_for_the_language_by_its_flag():
     """
     `-F` and `-J` name the language; neither is sniffed, because a
-    listing is what a script reads. Lillecarl/pymux#333.
+    listing is what a script reads. Lillecarl/pyterm#335.
     """
     import argparse
 

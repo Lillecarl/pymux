@@ -5,7 +5,7 @@
  * Everything else about `<pymux-pane>` is read as text or type checked,
  * and two faults reached a person that way -- the second was pressing
  * Control, which typed `C-Control` into the program.
- * Lillecarl/pymux#468.
+ * Lillecarl/pyterm#470.
  *
  * It reads the **compiled** `keys.js` out of `pymux/web/static/`, which
  * is what ships and what a browser runs. Plain javascript and not

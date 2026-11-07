@@ -52,7 +52,7 @@ def word_window(session: Session, target: str | None):
     `focus_next_window` walks. They name a window and not a number,
     so they never take the bare-target rule that creates at an index:
     `-a -t {end}` is how a person asks for a window at the end of the
-    stack. Lillecarl/pymux#381.
+    stack. Lillecarl/pyterm#383.
     """
     windows = session.arrangement.windows
     if target == "{start}":
@@ -69,7 +69,7 @@ def which_session(pymux: Pymux, args: argparse.Namespace) -> tuple[Session, str 
 
     `new-window -t work:` opens a window in `work`. Without a session
     part it is the session of the client that asks.
-    Lillecarl/pymux#323.
+    Lillecarl/pyterm#325.
     """
     target = args.target_window
     if target is None:
@@ -101,7 +101,7 @@ def where_new_window_goes(
     word names an end of the stack, so `-a -t {end}` puts a window
     after the last one whatever window a person is on -- the answer
     the default gives only while the numbering has no gaps.
-    Lillecarl/pymux#381.
+    Lillecarl/pyterm#383.
 
     `None` means the lowest free index, and nothing returns it any
     more. It is still what `Arrangement.create_window` does without an
@@ -140,7 +140,7 @@ def new_window(pymux: Pymux, args: argparse.Namespace):
     was looking at: on window five of one, two, five, `ctrl+b c` gave
     window three. A person who works across windows builds a map of
     what is where, and a new window arriving at the far end of it is a
-    window they then have to go and find. Lillecarl/pymux#191.
+    window they then have to go and find. Lillecarl/pyterm#193.
 
     With no gaps the two rules agree, which is why this went so long
     without being noticed: the lowest free index is the one after the
@@ -150,7 +150,7 @@ def new_window(pymux: Pymux, args: argparse.Namespace):
     to sit next to, and the active one is the default. tmux reads a
     bare `-t` as the index to create at instead, and so does this. A
     session part in the target -- `-t work:` -- opens the window in
-    that session. Lillecarl/pymux#323. `--tag` tags the new window, as
+    that session. Lillecarl/pyterm#325. `--tag` tags the new window, as
     `set-tag -w` would.
     """
     tags = parse_tags(args.tags)

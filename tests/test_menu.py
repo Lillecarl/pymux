@@ -4,7 +4,7 @@ The menu of `display-menu`.
 A menu is a box of lines with a key each; the key of a line runs the
 command it carries, Escape leaves, and a line answers a click. The
 tests drive `Menu.key_pressed` the way a key press would.
-Lillecarl/pymux#297.
+Lillecarl/pyterm#299.
 """
 
 from __future__ import annotations

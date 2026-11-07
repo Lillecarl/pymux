@@ -1,7 +1,7 @@
 //! Rust kernels for prompt_toolkit's per-cell loops.
 //! `python/prompt_toolkit_rs/__init__.py` says how they are put in place;
 //! each one gives the answer its Python original gives, decision for
-//! decision. Lillecarl/pymux#566.
+//! decision. Lillecarl/pyterm#568.
 
 mod row;
 

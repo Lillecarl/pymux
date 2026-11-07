@@ -155,7 +155,7 @@ def _ttyname() -> str:
     A client with no terminal is not an error. A pymux command in a
     script or a cron job has its output on a pipe, and the tests run
     one with stdout replaced; the server names those by the process
-    instead. Lillecarl/pymux#335.
+    instead. Lillecarl/pyterm#337.
     """
     try:
         return os.ttyname(sys.stdout.fileno())
@@ -178,12 +178,12 @@ class TerminalClient(Client):
     #: Whether this client can forward a port. Only `SshClient` can:
     #: forwarding needs an SSH connection, and a client on a unix
     #: socket is already on the machine the server runs on.
-    #: Lillecarl/pymux#436.
+    #: Lillecarl/pyterm#438.
     can_forward = False
 
     #: How a packet to the server is encoded. `_start_gui` sets it back
     #: to JSON for each connection, and a `wire` packet from the server
-    #: turns it to msgpack. Lillecarl/pymux#633.
+    #: turns it to msgpack. Lillecarl/pyterm#635.
     _encode = staticmethod(encode_json)
 
     #: The formats this client reads, best first. Compression pays only
@@ -191,12 +191,12 @@ class TerminalClient(Client):
     wire_formats: tuple[str, ...] = (MSGPACK,)
 
     #: The sound of the server, where this machine can play it. A
-    #: subclass that carries it sets it. Lillecarl/pymux#657.
+    #: subclass that carries it sets it. Lillecarl/pyterm#659.
     audio: AudioClient | None = None
 
     #: Every real client answers the server's ping. The server drops a
     #: client that stops answering, and only one that said it answers,
-    #: so this is what makes that safe. Lillecarl/pymux#446.
+    #: so this is what makes that safe. Lillecarl/pyterm#448.
     answers_ping = True
 
     def __init__(self) -> None:
@@ -211,7 +211,7 @@ class TerminalClient(Client):
 
         self.__stdin_reader: PosixStdinReader | None = None
         #: The server said to stop reading the terminal: a pane's program
-        #: is behind on a file the terminal sends it. Lillecarl/pymux#915.
+        #: is behind on a file the terminal sends it. Lillecarl/pyterm#917.
         self.input_held = False
         self._input_released: anyio.Event | None = None
 
@@ -219,13 +219,13 @@ class TerminalClient(Client):
         #: names it in an `exit` packet, which it sends before it closes
         #: a connection it will not serve: a refused attach is not the
         #: same as a person who detached, and a script has only the
-        #: code to tell them apart. Lillecarl/pymux#332.
+        #: code to tell them apart. Lillecarl/pyterm#334.
         self.exit_code = 0
 
         #: How many seconds to wait for the next server when this one
         #: goes, or `None`. Only a `restarting` packet sets it: a server
         #: that ends without one is gone, and the client leaves.
-        #: Lillecarl/pymux#409.
+        #: Lillecarl/pyterm#411.
         self.restart_wait: float | None = None
         #: Why, as the server said it, for the screen drawn meanwhile.
         self.restart_why = RESTARTING
@@ -238,7 +238,7 @@ class TerminalClient(Client):
         #: Who this client is, for as long as its process runs. It goes
         #: out with every attach, so a server that comes back after an
         #: upgrade knows a client it served before and can give it its
-        #: windows back. Lillecarl/pymux#399.
+        #: windows back. Lillecarl/pyterm#401.
         self.client_id = secrets.token_hex(8)
 
         #: Whether this client has attached once already. **Only the
@@ -250,7 +250,7 @@ class TerminalClient(Client):
 
         #: How a window pane's frame reaches the terminal: base64 until
         #: the terminal answers the shared memory probe, which `_shm`
-        #: makes. Lillecarl/pymux#634.
+        #: makes. Lillecarl/pyterm#636.
         self._carrier: Base64Carrier | ShmCarrier = Base64Carrier()
         self._shm: ShmCarrier | None = None
         #: The bands of the frames that have not had their last part, by
@@ -258,27 +258,27 @@ class TerminalClient(Client):
         self._frame_parts: dict[int, list[Any]] = {}
         #: What makes a decoder of each codec this client decodes, and
         #: the decoder of each window pane's stream, by outer image id.
-        #: Lillecarl/pymux#639.
+        #: Lillecarl/pyterm#641.
         self._decoder_kinds = decoders()
         self._decoders: dict[int, Any] = {}
         #: Each window pane's picture, so a frame goes as one edit.
-        #: Lillecarl/pymux#644.
+        #: Lillecarl/pyterm#646.
         self._pictures = Pictures()
         #: The browsers a program on the server drives.
         self.browsers = Browsers(self)
         #: The files a pane sends the person, until each is whole.
-        #: Lillecarl/pymux#743.
+        #: Lillecarl/pyterm#745.
         self.downloads = ArrivingFiles()
         #: The attachment's task group, for a client that runs on a loop.
         #: A download is written from it, and from a thread without it.
         self.tasks: anyio.abc.TaskGroup | None = None
-        #: The files a pane asks for: `pymux receive`. Lillecarl/pymux#743.
+        #: The files a pane asks for: `pymux receive`. Lillecarl/pyterm#745.
         self.sending_files = SendingFiles(self)
         #: kitty's file transfer, answered as the terminal.
-        #: Lillecarl/pymux#912.
+        #: Lillecarl/pyterm#914.
         self.kitty_terminal = KittyTerminal(self)
         #: What was typed from a Ctrl-V on, while the clipboard's image is
-        #: read; None when nothing waits. Lillecarl/pymux#956.
+        #: read; None when nothing waits. Lillecarl/pyterm#958.
         self._behind_an_image: list[str] | None = None
         #: One write to the terminal at a time: the socket client draws
         #: a question from a thread.
@@ -337,22 +337,22 @@ class TerminalClient(Client):
                 Field.CMD: Packet.START_GUI,
                 Field.DETACH_OTHERS: detach_other_clients and first,
                 # `-x`: the other clients of the session leave, and the
-                # terminals they were in close. Lillecarl/pymux#347.
+                # terminals they were in close. Lillecarl/pyterm#349.
                 Field.HANG_UP_OTHERS: self.hang_up_others and first,
-                # `-r`: this client only watches. Lillecarl/pymux#467.
+                # `-r`: this client only watches. Lillecarl/pyterm#469.
                 Field.READ_ONLY: self.read_only,
                 Field.COLOR_DEPTH: color_depth,
                 Field.TERM: os.environ.get("TERM", ""),
                 Field.COLORTERM: os.environ.get("COLORTERM", ""),
                 # The machine this client runs on. Only the client can
                 # say it: over ssh the server answers `gethostname`
-                # with another machine's name. Lillecarl/pymux#287.
+                # with another machine's name. Lillecarl/pyterm#289.
                 Field.HOSTNAME: socket.gethostname(),
                 # Whether this client can forward a port. Only the one
                 # that reached the server over SSH holds a connection
                 # that carries one, and the server cannot tell from its
                 # end: a unix socket is a unix socket either way.
-                # Lillecarl/pymux#436.
+                # Lillecarl/pyterm#438.
                 Field.FORWARDS: self.can_forward,
                 Field.REPORTS: self.can_forward,
                 Field.BROWSERS: True,
@@ -361,12 +361,12 @@ class TerminalClient(Client):
                 Field.KITTY_TRANSFERS: True,
                 # Whether this client answers a ping. A server drops a
                 # client that stops answering, and never one that did
-                # not say it would. Lillecarl/pymux#446.
+                # not say it would. Lillecarl/pyterm#448.
                 Field.PINGS: self.answers_ping,
                 # A real terminal answers a status report, and its
                 # answer is what says a frame arrived: over ssh the
                 # bytes wait in buffers this client cannot see.
-                # Lillecarl/pymux#259.
+                # Lillecarl/pyterm#261.
                 Field.PACED: True,
                 # The whole environment of this client, of which the
                 # server keeps the names "update-environment" lists and
@@ -374,7 +374,7 @@ class TerminalClient(Client):
                 # is the server that holds the option, and asking for it
                 # first would be a round trip at every attach. tmux
                 # sends the whole environment too, one message per
-                # variable. Lillecarl/pymux#271.
+                # variable. Lillecarl/pyterm#273.
                 Field.ENVIRONMENT: dict(os.environ),
                 # The terminal this client draws on, and the process it
                 # runs as. Both belong to this machine, which is why
@@ -382,7 +382,7 @@ class TerminalClient(Client):
                 # people can each be on their own `/dev/pts/3`. The
                 # process is the fallback for a client with no terminal
                 # at all, the way tmux falls back for a control client.
-                # Lillecarl/pymux#335.
+                # Lillecarl/pyterm#337.
                 Field.TTYNAME: _ttyname(),
                 Field.PID: os.getpid(),
                 Field.CLIENT_ID: self.client_id,
@@ -391,22 +391,22 @@ class TerminalClient(Client):
                 # person is sitting at, and only this side can read
                 # the file that names it: over SSH the server's
                 # configuration is another machine's.
-                # Lillecarl/pymux#223.
+                # Lillecarl/pyterm#225.
                 Field.CLIENT_OPTIONS: self._client_options(),
                 # What this client reads besides JSON. A server that
                 # takes one says which with a `wire` packet.
-                # Lillecarl/pymux#633.
+                # Lillecarl/pyterm#635.
                 Field.WIRE: list(self.wire_formats),
                 # This client plays the server's sound, on this
-                # connection. Lillecarl/pymux#657.
+                # connection. Lillecarl/pyterm#659.
                 Field.AUDIO: self.audio is not None,
                 # This client encodes a window pane's frames for its
                 # own terminal: the server sends the raw pixels.
-                # Lillecarl/pymux#634.
+                # Lillecarl/pyterm#636.
                 Field.FRAMES: True,
-                # And can take them in these codecs. Lillecarl/pymux#639.
+                # And can take them in these codecs. Lillecarl/pyterm#641.
                 Field.CODECS: [str(codec) for codec in self._decoder_kinds],
-                # And says when it wrote each. Lillecarl/pymux#641.
+                # And says when it wrote each. Lillecarl/pyterm#643.
                 Field.SHOWS: True,
                 Field.DATA: "",
             }
@@ -438,7 +438,7 @@ class TerminalClient(Client):
         and asks for it back afterwards. An attachment that ends in
         between leaves the terminal as the pane wanted it, which means
         the keys a person presses next are echoed and held for a line.
-        Lillecarl/pymux#256.
+        Lillecarl/pyterm#258.
         """
         while self._mode_context_managers:
             with contextlib.suppress(Exception):
@@ -451,8 +451,8 @@ class TerminalClient(Client):
 
         The configuration file first and the command line after, so a
         flag wins: a file belongs to one machine and a flag to the one
-        terminal it was typed in. Lillecarl/pymux#223,
-        Lillecarl/pymux#340.
+        terminal it was typed in. Lillecarl/pyterm#225,
+        Lillecarl/pyterm#342.
         """
         # The upload options stay here: they are this client's to read,
         # and the server is not to learn the allow-list.
@@ -477,21 +477,21 @@ class TerminalClient(Client):
         output.quit_alternate_screen()
         output.disable_mouse_support()
         # SGR pixel mouse, which the server may have turned on: the next
-        # program would read pixels as cells. Lillecarl/pymux#648.
+        # program would read pixels as cells. Lillecarl/pyterm#650.
         output.write_raw(PIXEL_MOUSE_OFF)
         # Focus, theme and size reports, which the server turns on.
-        # Lillecarl/pymux#794, Lillecarl/pymux#796, Lillecarl/pymux#797.
+        # Lillecarl/pyterm#796, Lillecarl/pyterm#798, Lillecarl/pyterm#799.
         output.write_raw(REPORTS_OFF)
         # kitty's paste events: the next program would get no paste.
-        # Lillecarl/pymux#893.
+        # Lillecarl/pyterm#895.
         output.write_raw(PASTE_EVENTS_OFF)
         # kitty's drops and drags, which the server registers for.
-        # Lillecarl/pymux#892.
+        # Lillecarl/pyterm#894.
         output.write_raw(DND_OFF)
         # The user variable passthrough sets, which a terminal may hold
         # its own shortcuts back on. Cleared whatever mode the client
         # was in, because a detach in passthrough leaves no leave-mode.
-        # Lillecarl/pymux#530.
+        # Lillecarl/pyterm#532.
         output.write_raw(set_user_var(PASSTHROUGH_VARIABLE, None))
         output.disable_bracketed_paste()
         output.reset_attributes()
@@ -507,11 +507,11 @@ class TerminalClient(Client):
         Put back everything an attachment changed, however it ended.
 
         Raw or cooked mode the server pushed over ours
-        (Lillecarl/pymux#411), then what the server's bytes set: the
+        (Lillecarl/pyterm#413), then what the server's bytes set: the
         alternate screen, the mouse, the cursor, the attributes and
         our kitty push. stdout may be the thing that failed, so the
         error that ended the attachment outranks anything this raises.
-        Lillecarl/pymux#404.
+        Lillecarl/pyterm#406.
         """
         self._restore_modes()
         with contextlib.suppress(Exception):
@@ -527,12 +527,12 @@ class TerminalClient(Client):
         the terminal, encoded the way the terminal reads it.
 
         A whole frame goes as one image, so its bands are put back
-        together; the bands of an edit are edits each. Lillecarl/pymux#634.
+        together; the bands of an edit are edits each. Lillecarl/pyterm#636.
         A frame in a codec is decoded first, and what changed is taken
-        from it. Lillecarl/pymux#639.
+        from it. Lillecarl/pyterm#641.
 
         True when the terminal was asked to answer the frame, which then
-        stands for `frame-shown`. Lillecarl/pymux#643.
+        stands for `frame-shown`. Lillecarl/pyterm#645.
         """
         image = packet[Field.IMAGE]
         codec = packet.get(Field.CODEC)
@@ -635,7 +635,7 @@ class TerminalClient(Client):
         # And whether to hang up the process that started this
         # client on the way out, which is `attach -x`. The signal
         # goes after the terminal is back, so it is remembered
-        # here and sent there. Lillecarl/pymux#347.
+        # here and sent there. Lillecarl/pyterm#349.
         if packet.get(Field.HANG_UP):
             self.hang_up_asked = True
 
@@ -649,7 +649,7 @@ class TerminalClient(Client):
     def _on_echo(self, packet: Message) -> None:
         # The server measures the round trip that sizes the sound
         # buffers: the answer goes at once, before anything else.
-        # Lillecarl/pymux#657.
+        # Lillecarl/pyterm#659.
         self.send_packet({Field.CMD: Packet.ECHO, Field.TIME: packet.get(Field.TIME)})
 
     @_PACKETS.handles(Packet.SOUND, Packet.AUDIO, Packet.LATENCY, Packet.MICROPHONE)
@@ -662,7 +662,7 @@ class TerminalClient(Client):
         # The server is asking whether anybody is still here. An
         # answer costs one packet and keeps this client's place;
         # silence is what tells the server the person is gone.
-        # Lillecarl/pymux#446.
+        # Lillecarl/pyterm#448.
         self.send_packet({Field.CMD: Packet.PONG})
 
     @_PACKETS.handles(Packet.SUSPEND)
@@ -708,7 +708,7 @@ class TerminalClient(Client):
     @_PACKETS.handles(Packet.REPORT_LOG)
     def _on_report_log(self, packet: Message) -> None:
         # `show-log -t` on the server: this machine's log, which the
-        # server cannot read. Lillecarl/pymux#934.
+        # server cannot read. Lillecarl/pyterm#936.
         self.sending_files.off_the_loop(lambda: log_answer(packet), self.send_packet)
 
     @_PACKETS.handles(Packet.KITTY_TRANSFER)
@@ -786,7 +786,7 @@ class TerminalClient(Client):
         -- our push still holds the restore point, and the value over
         it is ours to change. The way out pops what we pushed
         (`_pop_kitty_flags`), and that is how the nested case gives
-        the outer session its encoding back. Lillecarl/pymux#403.
+        the outer session its encoding back. Lillecarl/pyterm#405.
         """
         if not self._kitty_supported and flags != 0:
             return
@@ -813,7 +813,7 @@ class TerminalClient(Client):
     def _save(self, whole: Whole) -> None:
         """
         Write a download off the loop, and tell the server where it went.
-        A write of 64 MiB here stopped drawing and typing. Lillecarl/pymux#747.
+        A write of 64 MiB here stopped drawing and typing. Lillecarl/pyterm#749.
 
         A client on a loop answers from it: asyncssh's writer and the
         memory stream are not safe from a thread. The socket client has
@@ -861,7 +861,7 @@ class TerminalClient(Client):
 
         # **A Ctrl-V waits for the clipboard's image**, and what is typed
         # meanwhile waits behind it, so the image reaches the pane's
-        # compositor before the key that pastes it. Lillecarl/pymux#956.
+        # compositor before the key that pastes it. Lillecarl/pyterm#958.
         if self._behind_an_image is not None:
             self._behind_an_image.append(data)
             return

@@ -6,12 +6,12 @@ and nothing else: the alternate screen, the mouse reporting and a
 hidden cursor stayed as the server's last bytes had set them. The
 `finally` resets now, on every exit -- EOF, detach, exception -- and a
 reset that cannot write (stdout is the thing that failed) must not
-replace the error that ended the loop. Lillecarl/pymux#404.
+replace the error that ended the loop. Lillecarl/pyterm#406.
 
 The mode stack is part of the same way out. The server can push cooked
 mode over the client while a pane reads a password; a client that ends
 in between puts it back, or every key the person types next echoes.
-Lillecarl/pymux#411.
+Lillecarl/pyterm#413.
 """
 
 from __future__ import annotations
@@ -222,7 +222,7 @@ def test_a_resize_is_heard_from_before_start_gui_reports_the_size():
     """
     `start-gui` carries the size, and SIGWINCH is ignored until a handler
     takes it. A resize between the two was lost, and the pane kept the
-    old size under load. Lillecarl/pymux#611.
+    old size under load. Lillecarl/pyterm#613.
     """
     held = []
 

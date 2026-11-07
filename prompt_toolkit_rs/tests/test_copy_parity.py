@@ -3,7 +3,7 @@
 
 Both take the same text, the same known characters and a row each,
 and they have to agree on the index, the column, every cell of the
-row by identity, and what they collected. Lillecarl/pymux#566.
+row by identity, and what they collected. Lillecarl/pyterm#568.
 """
 
 from __future__ import annotations

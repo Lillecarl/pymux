@@ -216,7 +216,7 @@ def test_placeholders_do_not_reach_terminal_as_text():
 
 
 # ----------------------------------------------------------------------
-# A terminal that reads the placeholders itself. Lillecarl/pymux#600.
+# A terminal that reads the placeholders itself. Lillecarl/pyterm#602.
 
 
 def make_kitty(image_ids=None):
@@ -340,7 +340,7 @@ def test_two_clients_of_one_pane_each_get_their_own_way():
 
 
 # ----------------------------------------------------------------------
-# Which terminals read them. Lillecarl/pymux#607.
+# Which terminals read them. Lillecarl/pyterm#609.
 
 
 def test_the_terminal_names_itself_in_the_detection():

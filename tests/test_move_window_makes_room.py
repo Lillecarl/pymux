@@ -6,8 +6,8 @@ does. The other two things tmux does with a taken destination are
 insert -- move the occupant and the run above it up one -- and kill,
 and both are flags on this command: `-a`, `-b` and `-k`
 (`cmd-move-window.c:93`). The insert is `make_room_at`, which
-`new-window -a` already used. Lillecarl/pymux#191,
-Lillecarl/pymux#343.
+`new-window -a` already used. Lillecarl/pyterm#193,
+Lillecarl/pyterm#345.
 """
 
 from __future__ import annotations

@@ -6,7 +6,7 @@ await, so two commands of two clients can be in flight at once, and
 one answer on the server would hand each of them the other's output.
 A task copies the context that started it, so the answer a
 `run-command` packet makes belongs to that packet alone.
-Lillecarl/pymux#87.
+Lillecarl/pyterm#89.
 """
 
 from __future__ import annotations

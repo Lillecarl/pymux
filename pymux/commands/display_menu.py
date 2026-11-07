@@ -22,7 +22,7 @@ def display_menu(pymux: Pymux, args: argparse.Namespace) -> None:
 
     The menu is modal: a key of an entry runs it, Escape or ctrl+c
     leaves without taking anything, and clicking a line runs it.
-    Lillecarl/pymux#297.
+    Lillecarl/pyterm#299.
     """
     entries: list[tuple[str, str, str]] = []
     rest = list(args.entries)

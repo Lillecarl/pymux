@@ -18,7 +18,7 @@ __all__ = ["HSplit", "Node", "NodeKey", "Split", "VSplit", "node_key", "panes_of
 #: What names one node of a window's layout tree: its kind and its id.
 #: A pane and a split count their ids apart, so the kind keeps them
 #: apart. Keys are values, not objects, so a snapshot can write them
-#: and a new process can read them back. Lillecarl/pymux#399.
+#: and a new process can read them back. Lillecarl/pyterm#401.
 NodeKey = tuple[str, int]
 
 

@@ -4,7 +4,7 @@ One key has one binding, whatever a person calls it.
 `bind-key` and `unbind-key` both take a name, and one key has several:
 "ctrl+a", "C-a" and "c-a" all reach `Keys.ControlA`. The store was
 keyed by the text, so each of those was a binding of its own.
-Lillecarl/pymux#235.
+Lillecarl/pyterm#237.
 """
 
 from __future__ import annotations
@@ -105,7 +105,7 @@ def test_a_semicolon_is_the_key_being_bound_under_either_spelling(pymux, spellin
 
     The test that keeps the splitter off a bind read the word as typed, so it
     held for the long name and not for the alias a tmux configuration
-    actually writes. Lillecarl/pymux#313.
+    actually writes. Lillecarl/pyterm#315.
     """
     problems = complaints(pymux, "%s -n ';' new-window" % (spelling,))
 

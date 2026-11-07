@@ -16,7 +16,7 @@ def rename_pane(pymux: Pymux, args: argparse.Namespace) -> None:
     Rename a pane.
 
     The one `-t` names, else the pane a socket command came from, else
-    the active pane. Lillecarl/pymux#506.
+    the active pane. Lillecarl/pyterm#508.
     """
     pane = find_pane(pymux, args.target_pane)
     if pane is None:

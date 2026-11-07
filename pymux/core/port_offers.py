@@ -1,7 +1,7 @@
 """
 Offer to forward a port when a program in a pane starts listening on
 one, the way VS Code's remote editor does. Only while `forward-offers`
-is on. Lillecarl/pymux#438.
+is on. Lillecarl/pyterm#440.
 
 **A poll, because nothing says.** No call tells a process that another
 one bound a port, short of netlink. So every `OFFER_POLL` seconds this

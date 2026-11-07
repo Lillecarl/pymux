@@ -1,6 +1,6 @@
 """
 Link rules: text the nearest `pymux.toml` makes a link of, which
-`show-urls` labels with the other links. Lillecarl/pymux#776.
+`show-urls` labels with the other links. Lillecarl/pyterm#778.
 """
 
 from __future__ import annotations

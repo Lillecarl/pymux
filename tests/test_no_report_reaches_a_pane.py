@@ -1,6 +1,6 @@
 """
 What iTerm2's stuck-state banners look for: a report from the terminal
-that reached a program as text. Lillecarl/pymux#792.
+that reached a program as text. Lillecarl/pyterm#794.
 
 The pane's program asks for no mouse, no bracketed paste and no in-band
 resize, and writes every byte it reads to a file. The client sends what

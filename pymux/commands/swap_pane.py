@@ -18,7 +18,7 @@ def swap_pane(pymux: Pymux, args: argparse.Namespace) -> None:
     # -U takes the pane below and -D the one above: the pair is the
     # mirror of tmux's, which sends -U up. The inversion is deliberate
     # and recorded: tests/reference/tmux_compat/divergences.toml.
-    # Lillecarl/pymux#400. Each flag passes exactly one of the two:
+    # Lillecarl/pyterm#402. Each flag passes exactly one of the two:
     # with neither, `rotate` turns every pane of the window.
     the_window(pymux, None).rotate(with_pane_before_only=args.D, with_pane_after_only=args.U)
 

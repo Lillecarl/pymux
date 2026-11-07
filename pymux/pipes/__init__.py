@@ -26,7 +26,7 @@ def bind_and_listen_on_socket(
     clients. The two are apart because they happen at two times: the
     bind is what names the server and it happens before `daemonize`
     forks, and the accepting needs the loop that the fork's child
-    starts. Lillecarl/pymux#87.
+    starts. Lillecarl/pyterm#89.
 
     :param accept_callback: Callback is called with a `PipeConnection` as
         argument.

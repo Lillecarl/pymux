@@ -35,12 +35,12 @@ def list_forwards(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None] | N
 
     A line pymux opened by itself, for a loopback URL, is marked
     `(pymux)`: it is reaped when idle, so it is not a person's to keep.
-    Lillecarl/pymux#436. Lillecarl/pymux#448.
+    Lillecarl/pyterm#438. Lillecarl/pyterm#450.
 
     **The time it has left moves between reports**, so the listing asks
     each client that answers for its table first. One in use shows how
     many connections it carries instead, because its clock has not
-    started. Lillecarl/pymux#487.
+    started. Lillecarl/pyterm#489.
     """
     asked = [client.client for client in pymux.clients if client.client.answers_forwards]
     if asked:

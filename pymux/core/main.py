@@ -110,8 +110,8 @@ class Pymux:
     #: An option's value is saved, because a person may have set it
     #: since the configuration file was read; the tables that describe
     #: the options are rebuilt. The listening socket's fd passes to the
-    #: new server under the same number (Lillecarl/pymux#553).
-    #: Lillecarl/pymux#399.
+    #: new server under the same number (Lillecarl/pyterm#555).
+    #: Lillecarl/pyterm#401.
     KEEP: ClassVar[dict[str, Keep]] = {
         # Sessions, and the counters that name them.
         "sessions": Keep.SAVED,
@@ -219,7 +219,7 @@ class Pymux:
 
         self.options = ServerOptions()
         self.options.owner = self
-        #: What every session reads unless it set its own. Lillecarl/pymux#756.
+        #: What every session reads unless it set its own. Lillecarl/pyterm#758.
         self.session_defaults = SessionOptions()
         self.session_defaults.owner = self
         # `--log-level` told the logger before this server existed.
@@ -236,13 +236,13 @@ class Pymux:
         # pysmithay is installed and `wayland-server` is on. `wayland.py` says why.
         self.wayland = WaylandServer(self)
         # The light or dark scheme those panes' programs read. `portal.py`
-        # says where. Lillecarl/pymux#812.
+        # says where. Lillecarl/pyterm#814.
         self.portal = Portal(self)
         # Sound to and from the client used last. `audio.py` says what
-        # each mode costs. Lillecarl/pymux#657.
+        # each mode costs. Lillecarl/pyterm#659.
         self.audio = AudioServer(self)
         #: Browsers programs here drive on a client's machine.
-        #: Lillecarl/pymux#653.
+        #: Lillecarl/pyterm#655.
         self.browsers = Browsers(self)
 
         self.actions = ActionLog()
@@ -272,7 +272,7 @@ class Pymux:
         #: The panes that say a progress (OSC 9 ; 4), so the window list
         #: walks no panes while none does. A pane that goes stays until
         #: it would have cleared it, which costs a walk and no wrong
-        #: answer. Lillecarl/pymux#788.
+        #: answer. Lillecarl/pyterm#790.
         self.progressing: set[PaneId] = set()
 
         # When no panes are available.
@@ -283,7 +283,7 @@ class Pymux:
         #: True when this server draws on the one terminal it runs in.
         #: `pymux integrated` is that: a socket may still be bound, for
         #: commands, and a client that arrives over it cannot attach.
-        #: Lillecarl/pymux#159.
+        #: Lillecarl/pyterm#161.
         self._serves_one_terminal = False
 
         self.connections: list[ServerConnection] = []
@@ -293,7 +293,7 @@ class Pymux:
         self.overlays = Overlays(self)
         self.forward_requests = ForwardRequests(self)
         #: The ports a pane began to listen on, offered to a client
-        #: that can forward them. Lillecarl/pymux#438.
+        #: that can forward them. Lillecarl/pyterm#440.
         self.port_offers = PortOffers(self)
         self.waking = Waking(self)
         self.focus = Focus(self)
@@ -304,16 +304,16 @@ class Pymux:
         self.drag_and_drop = DragAndDrop(self)
         self.kitty_transfers = KittyTransfers(self)
         #: The links to other servers whose panes this one mirrors.
-        #: Lillecarl/pymux#759.
+        #: Lillecarl/pyterm#761.
         self.peers = Peers(self)
 
         #: The task group every route runs in. `running()` owns it, so
         #: it is there for exactly as long as this server serves, and
-        #: `None` before and after. Lillecarl/pymux#87.
+        #: `None` before and after. Lillecarl/pyterm#89.
         self.tasks: anyio.abc.TaskGroup | None = None
         self.stall_stacks: TextIO | None = None
 
-        #: The corner that says an error was logged. Lillecarl/pymux#241.
+        #: The corner that says an error was logged. Lillecarl/pyterm#243.
         self.error_notice = ErrorNotice(self)
 
         #: The asyncio loop under anyio, for inspection only: `introspect`
@@ -337,7 +337,7 @@ class Pymux:
         #: The channels of `wait-for`, by name. A channel exists for
         #: as long as it remembers something: a signal nobody took, a
         #: lock somebody holds, or somebody waiting.
-        #: Lillecarl/pymux#302.
+        #: Lillecarl/pyterm#304.
         self.wait_channels: dict[str, WaitChannel] = {}
 
         #: The jobs of `run`, by id. A job is a command with pipes
@@ -361,7 +361,7 @@ class Pymux:
         self.created = time.time()
         #: Which server this is, for a peer: a session whose path of
         #: servers holds it already is one this server mirrors back to
-        #: itself (`mirror.tree`). Lillecarl/pymux#759.
+        #: itself (`mirror.tree`). Lillecarl/pyterm#761.
         self.server_id = uuid.uuid4().hex
 
         #: What this server has done since it started. `pymux counters`
@@ -370,7 +370,7 @@ class Pymux:
         self.counters = introspect.Counters()
 
         #: The id each pane image has on the terminals of the clients,
-        #: one answer for all of them. Lillecarl/pymux#600.
+        #: one answer for all of them. Lillecarl/pyterm#602.
         self.outer_image_ids = OuterImageIds()
 
         # Keep track of all the panes, by ID. (For quick lookup.)
@@ -378,7 +378,7 @@ class Pymux:
         #: Set from an upgrade's last snapshot write to its exec. A command
         #: then changes what the snapshot no longer describes: a pane
         #: killed in that window was neither killed nor reaped by either
-        #: image. Lillecarl/pymux#740.
+        #: image. Lillecarl/pyterm#742.
         self.refusing_commands = False
 
         # Socket information.
@@ -399,14 +399,14 @@ class Pymux:
 
         #: What a loaded snapshot says about each client, by the id it
         #: keeps across reattaches, until that client comes back.
-        #: `snapshot/read.py` fills it. Lillecarl/pymux#399.
+        #: `snapshot/read.py` fills it. Lillecarl/pyterm#401.
         self.returning_clients: dict[str, dict[str, Any]] = {}
 
         # `new-session -x -y` on the route that starts a server: the
         # session is made here and its first window comes later, in
         # `startup`, so this is early enough for the program in that
         # window to be told the right size from its first byte.
-        # Lillecarl/pymux#459.
+        # Lillecarl/pyterm#461.
         if size_with_no_client is not None:
             first.default_size = size_with_no_client
 
@@ -414,18 +414,18 @@ class Pymux:
         # session's own, on `Session.environment`. A value of None is
         # an unset: the name leaves the environment of a new pane, so
         # a session unset falls through to the global value rather
-        # than to nothing. Lillecarl/pymux#270.
+        # than to nothing. Lillecarl/pyterm#272.
         self.global_environment: dict[str, str | None] = {}
 
         # What the command line and the prompts of every client took.
         # The buffers append through `leave_command_mode`, the grey
         # suggestion reads it, and up and down walk it.
-        # Lillecarl/pymux#305.
+        # Lillecarl/pyterm#307.
         self.prompt_history = InMemoryHistory()
 
         # The named buffers a `set-buffer` fills. The one buffer a
         # pane pastes from stays `clipboard`; a name here is tmux's
-        # `-b`. Lillecarl/pymux#303.
+        # `-b`. Lillecarl/pyterm#305.
         self.named_buffers: dict[str, str] = {}
 
     def create_session(self, name: str | None = None) -> Session:
@@ -452,7 +452,7 @@ class Pymux:
         # made rather than on the one somebody had just created. tmux
         # stamps a session's activity from its creation time
         # (`session.c:154`) and ranks by that (`cmd-find.c:146`).
-        # Lillecarl/pymux#473.
+        # Lillecarl/pyterm#475.
         self._uses += 1
         session.last_used = self._uses
         return session
@@ -501,7 +501,7 @@ class Pymux:
         client_state.previous_session = client_state.session
         client_state.session = session
         # The session this client now watches takes what the client
-        # reported when it attached. Lillecarl/pymux#271.
+        # reported when it attached. Lillecarl/pyterm#273.
         take_environment_from(self, client_state)
         self.client_was_used(client_state)
         self.invalidate(Woke.SESSION_CHANGED)
@@ -516,7 +516,7 @@ class Pymux:
         one client can run while another client is the current one. A
         caller that holds the client reads `client_state.session`
         instead. `Arrangement.get_active_window_for` says the same about
-        the window, one level down. Lillecarl/pymux#323.
+        the window, one level down. Lillecarl/pyterm#325.
 
         Nothing asks -- a start-up command, a timer -- falls back to the
         session a person looked at last.
@@ -541,7 +541,7 @@ class Pymux:
 
         One is taken when no session holds a window, because then the
         answer is a message and there is no better session to give it
-        about. Lillecarl/pymux#473.
+        about. Lillecarl/pyterm#475.
         """
         holding = [one for one in self.sessions if one.arrangement.windows]
         return max(holding or self.sessions, key=lambda session: session.last_used)
@@ -612,7 +612,7 @@ class Pymux:
         asking is the client the answer is about. The plane asks every
         watcher's `StatusLine.rows` instead, and
         `any_watcher_shows_pane_status`, which are not this one.
-        Lillecarl/pymux#471.
+        Lillecarl/pyterm#473.
         """
         options, full_screen = self._asking_for_chrome()
         return options.status and not full_screen
@@ -627,7 +627,7 @@ class Pymux:
         """
         The options of the asking client's session, and whether it is
         full screen, from one lookup of the client: every frame asks
-        both, several times. Lillecarl/pymux#770.
+        both, several times. Lillecarl/pyterm#772.
         """
         try:
             state = self.get_client_state()
@@ -662,7 +662,7 @@ class Pymux:
 
         Both routes enter it, and so does the test harness. A
         route that built its own would be a route the harness could
-        not be. Lillecarl/pymux#87.
+        not be. Lillecarl/pyterm#89.
         """
         async with anyio.create_task_group() as tasks:
             self.tasks = tasks
@@ -732,7 +732,7 @@ class Pymux:
         answered. A dialog put on that one is a dialog nobody sees: a
         `display-message` typed in a pane said nothing at all, and a
         `confirm-before` asked a question no one could answer, so its
-        command never ran. Lillecarl/pymux#272.
+        command never ran. Lillecarl/pyterm#274.
 
         So a real client answers for itself, and the fake one hands over
         to the client a person used last -- the rule
@@ -741,7 +741,7 @@ class Pymux:
         A listing does not come through here: `show_listing` and
         `answer` write to stdout when a command arrived over the command
         line, which is where the person who typed it is looking.
-        Lillecarl/pymux#288, #289.
+        Lillecarl/pyterm#290, #291.
         """
         try:
             asking = self.get_client_state()
@@ -774,7 +774,7 @@ class Pymux:
         `if (c_loop->session != s || c == c_loop) continue;`
         (`cmd-attach-session.c:129`) -- and pymux had it written twice,
         once for the flag on the `start-gui` packet and once for the
-        command. Lillecarl/pymux#345, Lillecarl/pymux#349.
+        command. Lillecarl/pyterm#347, Lillecarl/pyterm#351.
 
         **A command connection is not a client**, and `clients` already
         says so: the temporary client a command runs under is nobody,
@@ -803,7 +803,7 @@ class Pymux:
             # The window waits for its process. A command that arrives
             # meanwhile waits too, where it answered "no current
             # window"; tmux opens it before an attach returns.
-            # Lillecarl/pymux#571.
+            # Lillecarl/pyterm#573.
             await self._first_window.wait()
 
     def configure(self):
@@ -832,7 +832,7 @@ class Pymux:
         self._uses += 1
         client_state.last_used = self._uses
         client_state.session.last_used = self._uses
-        # The panes take this client's cell. Lillecarl/pymux#753.
+        # The panes take this client's cell. Lillecarl/pyterm#755.
         self.terminals.sync_cell_size()
         self.terminals.sync_color_scheme()
 
@@ -840,7 +840,7 @@ class Pymux:
         """
         Note that a person at another server just used a mirror of a
         pane here. Its terminal then speaks for the panes as a client's
-        does (`Terminals.cell_size`). Lillecarl/pymux#759.
+        does (`Terminals.cell_size`). Lillecarl/pyterm#761.
         """
         was_latest = link.last_used > 0 and link.last_used == self._uses
         self._uses += 1
@@ -896,7 +896,7 @@ class Pymux:
         # DEBUG: a server draws eleven frames a second when a pane
         # animates, and a line each is what made one log 86 MB in four
         # days. `pymux counters` holds the same reasons with nothing
-        # written down. Lillecarl/pymux#248.
+        # written down. Lillecarl/pyterm#250.
         logger.debug("Drawing %s of the clients: %s", len(self.apps), reason)
 
         # **Before the invalidates, and here rather than on the path a
@@ -919,7 +919,7 @@ class Pymux:
         self.terminals.sync_keyboard_source_flags()
         # Mirrors: what a client here shows streams, and a peer that
         # watches this server hears that its sessions may have changed.
-        # Lillecarl/pymux#759.
+        # Lillecarl/pyterm#761.
         self.peers.sync_sight()
         for link in self.peer_links():
             if link.watching:
@@ -1017,7 +1017,7 @@ class Pymux:
         commands too, over the socket and under a temporary client, so
         it can send that flag itself and answer a question nobody
         asked. The flag counts only when this says so.
-        Lillecarl/pymux#443, Lillecarl/pymux#440.
+        Lillecarl/pyterm#445, Lillecarl/pyterm#442.
         """
         try:
             asking = self.get_client_state()
@@ -1041,7 +1041,7 @@ class Pymux:
         """
         Whose answer a legacy pane gets for a key from `client`: the
         terminal it sits at, by its XTVERSION answer or its TERM, or
-        else "key-profile". Lillecarl/pymux#706.
+        else "key-profile". Lillecarl/pyterm#708.
         """
         named = client.client.replies.identity.key_profile if client is not None else ""
         options = client.session.options if client is not None else self.session_defaults
@@ -1073,7 +1073,7 @@ class Pymux:
         Whatever has not ended `GRACE` seconds later gets `stop`'s
         SIGKILL. `stop` alone SIGKILLs at once, and every shell lost the
         lines typed before `kill-server`. tmux hangs its panes up too.
-        Lillecarl/pymux#679.
+        Lillecarl/pyterm#681.
         """
         running = [pane.process for pane in self.panes_by_id.values() if not pane.process.is_terminated]
         for process in running:
@@ -1137,7 +1137,7 @@ class Pymux:
         the server's task group and the key is done. The socket route
         does the other thing: `Requests.run` awaits,
         so `pymux wait-for done` holds the client that typed it.
-        Lillecarl/pymux#87.
+        Lillecarl/pyterm#89.
         """
         self.spawn_command(handle_command(self, command))
 
@@ -1188,7 +1188,7 @@ class Pymux:
 
         # Not `get_client_state`. A command from a pane runs under a fake
         # client that draws nothing, and a message left there is a message
-        # nobody sees. Lillecarl/pymux#272.
+        # nobody sees. Lillecarl/pyterm#274.
         client_state = self.the_client_to_tell()
         if client_state is not None:
             client_state.message = message
@@ -1233,7 +1233,7 @@ class Pymux:
         answer. `startup()` runs it while the first application is still
         being built, so `show_message` finds no client state and drops
         the message. So it is kept, logged, and shown to the first
-        client that arrives. Lillecarl/pymux#38.
+        client that arrives. Lillecarl/pyterm#40.
         """
         if self.sourcing is not None:
             message = "%s: %s" % (self.sourcing, message)
@@ -1272,7 +1272,7 @@ class Pymux:
         This took an app and then read `get_app()`, so
         `attach-session -d` detached the person who typed it, once for
         each client it meant to take the session from, and left every
-        one of them attached. Lillecarl/pymux#347.
+        one of them attached. Lillecarl/pyterm#349.
         """
         client_state = self.client_of(app)
         if client_state is not None:
@@ -1294,7 +1294,7 @@ class Pymux:
         # looked at last, which is what `attach-session` with no `-t`
         # means in tmux. The fake client of a socket command names the
         # session of the pane the command was typed in, which the
-        # run-command packet carries. Lillecarl/pymux#323.
+        # run-command packet carries. Lillecarl/pyterm#325.
         if session is None:
             session = self.last_used_session
 
@@ -1351,7 +1351,7 @@ class Pymux:
         time, with its pipe input and its parser. Nothing draws for
         them -- `send_packet` answers a closed connection with nothing
         -- so the cost is memory and a longer walk for every broadcast.
-        Lillecarl/pymux#226.
+        Lillecarl/pyterm#228.
         """
         client = connection.client
         gone = self._client_states.pop(client, None) if client is not None else None

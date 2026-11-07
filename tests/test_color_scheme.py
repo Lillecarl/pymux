@@ -1,6 +1,6 @@
 """
 Whether the screen in front of the person is light or dark, which the
-portal tells the programs in window panes. Lillecarl/pymux#812.
+portal tells the programs in window panes. Lillecarl/pyterm#814.
 
 The serving is `test_portal.py`'s, in `checks.pymux-wayland`; this is
 the deciding, which needs no bus.

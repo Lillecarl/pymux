@@ -4,7 +4,7 @@
 # prompt-toolkit has to be one upstream could take: that source only names
 # the functions a kernel replaces, and the Rust is here, beside the program
 # that installs it. `pyte/pyte_rs/default.nix` says why this is not
-# `mkProject`. Lillecarl/pymux#566.
+# `mkProject`. Lillecarl/pyterm#568.
 {
   lib,
   stdenv,
@@ -94,7 +94,7 @@ let
 
   # prompt-toolkit's whole suite, with the Rust row and kernels installed
   # by `unit/conftest.py`, which goes in over the suite's own tests.
-  # Lillecarl/pymux#570.
+  # Lillecarl/pyterm#572.
   #
   #     nix build --file . checks.prompt-toolkit-rs-unit
   checks.unit = suite {

@@ -105,7 +105,7 @@ class Serving:
         `socket_name` is the snapshot's, and the fd has to be listening
         on that name: a number is only what the old server wrote down.
         Binding again is no answer, because this process still listens
-        there. Lillecarl/pymux#408.
+        there. Lillecarl/pyterm#410.
         """
         from ..pipes.posix import BACKLOG, PosixSocketListener
 
@@ -130,7 +130,7 @@ class Serving:
         # integrated server draws on the terminal it runs in, and
         # this socket is for commands. The question is asked at the
         # moment a client arrives, because the route is chosen after
-        # the bind. Lillecarl/pymux#159.
+        # the bind. Lillecarl/pyterm#161.
         may_attach = not self.pymux._serves_one_terminal
         context = contextvars.copy_context()
         connection = context.run(lambda: ServerConnection(self.pymux, pipe_connection, may_attach=may_attach))
@@ -159,7 +159,7 @@ class Serving:
         async def serve() -> None:
             try:
                 # This server forks its programs, and an upgrade execs in
-                # place to keep them. Lillecarl/pymux#736.
+                # place to keep them. Lillecarl/pyterm#738.
                 async with self.pymux.running():
                     if resumed is not None:
                         await resumed()
@@ -180,7 +180,7 @@ class Serving:
             # A daemon's stderr is /dev/null, so a crash that is not
             # written down is a crash nobody can read. The report goes
             # beside the log, and the log's last line names it.
-            # Lillecarl/pymux#736.
+            # Lillecarl/pyterm#738.
             report = introspect.write_crash_report(error, started)
             logger.critical("Pymux crashed: %r. The report is %s.", error, report, exc_info=error)
             raise
@@ -223,7 +223,7 @@ class Serving:
         half a session that the first one ends: `ctrl+b d` here takes
         the process with it. So `start-gui` on that socket is answered
         with `server.CANNOT_ATTACH` and the connection closes, and
-        commands are what the socket serves. Lillecarl/pymux#159.
+        commands are what the socket serves. Lillecarl/pyterm#161.
 
         The call returns when the server closes the connection: the
         last pane exited, somebody ran `kill-server`, or the client
@@ -234,7 +234,7 @@ class Serving:
         self.pymux.server_starts()
 
         #: The client, kept so that the hangup of `attach -x` can be
-        #: sent after the loop has gone. Lillecarl/pymux#347.
+        #: sent after the loop has gone. Lillecarl/pyterm#349.
         attached: list[MemoryClient] = []
 
         async def run() -> None:
@@ -252,7 +252,7 @@ class Serving:
                     client = MemoryClient(client_end)
                     # One process reads the file twice: as the server,
                     # for everything, and as the client, for the lines
-                    # that are about this terminal. Lillecarl/pymux#223.
+                    # that are about this terminal. Lillecarl/pyterm#225.
                     client.config_file = self.pymux.source_file
                     client.chosen_name = chosen_name
                     client.hang_up_others = hang_up_others
@@ -260,7 +260,7 @@ class Serving:
                     # can reach, which is a thin thing to want; it is
                     # passed on all the same, because the flag means
                     # the same wherever it is written and `ctrl+b d`
-                    # is still the way out. Lillecarl/pymux#467.
+                    # is still the way out. Lillecarl/pyterm#469.
                     client.read_only = read_only
                     attached.append(client)
                     await client.attach(
@@ -279,8 +279,8 @@ class Serving:
                 # the loop, and `anyio.run` waits for the executor
                 # threads on its way out. Without this the client put
                 # the terminal back and the person was left looking at
-                # their shell with no prompt. Lillecarl/pymux#109, and
-                # the place it is written is Lillecarl/pymux#87.
+                # their shell with no prompt. Lillecarl/pyterm#111, and
+                # the place it is written is Lillecarl/pyterm#89.
                 self.pymux.stop()
 
         try:

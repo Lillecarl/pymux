@@ -8,7 +8,7 @@
  * browser" and "nothing at all". Two faults reached a person that way.
  * This holds the part that is a table of cases, which is the part worth
  * running: `tests/keys.test.mjs` under `node --test`.
- * Lillecarl/pymux#468.
+ * Lillecarl/pyterm#470.
  *
  * Nothing here touches the DOM. `KeyPress` is structural, so a real
  * `KeyboardEvent` satisfies it and a test hands it an object literal.

@@ -7,7 +7,7 @@ on, because that is the only place two things exist: which pane each
 bar belongs to, and which pane is beside it.
 
 Every pane is given a name, so a bar says out loud which panes it is
-naming. Lillecarl/pymux#207.
+naming. Lillecarl/pyterm#209.
 """
 
 from __future__ import annotations
@@ -53,7 +53,7 @@ def bars_of(pymux, draw, panes):
     depend on how the window was divided.
 
     `None` for a pane the frame did not draw. A pane with no part of it
-    in the view is not written at all (Lillecarl/pymux#224), so it has
+    in the view is not written at all (Lillecarl/pyterm#226), so it has
     no bar on the screen -- which does not stop the bars that *are*
     drawn from naming it.
     """
@@ -141,7 +141,7 @@ async def test_strip_names_column_that_is_off_screen():
     edge of the screen, and a name is how a person knows what is out
     there. Two cells of the next column used to be the answer, which
     said that something was there and nothing about what.
-    Lillecarl/pymux#198, Lillecarl/pymux#209.
+    Lillecarl/pyterm#200, Lillecarl/pyterm#211.
 
     Two columns of half a window fit exactly, so the column on one
     side of the middle one is always on the screen. The one asked
@@ -160,7 +160,7 @@ async def test_strip_names_column_that_is_off_screen():
         # drawn: `select-pane` read where the panes were drawn, and
         # nothing had been. A strip answers from its plan now, so the
         # key works from the first keystroke and the scrolling is the
-        # frame's job alone. Lillecarl/pymux#217.
+        # frame's job alone. Lillecarl/pyterm#219.
         draw()
 
         # Onto the middle column, the way a key does it.
@@ -176,6 +176,6 @@ async def test_strip_names_column_that_is_off_screen():
         # **That is the point.** A bar names a neighbour out of the
         # plan, so it can name a pane that was never drawn -- where the
         # frame was once the only thing that could answer.
-        # Lillecarl/pymux#217, Lillecarl/pymux#224.
+        # Lillecarl/pyterm#219, Lillecarl/pyterm#226.
         drawn_at = state.layout_manager.pane_write_positions
         assert panes[0] not in drawn_at, drawn_at

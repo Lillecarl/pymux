@@ -26,7 +26,7 @@ def record_client(pymux: Pymux, args: argparse.Namespace) -> None:
     resize, so a replay shows what the person saw: every pane, the
     borders, the status line, whatever floats. The files are the three
     `record-pane` writes, in the same place, and `record-export` turns
-    either into a web replay or an asciicast. Lillecarl/pymux#612.
+    either into a web replay or an asciicast. Lillecarl/pyterm#614.
 
     The recording starts with the whole screen drawn again, so it does
     not begin as changes to a screen it never held. It ends when the
@@ -36,7 +36,7 @@ def record_client(pymux: Pymux, args: argparse.Namespace) -> None:
     the work is there, so the files go there too, over the peer link,
     and land in its recordings directory. `-l` keeps them here, and so
     does a link that is down or too old when the recording ends.
-    Lillecarl/pymux#955.
+    Lillecarl/pyterm#957.
     """
     client_state = the_client(pymux, args.target_client, "record-client")
     client = client_state.client

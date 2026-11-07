@@ -24,7 +24,7 @@ C-b` reads exactly as one chord would.
 **The chord is built and not looked up.** `keys.key_named` is the
 one translation from a base key and its modifier bits to the key
 prompt_toolkit binds, and the reader of a real key press uses the same
-one. A second table of every combination is what Lillecarl/pymux#234
+one. A second table of every combination is what Lillecarl/pyterm#236
 cost ctrl+Home: `PYMUX_TO_PROMPT_TOOLKIT_KEYS` writes out `C-Left`,
 `C-Right`, `C-Up` and `C-Down`, so ctrl on the four arrows worked and
 ctrl on the other twenty-two named keys did not.
@@ -286,7 +286,7 @@ def event(text: str) -> KeyEvent:
     **The form a key goes to a pane in.** The other reading, into
     prompt_toolkit keys, is for binding and never reaches a pane. They
     are two roads because one through the legacy encoding loses
-    everything that encoding cannot carry. Lillecarl/pymux#237.
+    everything that encoding cannot carry. Lillecarl/pyterm#239.
 
     Raises `ValueError` for a name that no key has.
     """
@@ -366,7 +366,7 @@ def key_however_it_is_written(text: str) -> tuple[str, ...]:
     configuration file already says can change meaning. Then the tmux
     name re-spelled as a chord, which is what fixes ctrl+Home: "C-Home"
     is in no table, and until now `send-keys C-Home` typed the six
-    letters into the pane. Lillecarl/pymux#234.
+    letters into the pane. Lillecarl/pyterm#236.
 
     The third reading only ever sees a name the second one refused, so
     it can add keys and cannot change one.
@@ -374,7 +374,7 @@ def key_however_it_is_written(text: str) -> tuple[str, ...]:
     "Any" reads before all of them, as the key that is every key. No
     keyboard sends it and `send-keys` must never, but a table binds it:
     `bind-key -T <mode> Any noop` is what makes a mode strict, and
-    that is the one way to write it. Lillecarl/pymux#394.
+    that is the one way to write it. Lillecarl/pyterm#396.
 
     **One key, and never a sequence.** `send-keys` sends what it cannot
     read as literal text, the way tmux does, so reading a space here
@@ -495,7 +495,7 @@ def _names_offered() -> list[tuple[str, str]]:
     Every name a completer offers, with what to say beside it, in the
     order they are offered.
 
-    **The order is the feature.** Lillecarl/pymux#220 exists because a
+    **The order is the feature.** Lillecarl/pyterm#222 exists because a
     laptop has no Home key and no function row, so those are the names
     a person comes here for and they come first. The rest are reachable
     and are not in the way.

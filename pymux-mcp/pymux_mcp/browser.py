@@ -1,6 +1,6 @@
 """
 A browser for an agent to drive, over the DevTools protocol, where a
-person can watch it. Lillecarl/pymux#822.
+person can watch it. Lillecarl/pyterm#824.
 
 Two kinds speak that protocol: Chromium, and qutebrowser through its
 QtWebEngine.

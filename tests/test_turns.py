@@ -1,6 +1,6 @@
 """
 `Turns`: one writer at a time, and sound ahead of whatever waits.
-Lillecarl/pymux#657.
+Lillecarl/pyterm#659.
 """
 
 from __future__ import annotations

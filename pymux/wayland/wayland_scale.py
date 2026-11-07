@@ -4,7 +4,7 @@ How dense a Wayland window in a pane draws: `wayland-scale`.
 No terminal reports its DPI, so `auto` reads it off the cell. A cell
 `NOMINAL_CELL_HEIGHT` pixels high is scale 1; a Retina kitty's cell is
 about twice that, and so is its scale. A window's UI therefore grows
-with the terminal's font. Lillecarl/pymux#637.
+with the terminal's font. Lillecarl/pyterm#639.
 
 The value is `auto`, `auto+N`, `auto-N`, `auto*N`, or a plain number.
 """

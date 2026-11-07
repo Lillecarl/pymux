@@ -53,7 +53,7 @@ def session_holder(pymux: Pymux, args: argparse.Namespace) -> OwnOptions | Pymux
     **A configuration file writes the defaults**, `-g` or not. pymux
     makes its first session before the file is read, and a line meant
     for every session must not become that one session's own value.
-    Lillecarl/pymux#756.
+    Lillecarl/pyterm#758.
     """
     if getattr(args, "g", 0):
         return pymux
@@ -70,7 +70,7 @@ def _not_here(pymux: Pymux, name: str, scope: Scope) -> str:
     **A name that lives in another scope names the command that takes
     it.** A bare "invalid option" is what a person sees the first time
     they run a configuration file after an option moves -- `full-screen`
-    became one terminal's (Lillecarl/pymux#471) -- and it reads as a
+    became one terminal's (Lillecarl/pyterm#473) -- and it reads as a
     typo rather than as a line to change.
     """
     for other, table in pymux.option_tables.items():
@@ -97,7 +97,7 @@ def set_option(
     -gg: the default, and every session's own value dropped, so the
         default reaches every session. tmux counts no `-g`, so it reads
         this as `-g` and a tmux configuration keeps working.
-        Lillecarl/pymux#756.
+        Lillecarl/pyterm#758.
 
     -t: the session whose own value this is. Without `-t` or `-g`, the
         caller's session.
@@ -109,7 +109,7 @@ def set_option(
     With no value, tmux prints what the option holds, and pymux does
     the same. Without it the command line was write-only: a person
     could change `mouse` and had no way to see what it was.
-    Lillecarl/pymux#292.
+    Lillecarl/pyterm#294.
     """
     name = args.option
     value = args.value
@@ -131,7 +131,7 @@ def set_option(
         # no window that is open, which is what it means in tmux.
         # It is the only way a configuration file can set a window
         # option, because that file is read before there is a
-        # window. Lillecarl/pymux#199.
+        # window. Lillecarl/pyterm#201.
         if scope is Scope.WINDOW and args.g:
             option.set_default(pymux, value)
         else:

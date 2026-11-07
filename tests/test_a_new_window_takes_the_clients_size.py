@@ -3,7 +3,7 @@ A window made where nobody watches takes its size from the clients on
 the server, by `window-size`, so an agent's window is the size the
 person's would be. It takes it once, when it is made: a client that
 resizes later never resizes a program nobody watches.
-Lillecarl/pymux#817.
+Lillecarl/pyterm#819.
 
 `test_a_session_nobody_watches.py` holds the sizes `new-session -x -y`
 names, which win over this.

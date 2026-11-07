@@ -3,7 +3,7 @@ The theme a terminal is closest to.
 
 A client asks its terminal what colours it draws with, and pymux holds
 hundreds of themes that name the same colours. So the theme of a
-terminal is a search, not something to invent. Lillecarl/pymux#346.
+terminal is a search, not something to invent. Lillecarl/pyterm#348.
 
 **The round trip is what judges the search.** Feed a theme's own
 colours in and that theme has to come back: a scheme is exactly zero
@@ -159,7 +159,7 @@ def _reply(connection, code: str, payload: str) -> None:
 
 
 async def test_a_client_takes_the_theme_of_its_terminal():
-    "The whole of Lillecarl/pymux#346, over a connection."
+    "The whole of Lillecarl/pyterm#348, over a connection."
     async with over_connection() as session:
         state, _ = await session.attach("here", SIZE)
         assert state.options.theme == NEAREST

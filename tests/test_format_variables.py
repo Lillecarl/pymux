@@ -54,7 +54,7 @@ async def test_the_hostname_is_spelled_the_way_tmux_spells_it(pymux, monkeypatch
     `#H` is the whole name and `#h` is the name without its domain.
     That is round this way in tmux (`format.c`: "host" is H and
     "host_short" is h), and pymux had `#h` answering the whole name and
-    no `#H` at all. Lillecarl/pymux#331.
+    no `#H` at all. Lillecarl/pyterm#333.
     """
     monkeypatch.setattr("socket.gethostname", lambda: "dynhetz.example.net")
 
@@ -75,7 +75,7 @@ async def test_the_client_is_what_a_client_variable_reads(pymux):
     """
     `#{client_hostname}` is the machine the client runs on, which only
     a client can say: `#{host}` here is the server's own, and over ssh
-    those are two machines. Lillecarl/pymux#287, Lillecarl/pymux#330.
+    those are two machines. Lillecarl/pyterm#289, Lillecarl/pyterm#332.
     """
 
     class Role:
@@ -96,7 +96,7 @@ async def test_a_client_variable_with_no_client_is_empty(pymux):
 async def test_the_mode_over_a_pane_is_named_the_way_tmux_names_it(pymux):
     """
     `#{pane_mode}` is the name of what is drawn over the program, and
-    tmux's names are `copy-mode` and `clock-mode`. Lillecarl/pymux#363.
+    tmux's names are `copy-mode` and `clock-mode`. Lillecarl/pyterm#365.
     """
     pane = _context(pymux).pane
 
@@ -110,7 +110,7 @@ async def test_a_pane_showing_the_clock_is_in_a_mode(pymux):
     """
     `#{pane_in_mode}` read copy mode alone, so a pane drawing the clock
     answered "0" while `#{pane_mode}` named one. tmux counts the whole
-    stack of modes (`format_cb_pane_in_mode`). Lillecarl/pymux#363.
+    stack of modes (`format_cb_pane_in_mode`). Lillecarl/pyterm#365.
     """
     pane = _context(pymux).pane
 
@@ -125,7 +125,7 @@ async def test_the_current_path_is_where_the_pane_says_it_is(pymux):
     A shell reports its directory on every prompt, and a new pane starts
     there. `#{pane_current_path}` read the process table alone, so
     `split-window -c "#{pane_current_path}"` started somewhere else.
-    Lillecarl/pymux#498.
+    Lillecarl/pyterm#500.
     """
     _context(pymux).pane.current_directory = "/reported"
 
@@ -133,7 +133,7 @@ async def test_the_current_path_is_where_the_pane_says_it_is(pymux):
 
 
 async def test_where_the_shell_runs_is_what_it_said(pymux):
-    "OSC 7 and iTerm2's RemoteHost and ShellIntegrationVersion. Lillecarl/pymux#784."
+    "OSC 7 and iTerm2's RemoteHost and ShellIntegrationVersion. Lillecarl/pyterm#786."
     assert format_pymux_string(pymux, "#{pane_current_host}|#{pane_current_user}|#{pane_shell}") == "||"
     pane = _context(pymux).pane
     pane.current_host, pane.current_user, pane.shell = "far", "deploy", "fish"
@@ -141,7 +141,7 @@ async def test_where_the_shell_runs_is_what_it_said(pymux):
 
 
 async def test_the_program_state_is_the_most_urgent_record(pymux):
-    "OSC 7501: blocked outranks working. Lillecarl/pymux#927."
+    "OSC 7501: blocked outranks working. Lillecarl/pyterm#929."
     asked = "#{pane_program_state}|#{pane_program_message}"
     assert format_pymux_string(pymux, asked) == "|"
     screen = _context(pymux).pane.screen
@@ -151,7 +151,7 @@ async def test_the_program_state_is_the_most_urgent_record(pymux):
 
 
 async def test_a_window_shows_the_most_urgent_state_of_its_panes(pymux):
-    "Two agents in one window: the window list names the one that needs the person. Lillecarl/pymux#931."
+    "Two agents in one window: the window list names the one that needs the person. Lillecarl/pyterm#933."
     from run_commands import said
 
     from pymux.options.session_options import WINDOW_STATUS
@@ -199,7 +199,7 @@ async def test_the_prefix_a_client_holds_is_a_format(pymux):
     prefix, and `#{client_key_table}` names the table that key is read
     from. tmux spells the two tables `root` and `prefix`, and a mode
     puts its own name there for as long as it lasts.
-    Lillecarl/pymux#363. Lillecarl/pymux#394.
+    Lillecarl/pyterm#365. Lillecarl/pyterm#396.
     """
 
     class Client:
@@ -240,7 +240,7 @@ async def test_id_reads_as_target(pymux):
 async def test_a_conditional_reads_a_value_the_way_tmux_reads_it(pymux):
     """
     `#{?cond,then,else}` takes the then for a value that is neither
-    empty nor "0", and the else otherwise. Lillecarl/pymux#469.
+    empty nor "0", and the else otherwise. Lillecarl/pyterm#471.
     """
     assert format_pymux_string(pymux, "#{?pane_active,yes,no}") == "yes"
     assert format_pymux_string(pymux, "#{?pane_in_mode,yes,no}") == "no"
@@ -251,14 +251,14 @@ async def test_a_conditional_with_no_else_answers_nothing(pymux):
     """
     tmux's `list-clients` wraps the flags only when a client has some,
     and the else is what leaves a plain client's line alone.
-    Lillecarl/pymux#469.
+    Lillecarl/pyterm#471.
     """
     assert format_pymux_string(pymux, "#{?not_a_variable,(}") == ""
     assert format_pymux_string(pymux, "#{?pane_active,(}") == "("
 
 
 async def test_a_comparison_is_a_condition(pymux):
-    "`#{==:a,b}` and `#{!=:a,b}` answer 1 or 0. Lillecarl/pymux#469."
+    "`#{==:a,b}` and `#{!=:a,b}` answer 1 or 0. Lillecarl/pyterm#471."
     assert format_pymux_string(pymux, "#{==:a,a}") == "1"
     assert format_pymux_string(pymux, "#{==:a,b}") == "0"
     assert format_pymux_string(pymux, "#{!=:a,b}") == "1"
@@ -268,7 +268,7 @@ async def test_a_branch_may_hold_a_comma_and_another_variable(pymux):
     """
     The comma inside a comparison belongs to it and not to the
     conditional around it, and a branch formats a variable of its own.
-    Lillecarl/pymux#469.
+    Lillecarl/pyterm#471.
     """
     template = "#{?#{==:#{pane_active},1},it is #{pane_index},no}"
 
@@ -279,7 +279,7 @@ async def test_a_bare_condition_is_a_variable_name_and_not_a_literal(pymux):
     """
     tmux looks the condition up as a name, so `#{?1,...}` names a
     variable called "1" and is false, while `#{?#{==:1,1},...}` is the
-    comparison that is true. Lillecarl/pymux#469.
+    comparison that is true. Lillecarl/pyterm#471.
     """
     assert format_pymux_string(pymux, "#{?1,yes,no}") == "no"
     assert format_pymux_string(pymux, "#{?#{==:1,1},yes,no}") == "yes"
@@ -288,7 +288,7 @@ async def test_a_bare_condition_is_a_variable_name_and_not_a_literal(pymux):
 async def test_a_comparison_reads_literals_and_needs_a_hash_for_a_variable(pymux):
     """
     A comparison operand is text unless it is written `#{...}`, so a
-    bare name compares as itself. Lillecarl/pymux#469.
+    bare name compares as itself. Lillecarl/pyterm#471.
     """
     assert format_pymux_string(pymux, "#{==:session_name,#{session_name}}") == "0"
     assert format_pymux_string(pymux, "#{==:#{session_name},#{session_name}}") == "1"
@@ -298,7 +298,7 @@ async def test_the_flags_of_a_client_are_bracketed_only_when_it_has_some(pymux):
     """
     tmux's `LIST_CLIENTS_TEMPLATE` ends with this shape, so a client
     with flags reads the flags and a plain one reads nothing.
-    Lillecarl/pymux#469.
+    Lillecarl/pyterm#471.
     """
     template = "#{?client_flags,(,}#{client_flags}#{?client_flags,),}"
 

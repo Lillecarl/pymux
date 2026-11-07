@@ -59,13 +59,13 @@ so every row held a styled cell at column 80, `get_max_column_index`
 answered 80 for all of them, and no row was ever short enough to erase.
 An erase of three cells went out as three spaces. prompt_toolkit's
 `get_max_column_index` counts only the columns of the screen now.
-Lillecarl/pymux#66.
+Lillecarl/pyterm#68.
 
 **An empty row cost one space** (1 assertion). `get_max_column_index`
 answered 0 for a row that holds nothing, so the loop wrote one space
 and the erase started at column 1. It answers -1 now, which is the
 column before the first one, and the whole row is erased.
-Lillecarl/pymux#61.
+Lillecarl/pyterm#63.
 
 **A cursor waiting to wrap moved the whole pane** (29 assertions). A
 character in the last column leaves ptterm's cursor one column further,
@@ -74,22 +74,22 @@ prompt_toolkit, and it is not on the line, so the window scrolled
 sideways to bring it into view and every row of the pane was drawn one
 column to the left for as long as the scroll lasted. Nothing else could
 see it: the pane's own screen was right, and only a terminal reading our
-wire disagreed. Lillecarl/pymux#62.
+wire disagreed. Lillecarl/pyterm#64.
 
 **A blank a program wrote never reached the wire** (1 assertion). The
 renderer takes the unstyled whitespace off the end of a row, for the
 sake of somebody copying the output, and the wire did not say which of
 the two kinds of blank a cell held. A cell can ask to stay now, with
 prompt_toolkit's `KeepWhitespace`, and a pane asks for every space a
-program wrote. Lillecarl/pymux#61.
+program wrote. Lillecarl/pyterm#63.
 
 **The double size lines were held and not emitted** (5 assertions).
 ptterm takes DECDWL and DECDHL, and the direct plug-in read them back
-(Lillecarl/pymux#55), but nothing put them on the wire and a real
+(Lillecarl/pyterm#57), but nothing put them on the wire and a real
 libvterm saw a flat line. The attribute belongs to a line and not to a
 cell, so prompt_toolkit's `Screen` carries one per row and the renderer
 diffs it against the frame before. A pane emits one only where pymux
-says it holds whole rows of the terminal. Lillecarl/pymux#65.
+says it holds whole rows of the terminal. Lillecarl/pyterm#67.
 
 **A resize left the cursor where the last frame put it** (2
 assertions). A terminal that changes size moves the cursor itself: it
@@ -225,7 +225,7 @@ def run_one(directory: Path, name: str, wires: Path | None = None):
     With `wires`, the middle man keeps everything pymux wrote in
     `<wires>/<name>.bin`. Always, and not behind a knob: a failure under
     load does not come back when asked, and a knob is a new build that
-    asks. A stray "o8" on a row was all one red run left. Lillecarl/pymux#742.
+    asks. A stray "o8" on a row was all one red run left. Lillecarl/pyterm#744.
     """
     command = [
         "perl",

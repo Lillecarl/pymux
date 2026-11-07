@@ -4,7 +4,7 @@
 # package holds the kernels, and `pymux/graphics/kernels.py` puts them in place.
 # Its parity check still takes pymux, for the Python each kernel is held
 # to. `pyte/pyte_rs/default.nix` says why this is not `mkProject`.
-# Lillecarl/pymux#574.
+# Lillecarl/pyterm#576.
 {
   lib,
   stdenv,
@@ -118,7 +118,7 @@ stdenv.mkDerivation {
     rustPlatform.bindgenHook
   ];
 
-  # The VP9 decoder of window panes. Lillecarl/pymux#639.
+  # The VP9 decoder of window panes. Lillecarl/pyterm#641.
   buildInputs = [ libvpx ];
 
   # `--auditwheel skip`: a repair copies libvpx into the wheel without

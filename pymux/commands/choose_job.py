@@ -22,7 +22,7 @@ def choose_job(pymux: Pymux, args: argparse.Namespace) -> None:
 
     The command line has no view to open a chooser on, so an asker
     that reads stdout gets nothing -- the same shape as the pop-ups.
-    Lillecarl/pymux#272. Lillecarl/pymux#528.
+    Lillecarl/pyterm#274. Lillecarl/pyterm#530.
     """
     if pymux.answer is not None:
         return

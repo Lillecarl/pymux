@@ -37,7 +37,7 @@ class Focus:
 
     def __init__(self, pymux: Pymux) -> None:
         self.pymux = pymux
-        #: The ids of the panes that have the focus. Lillecarl/pymux#795.
+        #: The ids of the panes that have the focus. Lillecarl/pyterm#797.
         self._focused_panes: set[PaneId] = set()
 
     def sync_panes(self) -> None:
@@ -47,12 +47,12 @@ class Focus:
         A pane has the focus while it is the active pane of a client
         whose terminal window has it. Several clients can give several
         panes the focus at once; tmux has one client and one focus.
-        Lillecarl/pymux#795.
+        Lillecarl/pyterm#797.
 
         A mirror that has the focus at another server gives the pane
         here the focus too, and a mirror here tells its owner rather
         than its program: the owner alone reports, for every viewer.
-        Lillecarl/pymux#759.
+        Lillecarl/pyterm#761.
         """
         self.pymux.notifier.close_seen_notifications()
         self.pymux.notifier.drop_seen_popups()
@@ -99,7 +99,7 @@ class Focus:
         state with no key here: a tree from a mirror's owner, a
         forwarded command that answers later, a hook or a job. Each of
         them invalidates, and the invalidate calls this.
-        Lillecarl/pymux#759.
+        Lillecarl/pyterm#761.
         """
         moved = False
         for client_state in list(self.pymux._client_states.values()):

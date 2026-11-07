@@ -2,7 +2,7 @@
 Who a port forward is asked of, and whether it needs a yes first. The
 server holds no SSH connection: a client does, so a forward is a
 request to the client, the way `open-url` is. `forwarding.py` holds the
-table a client reports back. Lillecarl/pymux#436, Lillecarl/pymux#440.
+table a client reports back. Lillecarl/pyterm#438, Lillecarl/pyterm#442.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ class Asker(NamedTuple):
     which is how a program in a pane runs a command. The forward still
     belongs to an attached client -- that is the machine with the SSH
     connection -- but nobody chose it, so `needs_asking` says
-    it has to be confirmed. Lillecarl/pymux#440.
+    it has to be confirmed. Lillecarl/pyterm#442.
     """
 
     client_state: ClientState
@@ -59,7 +59,7 @@ class ForwardRequests:
         of its own, which is no terminal and holds no SSH connection.
         Then the one attached client is the answer, and two of them is
         a question this cannot answer for the person.
-        Lillecarl/pymux#436.
+        Lillecarl/pyterm#438.
         """
         if self.pymux.a_person_asked():
             return self._can_it_forward(Asker(self.pymux.get_client_state(), in_person=True))
@@ -104,7 +104,7 @@ class ForwardRequests:
           far machine's service to the network this one is on. openssh
           makes the same split, through `GatewayPorts`.
 
-        Lillecarl/pymux#440.
+        Lillecarl/pyterm#442.
         """
         if self.pymux.options.forward_mode == ForwardMode.ASK:
             return True
@@ -121,6 +121,6 @@ class ForwardRequests:
         answer comes back as the client's whole table.
 
         `client` has already refused a client that cannot
-        forward at all. Lillecarl/pymux#436.
+        forward at all. Lillecarl/pyterm#438.
         """
         client_state.client.connection.send_packet(packet)

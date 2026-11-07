@@ -5,7 +5,7 @@ A hook runs its commands when the event it is named for happens; the
 wake a command leaves when it ran is the `after-<name>` hook, and
 the other events carry tmux's names. The tests keep to hooks that
 answer on the message line, so what fired is what is read back.
-Lillecarl/pymux#297.
+Lillecarl/pyterm#299.
 """
 
 from __future__ import annotations

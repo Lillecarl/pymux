@@ -2,7 +2,7 @@
 Which clients draw when one pane writes.
 
 **A pane that writes should wake the clients that can see it, and no
-others.** Lillecarl/pymux#224 says why, and this is the gate.
+others.** Lillecarl/pyterm#226 says why, and this is the gate.
 
 prompt_toolkit already does the first half: it attaches its invalidate
 handler to the controls of the layout it walks, and a client's layout
@@ -71,7 +71,7 @@ async def settled(*states) -> None:
     attach and a new window asked for are drawn before a count is taken:
     under the gate's load one of them landed inside the writes, and a
     client that looks elsewhere seemed to draw for the pane.
-    Lillecarl/pymux#669.
+    Lillecarl/pyterm#671.
     """
     quiet = 0
     with anyio.fail_after(10):
@@ -166,7 +166,7 @@ async def test_title_pane_writes_reaches_other_client():
 
     That is the contract: a client whose text moved is woken by a pane
     it cannot see, and one whose text did not is left alone. The test
-    above is the other half. Lillecarl/pymux#251.
+    above is the other half. Lillecarl/pyterm#253.
     """
     async with over_connection() as session:
         pymux = session.pymux

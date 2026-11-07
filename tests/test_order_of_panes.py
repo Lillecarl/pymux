@@ -11,7 +11,7 @@ before the splits inside it. Every pane sitting directly in the root
 was numbered before every pane in a nested split, whatever its place
 on the screen. A strip meets that at once, because turning `strip` on
 wraps the window it turns into a row: the first column is a nested
-split, so its panes came last. Lillecarl/pymux#210.
+split, so its panes came last. Lillecarl/pyterm#212.
 """
 
 from __future__ import annotations

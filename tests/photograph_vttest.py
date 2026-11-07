@@ -70,8 +70,8 @@ terminal names.
 **This is not a gate yet, and it should not be made one yet.** The
 chain is proven: two runs of the default item give the same verdicts,
 and the first outing found three faults that no other check here can
-see (Lillecarl/pymux#115, #116 and #117). The judging is not proven.
-Item 2 of the main menu still flaps, and the reason is #117 itself: it
+see (Lillecarl/pyterm#117, #118 and #119). The judging is not proven.
+Item 2 of the main menu still flaps, and the reason is #119 itself: it
 is a single change at a fixed moment after a screen is drawn, so
 whether a measurement holds it depends on when the measurement starts.
 A check that flaps is worse than no check, so `checks.all` leaves this
@@ -118,7 +118,7 @@ VTTEST = os.environ.get("PYMUX_VTTEST", "")
 #: Which item of vttest's main menu to walk. It is the walker's own
 #: `PTTERM_VTTEST_INCLUDE`, and it defaults to the double sized
 #: characters: six screens, and the ones where a pane most recently
-#: changed what a terminal draws (Lillecarl/pymux#65).
+#: changed what a terminal draws (Lillecarl/pyterm#67).
 #:
 #: The whole of vttest is five hundred screens, and each of them is
 #: photographed twice. That is a run of some twenty minutes for one
@@ -155,7 +155,7 @@ RECORDED = Path(__file__).parent / "vttest-picture-differences.txt"
 #: Both are written down when they are not what a run found, the same
 #: way and in the same file. A gate that is red for a reason everybody
 #: already knows is a gate everybody learns to ignore, so what stands is
-#: recorded and only a change fails (Lillecarl/pymux#46).
+#: recorded and only a change fails (Lillecarl/pyterm#48).
 SAME = "0"
 BLINK_AGREE = "blink-agree"
 
@@ -415,7 +415,7 @@ class Camera:
                     # starts anywhere else holds it only sometimes:
                     # measured on "2 Test of screen features", where a
                     # settle before the burst swallowed the one change
-                    # of Lillecarl/pymux#117 in one run of two.
+                    # of Lillecarl/pyterm#119 in one run of two.
                     #
                     # Then the still picture, taken once everything
                     # that was going to happen has happened.
@@ -538,7 +538,7 @@ def compare_one(terminal, seat, work, out):
         # burst, once everything that was going to happen has happened,
         # so every screen has one and the name is the same. Without it a
         # screen that blinks anywhere would be judged on its blinking
-        # alone, and a fault such as Lillecarl/pymux#115, the cursor two
+        # alone, and a fault such as Lillecarl/pyterm#117, the cursor two
         # columns to the left, would not be measured at all.
         name = "%04d.png" % number
         pixels = differences(
@@ -679,7 +679,7 @@ def main():
         return with_no_answer(str(gone))
     except Exception as reason:
         # A seat that went away makes every screen after it fail, and
-        # a run that cannot draw has no answer. Lillecarl/pymux#216.
+        # a run that cannot draw has no answer. Lillecarl/pyterm#218.
         try:
             seats[terminal.seat].still_there()
         except TheSeatIsGone as gone:

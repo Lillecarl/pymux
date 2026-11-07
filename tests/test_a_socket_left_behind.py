@@ -11,7 +11,7 @@ own last server had used.
 tmux unlinks a socket that nobody answers on and binds. These say that
 pymux does the same, and that it does not do it to a name that
 something is listening on, or to anything that is not a socket.
-Lillecarl/pymux#453.
+Lillecarl/pyterm#455.
 """
 
 from __future__ import annotations
@@ -104,7 +104,7 @@ def test_a_file_that_is_not_a_socket_is_left_alone(tmp_path):
 # /tmp/shared.sock` it is a name another account can get to first. The
 # per-UID room is 0700, so only an explicitly named socket in a
 # directory somebody else can write is exposed -- the shape of
-# Lillecarl/pymux#405 again. Lillecarl/pymux#455.
+# Lillecarl/pyterm#407 again. Lillecarl/pyterm#457.
 
 
 def test_a_lock_somebody_pointed_elsewhere_is_not_opened(tmp_path):

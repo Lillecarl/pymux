@@ -1,7 +1,7 @@
 """
 `list-sessions` lists a session that holds no window, with its window
 and pane variables empty, as tmux does. A session is empty before its
-first window and after its last. Lillecarl/pymux#810.
+first window and after its last. Lillecarl/pyterm#812.
 """
 
 from __future__ import annotations

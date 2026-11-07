@@ -1,7 +1,7 @@
 """
 `pymux <command> --help`: the help of one command or mode word, read on
 this side with no server. The command table is in the client's own
-build, so the help is the parser that runs the command. Lillecarl/pymux#845.
+build, so the help is the parser that runs the command. Lillecarl/pyterm#847.
 """
 
 from __future__ import annotations

@@ -19,7 +19,7 @@ def show_messages(pymux: Pymux, args: argparse.Namespace) -> None:
     show_message put on the message line, and what a command that
     failed said. tmux pages through them per client; the server here
     holds one log, which is one answer for every client that reads
-    it. Lillecarl/pymux#297.
+    it. Lillecarl/pyterm#299.
     """
     show_listing(pymux, "show-messages", "\n".join(pymux.message_log))
 

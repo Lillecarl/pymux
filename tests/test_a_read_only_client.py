@@ -14,7 +14,7 @@ run is marked at `add_command` and refused there. The default is no,
 and four commands are marked: the ones a watcher needs to leave, to
 move, and to see who else is here.
 
-Lillecarl/pymux#467.
+Lillecarl/pyterm#469.
 """
 
 from __future__ import annotations
@@ -133,7 +133,7 @@ async def test_a_read_only_client_reads_the_history_and_leaves():
     Copy mode is the client's and reads a copy, so a watcher may open
     it, and its keys are the copy buffer's, which the read-only rule
     does not reach. tmux marks `copy-mode` read only and then drops
-    every key, so a watcher there is stuck in it. Lillecarl/pymux#470.
+    every key, so a watcher there is stuck in it. Lillecarl/pyterm#472.
     """
     async with over_connection() as session:
         pymux = session.pymux

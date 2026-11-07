@@ -13,7 +13,7 @@ a unit test sees:
 
 **No browser here.** Whether the page draws is what a browser answers and
 nothing else can, which is why a headless one runs against this separately.
-Lillecarl/pymux#461.
+Lillecarl/pyterm#463.
 """
 
 from __future__ import annotations
@@ -147,7 +147,7 @@ async def test_a_viewer_of_the_session_is_a_client_of_it(pymux):
     """
     `/session` is what one client draws: the panes, and the status line a
     pane stream has none of. The size is the viewer's, because a client's
-    size is its terminal's. Lillecarl/pymux#481.
+    size is its terminal's. Lillecarl/pyterm#483.
     """
     async with pymux.running():
         async with anyio.create_task_group() as tasks:

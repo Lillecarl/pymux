@@ -5,7 +5,7 @@ A server logs an exception and keeps going, so an error is invisible to
 the person using it: they see a thing not work, and nothing tells them
 where to look. The notice says so for a few seconds, over the top right
 of every attached screen, and takes neither the keyboard nor the
-cursor. Lillecarl/pymux#241.
+cursor. Lillecarl/pyterm#243.
 
 **Counted, not stacked.** A loop that raises every frame raises a
 hundred times a second, so every error while the notice shows adds to

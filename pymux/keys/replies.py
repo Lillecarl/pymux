@@ -27,7 +27,7 @@ _LEAVE_BIT = 1 << 8
 
 
 def is_leave(report: str) -> bool:
-    "Whether this mouse report says the pointer left the window. Lillecarl/pymux#899."
+    "Whether this mouse report says the pointer left the window. Lillecarl/pyterm#901."
     parsed = SgrMouseReport.parse(report)
     return parsed is not None and bool(parsed.button & _LEAVE_BIT)
 
@@ -40,8 +40,8 @@ def pixels_to_cells(report: str, width: int, height: int, origin: int) -> tuple[
 
     `origin` is the number the terminal gives the first pixel of its
     cells. xterm, which defines the mode, and foot say 1; kitty alone
-    says 0 (`mouse.c`, `round(global_x)`). Lillecarl/pymux#648,
-    Lillecarl/pymux#651.
+    says 0 (`mouse.c`, `round(global_x)`). Lillecarl/pyterm#650,
+    Lillecarl/pyterm#653.
     """
     pixels = SgrMouseReport.parse(report)
     if pixels is None or pixels.button & _LEAVE_BIT:

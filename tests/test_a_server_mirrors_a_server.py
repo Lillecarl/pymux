@@ -1,6 +1,6 @@
 """
 One pymux server shows the sessions of another, over the other's
-socket. Lillecarl/pymux#759.
+socket. Lillecarl/pyterm#761.
 
 Two servers in one loop: the owner listens on a socket in the test's
 directory, and the peer runs `connect` on it. A client on the peer
@@ -149,7 +149,7 @@ async def shown_here(owner, peer, client, link=None):
 
 
 async def test_both_sides_of_a_link_hold_the_capabilities_both_named(two_servers):
-    "Lillecarl/pymux#959."
+    "Lillecarl/pyterm#961."
     owner, peer, client = two_servers
     await shown_here(owner, peer, client)
     (here,) = peer.peers.by_address.values()
@@ -158,7 +158,7 @@ async def test_both_sides_of_a_link_hold_the_capabilities_both_named(two_servers
 
 
 async def test_a_capability_the_peer_does_not_name_is_not_used(two_servers, monkeypatch):
-    "A side names what it has, and the other uses no more. Lillecarl/pymux#959."
+    "A side names what it has, and the other uses no more. Lillecarl/pyterm#961."
     owner, peer, client = two_servers
     monkeypatch.setattr(mirror_peer, "capabilities_named", lambda: [Capability.PINGS.value])
     await shown_here(owner, peer, client)
@@ -168,7 +168,7 @@ async def test_a_capability_the_peer_does_not_name_is_not_used(two_servers, monk
 
 
 def test_a_side_that_names_nothing_has_what_its_version_reached():
-    "A build from before names, which has every capability its version had. Lillecarl/pymux#959."
+    "A build from before names, which has every capability its version had. Lillecarl/pyterm#961."
     assert capabilities_in_common(4, None) == {Capability.IMAGES_BY_HASH, Capability.PINGS, Capability.WINDOWS}
     assert capabilities_in_common(1, None) == frozenset()
     assert capabilities_in_common(13, None) == frozenset(Capability)
@@ -198,7 +198,7 @@ async def test_a_session_there_shows_here(two_servers):
 
 
 async def test_the_palette_a_program_there_set_reaches_the_mirror(two_servers):
-    "The cells name a colour by number; the entries behind it follow. Lillecarl/pymux#922."
+    "The cells name a colour by number; the entries behind it follow. Lillecarl/pyterm#924."
     owner, peer, client = two_servers
     there, here = await shown_here(owner, peer, client)
     control = here.terminal.terminal_control
@@ -220,7 +220,7 @@ async def test_the_palette_a_program_there_set_reaches_the_mirror(two_servers):
 
 
 async def test_the_program_status_there_reaches_the_terminal_here(two_servers):
-    "OSC 7501 records cross whole, and a prompt there takes the work here too. Lillecarl/pymux#928."
+    "OSC 7501 records cross whole, and a prompt there takes the work here too. Lillecarl/pyterm#930."
     owner, peer, client = two_servers
     there, here = await shown_here(owner, peer, client)
     statuses = here.screen.program_status
@@ -257,7 +257,7 @@ async def test_a_copy_in_a_pane_there_reaches_the_clipboard_here(two_servers):
 
 
 async def test_a_kitty_copy_in_a_pane_there_reaches_the_paste_buffer_here_whole(two_servers):
-    "Every MIME type of an OSC 5522 write, not only its text. Lillecarl/pymux#902."
+    "Every MIME type of an OSC 5522 write, not only its text. Lillecarl/pyterm#904."
     owner, peer, client = two_servers
     owner.options.set_clipboard = Clipboard.ON
     peer.options.set_clipboard = Clipboard.ON
@@ -275,7 +275,7 @@ async def test_a_kitty_copy_in_a_pane_there_reaches_the_paste_buffer_here_whole(
 
 
 async def test_a_kitty_read_in_a_pane_there_asks_the_terminal_here(two_servers, monkeypatch):
-    "The person who pastes is at the peer: its terminal answers, and the answer reaches the pane. Lillecarl/pymux#902."
+    "The person who pastes is at the peer: its terminal answers, and the answer reaches the pane. Lillecarl/pyterm#904."
     owner, peer, client = two_servers
     owner.options.set_clipboard = Clipboard.ON
     peer.options.set_clipboard = Clipboard.ON
@@ -306,7 +306,7 @@ async def test_kitty_paste_events_reach_a_pane_there_and_its_read_comes_back_her
     The pane set ?5522 there: the terminal here is told, its paste event
     reaches the program, and the read under the event's password asks
     this terminal again, though a client there was used later.
-    Lillecarl/pymux#902.
+    Lillecarl/pyterm#904.
     """
     owner, peer, client = two_servers
     owner.options.set_clipboard = Clipboard.ON
@@ -392,7 +392,7 @@ async def kitty_here(owner, peer, client, monkeypatch):
 
 
 async def test_a_drop_here_reaches_the_registered_program_there(two_servers, monkeypatch):
-    "Its moves, its drop and its data reach the program, and the program's answers this terminal. Lillecarl/pymux#903."
+    "Its moves, its drop and its data reach the program, and the program's answers this terminal. Lillecarl/pyterm#905."
     owner, peer, client = two_servers
     there, here, at, heard, raw = await kitty_here(owner, peer, client, monkeypatch)
     connection = client.client
@@ -453,7 +453,7 @@ async def terminal_here(owner, peer, client, monkeypatch):
 
 
 async def test_a_file_transfer_there_is_answered_by_the_terminal_here(two_servers, monkeypatch):
-    "A mirrored pane's session goes to the peer's terminal, and its answers back. Lillecarl/pymux#912."
+    "A mirrored pane's session goes to the peer's terminal, and its answers back. Lillecarl/pyterm#914."
     owner, peer, client = two_servers
     there, heard, raw, _packets = await terminal_here(owner, peer, client, monkeypatch)
     send = TransferCommand(Action.SEND, id="s1")
@@ -478,7 +478,7 @@ async def test_the_pace_of_a_transfer_there_is_the_owners_to_say(two_servers, mo
 
 
 async def test_a_terminal_here_waits_while_the_program_there_reads(two_servers, monkeypatch):
-    "Past `HOLD_BYTES` the peer holds its terminal until the owner says the program took it. Lillecarl/pymux#918."
+    "Past `HOLD_BYTES` the peer holds its terminal until the owner says the program took it. Lillecarl/pyterm#920."
     owner, peer, client = two_servers
     there, heard, raw, packets = await terminal_here(owner, peer, client, monkeypatch)
     there.terminal.terminal_control.feed_output(str(TransferCommand(Action.SEND, id="s1")))
@@ -498,7 +498,7 @@ async def test_a_terminal_here_waits_while_the_program_there_reads(two_servers, 
 
 
 async def test_a_drag_a_program_there_offers_goes_through_the_terminal_here(two_servers, monkeypatch):
-    "Lillecarl/pymux#903."
+    "Lillecarl/pyterm#905."
     owner, peer, client = two_servers
     there, here, at, heard, raw = await kitty_here(owner, peer, client, monkeypatch)
     connection = client.client
@@ -524,7 +524,7 @@ async def test_a_drag_a_program_there_offers_goes_through_the_terminal_here(two_
 
 
 async def test_a_drop_over_a_mirror_ends_here_when_the_link_goes(two_servers, monkeypatch):
-    "The terminal is told nothing takes it, and the registration is back with the link. Lillecarl/pymux#909."
+    "The terminal is told nothing takes it, and the registration is back with the link. Lillecarl/pyterm#911."
     owner, peer, client = two_servers
     there, here, at, heard, raw = await kitty_here(owner, peer, client, monkeypatch)
     there.terminal.terminal_control.feed_output(dnd("t=a:i=7;text/x-mine"))
@@ -618,7 +618,7 @@ async def test_a_window_smaller_there_is_as_small_here(two_servers):
     Something at the owner holds the window under the peer's room. The
     peer lays it out at the owner's size, so the room around it is the
     background, as for any client bigger than its window.
-    Lillecarl/pymux#930.
+    Lillecarl/pyterm#932.
     """
     owner, peer, client = two_servers
     there, here = await shown_here(owner, peer, client)
@@ -771,7 +771,7 @@ async def test_a_window_the_peer_shows_is_seen_there(two_servers):
 
 
 async def test_a_drag_here_resizes_the_panes_there(two_servers):
-    "The owner lays the window out, so the drag goes there as a resize. Lillecarl/pymux#871."
+    "The owner lays the window out, so the drag goes there as a resize. Lillecarl/pyterm#873."
     owner, peer, client = two_servers
     await shown_here(owner, peer, client)
     (link,) = peer.peers.by_address.values()
@@ -802,7 +802,7 @@ async def test_a_drag_here_resizes_the_panes_there(two_servers):
 
 
 async def test_a_click_here_selects_the_pane_there(two_servers):
-    "Not only here: the owner's next tree would choose the old pane again. Lillecarl/pymux#872."
+    "Not only here: the owner's next tree would choose the old pane again. Lillecarl/pyterm#874."
     owner, peer, client = two_servers
     there, here = await shown_here(owner, peer, client)
     (link,) = peer.peers.by_address.values()
@@ -820,7 +820,7 @@ async def test_a_click_here_selects_the_pane_there(two_servers):
 
 
 async def test_select_pane_moves_from_the_pane_the_person_is_in(two_servers):
-    "The two servers disagree on the active pane: a key moves from the person's, and both agree after. Lillecarl/pymux#872."
+    "The two servers disagree on the active pane: a key moves from the person's, and both agree after. Lillecarl/pyterm#874."
     owner, peer, client = two_servers
     there, here = await shown_here(owner, peer, client)
     (link,) = peer.peers.by_address.values()
@@ -848,7 +848,7 @@ async def test_select_pane_moves_from_the_pane_the_person_is_in(two_servers):
 
 
 async def test_a_command_that_changes_nothing_there_still_ends_a_disagreement(two_servers):
-    "The owner answers each command a peer sends with a tree, and the tree undoes what the peer only previewed. Lillecarl/pymux#873."
+    "The owner answers each command a peer sends with a tree, and the tree undoes what the peer only previewed. Lillecarl/pyterm#875."
     owner, peer, client = two_servers
     there, here = await shown_here(owner, peer, client)
     (link,) = peer.peers.by_address.values()
@@ -928,7 +928,7 @@ async def test_a_status_line_that_wraps_here_takes_its_rows_from_the_pane_there(
     """
     The peer tells the owner its room with its own status rows off it,
     so a window list that wraps to a second row here makes the pane
-    there a row shorter. Lillecarl/pymux#954.
+    there a row shorter. Lillecarl/pyterm#956.
     """
     owner, peer, client = two_servers
     there, _here = await shown_here(owner, peer, client)
@@ -983,7 +983,7 @@ async def test_a_program_status_that_wraps_the_window_list_here_takes_its_rows_f
     """
     Carl's case: Claude Code's OSC 7501 there lengthens the status line
     here, the window list wraps, and the pane there gives up the row.
-    Lillecarl/pymux#954.
+    Lillecarl/pyterm#956.
     """
     owner, peer, client = two_servers
     client.app.output.get_size = lambda: Size(rows=40, columns=120)
@@ -1032,7 +1032,7 @@ async def test_a_status_line_that_time_wraps_here_takes_its_rows_from_the_pane_t
     A frame rate, a byte count or the clock in the status line grows by
     itself, and only the clock's refresh draws it: nothing passes
     `Pymux.invalidate`. The owner still hears the room left here.
-    Lillecarl/pymux#954.
+    Lillecarl/pyterm#956.
     """
     owner, peer, client = two_servers
     client.app.output.get_size = lambda: Size(rows=40, columns=120)
@@ -1070,7 +1070,7 @@ async def test_receive_there_asks_the_person_who_attaches_here(two_servers, tmp_
     """
     `pymux receive` in a pane there gets its files from the client here:
     the person attaches through this peer, and nobody attaches there.
-    Lillecarl/pymux#947.
+    Lillecarl/pyterm#949.
     """
     from libpymux.objects import Server
     from test_a_pane_asks_for_a_file import parts_of
@@ -1164,7 +1164,7 @@ async def test_a_clipboard_image_here_goes_to_the_owner_of_the_pane(two_servers)
     """
     The image a client sends ahead of Ctrl-V goes where the key goes: to
     the owner of the mirrored pane, for its compositor to offer, and an
-    empty one withdraws it. Lillecarl/pymux#956.
+    empty one withdraws it. Lillecarl/pyterm#958.
     """
     owner, peer, client = two_servers
     await shown_here(owner, peer, client)
@@ -1182,7 +1182,7 @@ async def test_a_clipboard_image_here_goes_to_the_owner_of_the_pane(two_servers)
 async def test_record_client_writes_on_the_owner_unless_kept_here(two_servers, tmp_path, monkeypatch, local):
     """
     A client on a mirrored session records to the owner, where the work
-    is; `-l` keeps it here. Lillecarl/pymux#955.
+    is; `-l` keeps it here. Lillecarl/pyterm#957.
 
     Both servers run in this process and read one `XDG_STATE_HOME`, so
     the owner is told apart by its own state directory.
@@ -1277,7 +1277,7 @@ def links_of(owner) -> list:
 
 
 async def test_a_pane_says_the_owner_restarts_until_its_link_is_back(two_servers):
-    "What a client draws over its terminal while its server upgrades, a mirror draws over its pane. Lillecarl/pymux#869."
+    "What a client draws over its terminal while its server upgrades, a mirror draws over its pane. Lillecarl/pyterm#871."
     owner, peer, client = two_servers
     there, here = await shown_here(owner, peer, client)
     owner_control = there.terminal.terminal_control
@@ -1335,7 +1335,7 @@ async def test_a_link_that_goes_is_dialled_again_with_copy_mode_where_it_was(two
 
 
 async def test_connect_again_dials_a_link_that_never_came(two_servers, tmp_path):
-    "A link whose first dial failed is not left dead: `connect` again dials it, and says so. Lillecarl/pymux#874."
+    "A link whose first dial failed is not left dead: `connect` again dials it, and says so. Lillecarl/pyterm#876."
     owner, peer, client = two_servers
     later = tmp_path / "later.sock"
     peer.handle_command("connect %s" % (later,))
@@ -1354,7 +1354,7 @@ async def test_connect_again_dials_a_link_that_never_came(two_servers, tmp_path)
 
 
 async def test_a_sleep_here_ends_the_link_and_dials_again(two_servers, tmp_path, monkeypatch):
-    "The peer's loop clock stops while its machine sleeps; the wall clock does not. Lillecarl/pymux#875."
+    "The peer's loop clock stops while its machine sleeps; the wall clock does not. Lillecarl/pyterm#877."
     owner, peer, client = two_servers
     monkeypatch.setattr(relink, "SUSPEND_POLL", 0.01)
     server, port, client_key = await create_ssh_server(tmp_path, owner.socket_name)
@@ -1378,7 +1378,7 @@ async def test_a_sleep_here_ends_the_link_and_dials_again(two_servers, tmp_path,
 
 
 async def test_a_sleep_leaves_a_link_on_this_machine_alone(two_servers, monkeypatch):
-    "Both ends of a unix socket slept together, so the link is still good. Lillecarl/pymux#880."
+    "Both ends of a unix socket slept together, so the link is still good. Lillecarl/pyterm#882."
     owner, peer, client = two_servers
     monkeypatch.setattr(relink, "SUSPEND_POLL", 0.01)
     await shown_here(owner, peer, client)
@@ -1398,7 +1398,7 @@ async def test_a_sleep_leaves_a_link_on_this_machine_alone(two_servers, monkeypa
 
 
 async def test_a_refused_key_stops_the_redial(two_servers):
-    "After a link was up, a failure that never comes back ends the retries, and the panes say how to start again. Lillecarl/pymux#879."
+    "After a link was up, a failure that never comes back ends the retries, and the panes say how to start again. Lillecarl/pyterm#881."
     import asyncssh
 
     owner, peer, client = two_servers
@@ -1420,7 +1420,7 @@ async def test_a_refused_key_stops_the_redial(two_servers):
 
 
 async def test_a_new_link_hears_which_pane_has_the_focus(two_servers):
-    "What the peer told the owner, a new link hears again: here, that a terminal with the focus shows the pane. Lillecarl/pymux#883."
+    "What the peer told the owner, a new link hears again: here, that a terminal with the focus shows the pane. Lillecarl/pyterm#885."
     owner, peer, client = two_servers
     there, here = await shown_here(owner, peer, client)
     client.terminal_focused = True
@@ -1442,7 +1442,7 @@ async def test_a_new_link_hears_which_pane_has_the_focus(two_servers):
 
 
 async def test_an_owner_drops_a_peer_link_that_stops_answering(two_servers, monkeypatch):
-    "A peer whose machine slept leaves a ghost link that still sizes the owner's panes. Lillecarl/pymux#877."
+    "A peer whose machine slept leaves a ghost link that still sizes the owner's panes. Lillecarl/pyterm#879."
     owner, peer, client = two_servers
     monkeypatch.setattr(server_module, "PING_INTERVAL", 0.2)
     await shown_here(owner, peer, client)
@@ -1478,7 +1478,7 @@ async def test_a_chain_of_three_encodes_input_once_on_the_owner(two_servers):
             await until(lambda: links_of(peer) and links_of(peer)[0].peer.sources, "C mirrors B's pane")
 
             last.paste("pasted")
-            # The button and the modifiers cross both links. Lillecarl/pymux#900.
+            # The button and the modifiers cross both links. Lillecarl/pyterm#902.
             last.mouse(MouseInput(MouseAction.PRESS, 3, 1, MouseButton.RIGHT, MouseBits.CONTROL))
             await until(lambda: len(typed) >= 2, "C's input reaches A", seen=lambda: typed)
             assert typed == ["\x1b[200~pasted\x1b[201~", "\x1b[<18;4;2M"]
@@ -1568,7 +1568,7 @@ async def test_an_upgrade_of_the_peer_opens_copy_mode_where_it_was(two_servers, 
 
 
 async def test_a_client_on_a_mirrored_window_is_back_there_after_an_upgrade(two_servers, tmp_path):
-    "A snapshot holds no mirrored session: the client goes back once the link's tree brings it. Lillecarl/pymux#870."
+    "A snapshot holds no mirrored session: the client goes back once the link's tree brings it. Lillecarl/pyterm#872."
     owner, peer, client = two_servers
     await shown_here(owner, peer, client)
     await run_as(peer, client, "new-window")
@@ -1693,7 +1693,7 @@ async def test_a_loopback_url_keeps_its_port_when_it_is_free_here(two_servers):
 
 @pytest.mark.parametrize("used_last", ["here", "there"])
 async def test_a_url_of_a_mirrored_pane_opens_once_where_a_person_was_last(two_servers, monkeypatch, used_last):
-    "A person at both servers gets the URL once, on the terminal they used last. Lillecarl/pymux#854."
+    "A person at both servers gets the URL once, on the terminal they used last. Lillecarl/pyterm#856."
     owner, peer, client = two_servers
     owner.options.set_clipboard = Clipboard.OFF
     peer.options.set_clipboard = Clipboard.ON
@@ -1733,7 +1733,7 @@ async def test_a_url_of_a_mirrored_pane_opens_once_where_a_person_was_last(two_s
 
 
 async def test_open_url_from_a_pane_opens_at_the_peer_when_nobody_is_here(two_servers, monkeypatch):
-    "A person who sees the owner only through a peer. Lillecarl/pymux#944."
+    "A person who sees the owner only through a peer. Lillecarl/pyterm#946."
     owner, peer, client = two_servers
     there, _ = await shown_here(owner, peer, client)
     opened: list[str] = []

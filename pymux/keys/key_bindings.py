@@ -81,12 +81,12 @@ class PromptHelix(HelixBindings):
     """
     Helix keys on the ":" line and on a `command-prompt`, with
     `status-keys helix`. One for the server: each client's buffers hold
-    an editor of their own. Lillecarl/pymux#749.
+    an editor of their own. Lillecarl/pyterm#751.
 
     **Escape closes the line from normal mode**, as the second Escape
     does with vi status keys: the first leaves insert mode, and a
     person in normal mode who presses Escape is asking to leave.
-    Lillecarl/pymux#255.
+    Lillecarl/pyterm#257.
     """
 
     def __init__(self, pymux: Pymux) -> None:
@@ -121,11 +121,11 @@ class KeyTable:
     A key the table holds no binding for falls through to the pane.
     That is what makes a mode transparent, and strictness is a
     binding of its own: `bind-key -T <table> Any noop` swallows
-    everything the table does not name. Lillecarl/pymux#394.
+    everything the table does not name. Lillecarl/pyterm#396.
 
     `keeps_prefix` is whether the prefix still answers in the mode. It
     does in every mode but passthrough, whose point is that the pane
-    gets the prefix too. Lillecarl/pymux#530.
+    gets the prefix too. Lillecarl/pyterm#532.
     """
 
     def __init__(
@@ -168,7 +168,7 @@ def _register_builtin_mode_tables(manager: PymuxKeyBindings) -> None:
     The keys themselves are the `bind-key -T` lines of the initial
     configuration, so a person who rebinds one rebinds it; the table
     is here so that entering it means something even then.
-    Lillecarl/pymux#395.
+    Lillecarl/pyterm#397.
     """
     manager.mode_tables["pane-management"] = KeyTable(
         "pane-management",
@@ -176,7 +176,7 @@ def _register_builtin_mode_tables(manager: PymuxKeyBindings) -> None:
         on_leave=_put_pane_numbers_back,
     )
     # Every key goes to the pane, the prefix too, but the one that
-    # leaves. For a tmux or a pymux inside a pane. Lillecarl/pymux#530.
+    # leaves. For a tmux or a pymux inside a pane. Lillecarl/pyterm#532.
     manager.mode_tables["passthrough"] = KeyTable(
         "passthrough",
         on_enter=lambda pymux: _tell_the_terminal(pymux, "1"),
@@ -197,7 +197,7 @@ class PymuxKeyBindings:
 
         #: The modes a person can be in, by the name `enter-mode`
         #: takes. `bind-key -T` creates a table without hooks here
-        #: when it meets a name this does not hold. Lillecarl/pymux#394.
+        #: when it meets a name this does not hold. Lillecarl/pyterm#396.
         self.mode_tables: dict[str, KeyTable] = {}
         _register_builtin_mode_tables(self)
 
@@ -206,7 +206,7 @@ class PymuxKeyBindings:
         self.key_bindings = merge_key_bindings(
             [
                 # First, where prompt_toolkit's own copies of them rank.
-                # Lillecarl/pymux#773.
+                # Lillecarl/pyterm#775.
                 copy_mode_key_bindings(),
                 self._load_builtins(),
                 # The right arrow accepts what the command line is
@@ -218,7 +218,7 @@ class PymuxKeyBindings:
                 # **It comes after the rest**, which upstream asks for
                 # in the docstring of that function: the vi bindings
                 # have a right arrow of their own, and the suggestion
-                # has to win while there is one. Lillecarl/pymux#163.
+                # has to win while there is one. Lillecarl/pyterm#165.
                 load_auto_suggest_bindings(),
                 # After the builtins and the suggestion, so Helix wins a
                 # tie on the line; before the person's own `bind-key`.
@@ -243,7 +243,7 @@ class PymuxKeyBindings:
         #: dictionary keyed by the text held one key three times, and
         #: `unbind-key` under a second spelling removed nothing while
         #: `bind-key` under it left two handlers on one key.
-        #: Lillecarl/pymux#235.
+        #: Lillecarl/pyterm#237.
         self.custom_bindings: dict[_ABinding, CustomBinding] = {}
 
     def _load_prefix_binding(self) -> None:
@@ -296,7 +296,7 @@ class PymuxKeyBindings:
             # The popup that lists what the prefix leads to draws only
             # when something asks for a frame, and the prefix alone
             # changes nothing else. `which-key` is the one thing that
-            # wants one here. Lillecarl/pymux#29.
+            # wants one here. Lillecarl/pyterm#31.
             if client_state.session.options.which_key:
                 client_state.app.invalidate()
 
@@ -352,11 +352,11 @@ class PymuxKeyBindings:
 
             **With vi status keys it takes two Escapes.** The first one
             is vi's: it leaves insert mode and the line stays open,
-            which is what tmux does and what Lillecarl/pymux#157
+            which is what tmux does and what Lillecarl/pyterm#159
             decided. The second one closes, because a person in normal
             mode who presses Escape is asking to leave.
 
-            That hole is what Lillecarl/pymux#255 was: Escape belonged
+            That hole is what Lillecarl/pyterm#257 was: Escape belonged
             to vi and nothing took the second press, so with vi status
             keys no number of Escapes closed the box at all. The mode
             the line is in is drawn on it, so a person can see which
@@ -389,7 +389,7 @@ class PymuxKeyBindings:
             Cancel command.
             """
             # `n` answers the question on screen and leaves the rest
-            # waiting, the way `y` does. Lillecarl/pymux#266.
+            # waiting, the way `y` does. Lillecarl/pyterm#268.
             client_state = pymux.get_client_state()
             client_state.answer()
 
@@ -400,7 +400,7 @@ class PymuxKeyBindings:
         # fired, and `pane.exit_scroll_buffer` does not exist.
         #
         # The keys of copy mode live with the copy buffer now, in
-        # `ptterm.terminal.Terminal`. Lillecarl/pymux#133.
+        # `ptterm.terminal.Terminal`. Lillecarl/pyterm#135.
 
         @Condition
         def popup_displayed() -> bool:
@@ -420,7 +420,7 @@ class PymuxKeyBindings:
         # the point is on and Escape goes back. The search of `/`
         # takes the focus; while it has it, everything types into it,
         # the list narrows as it does, and Escape brings the keys
-        # back. Lillecarl/pymux#295. Lillecarl/pymux#327.
+        # back. Lillecarl/pyterm#297. Lillecarl/pyterm#329.
         @Condition
         def chooser_displayed() -> bool:
             return self.pymux.get_client_state().chooser is not None
@@ -465,7 +465,7 @@ class PymuxKeyBindings:
 
         # The bar wraps, so up and down are a line and not an entry.
         # In the box a line holds one entry and the two agree, which
-        # is why only the bar binds these. Lillecarl/pymux#327.
+        # is why only the bar binds these. Lillecarl/pyterm#329.
         @kb.add("up", filter=window_bar & ~chooser_search_focused)
         @kb.add("k", filter=window_bar & ~chooser_search_focused)
         @_noted(self.pymux, "chooser-line-up")
@@ -512,7 +512,7 @@ class PymuxKeyBindings:
 
             The window chooser switched this client while a person
             moved through it, so leaving puts the client back on the
-            window it started from. Lillecarl/pymux#327.
+            window it started from. Lillecarl/pyterm#329.
             """
             state = self.pymux.get_client_state()
             state.layout_manager.chooser.leave_chooser(restore=True)
@@ -530,7 +530,7 @@ class PymuxKeyBindings:
         # leave it, and everything else stays in it. The named keys of
         # an entry -- Enter, Space, Tab -- come in as their own keys,
         # and a letter or a digit comes in as the character it is.
-        # Lillecarl/pymux#297.
+        # Lillecarl/pyterm#299.
         @Condition
         def menu_displayed() -> bool:
             return bool(self.pymux.get_client_state().menu_entries)
@@ -559,7 +559,7 @@ class PymuxKeyBindings:
             A key came back up, or one with no name here went down. Give
             the sequence to the pane that the keyboard of this client
             reaches, which encodes it for its own mode: F13 reaches a pane
-            that asked for every key. Lillecarl/pymux#707.
+            that asked for every key. Lillecarl/pyterm#709.
 
             A release is not a key press, so it drives nothing here: it
             does not leave the prefix, hide the pane numbers or stop
@@ -576,7 +576,7 @@ class PymuxKeyBindings:
             nothing of pymux's, so prompt_toolkit has no frame to draw
             from it; the frame that shows its effect comes when the
             pane answers. Returning anything else asks for a redraw
-            that has nothing in it. Lillecarl/pymux#246.
+            that has nothing in it. Lillecarl/pyterm#248.
             """
             pane = pymux.focus.focused_pane()
             if pane is None or not event.data:
@@ -584,7 +584,7 @@ class PymuxKeyBindings:
             terminal = pane.terminal
             if isinstance(terminal, WindowWidget):
                 # A window presses and lets go of each key at once, so
-                # it takes only the presses. Lillecarl/pymux#627.
+                # it takes only the presses. Lillecarl/pyterm#629.
                 if terminal.takes_keys() and get_app().layout.has_focus(terminal):
                     terminal.press_data(event.data)
                 return NotImplemented
@@ -609,7 +609,7 @@ class PymuxKeyBindings:
             **Not the keys of a mode.** Pane-management holds the
             numbers up for its whole stay: its keys move the focus and
             resize, and the numbers are how a person reads what they
-            did. Lillecarl/pymux#395.
+            did. Lillecarl/pyterm#397.
             """
             pymux.display_pane_numbers = False
 
@@ -625,7 +625,7 @@ class PymuxKeyBindings:
             """
             A key while URL labels are up. Every key stops here, so a
             letter that no label goes on with reaches neither the pane
-            nor copy mode. Lillecarl/pymux#608.
+            nor copy mode. Lillecarl/pyterm#610.
             """
             client_state = pymux.get_client_state()
             mode = client_state.url_mode
@@ -707,7 +707,7 @@ class PymuxKeyBindings:
             can take this client away, and `detach-client` does. Asking
             for it afterwards raised `ValueError` out of the key
             handler, on a terminal that the client had already put
-            back. Lillecarl/pymux#109.
+            back. Lillecarl/pyterm#111.
 
             The object outlives the client, so writing to it after the
             client has gone changes nothing that anybody reads.
@@ -764,7 +764,7 @@ class PymuxKeyBindings:
         Copy mode reads the keys its pane widget binds, and those are
         under every table this client holds: a mode left on the stack
         eats them. So copy mode's entry ends the modes first, which is
-        tmux's one-mode-at-a-time. #396 gives copy mode a table of its
+        tmux's one-mode-at-a-time. #398 gives copy mode a table of its
         own, and this moves under it.
         """
         client_state = self.pymux.get_client_state()
@@ -779,7 +779,7 @@ class PymuxKeyBindings:
         wrote it, and the command it runs with its arguments, spelled
         the way `list-keys` spells a binding. `which-key` reads this
         to draw its popup, and the view of the bindings that
-        Lillecarl/pymux#30 asks for reads the same. Sorted by key, so
+        Lillecarl/pyterm#32 asks for reads the same. Sorted by key, so
         the same table draws twice the same.
         """
         rows = []

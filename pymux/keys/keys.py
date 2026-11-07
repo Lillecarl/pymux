@@ -9,7 +9,7 @@ arrives garbled, one key press per character.
 
 **The reading is pyte's.** `pyte.keys.parse_key_data` knows every mode
 a keyboard can be in, and there is no second reader here: two readers
-of the same bytes cost 52 wrong keys once (Lillecarl/pymux#119). What
+of the same bytes cost 52 wrong keys once (Lillecarl/pyterm#121). What
 is here is the naming: which prompt_toolkit key a `KeyEvent` is,
 which pyte cannot say because a toolkit sits above it. `names.py`
 holds the tables.
@@ -122,7 +122,7 @@ _MODIFIED_F3_RE = re.compile(r"^\x1b\[1;([2-8])R\Z")
 # "$" is in there for DECRQM, whose reply is "CSI ? <mode> ; <state> $ y".
 # Without it the parser stops buffering at the "$" and hands the rest
 # out as key presses. The space after ">" is for kitty's multiple
-# cursors, whose replies end "SP q". Lillecarl/pymux#891.
+# cursors, whose replies end "SP q". Lillecarl/pyterm#893.
 _KITTY_PREFIX_RE = re.compile(r"^\x1b\[(?:[0-9;:<=>?$]*|>[0-9;:]* )$")
 
 
@@ -173,8 +173,8 @@ def parse_kitty_key(prefix: str) -> _KeyResult | None:
     **The reading is pyte's.** `parse_key_data` knows every mode a
     keyboard can be in, and there is no second reader here with its own
     regex, modifier bits and keypad: two readers of the same bytes cost
-    52 keys in Lillecarl/pymux#119. What is here is the naming: which
-    prompt_toolkit key a `KeyEvent` is. Lillecarl/pymux#176.
+    52 keys in Lillecarl/pyterm#121. What is here is the naming: which
+    prompt_toolkit key a `KeyEvent` is. Lillecarl/pyterm#178.
     """
     reply = reply_of(prefix)
     if reply is not None:
@@ -287,7 +287,7 @@ class KittyVt100Parser(Vt100Parser):
         # The cell size of a terminal that reports the mouse in pixels
         # (mode 1016), or None while it reports cells. Asked at each
         # report, because the mode turns on after the detection.
-        # Lillecarl/pymux#648.
+        # Lillecarl/pyterm#650.
         self.pixel_cell = pixel_cell
         #: Where in its cell the last mouse report was, as fractions.
         self.pointer_fraction = (0.5, 0.5)
@@ -300,7 +300,7 @@ class KittyVt100Parser(Vt100Parser):
         # protocol does. Asked when a key arrives and not once at the
         # start, because the detection answers after this is built.
         # None means nobody knows, which reads as no.
-        # Lillecarl/pymux#182.
+        # Lillecarl/pyterm#184.
         self.speaks_protocol = speaks_protocol
         # Whether the key being handled arrived as several: alt and a
         # key is one such. See `_call_handler`.
@@ -316,7 +316,7 @@ class KittyVt100Parser(Vt100Parser):
 
         No binding of pymux's takes such a key, so this is how a person
         finds out why it did nothing outside a pane. Once per sequence:
-        a key that is held down repeats. Lillecarl/pymux#167.
+        a key that is held down repeats. Lillecarl/pyterm#169.
         """
         if sequence in self._already_said:
             return
@@ -349,7 +349,7 @@ class KittyVt100Parser(Vt100Parser):
         Wait for the rest of a kitty key sequence or a string reply,
         instead of handing it out a character at a time. These two have
         variable parameters, which prompt_toolkit's table cannot list.
-        Lillecarl/pymux#697.
+        Lillecarl/pyterm#699.
         """
         if _KITTY_PREFIX_RE.match(prefix):
             return True
@@ -367,7 +367,7 @@ class KittyVt100Parser(Vt100Parser):
         # alt+Up, which is a third answer again.
         #
         # The detection already knows which terminal this is, so the
-        # question is asked rather than guessed. Lillecarl/pymux#182.
+        # question is asked rather than guessed. Lillecarl/pyterm#184.
         if self._counts_protocol_modifiers():
             modifier = _CARRIES_A_HIGH_MODIFIER_RE.match(prefix)
             if modifier is not None and int(modifier.group(1)) > _CTRL_ALT_SHIFT:
@@ -379,7 +379,7 @@ class KittyVt100Parser(Vt100Parser):
         # cursor report of row 1. The reports the server asks for are
         # `EMOJI_WIDTH_PROBE`'s, on row 2, and `CLUSTER_WIDTH_PROBE`'s,
         # on rows 3 to 5, so row 1 is the key. A probe that asks on row
-        # 1 would be read as a key press here. Lillecarl/pymux#244.
+        # 1 would be read as a key press here. Lillecarl/pyterm#246.
         f3 = _MODIFIED_F3_RE.match(prefix)
         if f3 is not None:
             return cast("Keys | tuple[Keys, ...]", key_named(str.__str__(Keys.F3), int(f3.group(1)) - 1))
@@ -407,13 +407,13 @@ class KittyVt100Parser(Vt100Parser):
             # The pane may still read it: F13 to a pane that asked for
             # every key, or ctrl+1 to one that disambiguates. Only the
             # binding for this key takes it, so it never self-inserts.
-            # Lillecarl/pymux#707.
+            # Lillecarl/pyterm#709.
             self._say_it_has_no_name(key, insert_text)
             super()._call_handler(Keys.UnnamedKey, insert_text)
             return
         # A cursor position report answers a probe of the server's: a
         # full screen application asks for none of its own.
-        # Lillecarl/pymux#539.
+        # Lillecarl/pyterm#541.
         if key is TERMINAL_REPLY or key is Keys.CPRResponse:
             if self.reply_callback is not None:
                 self.reply_callback(insert_text)
@@ -465,5 +465,5 @@ class KittyVt100Parser(Vt100Parser):
             # A terminal that disambiguates writes alt and a key as one
             # sequence of its own, so a bare Escape can complete
             # nothing, and nothing is lost by saying it now.
-            # Lillecarl/pymux#164.
+            # Lillecarl/pyterm#166.
             self.feed_key_callback(_Flush)

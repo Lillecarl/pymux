@@ -14,7 +14,7 @@ column holds.
 calls on a window that is not a strip and get the old answers, because
 a strip is one window's option and not a new way for pymux to work.
 
-Lillecarl/pymux#198.
+Lillecarl/pyterm#200.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ def create_strip(columns=1):
 
     The panes come back in the order they were opened, which is the
     order of the columns. `Window.panes` is in that order too now
-    (Lillecarl/pymux#210), and this still collects them as they are
+    (Lillecarl/pyterm#212), and this still collects them as they are
     opened: a test about where a split puts a pane should not be
     reading its answer out of the thing it is judging.
     """

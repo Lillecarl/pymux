@@ -1,7 +1,7 @@
 """
 A bell nobody saw flags its window and its pane, the way tmux's
 `window_bell_flag` does, and looking at them clears both.
-Lillecarl/pymux#501.
+Lillecarl/pyterm#503.
 
 The stand-in clients are objects of our own: `_active_window_for_cli`
 keys on the application and does nothing else with it.

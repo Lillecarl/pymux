@@ -1,7 +1,7 @@
 """
 The menu of `display-menu`: a box of entries, each with the key that
 runs it. What it holds lives on `ClientState`; this draws it and runs
-the entry a key or a click picks. Lillecarl/pymux#297.
+the entry a key or a click picks. Lillecarl/pyterm#299.
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ class Menu:
         The menu of `display-menu`: a line per entry, with the key
         that runs it beside the name. The box draws where the other
         boxes draw; tmux takes a position, and -x and -y are accepted
-        for it and change nothing. Lillecarl/pymux#297.
+        for it and change nothing. Lillecarl/pyterm#299.
         """
         self.client_state.display_popup = False
         self.client_state.chooser = None
@@ -101,7 +101,7 @@ class Menu:
         """
         The entries of the menu, one row each: the key that runs it,
         and its name. A row answers a click the way a chooser's row
-        does. Lillecarl/pymux#297.
+        does. Lillecarl/pyterm#299.
         """
         result: StyleAndTextTuples = []
         for key, name, _command in self.client_state.menu_entries:
@@ -115,7 +115,7 @@ class Menu:
         The menu, in a box. Built once, for the reason
         `CommandLine.window` gives; the title is asked each frame,
         because the command that opened the menu names it.
-        Lillecarl/pymux#297.
+        Lillecarl/pyterm#299.
         """
         if self._box is not None:
             return self._box

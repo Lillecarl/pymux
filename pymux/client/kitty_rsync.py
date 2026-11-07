@@ -1,7 +1,7 @@
 """
 kitty's rsync deltas, for the file transfer protocol (OSC 5113).
 https://sw.kovidgoyal.net/kitty/file-transfer-protocol/#transmitting-binary-deltas.
-Lillecarl/pymux#912.
+Lillecarl/pyterm#914.
 
 A port of kitty's `tools/rsync`. The side that holds the old file makes a
 `Patcher`, sends its signature, and applies the delta that comes back.
@@ -67,7 +67,7 @@ def _records(run: bytes, block_size: int, first: int) -> bytes:
     """
     The signature records of the blocks of `run`, numbered from `first`;
     the last block may be short. `pymux.graphics.kernels.install_rsync()`
-    puts `pymux_rs.rsync_records` in its place. Lillecarl/pymux#921.
+    puts `pymux_rs.rsync_records` in its place. Lillecarl/pyterm#923.
     """
     out = bytearray()
     for index, at in enumerate(range(0, len(run), block_size), first):
@@ -176,7 +176,7 @@ class _Blocks:
     """
     The blocks of a signature, and the search for one of them in new bytes.
     `pymux.graphics.kernels.install_rsync()` puts `pymux_rs.RsyncBlocks`
-    in its place, which answers the same. Lillecarl/pymux#916.
+    in its place, which answers the same. Lillecarl/pyterm#918.
     """
 
     def __init__(self, block_size: int) -> None:

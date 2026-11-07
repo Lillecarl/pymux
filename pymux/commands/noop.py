@@ -17,7 +17,7 @@ def noop(pymux: Pymux, args: argparse.Namespace) -> None:
     It is what a table binds a key to when the key must be swallowed
     and nothing more: `bind-key -T copy-mode Any noop` makes that mode
     strict, so the keys it does not name go nowhere.
-    Lillecarl/pymux#394.
+    Lillecarl/pyterm#396.
     """
 
 

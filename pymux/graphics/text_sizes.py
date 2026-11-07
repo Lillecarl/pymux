@@ -1,6 +1,6 @@
 """
 The text a pane holds at another size, sent to a client's terminal as
-kitty's text sizing, OSC 66. Lillecarl/pymux#890.
+kitty's text sizing, OSC 66. Lillecarl/pyterm#892.
 
 A pane's cells hold each block at scale one (`pyte.text_sizes`), so
 prompt_toolkit draws that on every terminal. For a terminal that said it
@@ -13,7 +13,7 @@ the check runs when the frame is laid out and before it is written
 (`will_lose_a_block`): a float over a block, or a block the program
 took away, makes that frame a full repaint. It erases the screen first,
 and every block with it, and the blocks go again after it.
-Lillecarl/pymux#911.
+Lillecarl/pyterm#913.
 """
 
 from __future__ import annotations

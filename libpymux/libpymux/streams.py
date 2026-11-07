@@ -3,7 +3,7 @@ A pane, streamed to a caller that draws it.
 
 `Pane.capture_html` gives a whole screen each time it is asked. This
 gives the rows that changed, once each, as the frames of
-Lillecarl/pymux#461 -- which is what a caller that draws a pane several
+Lillecarl/pyterm#463 -- which is what a caller that draws a pane several
 times a second wants, and what a relay in front of a browser carries.
 
 **A frame is a dict and nothing here reads one.** The shape of a frame is

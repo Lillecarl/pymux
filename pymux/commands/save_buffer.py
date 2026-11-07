@@ -16,7 +16,7 @@ def save_buffer(pymux: Pymux, args: argparse.Namespace) -> None:
     Write a buffer to a file.
 
     `-b` names the buffer; without it the session's one buffer is
-    written. Lillecarl/pymux#303.
+    written. Lillecarl/pyterm#305.
     """
     name = args.buffer_name
     if name:

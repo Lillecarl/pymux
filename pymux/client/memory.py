@@ -18,13 +18,13 @@ asyncio holds one callback per signal. On the socket route the server
 is another process and cannot reach this one's handler. Here it can, and
 a server application that took it would leave this client deaf to its
 terminal's size: a font size change in kitty would move nothing.
-Lillecarl/pymux#208.
+Lillecarl/pyterm#210.
 
 **So a server's application says it does not want the signal**, which
 is the honest statement of the same fact: it has no terminal of its own
 to be resized, and every client reports its size in a packet.
 `run_async(handle_sigwinch=False)` in `pymux.connection.attach.create_app`,
-and the flag is Lillecarl/pymux#231.
+and the flag is Lillecarl/pyterm#233.
 
 The size is polled as well, and that stays. prompt_toolkit polls for a
 reason of its own -- `Application._poll_output_size` names "situations
@@ -72,7 +72,7 @@ class MemoryClient(TerminalClient):
         self.connection = connection
         #: Frames the terminal has not taken yet. The server in this
         #: process skips frames while there are any, and draws what
-        #: changed once they are gone. Lillecarl/pymux#585.
+        #: changed once they are gone. Lillecarl/pyterm#587.
         self._backlog = bytearray()
         self._more: anyio.Event | None = None
         connection.held_for_terminal = lambda: len(self._backlog)
@@ -178,7 +178,7 @@ class MemoryClient(TerminalClient):
         so closing the connection ends the read loop the same way its
         own hangup does, and the attach returns through the
         `BrokenPipeError` that restores the terminal.
-        Lillecarl/pymux#419.
+        Lillecarl/pyterm#421.
         """
         while True:
             await self.input_released()

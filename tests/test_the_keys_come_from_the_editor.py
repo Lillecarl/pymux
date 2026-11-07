@@ -6,10 +6,10 @@ tmux reads the editor of the person and switches both `status-keys` and
 person used, so the vi keys of copy mode reached nothing: `v`, `y` and
 `$` do nothing in a read-only buffer with emacs keys, and a person
 pressing them read that as copy mode being unable to copy.
-Lillecarl/pymux#375.
+Lillecarl/pyterm#377.
 
 Helix gives Helix keys on the line, and copy mode stays on emacs keys
-until it has Helix keys of its own. Lillecarl/pymux#749.
+until it has Helix keys of its own. Lillecarl/pyterm#751.
 """
 
 from __future__ import annotations

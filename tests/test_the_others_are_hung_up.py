@@ -5,9 +5,9 @@ tmux's `-x` does not end a client differently. The client exits the
 same way `-d` makes it exit, and then sends SIGHUP to the process that
 started it (`client.c:415`), which usually closes the terminal window
 it was in. A pymux client already exits when it is detached, so that
-signal is the whole of what `-x` adds. Lillecarl/pymux#347.
+signal is the whole of what `-x` adds. Lillecarl/pyterm#349.
 
-The rule about *which* clients is Lillecarl/pymux#345's and is judged
+The rule about *which* clients is Lillecarl/pyterm#347's and is judged
 in `test_attach_detaches_the_others.py`. This file judges the message.
 """
 

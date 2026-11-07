@@ -149,7 +149,7 @@ class Snapshot:
         # No sync per commit: `finish` syncs the whole file before the
         # rename, and a crash throws the partial file away. Each of the
         # schema's tables was a commit of its own, and under a loaded
-        # disk those fsyncs took 9 s of an upgrade. Lillecarl/pymux#923.
+        # disk those fsyncs took 9 s of an upgrade. Lillecarl/pyterm#925.
         # The journal stays, in memory, so a failed write still rolls back.
         self.db.execute("PRAGMA synchronous = OFF; PRAGMA journal_mode = MEMORY")
         self.db.execute(SCHEMA)
@@ -241,7 +241,7 @@ class Snapshot:
         backend = process.backend
         assert isinstance(backend, PosixBackend)  # `write` refused anything else
         # A program that ended leaves no pty, and `remain-on-exit` keeps its
-        # pane: it goes with no master. Lillecarl/pymux#738.
+        # pane: it goes with no master. Lillecarl/pyterm#740.
         if backend.pid is None or (backend.master is None and not backend.closed):
             raise SnapshotError("pane %%%d holds a program with no pid or no pty" % pane.pane_id)
         freezer = self.freezers.get(pane.pane_id)

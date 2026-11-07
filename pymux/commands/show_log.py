@@ -27,7 +27,7 @@ def show_log(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None]:
     server's log nor its reach. `-t` asks a client and `-p` a peer for
     theirs, over the link they already hold. A peer is named by its
     address or by its host, from either end of the link.
-    Lillecarl/pymux#934.
+    Lillecarl/pyterm#936.
     """
     if args.target_client is not None and args.peer is not None:
         raise CommandException("show-log: -t and -p name two machines")

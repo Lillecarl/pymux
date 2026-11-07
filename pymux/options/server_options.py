@@ -1,7 +1,7 @@
 """
 The options of the server process, each declared once: one value for
 every session. `pymux/options/option_fields.py` says what the declaration gives.
-Lillecarl/pymux#757.
+Lillecarl/pyterm#759.
 """
 
 from __future__ import annotations
@@ -89,7 +89,7 @@ class ServerOptions(Options):
         doc=(
             "Who may write the clipboard of the person at the keyboard. "
             '"external" is tmux\'s default: a copy the person makes goes out, and a program in a '
-            "pane is refused. Lillecarl/pymux#378."
+            "pane is refused. Lillecarl/pyterm#380."
         ),
     )
     wayland_server: bool = option(
@@ -97,7 +97,7 @@ class ServerOptions(Options):
         doc=(
             "Hold a Wayland compositor for the panes whose session has no display, so wl-copy and "
             "wl-paste work there. Needs the `wayland` extra; without it this does nothing. A pane "
-            "that runs already keeps its environment. Lillecarl/pymux#383."
+            "that runs already keeps its environment. Lillecarl/pyterm#385."
         ),
         on_set=_wayland_changed,
     )
@@ -106,7 +106,7 @@ class ServerOptions(Options):
         doc=(
             "Where programs in window panes learn whether the theme is light or dark, from a desktop "
             "portal pymux serves. `WaylandPortal` says what each means. Needs the `wayland` extra. "
-            "Lillecarl/pymux#812."
+            "Lillecarl/pyterm#814."
         ),
         on_set=_portal_changed,
     )
@@ -114,7 +114,7 @@ class ServerOptions(Options):
         AudioServerMode.AUTO,
         doc=(
             "Whose PipeWire holds the speaker and microphone that panes play into and record from. "
-            "`AudioServerMode` says what each means. Only new panes see it. Lillecarl/pymux#657."
+            "`AudioServerMode` says what each means. Only new panes see it. Lillecarl/pyterm#659."
         ),
         on_set=_audio_changed,
     )
@@ -127,7 +127,7 @@ class ServerOptions(Options):
         doc=(
             "Offer to forward a port when a program in a pane starts listening on one, to a client that "
             "reached this server over SSH. Each port is offered once a pane; a yes runs `forward-port`. "
-            "It reads every pane's sockets every two seconds while it is on. Lillecarl/pymux#438."
+            "It reads every pane's sockets every two seconds while it is on. Lillecarl/pyterm#440."
         ),
     )
     job_ttl: int = option(
@@ -144,7 +144,7 @@ class ServerOptions(Options):
         doc=(
             "How long the notification hub keeps a notification after a client saw the window it came "
             "from, in seconds. An unseen one stays. Zero keeps every one until the hub holds 256. "
-            "Lillecarl/pymux#780."
+            "Lillecarl/pyterm#782."
         ),
         choices=[0, 600, 3600, 86400],
     )
@@ -165,7 +165,7 @@ class ServerOptions(Options):
         doc=(
             "How many days pymux keeps its copy of files dropped from another machine, under the "
             "user's cache. Older copies go at the server's start and at each new drop. Zero keeps "
-            "every one. Lillecarl/pymux#904."
+            "every one. Lillecarl/pyterm#906."
         ),
         choices=[0, 1, 7, 30],
     )
@@ -179,7 +179,7 @@ class ServerOptions(Options):
         doc=(
             'How much of the keyboard this server uses. "off" is the way out for a program that '
             "misbehaves under the extended encodings, and for a terminal that claims more than it "
-            "does. Lillecarl/pymux#173."
+            "does. Lillecarl/pyterm#175."
         ),
         on_set=_keyboard_changed,
     )
@@ -192,6 +192,6 @@ class ServerOptions(Options):
         False,
         doc=(
             "Show 13:37 on the 14th of March of this year wherever pymux shows a clock, so a screen "
-            "does not change while nobody types and a picture cannot race the clock. Lillecarl/pymux#273."
+            "does not change while nobody types and a picture cannot race the clock. Lillecarl/pyterm#275."
         ),
     )

@@ -6,7 +6,7 @@ program after us: a shell that pushed its own flags, most of all a
 nested pymux. So the first enable pushes, a later change sets over our
 own push, and the way out pops -- never a set back to zero, which
 would leave the state beneath ours gone.
-Lillecarl/pymux#403.
+Lillecarl/pyterm#405.
 """
 
 from __future__ import annotations

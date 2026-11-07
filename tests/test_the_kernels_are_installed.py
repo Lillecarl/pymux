@@ -2,7 +2,7 @@
 The server draws with the Rust kernels.
 
 A build that lost `pyte_rs` or `prompt_toolkit_rs` still draws the same
-cells, slower, and no other test would say so. Lillecarl/pymux#566.
+cells, slower, and no other test would say so. Lillecarl/pyterm#568.
 """
 
 from __future__ import annotations

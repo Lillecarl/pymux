@@ -10,8 +10,8 @@ and every variable reads one.
 read a fact nobody thought of when it was written: the client arrived
 that way, and `#{client_hostname}` is the first variable that needed
 something no session, window or pane knows. A renderer can take a
-context too, which is what Lillecarl/pymux#333 is for.
-Lillecarl/pymux#330.
+context too, which is what Lillecarl/pyterm#335 is for.
+Lillecarl/pyterm#332.
 """
 
 from __future__ import annotations
@@ -60,7 +60,7 @@ class Language(Enum):
     parses what it answers, libpymux builds its templates out of
     `#{...}`, and `pymux -V` says "tmux 3.4". A listing renders a
     template only when it is asked to, which is what `JINJA` is for.
-    Lillecarl/pymux#333.
+    Lillecarl/pyterm#335.
     """
 
     SNIFF = "sniff"
@@ -90,7 +90,7 @@ class FormatContext(NamedTuple):
 
     `window` and `pane` are missing for a session that holds no window,
     which `list-sessions` still lists. Each of their variables answers
-    nothing there, as tmux's do. Lillecarl/pymux#810.
+    nothing there, as tmux's do. Lillecarl/pyterm#812.
     """
 
     pymux: Pymux
@@ -125,7 +125,7 @@ def _hostname_short() -> str:
 
     tmux cuts at the first dot, and spells it this way round: `#H` is
     the whole name and `#h` is the short one. `format_cb_host_short` in
-    tmux's `format.c`. Lillecarl/pymux#331.
+    tmux's `format.c`. Lillecarl/pyterm#333.
     """
     return _hostname().split(".")[0]
 
@@ -153,7 +153,7 @@ def format_pymux_string(
     **A caller that draws for one client passes that client.** Its
     session is what the frame shows, which is right for a status line
     and wrong for a command; and a `client_` variable has nothing else
-    to read. Lillecarl/pymux#323, Lillecarl/pymux#330.
+    to read. Lillecarl/pyterm#325, Lillecarl/pyterm#332.
 
     `windowless` formats a session that holds no window, with every
     window and pane variable empty, where a command would refuse.
@@ -168,7 +168,7 @@ def format_pymux_string(
     if pane is None and window is not None:
         pane = window.active_pane
     # A command error, so a command that formats on a session with no
-    # window yet answers with a message. Lillecarl/pymux#552.
+    # window yet answers with a message. Lillecarl/pyterm#554.
     if window is None and not windowless:
         raise CommandException("No active window to format for.")
     if pane is None and not windowless:
@@ -295,7 +295,7 @@ def _format_variables(context: FormatContext, string: str) -> str:
     holds commas and further `#{...}` in its branches, and `#{==:a,b}`
     holds a comma between its two sides, so a regular expression that
     reads one name cannot parse either. This walks the string and takes a
-    branch as far as its own braces reach. Lillecarl/pymux#469.
+    branch as far as its own braces reach. Lillecarl/pyterm#471.
     """
     if "#{" not in string:
         return string
@@ -380,7 +380,7 @@ def marks_of(options: OwnOptions, windows: Iterable[Window]) -> str:
     """
     The symbols of the marks any of `windows` carries, in tmux's order:
     activity, bell, silence, then pymux's notification.
-    Lillecarl/pymux#767.
+    Lillecarl/pyterm#769.
     """
     return "".join(
         symbol
@@ -410,7 +410,7 @@ def _symbol_window_flags(context: FormatContext) -> str:
     marks = window_marks(context.session.options, window)
     # The progress follows the flags, so tmux's `#I:#W#F` shows it: a
     # conditional in the default format cost every frame 6% more parsing.
-    # Lillecarl/pymux#788.
+    # Lillecarl/pyterm#790.
     progress = _window_progress(context)
     z = ("Z" if window.zoom else "") + (" " + progress if progress else "")
 
@@ -538,7 +538,7 @@ def _window_flags(context: FormatContext) -> str:
 
 
 def _window_progress(context: FormatContext) -> str:
-    "The progress of the active pane, or else of the first pane that says one. Lillecarl/pymux#788."
+    "The progress of the active pane, or else of the first pane that says one. Lillecarl/pyterm#790."
     # Every window of every frame asks; the walk waits for a pane to say one.
     if not context.pymux.progressing:
         return ""
@@ -552,7 +552,7 @@ def _window_progress(context: FormatContext) -> str:
 def _window_program_state(context: FormatContext) -> str:
     """
     The most urgent OSC 7501 state of the window's panes, so two agents in
-    one window show the one that needs the person. Lillecarl/pymux#931.
+    one window show the one that needs the person. Lillecarl/pyterm#933.
     """
     most: Report | None = None
     for pane in context.the_window().panes:
@@ -675,7 +675,7 @@ def _pane_mode(context: FormatContext) -> str:
     **Copy mode is the client's**, where tmux's is the pane's, so the
     answer is for the client the string is formatted for. A command over
     the socket has none a person sits at, and the answer is for the
-    client `copy-mode` opens for then. Lillecarl/pymux#470.
+    client `copy-mode` opens for then. Lillecarl/pyterm#472.
     """
     pane = context.the_pane()
     if pane.clock_mode:
@@ -710,7 +710,7 @@ def _client_key_table(context: FormatContext) -> str:
     until it reads one key (`server_client_get_key_table` and
     `server-client.c`). A mode puts its own named table there for as
     long as it lasts, and a prefix pressed inside a mode sits on top
-    of it for one key. Lillecarl/pymux#394.
+    of it for one key. Lillecarl/pyterm#396.
     """
     client = context.client
     if client is None:
@@ -725,7 +725,7 @@ def _client_hostname(context: FormatContext) -> str:
     **tmux has no such variable**, because every tmux client is on the
     server's machine. pymux reaches a server over ssh, so `#{host}` is
     the server's answer and this is the other one. The client reports
-    it when it attaches. Lillecarl/pymux#287, Lillecarl/pymux#330.
+    it when it attaches. Lillecarl/pyterm#289, Lillecarl/pyterm#332.
     """
     client = _client_of(context)
     return client.hostname if client is not None else ""
@@ -739,7 +739,7 @@ def _client_name(context: FormatContext) -> str:
     otherwise. **This variable keeps its meaning either way**: it is
     what `list-clients` prints first on a line and what `-t` takes, so
     a format string written before names were choosable still says the
-    thing a person can paste into a command. Lillecarl/pymux#340.
+    thing a person can paste into a command. Lillecarl/pyterm#342.
     """
     client = context.client
     chosen = client.options.name if client is not None else ""
@@ -755,7 +755,7 @@ def _client_tty(context: FormatContext) -> str:
     path alone names a terminal that two machines both have, and a
     pymux client can be on another machine: `ServerConnection.name`
     says why the machine is always in front of it.
-    Lillecarl/pymux#335, Lillecarl/pymux#340.
+    Lillecarl/pyterm#337, Lillecarl/pyterm#342.
     """
     client = _client_of(context)
     return client.connection.name if client is not None else ""
@@ -815,7 +815,7 @@ def _client_cell(side: Callable[[ClientGraphics], int]) -> Callable[[FormatConte
 def _client_bytes(count: Callable[[PipeConnection], int]) -> Callable[[FormatContext], str]:
     """
     What the wire carried to this client or from it, after zstd: the
-    bytes a metered link pays for. Not tmux's. Lillecarl/pymux#677.
+    bytes a metered link pays for. Not tmux's. Lillecarl/pyterm#679.
     """
 
     def bytes_of(context: FormatContext) -> str:
@@ -831,7 +831,7 @@ def _client_rate(
     """
     The same bytes per second over the last few seconds, in a unit
     that fits (`pymux.connection.rate`). For a person; a script reads the counts.
-    Lillecarl/pymux#678.
+    Lillecarl/pyterm#680.
     """
 
     def rate_of(context: FormatContext) -> str:
@@ -846,7 +846,7 @@ def _client_rate(
 def _client_fps(context: FormatContext) -> str:
     """
     The frames a second this client gets, over the last few seconds.
-    A status line shows it where a template puts it. Lillecarl/pymux#596.
+    A status line shows it where a template puts it. Lillecarl/pyterm#598.
     """
     client = _client_of(context)
     if client is None:
@@ -883,7 +883,7 @@ def _client_flags(context: FormatContext) -> str:
     only way to read either one back, because `list-clients` has no
     line of its own for them. The default format wraps it in brackets
     with `#{?client_flags,...}`, so a plain client reads none.
-    Lillecarl/pymux#467, Lillecarl/pymux#469.
+    Lillecarl/pyterm#469, Lillecarl/pyterm#471.
     """
     client = context.client
     if client is None:
@@ -914,13 +914,13 @@ tmux_variables: dict[str, Callable[[FormatContext], str]] = {
     "pane_current_path_compact": _pane_current_path_compact,
     "pane_start_path": _pane_current_path,
     # What the shell says of where it runs: OSC 7 and iTerm2's RemoteHost
-    # and ShellIntegrationVersion. Lillecarl/pymux#784.
+    # and ShellIntegrationVersion. Lillecarl/pyterm#786.
     "pane_current_host": lambda c: c.the_pane().current_host or "",
     "pane_current_user": lambda c: c.the_pane().current_user or "",
     "pane_shell": lambda c: c.the_pane().shell or "",
     "pane_progress": lambda c: c.the_pane().progress.shown(),
     # OSC 7501: the most urgent of what the pane's program says it is
-    # doing, and the line it said with it. Lillecarl/pymux#927.
+    # doing, and the line it said with it. Lillecarl/pyterm#929.
     "pane_program_state": lambda c: r.state if (r := _program_status(c)) is not None else "",
     "pane_program_message": lambda c: (r.msg_text or "") if (r := _program_status(c)) is not None else "",
     "pane_dead": lambda c: "1" if c.the_pane().process.is_terminated else "0",
@@ -933,13 +933,13 @@ tmux_variables: dict[str, Callable[[FormatContext], str]] = {
     # "Has anything happened in this pane?", as one number to compare.
     # It only goes up, and a difference says something may have changed
     # rather than how much. `Pane.revision` says what moves it.
-    # Lillecarl/pymux#387.
+    # Lillecarl/pyterm#389.
     "pane_revision": lambda c: str(c.the_pane().revision),
-    # Not tmux's: which pane of the window rang. Lillecarl/pymux#501.
+    # Not tmux's: which pane of the window rang. Lillecarl/pyterm#503.
     "pane_bell_flag": _pane_bell_flag,
     "session_alerts": _session_alerts,
     # Not tmux's: the tags of `set-tag`, as `--tag` takes them, and a
-    # dictionary in a template. Lillecarl/pymux#762.
+    # dictionary in a template. Lillecarl/pyterm#764.
     "pane_tags": lambda c: spelled(c.the_pane().tags),
     "history_size": _history_size,
     "history_limit": lambda c: str(c.session.options.history_limit),
@@ -950,7 +950,7 @@ tmux_variables: dict[str, Callable[[FormatContext], str]] = {
     "window_active": _window_active,
     "window_flags": _window_flags,
     # `#F`: the flags with the progress after them, padded so the window
-    # list does not move. Lillecarl/pymux#960.
+    # list does not move. Lillecarl/pyterm#962.
     "window_status_flags": _symbol_window_flags,
     "window_progress": _window_progress,
     "window_program_state": _window_program_state,
@@ -976,7 +976,7 @@ tmux_variables: dict[str, Callable[[FormatContext], str]] = {
     "client_created": _client_created,
     "client_activity": _client_activity,
     # Not tmux's: the token a client keeps across reattaches to a
-    # restarted server. Lillecarl/pymux#399.
+    # restarted server. Lillecarl/pyterm#401.
     "client_id": _client_id,
     "client_hostname": _client_hostname,
     "client_prefix": _client_prefix,

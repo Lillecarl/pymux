@@ -4,7 +4,7 @@ something, newest window first, and its messages under it.
 
 A list of records in time order said what arrived and not where to go:
 the same window came back on every other row, and no row named the
-window or the program. Lillecarl/pymux#768.
+window or the program. Lillecarl/pyterm#770.
 """
 
 from __future__ import annotations

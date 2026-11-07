@@ -89,7 +89,7 @@ def _client_options_move_out() -> str:
     """
     39 kept a client's options as columns of `clients`, which a NULL
     left unset. 40 gives them a table of their own, and
-    `swap-light-and-dark-colors` its attribute's name. Lillecarl/pymux#769.
+    `swap-light-and-dark-colors` its attribute's name. Lillecarl/pyterm#771.
     """
     declared = SAVED[ClientOptions]
     old = {each.attribute: OLD_CLIENT_COLUMNS.get(each.attribute, each.attribute) for each in declared}
@@ -228,7 +228,7 @@ def terminal_of(pane: Pane) -> Terminal:
     """
     The terminal of a pane the snapshot holds. A Wayland window lives on
     the server's compositor, which no handover carries, and the upgrade
-    closes it before it writes. Lillecarl/pymux#620.
+    closes it before it writes. Lillecarl/pyterm#622.
     """
     terminal = pane.terminal
     if not isinstance(terminal, Terminal):

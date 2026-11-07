@@ -12,7 +12,7 @@ One difference is allowed: a Rust row iterates by column and a dict in
 the order it was written, so contents are compared sorted.
 `checks.prompt-toolkit-rs-unit` runs prompt-toolkit's whole suite with
 the Rust row, which is what says nothing reads that order.
-Lillecarl/pymux#570.
+Lillecarl/pyterm#572.
 """
 
 from __future__ import annotations

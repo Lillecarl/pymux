@@ -17,7 +17,7 @@ def confirm_before(pymux: Pymux, args: argparse.Namespace) -> None:
     # The client a person is looking at, which is not the one that ran
     # this when the command came from a pane. A question on a temporary client
     # is one nobody can answer, so the command never ran.
-    # Lillecarl/pymux#272.
+    # Lillecarl/pyterm#274.
     client_state = pymux.the_client_to_tell()
     if client_state is None:
         pymux.add_command_error("pymux: nobody is attached to ask.")

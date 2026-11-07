@@ -1,7 +1,7 @@
 """
 The environment a pane runs under: the server's, what `set-environment -g`
 and `set-environment` put over it, and the names a client brings when it
-attaches (`update-environment`). Lillecarl/pymux#270, Lillecarl/pymux#271.
+attaches (`update-environment`). Lillecarl/pyterm#272, Lillecarl/pyterm#273.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ def take_environment_from(pymux: Pymux, client_state: ClientState) -> None:
     **The machine a person attaches from is the machine their panes
     should talk to.** `DISPLAY`, `SSH_AUTH_SOCK` and `WAYLAND_DISPLAY`
     name things that live on that machine, and a server outlives the
-    client that started it: over ssh (Lillecarl/pymux#90) an old
+    client that started it: over ssh (Lillecarl/pyterm#92) an old
     `DISPLAY` from the server's own start is worse than none, because
     a pane then opens a window nobody is looking at.
 
@@ -36,7 +36,7 @@ def take_environment_from(pymux: Pymux, client_state: ClientState) -> None:
 
     `set-environment` writes the same dictionary and is not touched
     here, except for the names this option lists -- those belong to
-    whoever attached. Lillecarl/pymux#271, Lillecarl/pymux#270.
+    whoever attached. Lillecarl/pyterm#273, Lillecarl/pyterm#272.
     """
     reported = client_state.client.environment
     environment = client_state.session.environment
@@ -61,7 +61,7 @@ def pane_environment(pymux: Pymux, base: dict[str, str] | None = None) -> dict[s
     a plain `set-environment` set over it. An unset takes the name out of
     its scope only: a session unset of a name the global set
     falls through to the global value, and a name no scope says
-    anything about leaves entirely. Lillecarl/pymux#270.
+    anything about leaves entirely. Lillecarl/pyterm#272.
     """
     merged = dict(os.environ if base is None else base)
     for name, value in pymux.global_environment.items():

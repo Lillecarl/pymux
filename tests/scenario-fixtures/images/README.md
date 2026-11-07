@@ -1,5 +1,5 @@
 Photographs for the yazi scenario to preview, in several formats and
-shapes. Lillecarl/pymux#593.
+shapes. Lillecarl/pyterm#595.
 
 Each is an Unsplash photograph, fetched from picsum.photos by its id on
 2026-10-11, with its metadata stripped. The Unsplash licence allows free

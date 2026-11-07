@@ -17,7 +17,7 @@ def refresh_client(pymux: Pymux, args: argparse.Namespace) -> None:
     This is what tmux's refresh-client does. A frame writes what
     changed, so a cell the terminal lost stays lost until something
     writes over it; this writes every cell. The other clients keep the
-    frames they have. Lillecarl/pymux#301.
+    frames they have. Lillecarl/pyterm#303.
     """
     if pymux.answer is not None:
         return  # The command line drew nothing and has nothing to draw.

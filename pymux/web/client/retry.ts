@@ -2,7 +2,7 @@
  * Whether a stream that closed opens again, and when.
  *
  * A module of its own so that `tests/retry.test.mjs` can run it under
- * node, as `keys.ts` is. Lillecarl/pymux#492.
+ * node, as `keys.ts` is. Lillecarl/pyterm#494.
  */
 
 /** The close code the server sends when it will not serve a stream. */

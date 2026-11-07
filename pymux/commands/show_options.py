@@ -23,12 +23,12 @@ def show_options(pymux: Pymux, args: argparse.Namespace) -> None:
     option's name finds it without `-s`, as on the write. Without a
     name, one `name value` line per option, sorted: the session's, or
     with `-s` the server's, which is what tmux lists.
-    Lillecarl/pymux#298, Lillecarl/pymux#757.
+    Lillecarl/pyterm#300, Lillecarl/pyterm#759.
 
     A session reads what `-t` names, or the caller's; `-g` reads the
     defaults. `-A` marks a value the session did not set itself with
     `*` after its name, which is how tmux spells an inherited one.
-    Lillecarl/pymux#756.
+    Lillecarl/pyterm#758.
     """
     holder = session_holder(pymux, args)
 

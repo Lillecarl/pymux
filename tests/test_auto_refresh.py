@@ -6,14 +6,14 @@ in the status line is what it is for. A whole frame is 279,645 bytecode
 instructions and the text that time moves is 2,371 of them, so the
 refresh reads the text and asks for a frame only when it differs from
 what the last frame drew. A tick that finds it the same costs 2,461.
-Lillecarl/pymux#154.
+Lillecarl/pyterm#156.
 
 A session with `full-screen on` draws no status line and no pane
-titlebar, so its text is empty and never differs. Lillecarl/pymux#151.
+titlebar, so its text is empty and never differs. Lillecarl/pyterm#153.
 
 The tests call the refresh. What runs it is `Waking.auto_refresh`, one
 task of the server's own task group, and it is on the loop rather than
-on a thread for the reason in Lillecarl/pymux#155.
+on a thread for the reason in Lillecarl/pyterm#157.
 """
 
 from __future__ import annotations
@@ -90,7 +90,7 @@ async def session():
 def set_option(pymux, name, value, state=None):
     """
     A client option belongs to one terminal, so `full-screen` needs
-    the client to set it under. Lillecarl/pymux#471.
+    the client to set it under. Lillecarl/pyterm#473.
     """
     table = ALL_CLIENT_OPTIONS if name in ALL_CLIENT_OPTIONS else ALL_SERVER_OPTIONS | ALL_OPTIONS
     if state is None:
@@ -179,7 +179,7 @@ async def test_clock_inside_pane_asks_for_frames(session):
     # `add_client` runs `startup()`, which makes a window of its own
     # and makes it active, so `windows[0]` is a window nobody is
     # looking at. This test used to set the clock there and pass,
-    # because the refresh read every window. Lillecarl/pymux#251.
+    # because the refresh read every window. Lillecarl/pyterm#253.
     in_view(pymux, state).panes[0].clock_mode = True
     pymux.waking.refresh_what_time_moves()
 
@@ -198,7 +198,7 @@ async def test_text_holds_clock_and_window_list(session):
 
 
 # ----------------------------------------------------------------------
-# How wide the question is. Lillecarl/pymux#251.
+# How wide the question is. Lillecarl/pyterm#253.
 #
 # A pane's write asks the other clients this now, so reading every pane
 # of every window costs on every write and not once every four seconds.

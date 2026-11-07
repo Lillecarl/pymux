@@ -1,6 +1,6 @@
 """
 The client half of `qutebridge`: one request to a qutebrowser's bridge,
-and its answer. Lillecarl/pymux#942.
+and its answer. Lillecarl/pyterm#944.
 
 A qutebrowser that pymux starts serves the bridge from the moment it
 runs, at `BRIDGE` in its profile. A person's own qutebrowser serves it

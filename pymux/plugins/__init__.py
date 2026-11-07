@@ -7,7 +7,7 @@ server and the parsed arguments, and a `register(subparsers)` that
 calls `add_command` for it. The tree mounts each one after the
 commands of pymux, so a plugin command runs from a key binding, the
 command bar, a configuration file and the socket, and the shell
-completes it. Lillecarl/pymux#529.
+completes it. Lillecarl/pyterm#531.
 
 A person's plugin with the name of one shipped here is not loaded:
 the first directory wins.

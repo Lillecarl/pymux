@@ -5,7 +5,7 @@ The daemon is the server, and every pane forks from it, so the umask
 it keeps is the umask every file a pane writes gets. It used to set
 0 at its "decouple" step and never restore anything, which made every
 pane write mode 0666 files on a machine whose login shell sets 077.
-Lillecarl/pymux#398.
+Lillecarl/pyterm#400.
 """
 
 from __future__ import annotations

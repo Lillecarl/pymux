@@ -12,7 +12,7 @@ label.
 The last letter in lower case opens the link on the client's machine,
 and in upper case copies it. Escape leaves. The pane goes on drawing
 while the labels are up, and a label moves with its link: it is a place
-on the page, not on the screen. Lillecarl/pymux#608.
+on the page, not on the screen. Lillecarl/pyterm#610.
 """
 
 from __future__ import annotations

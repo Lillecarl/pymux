@@ -10,7 +10,7 @@
 # that `take_picture.py` asks each terminal for. Change either and
 # every count has to be recorded again.
 #
-# It is a number of pixels since Lillecarl/pymux#368. It was a channel
+# It is a number of pixels since Lillecarl/pyterm#370. It was a channel
 # error sum before that, which is why the counts below are not the ones
 # this file held: `compare -metric AE` says it counts pixels and does
 # not, and a small difference over few pixels came back as none at all.
@@ -62,7 +62,7 @@ xterm underlines 208
 # It shows here and nowhere else because nowhere else is a run of a
 # glyph whose ink reaches the edge of its cell *and* runs to column 79.
 # A pane cannot give up the guard, so this is what a pane costs: eight
-# pixels. Lillecarl/pymux#371.
+# pixels. Lillecarl/pyterm#373.
 #
 # Three more, at the "●" before "high". U+25CF is a symbol some
 # terminals draw as an emoji, so the renderer no longer trusts the
@@ -71,7 +71,7 @@ xterm underlines 208
 # both in one. xterm's "●" inks a pixel past its cell, and the cell
 # written after it on its own covers that ink. Same mechanism as the
 # seam above; the guard against a terminal counting the symbol two
-# columns wide is what it costs. Lillecarl/pymux#539.
+# columns wide is what it costs. Lillecarl/pyterm#541.
 xterm recorded-claude-code 11
 
 # ----------------------------------------------------------------------
@@ -113,7 +113,7 @@ xterm recorded-claude-code 11
 # image may be compared that way when nothing else may.
 #
 # **Four of these eight were differences until the fix for
-# Lillecarl/pymux#369.**
+# Lillecarl/pyterm#371.**
 # A pane used to reserve `ceil(pixels / 20)` rows against a cell size
 # it had invented, and every client whose cell was not ten by twenty
 # drew a resampled picture:
@@ -162,7 +162,7 @@ foot kitty-image-114 13680
 # them.
 #
 # **All four are 120 by 120, and the two 114 pixel images among them
-# are not a resampling that #369 left behind.** A half block renderer
+# are not a resampling that #371 left behind.** A half block renderer
 # holds no pixels: `_blocks_for` averages the image down to two samples
 # per cell, so a cell is the smallest thing it can draw. Twelve by six
 # cells of xterm's ten by twenty cell is 120 by 120 whatever the height

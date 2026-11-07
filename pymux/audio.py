@@ -3,13 +3,13 @@ Sound between the panes and the machine a person sits at.
 
 The server holds a speaker and a microphone in PipeWire, and carries
 their sound to the client used last, as Opus, on the connection that
-client attached on. Lillecarl/pymux#657.
+client attached on. Lillecarl/pyterm#659.
 
 **The server is a sound client too, and pymux only the transport.** The
 speaker is a `pw-cat --record` that says it is an `Audio/Sink`, and the
 microphone a `pw-cat --playback` that says it is an `Audio/Source`.
 WirePlumber links programs to them as to any device, and PipeWire's own
-clock paces both. Lillecarl/pymux#662.
+clock paces both. Lillecarl/pyterm#664.
 
 `audio-server` says whose PipeWire holds the speaker:
 
@@ -154,7 +154,7 @@ def dies_with_this_process(argv: list[str]) -> list[str]:
     `argv`, started so that it ends when this process does, however this
     one ends. A killed server left its PipeWire running for days, with
     parent 1. Linux alone has the call; elsewhere `argv` is unchanged.
-    Lillecarl/pymux#729.
+    Lillecarl/pyterm#731.
 
     The signal follows the thread that forks, and the server forks these
     from its loop, on the main thread, which lives as long as it does.
@@ -653,7 +653,7 @@ class AudioServer:
 
         **The exec keeps this pid**, so a program not waited for here
         stays a zombie child of the new image, which never knew it.
-        Lillecarl/pymux#739.
+        Lillecarl/pyterm#741.
         """
         self.paused = True
         processes = list(self._processes)

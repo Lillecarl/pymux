@@ -11,7 +11,7 @@ two versions of pymux still read each other's trees.
 A pane holds its mirror's screen, and clients, copy views and overlays
 hold windows and sessions, so an update changes those in place. A
 window whose shape changed gets its splits built again around the
-panes it keeps. Lillecarl/pymux#759.
+panes it keeps. Lillecarl/pyterm#761.
 """
 
 from __future__ import annotations
@@ -296,7 +296,7 @@ class MirrorTree:
         A pane chosen here, by a click or anything else that sets the
         active pane: the owner chooses it, or its next tree would choose
         the old one again. A forwarded `select-pane` runs there and not
-        here, so it does not come back. Lillecarl/pymux#872.
+        here, so it does not come back. Lillecarl/pyterm#874.
         """
         if not self._updating and owner_pane_id(pane) is not None:
             self.pymux.handle_command("select-pane -t %%%d" % (pane.pane_id,))

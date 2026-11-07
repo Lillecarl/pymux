@@ -24,7 +24,7 @@ def wl(pymux: Pymux, args: argparse.Namespace):
     window closes, the pane closes. Later windows of the program open
     beside it. A program that ends before it opens a window leaves the
     pane as it was, and `pymux wl` answers with what it wrote and exits
-    with its code. Lillecarl/pymux#630.
+    with its code. Lillecarl/pyterm#632.
     """
     argv = args.program
     if argv and argv[0] == "--":

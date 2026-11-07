@@ -1,5 +1,5 @@
 """
-Forwarded ports over the `ssh://` client. Lillecarl/pymux#436.
+Forwarded ports over the `ssh://` client. Lillecarl/pyterm#438.
 
 The spelling is judged on its own, because it is pure. The table is
 judged against a real asyncssh server and a real echo server: a forward
@@ -108,7 +108,7 @@ def test_only_a_remote_bind_off_loopback_may_be_narrowed():
 
 
 # ----------------------------------------------------------------------
-# The URL a pane printed. Lillecarl/pymux#437.
+# The URL a pane printed. Lillecarl/pyterm#439.
 
 
 @pytest.mark.parametrize(
@@ -362,7 +362,7 @@ async def test_a_refused_local_forward_opens_and_fails_per_connection():
 
     So the listener is open and the table is clean, and every connection
     through it dies. `list-forwards` cannot show a reason here; the
-    person finds out by using it. Lillecarl/pymux#436.
+    person finds out by using it. Lillecarl/pyterm#438.
     """
     async with echoing() as echo_port, ssh_connection(allow_forward=False) as connection:
         forwards = Forwards()
@@ -433,7 +433,7 @@ async def test_a_forward_that_came_back_on_another_port_says_so():
     **The case that costs a person their session otherwise.** A forward
     that asked for any free port rarely gets the same one twice, and
     whatever was pointed at the old number is pointing at nothing.
-    Lillecarl/pymux#442.
+    Lillecarl/pyterm#444.
     """
     async with echoing() as echo_port:
         forwards = Forwards()
@@ -505,7 +505,7 @@ async def test_a_forward_is_removed_by_the_port_it_was_shown_at():
     """
     A forward that asked for any free port is filed under 0 and shown at
     the number that was free, so the number a person read there has to
-    find it. Lillecarl/pymux#441.
+    find it. Lillecarl/pyterm#443.
     """
     async with echoing() as echo_port, ssh_connection() as connection:
         forwards = Forwards()
@@ -523,7 +523,7 @@ async def test_a_forward_is_removed_by_any_name_for_loopback():
     """
     `localhost` and `127.0.0.1` are one machine, so a forward asked for
     at one is found by the other -- which is what a person who typed no
-    address has in front of them. Lillecarl/pymux#441.
+    address has in front of them. Lillecarl/pyterm#443.
     """
     async with echoing() as echo_port, ssh_connection() as connection:
         forwards = Forwards()
@@ -576,7 +576,7 @@ async def test_asking_twice_leaves_one_listener():
 
 
 # ----------------------------------------------------------------------
-# A forward pymux opened for a URL. Lillecarl/pymux#437.
+# A forward pymux opened for a URL. Lillecarl/pyterm#439.
 
 
 def _nothing_connected(forwards: Forwards, port: int):
@@ -632,7 +632,7 @@ async def test_two_url_forwards_that_both_moved_keep_their_own_entries():
     where it listens, so two that both fell back to any free port would
     claim one entry and the second would close the first. The name stays
     the port the URL asked for, which is different for each.
-    Lillecarl/pymux#441.
+    Lillecarl/pyterm#443.
     """
     async with echoing() as echo_port, ssh_connection() as connection:
         first, second = _free_port(), _free_port()
@@ -803,7 +803,7 @@ async def test_a_forward_carrying_a_connection_is_never_idle():
 
 
 async def test_the_report_says_what_a_url_forward_has_left_or_carries():
-    "The clock stops while a connection is open, so the report says which. Lillecarl/pymux#487."
+    "The clock stops while a connection is open, so the report says which. Lillecarl/pyterm#489."
     async with echoing() as echo_port, ssh_connection() as connection:
         forwards = Forwards()
 
@@ -1083,7 +1083,7 @@ async def test_the_client_opens_what_the_server_asked_for():
 
 async def test_the_client_removes_by_the_number_it_reported():
     """
-    The whole round trip of Lillecarl/pymux#441: ask for any free port,
+    The whole round trip of Lillecarl/pyterm#443: ask for any free port,
     read the number the client reported, and ask to stop by that number
     and a loopback name the person did not type.
     """
@@ -1139,7 +1139,7 @@ async def test_the_message_does_not_claim_an_address_it_cannot_know():
     -R 0.0.0.0:2222" would be an assertion the client cannot support.
     `checks.pymux-openssh` shows the other half: a real openssh under
     its default binds loopback here and reports success.
-    Lillecarl/pymux#444.
+    Lillecarl/pyterm#446.
     """
     sent = []
 
@@ -1203,7 +1203,7 @@ async def test_the_client_keeps_the_url_when_its_port_was_free():
     **The number in the URL is the whole point of trying it first.**
     A bookmark, a link in a chat, a second tab -- all of them name the
     port the pane printed, and they keep working only while pymux binds
-    that one. Lillecarl/pymux#437.
+    that one. Lillecarl/pyterm#439.
     """
     sent = []
     port = _free_port()
@@ -1336,7 +1336,7 @@ async def test_a_forward_pymux_made_is_marked_in_its_report():
     """
     The report carries which forwards are pymux's own, so the server's
     listing can mark the line a person did not make.
-    Lillecarl/pymux#448.
+    Lillecarl/pyterm#450.
     """
     async with echoing() as echo_port, ssh_connection() as connection:
         forwards = Forwards()
@@ -1501,7 +1501,7 @@ async def test_the_request_reaches_the_client_that_asked():
 
 
 async def test_the_listing_asks_for_a_fresh_table_and_shows_the_time_left():
-    "What a forward pymux made has left moves between reports, so the listing asks. Lillecarl/pymux#487."
+    "What a forward pymux made has left moves between reports, so the listing asks. Lillecarl/pyterm#489."
     answering = []
 
     def answer(packet: dict) -> None:
@@ -1638,7 +1638,7 @@ async def test_the_listing_marks_a_forward_pymux_made():
     A line pymux opened for a URL is marked, so a person reading the
     listing knows which one will go away by itself. A mark and a reason
     share the parentheses when both are there.
-    Lillecarl/pymux#448.
+    Lillecarl/pyterm#450.
     """
     async with over_connection() as session:
         await session.attach("the client", SIZE)
@@ -1679,7 +1679,7 @@ async def test_the_listing_marks_a_forward_pymux_made():
 
 
 # ----------------------------------------------------------------------
-# The URL that brings its port with it. Lillecarl/pymux#437.
+# The URL that brings its port with it. Lillecarl/pyterm#439.
 
 LOOPBACK_URL = "http://localhost:3000/"
 
@@ -1847,7 +1847,7 @@ async def test_answering_yes_opens_it_with_the_forward():
 
 
 # ----------------------------------------------------------------------
-# The trust gate. Lillecarl/pymux#440.
+# The trust gate. Lillecarl/pyterm#442.
 
 
 def _questions(session) -> list:
@@ -1864,7 +1864,7 @@ def as_the_person(session):
     runs with that client's application current, so `get_client_state`
     finds it and `ForwardRequests.client` says a person asked. A test that
     calls `handle_command` bare looks like a program in a pane instead,
-    which is a different answer from the gate. Lillecarl/pymux#440.
+    which is a different answer from the gate. Lillecarl/pyterm#442.
     """
     with set_app(session.pymux.clients[0].app):
         yield
@@ -1913,7 +1913,7 @@ async def test_binding_off_loopback_is_asked_even_when_the_mode_is_on():
         # And that the answer is not pymux's to give. Asking somebody to
         # confirm the dangerous bind without saying openssh may quietly
         # make it a safe one asks about something that may not happen.
-        # Lillecarl/pymux#444.
+        # Lillecarl/pyterm#446.
         assert "loopback only" in asked[0], asked
 
 

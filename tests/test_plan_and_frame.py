@@ -166,7 +166,7 @@ async def test_plan_holds_column_frame_never_drew():
     same place relative to everything else.
 
     The frame does not hold it at all: no part of it is in the view, so
-    it is not drawn (Lillecarl/pymux#224). Everything that asks where
+    it is not drawn (Lillecarl/pyterm#226). Everything that asks where
     that pane is asks the plan.
     """
     async with create_client(STRIP, rows=ROWS, columns=COLUMNS) as (pymux, draw):
@@ -213,7 +213,7 @@ async def test_key_moves_focus_before_anything_is_drawn():
     key works from the first keystroke.
 
     This is a change a person sees, and it is what the whole of
-    Lillecarl/pymux#217 is for.
+    Lillecarl/pyterm#219 is for.
     """
     async with create_client(STRIP, rows=ROWS, columns=COLUMNS) as (pymux, _draw):
         panes = await create_row_of_panes(pymux)

@@ -9,7 +9,7 @@ only be diagnosed by reproducing it somewhere else.
 py-spy is the usual answer and it is not available here: it needs
 `ptrace`, and a machine with `kernel.yama.ptrace_scope` at 1 lets only an
 ancestor attach. A person can `sudo`; a person on another machine cannot.
-So a server answers for itself. Lillecarl/pymux#249.
+So a server answers for itself. Lillecarl/pyterm#251.
 
 ## Two ways in, because they fail differently
 
@@ -82,7 +82,7 @@ class Counters:
     names the fault before anybody reads a line of Python.
 
     It was read out of the log the first time, which cost an 86 MB file
-    (Lillecarl/pymux#248). These are the same numbers with nothing
+    (Lillecarl/pyterm#250). These are the same numbers with nothing
     written down.
 
     Each count has to be free, because a server pays for it on every
@@ -107,7 +107,7 @@ class Counters:
 
         #: What the clients that have gone moved on the wire, to them
         #: and from them. With what the clients still here moved, these
-        #: are the server's whole traffic. Lillecarl/pymux#677.
+        #: are the server's whole traffic. Lillecarl/pyterm#679.
         self.gone_bytes_out = 0
         self.gone_bytes_in = 0
 
@@ -165,7 +165,7 @@ def answer_signal() -> Path | None:
         faulthandler.register(signal.SIGUSR1, file=_stacks_file, all_threads=True, chain=False)
         # And a fatal signal -- SIGSEGV, SIGABRT, SIGBUS, SIGFPE, SIGILL
         # -- writes them there before the process goes. The server that
-        # died on 2026-10-22 left this file empty. Lillecarl/pymux#736.
+        # died on 2026-10-22 left this file empty. Lillecarl/pyterm#738.
         faulthandler.enable(file=_stacks_file, all_threads=True)
     except OSError, ValueError, RuntimeError:
         # A read only home, a full disk, or not the main thread.
@@ -180,7 +180,7 @@ def log_what_escapes() -> None:
     """
     Log an exception that escapes a thread, and one Python cannot
     raise anywhere (a finaliser, a callback). Both went to a stderr
-    that a daemon points at /dev/null. Lillecarl/pymux#736.
+    that a daemon points at /dev/null. Lillecarl/pyterm#738.
     """
 
     def thread_died(info: threading.ExceptHookArgs) -> None:
@@ -217,7 +217,7 @@ def write_crash_report(error: BaseException, started: float | None = None) -> Pa
     Everything a person needs to understand a crash, in one file beside
     the log: what ran, how long, what it was in the middle of, the whole
     chain of the exception, and the stack of every thread at the moment.
-    Its name is in the log's last line. Lillecarl/pymux#736.
+    Its name is in the log's last line. Lillecarl/pyterm#738.
     """
     path = where_dump_goes() / ("crash-%d-%s.log" % (os.getpid(), time.strftime("%Y%m%d-%H%M%S")))
     try:
@@ -517,7 +517,7 @@ def _server(pymux: Pymux) -> str:
             # And the level, because `set-option log-level debug`
             # reaches a running server and pymux has no `show-options`
             # to read it back with. A person who turned it up and
-            # forgot needs somewhere to find out. Lillecarl/pymux#252.
+            # forgot needs somewhere to find out. Lillecarl/pyterm#254.
             "log %s, at %s" % (logfile() or "nowhere", level()),
             "a debugger may attach: %s" % ("yes" if pymux.options.allow_remote_debugging else "no"),
         ]
@@ -565,7 +565,7 @@ def _tasks(pymux: Pymux) -> str:
     and nothing else. The tasks are where the work of a server is: a
     connection reading its client, a packet on its way out, a pane being
     torn down. A task that never finishes is a leak
-    (Lillecarl/pymux#226), and one that waits on something that will
+    (Lillecarl/pyterm#228), and one that waits on something that will
     never come is a hang.
     """
     # Here, not at the top: this module is imported by the server, and

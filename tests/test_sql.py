@@ -97,7 +97,7 @@ async def test_free_form_select_answers_a_table():
 
 async def test_the_windows_are_there_beside_the_jobs():
     """
-    The live tables answer in the same question as the jobs. Lillecarl/pymux#399.
+    The live tables answer in the same question as the jobs. Lillecarl/pyterm#401.
 
     One window, the one attaching makes. The plain session's window
     runs a program that ends at once, and whether that window is still
@@ -124,7 +124,7 @@ async def test_questions_at_once_share_nothing_to_lock():
     """
     Each question has a connection of its own and no table holds a row,
     so questions that run together and a server that changes under them
-    never meet a lock. Lillecarl/pymux#722.
+    never meet a lock. Lillecarl/pyterm#724.
     """
     async with create_session() as (pymux, state):
         failures: list[str] = []

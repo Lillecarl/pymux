@@ -129,7 +129,7 @@ class PaneCursor(CursorShapeConfig):
 
 #: How often a client whose terminal fell behind looks again whether it
 #: caught up, in seconds: its next frame draws within this of it.
-#: Lillecarl/pymux#585.
+#: Lillecarl/pyterm#587.
 BEHIND_INTERVAL = 0.1
 
 
@@ -140,7 +140,7 @@ class ClientState:
 
     #: What a hot upgrade does with each attribute; `pyte.keep` says.
     #: This is the record a reconnecting client gets back
-    #: (Lillecarl/pymux#409): what a person set and what they were in
+    #: (Lillecarl/pyterm#411): what a person set and what they were in
     #: the middle of. The application around it is built again. The
     #: strip views live on `layout_manager`, keyed by window, and are
     #: saved by window id.
@@ -217,13 +217,13 @@ class ClientState:
         self.color_depth = color_depth
         #: Every route builds a `ClientRole`, so its attributes are
         #: read plainly. A test's stand-in carries them too.
-        #: Lillecarl/pymux#726, Lillecarl/pymux#886.
+        #: Lillecarl/pyterm#728, Lillecarl/pyterm#888.
         self.client = client
 
         #: The session this client looks at. `attach-session` and
         #: `switch-client` move it to another one. Every render path
         #: reads the windows through this, and never through
-        #: `get_app()`. Lillecarl/pymux#323.
+        #: `get_app()`. Lillecarl/pyterm#325.
         self.session = session
 
         #: Where this client was before, for `switch-client -l`.
@@ -238,7 +238,7 @@ class ClientState:
         #: has said nothing. It is not what a person wrote, so it is
         #: kept beside `theme` rather than in it: a client whose
         #: terminal reports a new background is matched again, and
-        #: `show-client-options` says both. Lillecarl/pymux#346.
+        #: `show-client-options` says both. Lillecarl/pyterm#348.
         self.matched: str | None = None
 
         #: Whether this client only watches. `attach-session -r` sets
@@ -249,7 +249,7 @@ class ClientState:
         #: paste and every mouse event, through `may_type` on the
         #: widget. And a command refuses to run for such a client
         #: unless `add_command` marked it read only.
-        #: Lillecarl/pymux#467.
+        #: Lillecarl/pyterm#469.
         self.read_only = False
 
         #: What copy mode copies while `read_only`, in place of the
@@ -269,11 +269,11 @@ class ClientState:
         self.url_mode: UrlMode | None = None
 
         #: The line between two panes this client is dragging, from the
-        #: press to the release. Lillecarl/pymux#772.
+        #: press to the release. Lillecarl/pyterm#774.
         self.border_drag: BorderDrag | None = None
 
         #: What to call when the pointer leaves what it is over: a
-        #: window pane's `pointer_left`. Lillecarl/pymux#899.
+        #: window pane's `pointer_left`. Lillecarl/pyterm#901.
         self.pointer_left: Callable[[], None] | None = None
 
         #: Ticks of the input this client sent against ticks of the
@@ -283,12 +283,12 @@ class ClientState:
         #: one instead, which the input's own handling brings. Every
         #: schedule records the tick, so equality is the steady state
         #: and a frame whose input has been handled always draws.
-        #: Lillecarl/pymux#524.
+        #: Lillecarl/pyterm#526.
         self.input_tick = 0
         self.schedule_tick = 0
 
         #: A wait for this client's terminal to take its bytes is out,
-        #: and redraws the window panes after. Lillecarl/pymux#629.
+        #: and redraws the window panes after. Lillecarl/pyterm#631.
         self._waiting_for_drain = False
 
         #: Whether this client's redraws are paced because its terminal
@@ -308,7 +308,7 @@ class ClientState:
         #: client state, the way the chooser is: two people on one
         #: session manage panes separately.
         #: `enter-mode` and `leave-mode` move the top.
-        #: Lillecarl/pymux#394.
+        #: Lillecarl/pyterm#396.
         self.key_tables: list[str] = []
 
         #: Error/info message.
@@ -323,7 +323,7 @@ class ClientState:
         #: `open-url` ask, and a `y` then opens the URL while the kill
         #: is lost with nothing said about either. Ask mode exists so
         #: that nothing happens without a yes, and losing a yes is the
-        #: same surprise the other way round. Lillecarl/pymux#266.
+        #: same surprise the other way round. Lillecarl/pyterm#268.
         self.confirmations: list[tuple[str, str]] = []
 
         # When a "command-prompt" command is running.
@@ -342,7 +342,7 @@ class ClientState:
         #: stops at twelve rows, and in the box it takes the height of
         #: the box. That is the argument `_command_palette` makes for
         #: the ":" line, and it is the same argument here.
-        #: Lillecarl/pymux#220.
+        #: Lillecarl/pyterm#222.
         self.prompt_completer: Completer | None = None
 
         # Popup.
@@ -355,10 +355,10 @@ class ClientState:
         # the point back on the first row. The filter and the index
         # are the chooser's, whichever kind shows -- a buffer chooser
         # runs the same keys over its own rows.
-        # Lillecarl/pymux#295. Lillecarl/pymux#304.
+        # Lillecarl/pyterm#297. Lillecarl/pyterm#306.
         self.chooser: Chooser | None = None
         #: The notifications this client shows as boxes, newest last.
-        #: Lillecarl/pymux#826.
+        #: Lillecarl/pyterm#828.
         self.popups: list[Notification] = []
         self.choose_window_index = 0
         self.choose_window_command = ""
@@ -371,7 +371,7 @@ class ClientState:
         #: The window chooser has no preview of its own: it switches
         #: this client to the window it points at, so a person reads
         #: the real thing. Leaving it has to undo that.
-        #: Lillecarl/pymux#327.
+        #: Lillecarl/pyterm#329.
         self.chooser_return_to: tuple[Session, Window | None] | None = None
         self.choose_window_filter = Buffer(
             name=CHOOSE,
@@ -379,14 +379,14 @@ class ClientState:
             accept_handler=self._accept_chooser,
             # Typing narrows the list, so the point goes back to the
             # first match -- and the window chooser switches to it,
-            # which is how a search previews. Lillecarl/pymux#327.
+            # which is how a search previews. Lillecarl/pyterm#329.
             on_text_changed=lambda buffer: self.layout_manager.chooser.point_at(0),
         )
 
         # The menu that `display-menu` opened: a line per entry, as
         # (key, name, command), and what its title bar says. The key
         # of an entry is what runs it, and Escape leaves the menu.
-        # Lillecarl/pymux#297.
+        # Lillecarl/pyterm#299.
         self.menu_entries: list[tuple[str, str, str]] = []
         self.menu_title = ""
 
@@ -396,7 +396,7 @@ class ClientState:
 
         #: Whether this client's terminal window has the focus, as its
         #: DEC 1004 reports say. A terminal that never reports has it.
-        #: Lillecarl/pymux#795.
+        #: Lillecarl/pyterm#797.
         self.terminal_focused = True
 
         #: True for the temporary client that runs a command that arrived over
@@ -420,7 +420,7 @@ class ClientState:
 
         # What the last frame of this client drew of the strings that
         # time moves. The auto refresh compares against it, and asks
-        # for a frame only when they differ. Lillecarl/pymux#154.
+        # for a frame only when they differ. Lillecarl/pyterm#156.
         self.last_time_text: tuple[str, ...] = ()
 
         # Input buffers.
@@ -543,7 +543,7 @@ class ClientState:
         **A frame input arrived after is stale**, and the next one is
         asked for at once. Equality is the steady state: every scheduled
         redraw records the tick, so input that has been handled reads
-        equal and the frame draws. Lillecarl/pymux#524.
+        equal and the frame draws. Lillecarl/pyterm#526.
 
         **The terminal has not read the last frame**, on any route.
         Over ssh the bytes wait where no route sees them, in sshd's
@@ -551,17 +551,17 @@ class ClientState:
         status report behind the frame says they arrived. So a slow
         link carries the newest screen, a little late, and never a
         backlog of old ones; a keystroke's frame waits for one frame and
-        not for thirty. Lillecarl/pymux#259. Nothing asks again here:
+        not for thirty. Lillecarl/pyterm#261. Nothing asks again here:
         the answer asks for the next frame. A skip that asked again
         spun the loop for as long as a key's urgency outran the pacing,
         a frame's cost each turn, and the request the answer made then
-        waited for the pacing's timer. Lillecarl/pymux#824.
+        waited for the pacing's timer. Lillecarl/pyterm#826.
 
         **A terminal that fell behind on a route where the bytes pile up
         in this process** has no answer to wait for, so its skip asks
         again, paced until it caught up. The next frame is a diff
         against the last one drawn, so a skipped one loses nothing.
-        Lillecarl/pymux#585.
+        Lillecarl/pyterm#587.
         """
         if self.input_tick != self.schedule_tick:
             self.app.invalidate()
@@ -593,7 +593,7 @@ class ClientState:
         runs on every invalidate, and a pane that animates invalidates
         many times a second. If it wrote the knob alone, it would clear
         the pacing a terminal that is behind needs, and the client would
-        ask for a frame a thousand times a second. Lillecarl/pymux#811.
+        ask for a frame a thousand times a second. Lillecarl/pyterm#813.
         """
         interval = self.frame_interval
         if self._paced_while_behind:
@@ -609,7 +609,7 @@ class ClientState:
         on top of it: one key is read from `prefix`, and the mode is
         still there when that key is done. Then the innermost mode,
         and `root` when no mode is on the stack.
-        Lillecarl/pymux#394.
+        Lillecarl/pyterm#396.
         """
         if self.has_prefix:
             return "prefix"
@@ -629,7 +629,7 @@ class ClientState:
         **This is a fact about one terminal**, which is why a client
         holds it and the session does not. Two people on one session
         can be on a light terminal and a dark one.
-        Lillecarl/pymux#223.
+        Lillecarl/pyterm#225.
         """
         if self.client is None:
             return DefaultColors()
@@ -639,7 +639,7 @@ class ClientState:
         """
         Whether this client's terminal draws `pane`'s extra cursors
         itself: it can, and the pane is the one this client works in.
-        Lillecarl/pymux#891.
+        Lillecarl/pyterm#893.
         """
         return self.client is not None and self.client.replies.extra_cursors and self.pymux.focus.pane_of(self) is pane
 
@@ -677,7 +677,7 @@ class ClientState:
         terminal content, and a popup covers the panes. Those show no
         images. (The list is empty then, so the previous images go
         away.) What this client drew over a pane goes with it, and its
-        images are cut around that. Lillecarl/pymux#816.
+        images are cut around that. Lillecarl/pyterm#818.
         """
         if self.display_popup:
             return []
@@ -713,7 +713,7 @@ class ClientState:
         """
         Send this client the new frame of a window pane it shows, and
         draw nothing else: the window drew, and the cells around it did
-        not move. Lillecarl/pymux#636.
+        not move. Lillecarl/pyterm#638.
         """
         if self.client is None or self.display_popup:
             return
@@ -732,7 +732,7 @@ class ClientState:
         """
         Draw the window panes again once this client's terminal has
         taken what it holds. A window frame can be megabytes, and frames
-        that queue behind each other only arrive late. Lillecarl/pymux#629.
+        that queue behind each other only arrive late. Lillecarl/pyterm#631.
         """
         if self._waiting_for_drain or self.client is None:
             return
@@ -753,7 +753,7 @@ class ClientState:
         Draw this client again, and wait until it has. What a command
         changed shows then: the command line that ran it is closed.
         A client that draws nothing within `timeout` keeps its last frame,
-        as one whose terminal fell behind does. Lillecarl/pymux#820.
+        as one whose terminal fell behind does. Lillecarl/pyterm#822.
         """
         if self._frame_waiters is None:
             self._frame_waiters = anyio.Event()
@@ -855,7 +855,7 @@ class ClientState:
             # pane that writes the clipboard fills it as well. A client
             # that only watches writes nothing the others share, so its
             # copy mode copies into a buffer of its own.
-            # Lillecarl/pymux#470.
+            # Lillecarl/pyterm#472.
             clipboard=DynamicClipboard(lambda: self.watched_clipboard if self.read_only else pymux.clipboard),
             # Read on every render: the detection of the outer
             # terminal can raise the depth after the app started.
@@ -871,7 +871,7 @@ class ClientState:
             # attached reaches it without rebuilding the application.
             # This client's own theme, not the server's: two people on
             # one session may be at very different screens.
-            # Lillecarl/pymux#223.
+            # Lillecarl/pyterm#225.
             style=DynamicStyle(lambda: self.style),
             style_transformation=ConditionalStyleTransformation(
                 SwapLightAndDarkStyleTransformation(),
@@ -915,7 +915,7 @@ class ClientState:
         # A frame this client asked for is already stale when input
         # arrived after it was scheduled: the renderer skips it and
         # asks for another one instead, so the input is handled first.
-        # Lillecarl/pymux#524.
+        # Lillecarl/pyterm#526.
         app.should_skip_render = self.should_skip_render
 
         # The frame that answers these keys goes now: postponing it
@@ -923,7 +923,7 @@ class ClientState:
         # Stamped when the keys are handled, and not when they arrive:
         # terminal replies ride the same packets and want no fast
         # frame. The stamp expires by itself, so a loop with no input
-        # behind it postpones as always. Lillecarl/pymux#524.
+        # behind it postpones as always. Lillecarl/pyterm#526.
         def rushed(_):
             app._urgent_until = time.time() + 0.2
 
@@ -952,7 +952,7 @@ class ClientState:
         and the layout this walks is built per application:
         `DynamicBody` keys its body on `get_app()`. Without this a
         client would be focused into the body of the client that asked.
-        Lillecarl/pymux#323.
+        Lillecarl/pyterm#325.
         """
         with set_app(self.app):
             target = self._focus_target()
@@ -973,7 +973,7 @@ class ClientState:
         """
         What this client is in the middle of, as plain values: what a
         snapshot holds and `take_modes` opens again.
-        Lillecarl/pymux#551.
+        Lillecarl/pyterm#553.
         """
         layout = self.layout_manager
         going_back = self.chooser_return_to
@@ -1010,7 +1010,7 @@ class ClientState:
 
         The copy itself is not saved. It is read from the screen again,
         which has moved on by then, so a caret can land on another line
-        than the one it stood on. Lillecarl/pymux#470.
+        than the one it stood on. Lillecarl/pyterm#472.
         """
         copying = []
         for pane_id, pane in sorted(self.pymux.panes_by_id.items()):
@@ -1082,7 +1082,7 @@ class ClientState:
         known theme the search found for this terminal. A terminal
         that has said nothing yet leaves the default standing, so the
         first frame draws in it and a later frame draws in the match.
-        Lillecarl/pymux#346.
+        Lillecarl/pyterm#348.
         """
         if self.options.theme != NEAREST:
             return self.options.theme
@@ -1102,7 +1102,7 @@ class ClientState:
         # A question takes no focus: its keys are global bindings, and
         # they come after the pane's, so they win. The pane keeps the
         # keyboard, and a window switched to under a question draws its
-        # active pane. Lillecarl/pymux#551.
+        # active pane. Lillecarl/pyterm#553.
 
         # Custom prompt.
         if self.prompt_command:
@@ -1119,7 +1119,7 @@ class ClientState:
         # search line can never be typed into. Every other key of the
         # chooser works, because its bindings ask what shows and not
         # what has the focus, which is why only the search broke.
-        # Lillecarl/pymux#161, Lillecarl/pymux#337.
+        # Lillecarl/pyterm#163, Lillecarl/pyterm#339.
         if self.chooser is not None:
             return None
 

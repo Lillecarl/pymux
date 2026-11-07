@@ -4,7 +4,7 @@ Nothing this suite ran is still holding a pty.
 A pane opens two descriptors and gives neither back by itself. `kill`
 sends a signal; the reap closes the slave from a loop callback and the
 reader closes the master when it reads the end of the file
-(Lillecarl/pymux#121), and a test ends before either turn. So a suite
+(Lillecarl/pyterm#123), and a test ends before either turn. So a suite
 that makes a hundred and eighty panes held a descriptor for each side
 of every one of them.
 

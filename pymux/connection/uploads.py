@@ -1,6 +1,6 @@
 """
 Files a pane asks for from the person's machine: `pymux receive`.
-Lillecarl/pymux#743, phase 2.
+Lillecarl/pyterm#745, phase 2.
 
 **The pymux client decides, not the server.** The server runs on the far
 machine with whatever runs in its panes, so anything it drew or held

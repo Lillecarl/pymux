@@ -53,7 +53,7 @@ class Background(Container):
 
     `paint_screen` colours the whole area with the theme's background as
     well; the dots keep their colour, because the pattern is what says a
-    client here disagrees. Lillecarl/pymux#273.
+    client here disagrees. Lillecarl/pyterm#275.
     """
 
     def __init__(self, painted: Callable[[], bool] = lambda: False) -> None:
@@ -407,7 +407,7 @@ class UrlLabels(Container):
     The labels of URL mode, over the first cells of each link. They are
     placed after the panes drew, from where each pane says it drew the
     link this frame, so a label follows its link as the pane scrolls.
-    Lillecarl/pymux#608.
+    Lillecarl/pyterm#610.
     """
 
     def __init__(self, client_state: ClientState) -> None:
@@ -484,7 +484,7 @@ class MessageToolbar(Window):
     names the file and the line, so two of them pass the width of a
     normal terminal easily -- and only the last could be read. A person
     fixed that one, ran pymux again, and met the first.
-    Lillecarl/pymux#205, and the last step of Lillecarl/pymux#38.
+    Lillecarl/pyterm#207, and the last step of Lillecarl/pyterm#40.
 
     Nothing is typed into a message, so the cursor had no work to do
     there. The y/n toolbar keeps its marker: that one is a prompt, and

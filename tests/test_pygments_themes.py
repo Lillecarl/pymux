@@ -12,7 +12,7 @@ derivation computes: the blends are the derivation's own opinion, and
 a test that recomputed them would only test the arithmetic twice. The
 pinned ones are the anchors a person can check against pygments.
 
-Lillecarl/pymux#194.
+Lillecarl/pyterm#196.
 """
 
 from __future__ import annotations
@@ -106,7 +106,7 @@ def test_pastel_names_colours_of_scheme():
     muted lavender of its comments for the quiet text. Its `Error`
     and `Generic.Error` tokens are the plain foreground, but the
     deleted-diff token carries the flavour's red, and the pane that
-    ends is drawn on that. Lillecarl/pymux#195.
+    ends is drawn on that. Lillecarl/pyterm#197.
     """
     theme = pygments_theme("catppuccin-mocha")
 

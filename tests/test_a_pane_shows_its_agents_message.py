@@ -1,5 +1,5 @@
 """
-An agent's message, on a row under its pane's bar. Lillecarl/pymux#931.
+An agent's message, on a row under its pane's bar. Lillecarl/pyterm#933.
 
 Carl: "show the 'long status' on a new line in the pane titlebar".
 `pane-message-row` says where the row comes from: `take` makes the

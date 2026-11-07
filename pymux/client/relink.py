@@ -7,8 +7,8 @@ Two links use it: an SSH client's link to its server, and a peer's link
 to the server whose panes it mirrors (`mirror/peer.py`). Each one says
 how to dial, how to hold one link, and what a person sees while it is
 gone (`Waiting`); the rest is the same for both. `client/reconnect.py`
-holds the arithmetic and the lines of the notice. Lillecarl/pymux#256,
-Lillecarl/pymux#881.
+holds the arithmetic and the lines of the notice. Lillecarl/pyterm#258,
+Lillecarl/pyterm#883.
 """
 
 from __future__ import annotations
@@ -177,7 +177,7 @@ async def wait_for_sleep(read_clocks: Callable[[], tuple[float, float]]) -> str:
     been asleep has almost always lost its TCP connections.
     Reconnecting a link that was alive costs about a second, while
     waiting on a link that is dead costs the twenty seconds the
-    keepalive needs. Lillecarl/pymux#445, Lillecarl/pymux#875.
+    keepalive needs. Lillecarl/pyterm#447, Lillecarl/pyterm#877.
     """
     was_wall, was_loop = read_clocks()
     while True:
@@ -205,7 +205,7 @@ class Relink[L]:
     `dial` opens one, bounded by the timeout it is passed. `abort` ends
     one at once, for the sleep watch. `watch_sleep` is False for a link
     a sleep cannot break: a unix socket on this machine, whose two ends
-    slept together. Lillecarl/pymux#880.
+    slept together. Lillecarl/pyterm#882.
     """
 
     def __init__(
@@ -221,7 +221,7 @@ class Relink[L]:
         self.watch_sleep = watch_sleep
         self.backoff = Backoff()
         #: Why this side ended its own link, when it did. Only the
-        #: sleep watch sets it. Lillecarl/pymux#445.
+        #: sleep watch sets it. Lillecarl/pyterm#447.
         self.slept_through: Exception | None = None
 
     def clocks(self) -> tuple[float, float]:
@@ -237,7 +237,7 @@ class Relink[L]:
         written down before the link goes, and `hold` uses it in place
         of the ending the link reports. A reset is what the reason
         says, because that is what a sleep did to the socket, and
-        `link_may_come_back` retries an `OSError`. Lillecarl/pymux#445.
+        `link_may_come_back` retries an `OSError`. Lillecarl/pyterm#447.
         """
         # A lambda, so a test that moves `self.clocks` mid-watch is read.
         self.slept_through = ConnectionResetError(await wait_for_sleep(lambda: self.clocks()))
@@ -299,7 +299,7 @@ class Relink[L]:
                 # takes no channel is one that is not there, which never
                 # comes back -- except in the window the server named:
                 # the next image takes the socket over within it, and
-                # its queue may be full until then. Lillecarl/pymux#750.
+                # its queue may be full until then. Lillecarl/pyterm#752.
                 while link_may_come_back(lost) or restarting():
                     if restart is not None and restarting():
                         outcome = await self._one_try(RESTART_RETRY, restart, internet)

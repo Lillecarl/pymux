@@ -1,6 +1,6 @@
 # Firefox on a red page, in a profile of its own: no first-run page and
 # no default browser question to cover it. `open_a_window.sh` runs this
-# on the server's compositor. Lillecarl/pymux#753.
+# on the server's compositor. Lillecarl/pyterm#755.
 profile=$(mktemp -d)
 cat > "$profile/user.js" <<'PREFS'
 user_pref("browser.shell.checkDefaultBrowser", false);

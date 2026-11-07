@@ -3,7 +3,7 @@ kitty's drag and drop protocol (OSC 72) through pymux: pymux registers
 with a terminal that answers the query, a drop over a pane whose program
 registered goes to that pane at its own cells and under its `i`, a drop
 over any other pane is pymux's to paste, and a drag a pane offers goes
-between that pane and the terminal. Lillecarl/pymux#892.
+between that pane and the terminal. Lillecarl/pyterm#894.
 """
 
 from __future__ import annotations
@@ -240,7 +240,7 @@ async def test_a_terminal_that_never_answers_gets_no_registration():
 
 @pytest.mark.skipif(sys.platform != "darwin", reason="Linux reads /etc/machine-id")
 def test_a_mac_has_a_machine_id():
-    "Lillecarl/pymux#905."
+    "Lillecarl/pyterm#907."
     assert re.fullmatch("1:[0-9a-f]{64}", server_machine_id())
 
 

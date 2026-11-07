@@ -3,7 +3,7 @@ A client over SSH keeps the attachment when the link drops.
 
 The panes run on the other machine and they survive a link that goes,
 so the client shows a notice, counts down and opens the link again.
-Lillecarl/pymux#256.
+Lillecarl/pyterm#258.
 
 **The round trip runs on a real pty and a real SSH stack.** The client
 draws on the slave and the test reads the master, which is how the
@@ -269,7 +269,7 @@ async def test_the_watch_keeps_the_last_answer(monkeypatch):
 
 
 # ----------------------------------------------------------------------
-# A machine that was asleep. Lillecarl/pymux#445.
+# A machine that was asleep. Lillecarl/pyterm#447.
 
 
 class Link:
@@ -310,7 +310,7 @@ def _a_relink(dial) -> tuple[Relink, _TriesAtOnce]:
 
 
 async def test_a_link_that_drops_at_once_waits_longer_each_time():
-    "A server that accepts and drops is not back: the wait grows. Lillecarl/pymux#878."
+    "A server that accepts and drops is not back: the wait grows. Lillecarl/pyterm#880."
     held: list[int] = []
 
     async def dial(timeout):
@@ -326,7 +326,7 @@ async def test_a_link_that_drops_at_once_waits_longer_each_time():
 
 
 async def test_a_refused_key_ends_the_retries():
-    "A refused key is an answer, and asking again locks the account out. Lillecarl/pymux#879."
+    "A refused key is an answer, and asking again locks the account out. Lillecarl/pyterm#881."
     import asyncssh
 
     dialled: list[float] = []
@@ -633,7 +633,7 @@ async def attached(monkeypatch, pymux=None, client_setup=None, **how):
 
 async def test_a_dropped_link_shows_a_notice_and_comes_back(monkeypatch):
     """
-    The whole of Lillecarl/pymux#256: attach, lose the link, read the
+    The whole of Lillecarl/pyterm#258: attach, lose the link, read the
     notice, and be attached again afterwards.
     """
     async with attached(monkeypatch) as it:
@@ -663,7 +663,7 @@ async def test_a_dropped_link_shows_a_notice_and_comes_back(monkeypatch):
 
 async def test_a_machine_that_slept_comes_back_without_waiting(monkeypatch):
     """
-    The whole of Lillecarl/pymux#445, on the real stack.
+    The whole of Lillecarl/pyterm#447, on the real stack.
 
     **Nothing drops the link here.** The stand-in sshd is untouched and
     the server is still serving; the only thing that changes is that
@@ -731,7 +731,7 @@ async def test_the_screen_says_it_is_trying_while_the_attempt_runs(monkeypatch):
 
 
 async def test_a_failure_that_does_not_come_back_is_told_as_itself(monkeypatch, capsys):
-    "Not as the task group it ended. Lillecarl/pymux#646."
+    "Not as the task group it ended. Lillecarl/pyterm#648."
     import asyncssh
 
     async with attached(monkeypatch) as it:
@@ -752,7 +752,7 @@ async def test_a_server_that_restarts_is_reached_again(monkeypatch):
     """
     An upgrade says `restarting` and then the old server's channel ends
     cleanly. That is not a detach: the next server takes the socket
-    over, and the client goes back to it. Lillecarl/pymux#409.
+    over, and the client goes back to it. Lillecarl/pyterm#411.
     """
     async with attached(monkeypatch) as it:
         await it.until(lambda: len(it.pymux.connections) == 1, "the first attach")
@@ -777,7 +777,7 @@ async def test_a_restarting_server_s_refusals_are_waited_out(monkeypatch):
     queue is full while it restarts refuses the channel: asyncssh says
     "open failed". Anywhere else that is an answer, and the client
     leaves. Inside the window the server named, the client tries again,
-    by itself. Lillecarl/pymux#750.
+    by itself. Lillecarl/pyterm#752.
     """
     import asyncssh
 
@@ -798,7 +798,7 @@ async def test_a_restarting_server_s_refusals_are_waited_out(monkeypatch):
         # Whether the server's own write let the client go while it sent
         # the notice: the warning `say_restarting` logs for that does not
         # reach this log once a test on the same worker stopped the
-        # loggers propagating. Lillecarl/pymux#766.
+        # loggers propagating. Lillecarl/pyterm#768.
         dropped = []
         for connection in list(it.pymux.connections):
             await connection.say_restarting(5.0, "pymux is being upgraded.")
@@ -806,7 +806,7 @@ async def test_a_restarting_server_s_refusals_are_waited_out(monkeypatch):
             connection.close_connection()
 
         # What the client left with says which way the notice was lost:
-        # an EXIT from the server, or nothing. Lillecarl/pymux#766.
+        # an EXIT from the server, or nothing. Lillecarl/pyterm#768.
         await it.until(
             lambda: len(it.pymux.connections) == 1,
             lambda: (
@@ -841,7 +841,7 @@ async def test_a_client_told_to_hang_up_does_not_come_back(monkeypatch):
     """
     `attach -x` on another terminal tells this one to leave. A client
     that can wait for a link to come back must read that as an ending
-    and not as a link that went. Lillecarl/pymux#347.
+    and not as a link that went. Lillecarl/pyterm#349.
     """
     async with attached(monkeypatch) as it:
         await it.until(lambda: len(it.pymux.connections) == 1, "the attach")
@@ -850,7 +850,7 @@ async def test_a_client_told_to_hang_up_does_not_come_back(monkeypatch):
         # It failed once under the full gate, and the assertion could not
         # say why. What the client read last, and the loss it would have
         # retried (none is the server closing), tell the cases apart.
-        # Lillecarl/pymux#710.
+        # Lillecarl/pyterm#712.
         read: list[str] = []
         retried: list[object] = []
         process, link_again = it.client._process, it.client.relink.again

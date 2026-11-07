@@ -21,7 +21,7 @@ round trips leave room for the output of a fast command to land between
 them. The echo of the typed command is new too, so a pattern that the
 command line also holds wants an anchor: `^DONE`, not `DONE`.
 
-Lillecarl/pymux#388.
+Lillecarl/pyterm#390.
 """
 
 from __future__ import annotations

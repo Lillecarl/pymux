@@ -76,7 +76,7 @@ def capture_client(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None] | 
     It draws the client again first and reads that frame, so it is what
     the person sees once the command ran: a change the command made
     shows, and the command line that ran it is closed.
-    Lillecarl/pymux#820.
+    Lillecarl/pyterm#822.
     """
     if args.output is None and not args.p:
         raise CommandException("capture-client: it prints, so it needs -p or -o")

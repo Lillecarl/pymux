@@ -107,7 +107,7 @@ async def test_command_from_pane_opens_in_browser_of_client():
     connection of the command, which closes the moment the command
     answers. It used to carry the newest "used last" stamp, so the
     open packet went to that connection and no browser opened.
-    Lillecarl/pymux#261, found on a machine.
+    Lillecarl/pyterm#263, found on a machine.
     """
     packets = []
     async with over_connection(read_packet=packets.append) as session:
@@ -179,7 +179,7 @@ async def test_a_pane_cannot_confirm_its_own_open():
     `-c` is the answer to a question, and a program in a pane runs
     pymux commands too -- over the socket, under a temporary client. It
     could send the flag itself and reach the browser of the person at
-    the keyboard with the option set to ask. Lillecarl/pymux#443.
+    the keyboard with the option set to ask. Lillecarl/pyterm#445.
     """
     packets = []
     async with over_connection(read_packet=packets.append) as session:
@@ -231,7 +231,7 @@ async def test_a_second_question_waits_its_turn():
     `kill-pane` had its question taken, and the `y` that followed opened
     the URL while the kill was lost with nothing said about either. Ask
     mode exists so that nothing happens without a yes, and losing a yes
-    is the same surprise the other way round. Lillecarl/pymux#266.
+    is the same surprise the other way round. Lillecarl/pyterm#268.
     """
     packets = []
     async with over_connection(read_packet=packets.append) as session:
@@ -320,7 +320,7 @@ async def test_confirmed_command_opens_without_asking():
         # yes runs it: `ClientState` answers the question from its own
         # context. A bare `handle_command` has no client and therefore
         # looks like a pane, whose `-c` answers nothing.
-        # Lillecarl/pymux#443.
+        # Lillecarl/pyterm#445.
         with set_app(state.app):
             pymux.handle_command("open-url -c %s" % URL)
 
@@ -518,8 +518,8 @@ async def test_pane_that_starts_with_shim_finds_opener():
         # It used to have to fit in six characters. A pane of this route
         # started at nought columns, because `create_pane` sized the pty
         # and not the screen, so anything longer wrapped a character to
-        # a row and the reader below saw it cut. Lillecarl/pymux#267,
-        # fixed with Lillecarl/pymux#321.
+        # a row and the reader below saw it cut. Lillecarl/pyterm#269,
+        # fixed with Lillecarl/pyterm#323.
         program = (
             '%s -c \'import os, time; p = os.environ["PATH"].split(":")[0];'
             ' b = os.environ.get("BROWSER");'

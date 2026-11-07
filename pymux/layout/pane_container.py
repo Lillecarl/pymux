@@ -65,7 +65,7 @@ PANE_TITLE_FORMAT = " #T "
 
 #: How a title bar marks the name of the pane on each side of its own.
 #: The mark points outward, at the edge it sits on, so the name reads
-#: as "that way". Lillecarl/pymux#207.
+#: as "that way". Lillecarl/pyterm#209.
 #:
 #: They are one cell wide. Every glyph of this kind is "ambiguous"
 #: width in Unicode, which a terminal in a CJK locale may draw as two,
@@ -76,7 +76,7 @@ LEFT_MARK = "◂"
 RIGHT_MARK = "▸"
 
 #: And the same two, turned. They name the pane above and the pane
-#: below on the bar under a pane. Lillecarl/pymux#211.
+#: below on the bar under a pane. Lillecarl/pyterm#213.
 ABOVE_MARK = "▴"
 BELOW_MARK = "▾"
 
@@ -154,7 +154,7 @@ def create_container_for_process(
         if pymux.current_session.options.paint_screen:
             # The theme's background behind every cell the program left
             # at a default one, so the terminal's own colours are never
-            # seen. Lillecarl/pymux#273.
+            # seen. Lillecarl/pyterm#275.
             result += " class:painted"
 
         return result
@@ -183,7 +183,7 @@ def create_container_for_process(
         # **Padded on both sides, and not on one.** The bar centres
         # this, so a space that hangs off the end of it moves the title
         # off the middle of the pane by half of that space.
-        # Lillecarl/pymux#207.
+        # Lillecarl/pyterm#209.
         title = format_pymux_string(
             pymux, window.options.pane_title_format, window=window, pane=arrangement_pane
         ).strip()
@@ -232,7 +232,7 @@ def create_container_for_process(
         The pane's own number, at the far left of its bar.
 
         **It moved there from the right edge**, because the right edge
-        now belongs to the right neighbour. Lillecarl/pymux#207.
+        now belongs to the right neighbour. Lillecarl/pyterm#209.
         """
         return [("class:paneindex", get_pane_index())]
 
@@ -251,7 +251,7 @@ def create_container_for_process(
         stack puts above and below go on a bar of their own, under the
         pane, and they go in the middle of it together: two marks that
         point the way they mean, and one gap between them.
-        Lillecarl/pymux#211.
+        Lillecarl/pyterm#213.
         """
         above = pane_beside(pymux, window, arrangement_pane, Side.ABOVE)
         below = pane_beside(pymux, window, arrangement_pane, Side.BELOW)
@@ -324,7 +324,7 @@ def create_container_for_process(
                 Float(content=message_row(MessageRow.COVER), left=0, right=0, top=0, height=1),
                 # The title bar: this pane's title in the middle, and
                 # the panes beside it named at the edges.
-                # Lillecarl/pymux#207.
+                # Lillecarl/pyterm#209.
                 Float(
                     content=ConditionalContainer(
                         content=Window(
@@ -333,7 +333,7 @@ def create_container_for_process(
                             # cell of it, which is what lets an unchanged
                             # bar write its last cells again. The bar
                             # pads to the width, so this changes no cell.
-                            # Lillecarl/pymux#578.
+                            # Lillecarl/pyterm#580.
                             char=" ",
                             content=PaneTitleBar(
                                 get_number=get_pane_number,
@@ -353,7 +353,7 @@ def create_container_for_process(
                 ),
                 # The bar below: the panes above and below this one.
                 # There is no room for them on the bar above, which has
-                # four parts already. Lillecarl/pymux#211.
+                # four parts already. Lillecarl/pyterm#213.
                 Float(
                     content=ConditionalContainer(
                         content=Window(
@@ -376,7 +376,7 @@ def create_container_for_process(
                         # coloured band under a pane that is not
                         # stacked at all. Carl, on the picture: "we
                         # only want that bar if the rectangle is
-                        # split". Lillecarl/pymux#219.
+                        # split". Lillecarl/pyterm#221.
                         filter=Condition(lambda: bool(get_bar_below())),
                     ),
                     left=0,
@@ -412,7 +412,7 @@ def create_container_for_process(
         get_terminal_style,
         # Whether the row below this pane is the bar that names a stack's
         # neighbours, which is the row the mark's foot is drawn on.
-        # Lillecarl/pymux#401.
+        # Lillecarl/pyterm#403.
         has_bar_below=lambda: bool(get_bar_below()),
         hidden=lambda: hidden_of_pane(pymux, arrangement_pane),
         backdrop=lambda: cut_backdrop(pymux),
@@ -475,12 +475,12 @@ class _PaneMark(_ContainerProxy):
     neighbours -- there is none for a pane in no stack, whose lower
     edge is the window's, where a mark would land on the status line.
     So the foot of the mark is drawn only where that bar is.
-    Lillecarl/pymux#401.
+    Lillecarl/pyterm#403.
 
     **Six cells are not six Floats.** A `Float` per cell draws
     through the whole container machinery to land one character, and
     the two corners of the foot cost almost six thousand instructions
-    a frame in `checks.pymux-keystroke`. Lillecarl/pymux#488.
+    a frame in `checks.pymux-keystroke`. Lillecarl/pyterm#490.
     """
 
     #: What a mark cell is styled as.
@@ -507,7 +507,7 @@ class _PaneMark(_ContainerProxy):
         self.has_bar_below = has_bar_below
         #: What the view hides of this pane, and what a default cell
         #: shows: the two things the shade at a cut edge needs.
-        #: Lillecarl/pymux#616.
+        #: Lillecarl/pyterm#618.
         self.hidden = hidden
         self.backdrop = backdrop
         self.fade = fade

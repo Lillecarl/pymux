@@ -76,14 +76,14 @@ bind-key ] paste-buffer
 bind-key ? list-keys
 bind-key PPage copy-mode -u
 # tmux binds nothing on P. A picture of what this client shows, in the
-# pictures directory of the server's machine. Lillecarl/pymux#813.
+# pictures directory of the server's machine. Lillecarl/pyterm#815.
 bind-key P capture-client -o
 # Nor on U. The history back above the cursor, as kitty's
 # scroll_prompt_to_bottom brings it.
 bind-key U unscroll-pane
 
 # The strip. tmux has none of these, so there is no muscle memory to
-# keep and the keys are a choice. Lillecarl/pymux#212.
+# keep and the keys are a choice. Lillecarl/pyterm#214.
 #
 # niri's own keys are Mod+BracketLeft and Mod+BracketRight for
 # consume-or-expel, which behind a prefix are `{` and `}`. Those are
@@ -120,11 +120,11 @@ bind-key "'" command-prompt -p index "select-window -t ':%%'"
 # The resize step is the prefix table's own, so the two feel the same.
 # A key the table does not name still reaches the pane, so a person
 # can keep working while they manage; q and Escape leave.
-# Lillecarl/pymux#395.
+# Lillecarl/pyterm#397.
 # Passthrough: every key goes to the pane, the prefix too, for a tmux
 # or a pymux inside it. F12 enters and F12 leaves; F12 is what nested
 # tmux setups use, and a program in a pane rarely needs it. The status
-# line says so while it lasts. Lillecarl/pymux#530.
+# line says so while it lasts. Lillecarl/pyterm#532.
 bind-key -n F12 enter-mode passthrough
 bind-key -T passthrough F12 leave-mode
 

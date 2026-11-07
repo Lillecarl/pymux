@@ -1,11 +1,11 @@
 """
-Hold what images cost to a budget. Lillecarl/pymux#604.
+Hold what images cost to a budget. Lillecarl/pyterm#606.
 
 `checks.pymux-frame` and `checks.pymux-keystroke` count text frames and
 keys. Images take their own paths: pyte reads a transmission and keeps
 the cells under a placement up to date, and pymux crops, scales and
 re-encodes each image for each client's terminal on each frame.
-Lillecarl/pymux#574 and #575 moved that work into Rust and off the
+Lillecarl/pyterm#576 and #577 moved that work into Rust and off the
 event loop, and nothing held the result.
 
 The unit is bytecode instructions. `pyterm_pytest.instructions` says why,
@@ -34,7 +34,7 @@ build time, so the counted work never decodes a JPEG.
 - **sixel transmission**: pyte reads the same picture as sixel.
 - **text over it**: a screen of text drawn while the placement holds.
   Each write asks the placement which cells it covers
-  (Lillecarl/pymux#598); **text alone** is the same without one.
+  (Lillecarl/pyterm#600); **text alone** is the same without one.
 - **sixel frame** and **kitty frame**: a client's first frame of the
   pane, which encodes or transmits the image. **again** is the next
   frame, which should cost almost nothing. **scrolled** is a frame

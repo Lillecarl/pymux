@@ -9,7 +9,7 @@ and did nothing.
 `set-window-option -g` is the answer, and it is tmux's: it says what
 every new window starts with and changes no window that is open.
 
-Lillecarl/pymux#199.
+Lillecarl/pyterm#201.
 """
 
 from __future__ import annotations

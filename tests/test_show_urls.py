@@ -1,7 +1,7 @@
 """
 URL mode, through a client: labels over the links a pane shows, live
 and in copy mode, and the letters that open or copy one.
-Lillecarl/pymux#608.
+Lillecarl/pyterm#610.
 """
 
 from __future__ import annotations
@@ -57,7 +57,7 @@ async def test_a_lower_case_label_opens_its_link(pymux, monkeypatch):
 
 
 async def test_a_url_a_program_broke_at_the_edge_opens_whole(pymux, monkeypatch):
-    "A hard break at the last column and an indent, as Claude Code writes it. Lillecarl/pymux#926."
+    "A hard break at the last column and an indent, as Claude Code writes it. Lillecarl/pyterm#928."
     opened = []
     monkeypatch.setattr(
         pymux.outward, "open_url", lambda url, confirmed=False, pane=None: opened.append((url, confirmed))

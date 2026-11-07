@@ -83,7 +83,7 @@ def new_session(pymux: Pymux, args: argparse.Namespace):
     to is how big it is. Without them it is eighty by twenty-four, and
     a program in a pane laid itself out at that whatever the caller
     meant. The size is set before the first pane starts, so the program
-    is never told the wrong one. Lillecarl/pymux#459.
+    is never told the wrong one. Lillecarl/pyterm#461.
 
     It is not `resize-window`: a manual size says a person means that
     size to stay, so a client that attaches keeps it and scrolls. This

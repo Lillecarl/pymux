@@ -1,7 +1,7 @@
 """
 A desktop portal for the programs in window panes, so that they draw
 light or dark the way the screen in front of the person does.
-Lillecarl/pymux#812.
+Lillecarl/pyterm#814.
 
 `wayland-portal` says where it is served:
 

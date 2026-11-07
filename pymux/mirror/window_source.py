@@ -1,6 +1,6 @@
 """
 One window pane, lent to one peer: the owner's side of a mirrored
-Wayland window. Lillecarl/pymux#888.
+Wayland window. Lillecarl/pyterm#890.
 
 The peer is one more viewer of the window. It takes each frame as a
 client that encodes pixels itself does (`WindowFrames`): raw rectangles,

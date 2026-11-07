@@ -4,7 +4,7 @@
 The streams are lossless 4:4:4, made by ffmpeg from planes this file
 writes, so the decoder has exactly those planes and only the colour
 conversion stands between them and the RGB: full range BT.601, held to
-the formula in floating point. Lillecarl/pymux#639.
+the formula in floating point. Lillecarl/pyterm#641.
 """
 
 from __future__ import annotations

@@ -4,7 +4,7 @@ A real Firefox in a window pane, switched away from and back to.
 Carl saw a Firefox pane go dark after a switch away and back, with raw
 frames and VP9 alike. The probe window of `test_window_panes.py` draws
 every frame it is asked for; Firefox paints only what changed, and a
-still page paints nothing at all after the return. Lillecarl/pymux#753.
+still page paints nothing at all after the return. Lillecarl/pyterm#755.
 
 Runs in `checks.pymux-firefox`, which puts Firefox on the PATH.
 """

@@ -37,11 +37,11 @@ def list_panes(pymux: Pymux, args: argparse.Namespace) -> None:
     wanted = [parse_tag(word) for word in args.tags]
     if args.a:
         # Every window of every session. tmux reads `-a` as the whole
-        # server too. Lillecarl/pymux#323.
+        # server too. Lillecarl/pyterm#325.
         windows: list[Window] = [w for session in pymux.sessions for w in session.arrangement.windows]
     elif args.s:
         # With `-s` the target is a session, as tmux reads it
-        # (`cmd-list-panes.c`). Lillecarl/pymux#808.
+        # (`cmd-list-panes.c`). Lillecarl/pyterm#810.
         windows = list(session_of_target(pymux, args.target_pane).arrangement.windows)
     elif args.target_pane:
         window = find_window(pymux, args.target_pane.rsplit(".", 1)[0])
@@ -93,7 +93,7 @@ def list_panes(pymux: Pymux, args: argparse.Namespace) -> None:
 
         # The list-keys title rode along when this branch was
         # written, and the overview of panes said list-keys.
-        # Lillecarl/pymux#288.
+        # Lillecarl/pyterm#290.
         show_listing(pymux, "list-panes", "\n".join(sorted(result)))
 
 

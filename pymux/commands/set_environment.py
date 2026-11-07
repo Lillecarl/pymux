@@ -20,7 +20,7 @@ def set_environment(pymux: Pymux, args: argparse.Namespace) -> None:
     with `-g` it leaves the global scope itself. A program that
     already runs never sees any of this -- the environment is read
     once, at exec, so only panes spawned after the set carry it.
-    Lillecarl/pymux#270.
+    Lillecarl/pyterm#272.
     """
     name, value = args.name, args.value
     if not name or "=" in name:

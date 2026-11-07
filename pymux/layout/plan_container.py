@@ -4,7 +4,7 @@ Draw a plan: every pane where the layout says it goes.
 One container for two axes, doing what `ScrollableStrip` does for one.
 A layout says where every pane is (`measure`) and where the view sits
 on the plane (`look_at`); this puts each pane's container at its
-rectangle, less the view's offset. Lillecarl/pymux#217.
+rectangle, less the view's offset. Lillecarl/pyterm#219.
 
 **There is one coordinate space, the real one.** A pane that has
 scrolled half off the left is written at a negative position, and the
@@ -18,13 +18,13 @@ one for each thing that hangs on a screen.
 clipping above is what makes a half-visible pane free; a pane that is
 wholly outside is a different thing, because building its rows and
 spelling its cells happens before any of them is thrown away.
-Lillecarl/pymux#224.
+Lillecarl/pyterm#226.
 
 **A pane that is half in the view is shaded at its cut edge**, so that
 a person can see it is cut. The shade is not here: the panes are drawn
 in a later pass of `Screen.draw_all_floats` than this method runs in,
 so the pane's own container registers it after itself
-(`pymux/layout/cut_shade.py`). Lillecarl/pymux#222, Lillecarl/pymux#616.
+(`pymux/layout/cut_shade.py`). Lillecarl/pyterm#224, Lillecarl/pyterm#618.
 
 **It holds the plan it drew.** A title bar is drawn *during* a frame,
 inside one of these panes, so anything drawn in a frame can ask this
@@ -66,7 +66,7 @@ class LineHandler:
     """
     The mouse handler of a line a drag moves. It carries the shape of a
     pointer over the line: `Terminals` reads it off the handler under the
-    pointer, so a line something covers shows no shape. Lillecarl/pymux#819.
+    pointer, so a line something covers shows no shape. Lillecarl/pyterm#821.
     """
 
     __slots__ = ("line", "on_line", "pointer_shape")
@@ -129,7 +129,7 @@ class PlanContainer(Container):
     ) -> None:
         #: Hears the mouse over a line that has a seam, from a draw at
         #: `line_z_index`: a bar a pane draws over the line comes later
-        #: than the line, and would take its cells. Lillecarl/pymux#772.
+        #: than the line, and would take its cells. Lillecarl/pyterm#774.
         self.on_line = on_line
         self.line_z_index = line_z_index
         #: How long the view takes to glide to a new place, in seconds,
@@ -154,7 +154,7 @@ class PlanContainer(Container):
         #: bar drawn in this frame reads the plan rather than working
         #: it out again, and this is what says the plan is still the
         #: answer: a client that resized between two frames has a plan
-        #: of the size it was. Lillecarl/pymux#217.
+        #: of the size it was. Lillecarl/pyterm#219.
         self.measured_for: Size | None = None
 
     def __repr__(self) -> str:
@@ -197,7 +197,7 @@ class PlanContainer(Container):
 
         # The last plan, when nothing moved: what it already answered
         # stays answered, which is every title bar's neighbours on an
-        # idle frame. Lillecarl/pymux#578.
+        # idle frame. Lillecarl/pyterm#580.
         plan = self.layout.measure(plane)
         if self.plan is None or not plan.same_as(self.plan):
             self.plan = plan
@@ -213,7 +213,7 @@ class PlanContainer(Container):
         # **Told before culled, and over every slot.** A pane under a
         # higher plane still has a pty and a size it comes back to, so
         # the size goes to every pane of every slot whether or not a
-        # cell of it reaches the screen. Lillecarl/pymux#355.
+        # cell of it reaches the screen. Lillecarl/pyterm#357.
         if self.tell_its_size is not None:
             for slot, rect in self.plan.rects.items():
                 # Every pane of the slot, shown or not, because a
@@ -227,7 +227,7 @@ class PlanContainer(Container):
         # computing things from lower planes that are entirely
         # invisible". `drawn()` is that walk. With one plane it answers
         # the plan's own rectangles, which is every plan built today.
-        # Lillecarl/pymux#228, Lillecarl/pymux#355.
+        # Lillecarl/pyterm#230, Lillecarl/pyterm#357.
         for slot, rect in self.plan.drawn().items():
             if not rect.overlaps(view):
                 # **A pane no part of which is in the view is not
@@ -236,7 +236,7 @@ class PlanContainer(Container):
                 # screen first, and every cell of those rows is
                 # spelled. A strip of sixteen columns showed two of
                 # them and paid three times what sixteen visible panes
-                # of a divided window cost. Lillecarl/pymux#224.
+                # of a divided window cost. Lillecarl/pyterm#226.
                 #
                 # A pane that is *partly* in the view is drawn whole
                 # and clipped, which is what the plane rests on.
@@ -244,7 +244,7 @@ class PlanContainer(Container):
                 # The cursor follows: nothing sets `show_cursor` unless
                 # a window drew one, so a focused pane out of the view
                 # leaves the cursor hidden. That is the decision
-                # Lillecarl/pymux#201 made inside `ScrollablePane`.
+                # Lillecarl/pyterm#203 made inside `ScrollablePane`.
                 continue
 
             container = self.containers.get(slot.shown)
@@ -290,7 +290,7 @@ class PlanContainer(Container):
         outside it lands in a dictionary the renderer never reads. A
         line with no part of it in the view is not written at all: a
         strip draws one down the right of every column, and the columns
-        it has scrolled past are most of them. Lillecarl/pymux#224.
+        it has scrolled past are most of them. Lillecarl/pyterm#226.
         """
         style = (parent_style + " class:border").strip()
         measure = screen.max_column_index

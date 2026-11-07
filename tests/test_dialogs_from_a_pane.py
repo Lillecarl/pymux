@@ -12,9 +12,9 @@ Measured before the fix, driving the real connection route:
     list-panes                               answered on stdout
 
 So a listing was already right -- `show_listing` writes to stdout when a
-command came over the command line (Lillecarl/pymux#288) -- and the two
+command came over the command line (Lillecarl/pyterm#290) -- and the two
 that talk to `get_client_state()` directly were not.
-Lillecarl/pymux#272.
+Lillecarl/pyterm#274.
 """
 
 from __future__ import annotations

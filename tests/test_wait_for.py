@@ -12,7 +12,7 @@ be a plain function, so a wait could only be a wait on the server's
 own event loop -- and the client that would signal the channel is
 answered by that same loop. `wait-for done` in one pane and
 `wait-for -S done` in another could never meet, so the command stayed
-out of the tree rather than land as a hang. Lillecarl/pymux#302.
+out of the tree rather than land as a hang. Lillecarl/pyterm#304.
 
 `test_two_clients_take_turns_over_the_socket` is that pair, run for
 real over two connections. It is the test the issue asked for.
@@ -204,7 +204,7 @@ async def test_a_signal_needs_nobody_waiting_for_it():
 async def test_two_clients_take_turns_over_the_socket():
     """
     One client waits and another signals, both over their own
-    connection. This is the deadlock Lillecarl/pymux#302 described:
+    connection. This is the deadlock Lillecarl/pyterm#304 described:
     the loop that would answer the second client is the one the first
     was sleeping on.
     """

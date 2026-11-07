@@ -4,7 +4,7 @@ Copy mode belongs to the client that opens it.
 Two people can watch one pane. One of them reading its history must not
 stop the program for the other, and must not move the other's view or
 take the other's keys. Each client is an application of its own, and
-`ptterm` keeps a copy mode for each. Lillecarl/pymux#470.
+`ptterm` keeps a copy mode for each. Lillecarl/pyterm#472.
 """
 
 from __future__ import annotations

@@ -1,7 +1,7 @@
 """
 A program in a terminal pane that counts the mouse in pixels (1016)
 hears kitty's leave report when the pointer moves off its pane.
-Lillecarl/pymux#899.
+Lillecarl/pyterm#901.
 """
 
 from __future__ import annotations

@@ -5,7 +5,7 @@ The encoder takes random images: few colours and many, under every
 palette size, with pixels transparent enough to stay clear, so the
 median cut splits, ties and runs out of buckets. The conversions take
 every size. `pymux.graphics.kernels.install()` is held to the Python too, edges
-and all. Lillecarl/pymux#574.
+and all. Lillecarl/pyterm#576.
 """
 
 from __future__ import annotations

@@ -1,7 +1,7 @@
 """
 How fast a client gets frames: a status report behind each frame, whose
-answer says the terminal read it (Lillecarl/pymux#259, #825), the window
-pane frames a client has not answered yet (Lillecarl/pymux#641), and the
+answer says the terminal read it (Lillecarl/pyterm#261, #827), the window
+pane frames a client has not answered yet (Lillecarl/pyterm#643), and the
 counts `#{client_fps}` reads.
 """
 
@@ -28,11 +28,11 @@ __all__ = ["FramePacing"]
 
 #: A status report and its answer: 0 is ready, 3 a malfunction, and
 #: either says the terminal read everything sent before the report.
-#: Lillecarl/pymux#259.
+#: Lillecarl/pyterm#261.
 STATUS_REPORT = ask_status()
 
 #: How long a window pane's frame may go unanswered before the next one
-#: goes all the same. Lillecarl/pymux#643.
+#: goes all the same. Lillecarl/pyterm#645.
 FRAME_ANSWER_SECONDS = 2.0
 
 
@@ -63,21 +63,21 @@ class FramePacing:
 
         #: Window frames sent and not yet answered with `frame-shown`,
         #: for a client that answers; set while there are none.
-        #: Lillecarl/pymux#641.
+        #: Lillecarl/pyterm#643.
         self.frames_out = 0
         self.frames_shown = anyio.Event()
         self.frames_shown.set()
         #: Whether this client said its terminal answers a status
         #: report, the size of each frame whose report is not answered
-        #: yet, oldest first, and whether one ever was. Lillecarl/pymux#259.
+        #: yet, oldest first, and whether one ever was. Lillecarl/pyterm#261.
         self.paced = False
         self.unread: deque[int] = deque()
         self.answers_reports = False
         #: A frame was skipped for the terminal, so its answer asks for
-        #: the next one. Lillecarl/pymux#824.
+        #: the next one. Lillecarl/pyterm#826.
         self.frame_held = False
         #: The frames this client was sent, and what `#{client_fps}`
-        #: reads off them. Lillecarl/pymux#596.
+        #: reads off them. Lillecarl/pyterm#598.
         self.frames_sent = 0
         self.rate_frames = Rate()
         #: The window panes' frames, which go out apart from the frames
@@ -108,7 +108,7 @@ class FramePacing:
         """
         Wait until this client's terminal took what it was sent: every
         window frame answered, for a client that answers, and the
-        socket empty. Lillecarl/pymux#641.
+        socket empty. Lillecarl/pyterm#643.
         """
         await self.client.connection.pipe_connection.drained()
         if self.client.graphics.windows.frame_room is not None:
@@ -129,7 +129,7 @@ class FramePacing:
         What goes behind a frame of `size` bytes: a status report, for a
         client whose terminal answers one. The answer arrives once the
         terminal read everything before it, which over ssh is the only
-        thing that says a frame reached the person. Lillecarl/pymux#259.
+        thing that says a frame reached the person. Lillecarl/pyterm#261.
         """
         if not self.paced:
             return ""
@@ -158,7 +158,7 @@ class FramePacing:
         never waited for, so a terminal that ignores the report costs
         nothing; one that answered and went quiet holds a few frames and
         no more, which is the dead link of a phone that lost its signal.
-        Lillecarl/pymux#825.
+        Lillecarl/pyterm#827.
         """
         if not self.answers_reports or not self.unread:
             return False

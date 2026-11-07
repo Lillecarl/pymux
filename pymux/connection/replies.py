@@ -56,7 +56,7 @@ if TYPE_CHECKING:
 __all__ = ["TerminalReplies"]
 
 #: Whether the terminal reports the mouse in pixels (SGR pixel mode,
-#: 1016). Lillecarl/pymux#648.
+#: 1016). Lillecarl/pyterm#650.
 PIXEL_MOUSE_QUERY = ask_mode(PrivateMode.SGR_PIXEL_MOUSE)
 
 #: What a pixel mouse answer must say for the mode to be turned on:
@@ -68,7 +68,7 @@ _PIXEL_MOUSE_STATES = (ModeState.SET, ModeState.RESET, ModeState.PERMANENTLY_SET
 #: column 2 says one cell, column 3 says the terminal widened it, as
 #: kitty alone of seven does. Row 2, because "CSI 1;2R" is shift+F3 as
 #: well. The two cells are erased again, and the answer repaints.
-#: Lillecarl/pymux#539.
+#: Lillecarl/pyterm#541.
 EMOJI_WIDTH_ROW = 2
 EMOJI_WIDTH_PROBE = (
     esc(escape.DECSC)
@@ -85,7 +85,7 @@ EMOJI_WIDTH_PROBE = (
 #: report. Column 3 says the terminal drew it; a terminal that does not
 #: read OSC 66 leaves the cursor in column 1. Rows 3 to 5 are the
 #: cluster probes'. The cells are erased again, which takes a block
-#: away whole. Lillecarl/pymux#890.
+#: away whole. Lillecarl/pyterm#892.
 TEXT_WIDTH_ROW = 6
 TEXT_SCALE_ROW = 7
 TEXT_SIZE_PROBE_ROWS = TEXT_SCALE_ROW + 1
@@ -128,26 +128,26 @@ class TerminalReplies:
         self.client = client
 
         #: Whether this client's terminal reports the mouse in pixels.
-        #: Lillecarl/pymux#648.
+        #: Lillecarl/pyterm#650.
         self.pixel_mouse = False
         #: Whether this client's terminal draws kitty's extra cursors
-        #: itself, as it answered "CSI > SP q". Lillecarl/pymux#891.
+        #: itself, as it answered "CSI > SP q". Lillecarl/pyterm#893.
         self.extra_cursors = False
         #: Whether this client's terminal speaks kitty's clipboard
         #: protocol, OSC 5522, as DECRQM for its paste events mode said.
-        #: Lillecarl/pymux#893.
+        #: Lillecarl/pyterm#895.
         self.kitty_clipboard = False
         #: Whether this client's terminal reports its size in band, DEC
-        #: 2048, pixels and all. Lillecarl/pymux#797.
+        #: 2048, pixels and all. Lillecarl/pyterm#799.
         self.sizes_in_band = False
         #: Whether this client's terminal draws a text emoji with U+FE0F
-        #: two columns wide, where a pane holds one. Lillecarl/pymux#539.
+        #: two columns wide, where a pane holds one. Lillecarl/pyterm#541.
         self.widens_text_emoji = False
         #: How wide this client's terminal draws each kind of grapheme
         #: cluster, as it answered `CLUSTER_WIDTH_PROBE`.
-        #: Lillecarl/pymux#801.
+        #: Lillecarl/pyterm#803.
         self.clusters_drawn = Drawn()
-        #: Every reply this client's terminal gave. Lillecarl/pymux#725.
+        #: Every reply this client's terminal gave. Lillecarl/pyterm#727.
         self.terminal_said = TerminalAnswers()
         #: Set from `start_detection` until the device attributes reply,
         #: which closes the detection. The client sends `Packet.DETECT`
@@ -162,26 +162,26 @@ class TerminalReplies:
         self.kitty_source_flags = 0
         #: Whether the outer terminal can take a notification back off
         #: its screen (`close` in `p=`), which pymux does once one is
-        #: seen. Lillecarl/pymux#799.
+        #: seen. Lillecarl/pyterm#801.
         self.notification_closes = False
         #: Whether the outer terminal answered the OSC 99 query.
         self.answered_notification_query = False
         #: Whether the outer terminal answered "OSC 7501 ; ?", and so
-        #: keeps the records of the panes. Lillecarl/pymux#927.
+        #: keeps the records of the panes. Lillecarl/pyterm#929.
         self.program_status = False
 
     def start_detection(self) -> None:
         """
         The client queried its terminal, and the server asks the rest:
         so a client of any age gets a pointer to the pixel
-        (Lillecarl/pymux#648), the survey whose answers are only kept
-        (Lillecarl/pymux#725), and what a notification's click can do,
-        OSC 99 `p=?` (Lillecarl/pymux#779).
+        (Lillecarl/pyterm#650), the survey whose answers are only kept
+        (Lillecarl/pyterm#727), and what a notification's click can do,
+        OSC 99 `p=?` (Lillecarl/pyterm#781).
         """
         self.detection_pending = True
         # kitty's drag and drop: a terminal that speaks it answers, and
         # its packets are cut out of the keys from here on.
-        # Lillecarl/pymux#892.
+        # Lillecarl/pyterm#894.
         self.client.pymux.drag_and_drop.asked(self.client)
         self.client.write_output_raw(
             PIXEL_MOUSE_QUERY
@@ -229,14 +229,14 @@ class TerminalReplies:
             return
         # The terminal switched between light and dark. The report says
         # which, not the colours: those are asked again, and their
-        # answers match the theme as at attach. Lillecarl/pymux#796.
+        # answers match the theme as at attach. Lillecarl/pyterm#798.
         if isinstance(reply, ColorSchemeReport):
             self.client.write_output_raw(COLOR_QUERIES)
             self.client.flush_output()
             return
 
         # Every reply is kept, whatever is done with it below.
-        # Lillecarl/pymux#725.
+        # Lillecarl/pyterm#727.
         self.terminal_said.heard(data)
 
         if self._took(reply) or not self.detection_pending:
@@ -257,16 +257,16 @@ class TerminalReplies:
         "Read a reply that may come at any time. True when it was one."
         match reply:
             # The terminal reports the mouse in pixels if asked: from here
-            # on it is asked, with the rest of the mouse. Lillecarl/pymux#648.
+            # on it is asked, with the rest of the mouse. Lillecarl/pyterm#650.
             case ModeReport(mode=PrivateMode.SGR_PIXEL_MOUSE, state=state):
                 # Only with a cell to divide by. xterm reports pixels and,
                 # by default, keeps its cell size to itself; its answer to
                 # that query came before this one, or never.
-                # Lillecarl/pymux#651. Permanently reset is what iTerm2
+                # Lillecarl/pyterm#653. Permanently reset is what iTerm2
                 # answers.
                 if state in _PIXEL_MOUSE_STATES and self.client.graphics.cell_size_known:
                     self._turn_on_pixel_mouse()
-            # 0 and 4 mean no, as the spec says. Lillecarl/pymux#893.
+            # 0 and 4 mean no, as the spec says. Lillecarl/pyterm#895.
             case ModeReport(mode=PrivateMode.PASTE_EVENTS, state=state):
                 self.kitty_clipboard = state not in (ModeState.UNKNOWN, ModeState.PERMANENTLY_RESET)
             case ExtraCursorsSupport(supported=supported) if ExtraShape.MAIN in supported:
@@ -279,10 +279,10 @@ class TerminalReplies:
                 self._cluster_width_answered(row, column)
             case CursorPositionReport(row=row, column=column) if row in (TEXT_WIDTH_ROW, TEXT_SCALE_ROW):
                 self._text_size_answered(row, column)
-            # The terminal read a frame. Lillecarl/pymux#259.
+            # The terminal read a frame. Lillecarl/pyterm#261.
             case StatusReport():
                 self.client.pacing.status_answered()
-            # The terminal processed a window pane's frame. Lillecarl/pymux#643.
+            # The terminal processed a window pane's frame. Lillecarl/pyterm#645.
             case GraphicsReply() if (
                 self.client.graphics.windows.frame_room is not None
                 and self.client.graphics.windows.is_frame_answer(reply)
@@ -307,13 +307,13 @@ class TerminalReplies:
             # The cell size, whenever it comes: asked again at each resize.
             # The client that attached before its terminal answered can
             # first speak for the panes now, and one whose cell changed
-            # speaks again. Lillecarl/pymux#369, Lillecarl/pymux#774.
+            # speaks again. Lillecarl/pyterm#371, Lillecarl/pyterm#776.
             case CellSizeReport():
                 if self.client.graphics.take_cell_size(reply):
                     self.client.pymux.terminals.sync_cell_size()
             # DEC 2048: the size and the pixels in one report, which the
             # terminal sends when the mode is set and at each resize. From
-            # here on a resize needs no cell size query. Lillecarl/pymux#797.
+            # here on a resize needs no cell size query. Lillecarl/pyterm#799.
             case InBandSizeReport(rows=rows, columns=columns, height=height, width=width):
                 self.sizes_in_band = True
                 if rows and columns:
@@ -389,7 +389,7 @@ class TerminalReplies:
             self.client.request_repaint()
 
         # The secondary attributes are the survey's, never the fence.
-        # Lillecarl/pymux#725.
+        # Lillecarl/pyterm#727.
         if not (isinstance(reply, DeviceAttributes) and reply.kind is AttributesKind.PRIMARY):
             return
 
@@ -422,7 +422,7 @@ class TerminalReplies:
         detection. `set-option extended-keys always` is for a terminal
         that speaks the protocol and does not answer the query that
         asks; there are some, and a person who knows theirs is one can
-        say so. Lillecarl/pymux#173.
+        say so. Lillecarl/pyterm#175.
         """
         if self.client.pymux.options.extended_keys is ExtendedKeys.ALWAYS:
             return True
@@ -431,9 +431,9 @@ class TerminalReplies:
     @property
     def identity(self) -> Identity:
         """
-        This client's terminal, as its answers name it. Lillecarl/pymux#827.
+        This client's terminal, as its answers name it. Lillecarl/pyterm#829.
         The one place that names it: the key profile reads it too.
-        Lillecarl/pymux#841.
+        Lillecarl/pyterm#843.
         """
         return identify(self.client.graphics.terminal_version, outer_term(self.client.colors.term))
 
@@ -442,7 +442,7 @@ class TerminalReplies:
         """
         The notification OSC this client's terminal shows, or None when
         it is known to show none. The query answer goes first; a
-        terminal with no OSC 99 is known by its name. Lillecarl/pymux#826.
+        terminal with no OSC 99 is known by its name. Lillecarl/pyterm#828.
         """
         if self.answered_notification_query:
             return Osc.NOTIFICATION
@@ -457,7 +457,7 @@ class TerminalReplies:
         must not reach a pane as key presses.
 
         A click shows this client the pane, and reaches the program only
-        when it asked for clicks itself. Lillecarl/pymux#779.
+        when it asked for clicks itself. Lillecarl/pyterm#781.
         """
         metadata, _semicolon, text = split_payload(param)
         if read_identifier(metadata) == QUERY_IDENTIFIER:
@@ -531,7 +531,7 @@ class TerminalReplies:
 
         A client that named a theme is left alone. A terminal that
         reports a theme change later comes through here as well, and
-        the match follows it. Lillecarl/pymux#346.
+        the match follows it. Lillecarl/pyterm#348.
         """
         if self.client.state is None or self.client.state.options.theme != NEAREST:
             return

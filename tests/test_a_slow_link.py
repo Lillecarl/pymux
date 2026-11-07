@@ -6,7 +6,7 @@ sshd's, the kernel's, the link. A phone on a weak signal then shows
 what was true seconds ago, and a keystroke's frame waits behind every
 frame of an animation before it. So a client whose terminal answers a
 status report gets one behind each frame, and the next frame waits for
-the answer. Lillecarl/pymux#259.
+the answer. Lillecarl/pyterm#261.
 
 A terminal that never answered is never waited for, and a pane's
 program never waits on any of it: pyte reads the pane whether anybody
@@ -80,7 +80,7 @@ async def answered_all(session, state, packets, in_flight: int = 1) -> None:
     a held frame go, and that frame carries a report of its own. Counting
     `unread` once answered the frames out then and left that one unread
     for ever, under load. The count here is of the reports that reached
-    the client, so no report is answered twice. Lillecarl/pymux#846.
+    the client, so no report is answered twice. Lillecarl/pyterm#848.
     """
     connection = state.client.connection
     state.options.frames_in_flight = in_flight
@@ -136,7 +136,7 @@ async def test_after_an_answer_the_next_frame_waits_for_the_next_one():
 async def test_small_frames_go_until_the_count_is_out():
     """
     An animation runs faster than one frame a round trip: frames go
-    until `frames-in-flight` are unanswered. Lillecarl/pymux#825.
+    until `frames-in-flight` are unanswered. Lillecarl/pyterm#827.
     """
     packets: list = []
     async with over_connection(read_packet=packets.append) as session:
@@ -162,7 +162,7 @@ async def test_small_frames_go_until_the_count_is_out():
 async def test_a_frame_past_the_bytes_waits_however_few_frames():
     """
     What a key waits behind is bytes in the link, so a big frame holds
-    the next one though the count has room. Lillecarl/pymux#825.
+    the next one though the count has room. Lillecarl/pyterm#827.
     """
     packets: list = []
     async with over_connection(read_packet=packets.append) as session:
@@ -191,7 +191,7 @@ async def test_a_key_draws_within_a_round_trip_while_a_pane_animates():
     terminal answered, and not on a timer after; and the frames skipped
     meanwhile ask for no others. Measured before the fix: keys up to
     104 ms, and 1,307 redraws a second for 36 frames, each a walk of the
-    layout. Lillecarl/pymux#824.
+    layout. Lillecarl/pyterm#826.
     """
     packets: list = []
     arrived: list[tuple[float, str]] = []
@@ -258,7 +258,7 @@ async def test_a_key_draws_within_a_round_trip_while_a_pane_animates():
         # Twenty spins and a key or two a second, and no spin of skips.
         assert redraws < 150, redraws
         # Five frames may be out, so the spinner's twenty a second all go:
-        # one in flight held it to one a round trip. Lillecarl/pymux#825.
+        # one in flight held it to one a round trip. Lillecarl/pyterm#827.
         drawn = (len(arrived) - drawn_before) / seconds
         assert drawn > 15, drawn
 

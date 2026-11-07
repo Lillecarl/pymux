@@ -261,7 +261,7 @@ class Told:
     the packet that says it, or what makes that packet when a link
     starts. A new link hears every entry again, in the order each was
     first said, so state added here cannot be left out of a reconnect.
-    Lillecarl/pymux#883.
+    Lillecarl/pyterm#885.
     """
 
     def __init__(self, send: Callable[[Message], None]) -> None:
@@ -414,9 +414,9 @@ class Peer:
         #: and `Peers.of` starts it again.
         self.running = False
         self._waiting = _PaneWaiting(self)
-        #: The `show-log -p` requests that wait for the owner. Lillecarl/pymux#934.
+        #: The `show-log -p` requests that wait for the owner. Lillecarl/pyterm#936.
         self.log_asks = LogAsks(self.send)
-        #: The owner's `pymux receive` requests that a client here answers. Lillecarl/pymux#947.
+        #: The owner's `pymux receive` requests that a client here answers. Lillecarl/pyterm#949.
         self.relays = Relays(pymux, self.send)
         #: The scope of the link while it is up.
         self._tasks: anyio.abc.TaskGroup | None = None
@@ -438,7 +438,7 @@ class Peer:
         Put each client back where it was on this link's sessions before
         this server upgraded, once the client attached again and the tree
         brought the session. A snapshot holds no mirrored session, so the
-        client came back on one of this server's. Lillecarl/pymux#870.
+        client came back on one of this server's. Lillecarl/pyterm#872.
         """
         if not self.places:
             return
@@ -477,7 +477,7 @@ class Peer:
         """
         Give the owner the files of a client recording made on one of its
         sessions, a piece at a time, in order behind everything sent
-        before. Lillecarl/pymux#955.
+        before. Lillecarl/pyterm#957.
 
         **They travel as their own packets**, never as anything a client
         draws or types, so a recording can never take in the channel that
@@ -533,7 +533,7 @@ class Peer:
 
     def mirror(self, pane_id: int, sink: MirrorSink | RemoteWindow) -> None:
         self.sinks[pane_id] = sink
-        # The codecs this side decodes, for a window pane. Lillecarl/pymux#888.
+        # The codecs this side decodes, for a window pane. Lillecarl/pyterm#890.
         self.told.say(
             ("mirror", pane_id), {Field.CMD: Packet.MIRROR, Field.PANE_ID: pane_id, Field.CODECS: sorted(decoders())}
         )
@@ -683,7 +683,7 @@ class Peer:
             try:
                 await self.relink.hold(stream, self._hold)
             except Exception as error:
-                # Lillecarl/pymux#879: a refused key is asked again only
+                # Lillecarl/pyterm#881: a refused key is asked again only
                 # when a person asks.
                 self.error = why(error)
                 logger.warning("The link to %s stops trying: %s", self.address, self.error)

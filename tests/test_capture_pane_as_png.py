@@ -122,7 +122,7 @@ def _colors(image: Image.Image, box: tuple[int, int, int, int]) -> set[tuple[int
 
 
 async def test_a_block_element_fills_its_cell_to_the_edge(pymux):
-    "Drawn as foot draws it, so block art shows no gap between cells. Lillecarl/pymux#777."
+    "Drawn as foot draws it, so block art shows no gap between cells. Lillecarl/pyterm#779."
     pane = create_pane(pymux, "\x1b[?25l██▀▐▛▒")
     paint = Paint.of(pane.screen.colors)
     image = await picture(pymux, "--cell", "9x18")
@@ -161,7 +161,7 @@ async def test_a_glyph_the_font_lacks_comes_from_the_fallback(pymux):
 
 
 def test_a_cell_of_several_characters_takes_a_font_that_has_them_all():
-    "The face has the digit of a keycap and not its U+20E3. Lillecarl/pymux#802."
+    "The face has the digit of a keycap and not its U+20E3. Lillecarl/pyterm#804."
     keycap = "1\ufe0f\u20e3"
     assert 0x20E3 not in screenshot._characters(FONTS[0])
     assert 0x20E3 in screenshot._characters(FALLBACK)
@@ -175,7 +175,7 @@ def test_a_cell_of_several_characters_takes_a_font_that_has_them_all():
 async def test_a_glyph_wider_than_its_cells_stays_in_them(pymux):
     """
     Unifont draws the conjunct ksha with its vowel sign about three cells
-    wide, and the screen gives it two: the third stays blank. Lillecarl/pymux#803.
+    wide, and the screen gives it two: the third stays blank. Lillecarl/pyterm#805.
     """
     pane = create_pane(pymux, "\x1b[?25l\u0915\u094d\u0937\u093f ")
     assert pane.screen.page.data_buffer[0][2].char == " "
@@ -234,7 +234,7 @@ async def test_an_image_under_the_text_lets_the_text_show(pymux):
 
 
 async def test_an_image_under_the_backgrounds_shows_only_where_the_background_is_the_default(pymux):
-    "As kitty draws a z under -2**30: a cell with a colour of its own covers it. Lillecarl/pymux#814."
+    "As kitty draws a z under -2**30: a cell with a colour of its own covers it. Lillecarl/pyterm#816."
     create_pane(pymux, "\x1b[?25l" + KITTY_RED % (",z=%d,C=1" % WINDOW_Z) + "\x1b[44m \x1b[m")
     image = await picture(pymux, "--cell", "9x18")
     assert RED not in _cell(image, 0, 0, 9, 18)
@@ -242,7 +242,7 @@ async def test_an_image_under_the_backgrounds_shows_only_where_the_background_is
 
 
 def test_a_window_frame_is_drawn_over_its_cells_and_under_their_colours():
-    "Lillecarl/pymux#814."
+    "Lillecarl/pyterm#816."
     plain, blue = screenshot.Look("#ffffff", "#000000"), screenshot.Look("#ffffff", "#0000ff")
     frame = screenshot.Pixels(2, 1, bytes((0, 255, 0, 255)) * 2)
     grid = screenshot.Grid(
@@ -313,7 +313,7 @@ async def test_without_a_font_fontconfig_answers():
 
 @pytest.mark.skipif(shutil.which("fc-match") is None, reason="no fontconfig on PATH")
 async def test_the_system_font_falls_back_where_fontconfig_says():
-    "The check's fontconfig knows Unifont, which has U+23BF. Lillecarl/pymux#815."
+    "The check's fontconfig knows Unifont, which has U+23BF. Lillecarl/pyterm#817."
     look = screenshot.Look("#ffffff", "#000000")
     grid = screenshot.Grid([[("⎿", look), ("a", look)]], 2, "#ffffff", "#000000", None)
     (found,) = await screenshot.system_fallbacks(grid, FONTS[0])

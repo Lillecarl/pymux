@@ -44,7 +44,7 @@ class FakeClientState:
     #: A real client state says whether the temporary client of a socket
     #: command holds it, and the keyboard mask walks that: a client
     #: that never attached a terminal must not be counted as one that
-    #: reports nothing. Lillecarl/pymux#420.
+    #: reports nothing. Lillecarl/pyterm#422.
     temporary = False
 
     terminal_focused = True
@@ -52,7 +52,7 @@ class FakeClientState:
     popups: tuple = ()
 
     #: What `latest_client` and the portal's scheme read of every
-    #: client. Lillecarl/pymux#812.
+    #: client. Lillecarl/pyterm#814.
     last_used = 0
     theme_in_use = DEFAULT_THEME
 
@@ -130,7 +130,7 @@ def test_temporary_client_does_not_hold_the_mask_back():
     """
     The temporary client of a socket command never asked a terminal
     anything, so its report of nothing must not drag the mask of every
-    real client down while the command runs. Lillecarl/pymux#420.
+    real client down while the command runs. Lillecarl/pyterm#422.
     """
     pymux, connections = make_pymux(0b11111)
     temporary = FakeClient(0)
@@ -249,7 +249,7 @@ def test_pymux_asks_terminal_to_disambiguate():
     A bare Escape is also the first byte of every escape sequence. A
     terminal that disambiguates writes the key as "CSI 27 u" instead,
     which can start nothing. pymux asks for that on its own account,
-    and not only when a pane wants it. Lillecarl/pymux#164.
+    and not only when a pane wants it. Lillecarl/pyterm#166.
     """
     assert Pymux().terminals.keyboard_flags_for_client() == KeyboardFlag.DISAMBIGUATE
 
@@ -279,7 +279,7 @@ def test_off_asks_terminal_for_nothing():
     A person attaching with a terminal that claims more than it does
     steps the whole session down, and the client writes
     "CSI = 0 ; 1 u" to put it back in the legacy encoding.
-    Lillecarl/pymux#173.
+    Lillecarl/pyterm#175.
     """
     pymux, _ = make_pymux(0b11111)
     ALL_SERVER_OPTIONS["extended-keys"].set_value(pymux, "off")

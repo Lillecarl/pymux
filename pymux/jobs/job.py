@@ -77,7 +77,7 @@ class Job:
     #: What a hot upgrade does with each attribute; `pyte.keep` says.
     #: A running job crosses an upgrade's exec as a child of the same
     #: process, and the new image adopts its pty or its pipes.
-    #: Lillecarl/pymux#399, Lillecarl/pymux#736.
+    #: Lillecarl/pyterm#401, Lillecarl/pyterm#738.
     KEEP: ClassVar[dict[str, Keep]] = {
         "job_id": Keep.SAVED,
         "command": Keep.SAVED,

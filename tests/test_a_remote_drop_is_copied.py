@@ -3,7 +3,7 @@ A drop of files from another machine: pymux pulls each file over kitty's
 drag and drop protocol into a directory of its own, breadth first, and
 pastes the paths there. The packets here are spelled as kitty's dnd.c
 sends them: data in chunks with `m=1`, an empty end, `X=1` for a link
-and `X=handle` for a directory. Lillecarl/pymux#892.
+and `X=handle` for a directory. Lillecarl/pyterm#894.
 """
 
 from __future__ import annotations
@@ -184,7 +184,7 @@ def old_and_new_drops(base: Path) -> tuple[Path, Path]:
 
 
 def test_copies_older_than_the_days_kept_go(tmp_path: Path):
-    "Lillecarl/pymux#904."
+    "Lillecarl/pyterm#906."
     old, new = old_and_new_drops(tmp_path)
     assert remove_old_drops(tmp_path, 7) == [old]
     assert not old.exists()

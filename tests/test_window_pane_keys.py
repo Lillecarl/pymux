@@ -1,6 +1,6 @@
 """
 What a key press in a window pane becomes: an evdev key, and the
-modifiers held around it. Lillecarl/pymux#620.
+modifiers held around it. Lillecarl/pyterm#622.
 """
 
 from __future__ import annotations
@@ -57,7 +57,7 @@ def _event(data: str):
 
 def test_control_and_a_character_with_no_control_code():
     # foot's zoom, as kitty and as xterm's modifyOtherKeys write it.
-    # Lillecarl/pymux#627.
+    # Lillecarl/pyterm#629.
     assert _event("\x1b[61;5u") == ((CTRL,), 13)
     assert _event("\x1b[27;5;61~") == ((CTRL,), 13)
     assert _event("\x1b[45;5u") == ((CTRL,), 12)

@@ -1,5 +1,5 @@
 """
-A strip follows the size of the terminal. Lillecarl/pymux#206.
+A strip follows the size of the terminal. Lillecarl/pyterm#208.
 
 Carl: "The strip window mode doesn't react when i resize the outside
 terminal."
@@ -117,7 +117,7 @@ def widths(pymux, panes):
 
 #: A column's share of the window, less the border it owns. Two default
 #: columns and their two borders come to exactly the window.
-#: Lillecarl/pymux#206.
+#: Lillecarl/pyterm#208.
 def content_of(share):
     return share - 1
 
@@ -125,7 +125,7 @@ def content_of(share):
 async def test_two_default_columns_fill_window_exactly():
     """
     Half a window each, borders included, so the strip does not
-    overflow and nothing is shaved. Lillecarl/pymux#206.
+    overflow and nothing is shaved. Lillecarl/pyterm#208.
     """
     async with create_client(STRIP) as (pymux, _terminal, draw):
         _window, panes = await columns_of(pymux, 2)

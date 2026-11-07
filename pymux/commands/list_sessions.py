@@ -22,7 +22,7 @@ def list_sessions(pymux: Pymux, args: argparse.Namespace) -> None:
     List the sessions of this server, one to a line.
 
     With `-F`, each line is that format. (Like tmux.) `-J` is the same
-    line written as a jinja2 template. Lillecarl/pymux#333. `--tag`
+    line written as a jinja2 template. Lillecarl/pyterm#335. `--tag`
     keeps the sessions carrying every tag it names.
     """
     chosen = chosen_format(args, DEFAULT_FORMAT)

@@ -10,7 +10,7 @@ sends nothing, which is the answer most of the time.
 websocket server are two callers of this, and neither adds a rule of its
 own. `send` is a coroutine the caller gives, because a socket and a
 websocket say "send" differently and neither belongs here.
-Lillecarl/pymux#461.
+Lillecarl/pyterm#463.
 """
 
 from __future__ import annotations
@@ -149,7 +149,7 @@ class PaneStream:
                 return "this stream does not take input"
             # The program's report when it asked for one, arrows for a
             # wheel on the alternate screen, else nothing: a pane stream
-            # has no client to open copy mode in. Lillecarl/pymux#950.
+            # has no client to open copy mode in. Lillecarl/pyterm#952.
             self.terminal.terminal_control.use_mouse(mouse)
             return None
 

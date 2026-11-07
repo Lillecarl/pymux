@@ -1,7 +1,7 @@
 """
 "OSC 6", iTerm2's tab colour: a tab is a window, so the status line
 draws a window's name in the colour of its active pane.
-Lillecarl/pymux#786.
+Lillecarl/pyterm#788.
 """
 
 from __future__ import annotations

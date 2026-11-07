@@ -18,9 +18,9 @@ def connect(pymux: Pymux, args: argparse.Namespace):
     the windows; this one shows them and sends the keys typed here. The
     address is a socket path on this machine, or
     `ssh://[user@]host[:port][/path]`. A session never mixes the windows
-    of two servers. Lillecarl/pymux#759.
+    of two servers. Lillecarl/pyterm#761.
 
-    Run again on a link that is down, it dials at once. Lillecarl/pymux#874.
+    Run again on a link that is down, it dials at once. Lillecarl/pyterm#876.
     """
     peer = pymux.peers.of(args.address)
     peer.watch()

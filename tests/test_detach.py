@@ -1,6 +1,6 @@
 """
 What "detach-client" does: it closes the client's connection, and the
-session goes on. Lillecarl/pymux#160.
+session goes on. Lillecarl/pyterm#162.
 """
 
 from __future__ import annotations

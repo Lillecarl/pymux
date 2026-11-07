@@ -13,7 +13,7 @@ whose arithmetic stays typed, and `WindowIndex("3")` reads like
 Both cost nothing at runtime: every value stays an int on the wire,
 in JSON and in `-t %/@` spellings. Mint once, wrap once: counters
 and the two parsing sites (`-t` spellings, client packets) construct
-these, and everything else only carries them. Lillecarl/pymux#508.
+these, and everything else only carries them. Lillecarl/pyterm#510.
 """
 
 from __future__ import annotations

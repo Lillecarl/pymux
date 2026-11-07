@@ -5,7 +5,7 @@ A program that writes a clipboard write and exits at once: the kernel
 holds those bytes after the exit, and the pane's reader takes them on
 the turns after it. If the pane went away first, the write would be
 lost -- the race rmux fences with a drain before teardown.
-Lillecarl/pymux#389.
+Lillecarl/pyterm#391.
 """
 
 from __future__ import annotations

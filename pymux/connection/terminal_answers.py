@@ -4,11 +4,11 @@ Everything a client's terminal said when it was asked, kept.
 pymux asks an attaching terminal a dozen questions and acts on a few of
 the answers. Every reply is kept per client, and `show-terminal` reads
 them back, so a terminal nobody documents, such as a phone's, need not
-be guessed at. Lillecarl/pymux#725.
+be guessed at. Lillecarl/pyterm#727.
 
 **Keyed by what was said.** The same reply again adds to a count
 rather than a row, so the status answer behind every frame
-(Lillecarl/pymux#259) is one row however long the client stays, and the
+(Lillecarl/pyterm#261) is one row however long the client stays, and the
 whole store is capped besides.
 """
 
@@ -35,7 +35,7 @@ __all__ = ["SURVEY", "Answer", "TerminalAnswers", "readable"]
 #: version, the colours, the keyboard and the graphics already.
 SURVEY = (
     csi(escape.DA, private=Marker.GREATER)
-    # kitty's multiple cursors. Lillecarl/pymux#891.
+    # kitty's multiple cursors. Lillecarl/pyterm#893.
     + csi(Csi.DECSCUSR, private=Marker.GREATER)
     + csi(Csi.XTWINOPS, WindowOp.REPORT_TEXT_AREA_PIXELS)
     # The same with a 2: the whole window, and not its text area.

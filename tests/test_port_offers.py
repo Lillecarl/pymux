@@ -1,7 +1,7 @@
 """
 A port a program in a pane starts listening on is offered to the client
 that can forward it, once, while `forward-offers` is on.
-Lillecarl/pymux#438.
+Lillecarl/pyterm#440.
 """
 
 from __future__ import annotations

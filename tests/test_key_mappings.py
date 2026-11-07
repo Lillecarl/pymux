@@ -2,7 +2,7 @@
 The names a person writes for a key, and what they reach.
 
 `bind-key` takes a key by name, so this table is the whole vocabulary
-of a configuration file. Nothing tested it until Lillecarl/pymux#204,
+of a configuration file. Nothing tested it until Lillecarl/pyterm#206,
 which is how "M-J" came to be unbindable: the table names "M-a" to
 "M-z" one at a time and no uppercase form, and tmux binds "M-J".
 """
@@ -31,7 +31,7 @@ def test_lowercase_alt_key_is_escape_and_letter():
 def test_uppercase_alt_keys_tmux_binds(key):
     """
     tmux binds these three out of the box, so a ported configuration
-    reaches them on its first Alt line. Lillecarl/pymux#204.
+    reaches them on its first Alt line. Lillecarl/pyterm#206.
     """
     assert reached(key) == (Keys.Escape, key[2])
 

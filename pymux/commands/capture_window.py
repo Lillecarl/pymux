@@ -69,7 +69,7 @@ def capture_window(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None] | 
     The status line is a client's and not the window's, so it is not
     here: `capture-client` draws what a client shows. A Wayland window
     pane draws what it waits to draw first, for a second at most.
-    Lillecarl/pymux#818, Lillecarl/pymux#822.
+    Lillecarl/pyterm#820, Lillecarl/pyterm#824.
     """
     if args.output is None and not args.p:
         raise CommandException("capture-window: it prints, so it needs -p or -o")

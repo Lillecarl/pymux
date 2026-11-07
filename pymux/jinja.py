@@ -6,7 +6,7 @@ is all of it: the regex is `#\\{([a-zA-Z0-9_]+)\\}`, so there is no
 condition, no comparison, no padding and no arithmetic. tmux has all of
 those, in `format.c`, which is seven thousand lines and two hundred
 entries. **The choice was to write that, or to take a language that
-exists.** Lillecarl/pymux#333.
+exists.** Lillecarl/pyterm#335.
 
 So a string that holds `{{` or `{%` is rendered here instead, and a
 string that does not is formatted the way it always was. A `.tmux.conf`
@@ -84,7 +84,7 @@ class _Compiled(NamedTuple):
     #: jinja2's own globals (`range`, `namespace`, ...). `Template.render`
     #: copies them out of a `ChainMap` on every call, a name at a time,
     #: and that cost a keystroke more than every fact it read.
-    #: Lillecarl/pymux#960.
+    #: Lillecarl/pyterm#962.
     globals: dict[str, object]
 
 

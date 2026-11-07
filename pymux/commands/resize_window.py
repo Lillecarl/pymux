@@ -62,12 +62,12 @@ def resize_window(pymux: Pymux, args: argparse.Namespace) -> None:
     window that one happened to point at, or to none. So `-t` is what
     makes this reach a detached session, which is the shape an
     automated caller and a web front end both have. tmux spells the
-    same flag. Lillecarl/pymux#459.
+    same flag. Lillecarl/pyterm#461.
 
     tmux also takes `-A` and `-a` for the largest and smallest client.
     The four policies of `window-size` already say that and keep
     saying it, so whether those are worth having at all is
-    Lillecarl/pymux#225.
+    Lillecarl/pyterm#227.
     """
     window = the_window(pymux, args.target_window)
 
@@ -97,7 +97,7 @@ def resize_window(pymux: Pymux, args: argparse.Namespace) -> None:
 
     # A frame is what tells a pane its size, and a window nobody
     # watches gets no frame. Without this the plane answered the new
-    # number and every pty kept the old one. Lillecarl/pymux#459.
+    # number and every pty kept the old one. Lillecarl/pyterm#461.
     size_the_panes_of(pymux, window)
 
 

@@ -20,7 +20,7 @@ def upgrade_server(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None]:
     COMMAND starts the new build, `pymux` on the server's PATH by
     default. It loads a snapshot of this server first, and a build that
     cannot is refused with nothing lost. Attached clients wait for the
-    new server and attach again. Lillecarl/pymux#399.
+    new server and attach again. Lillecarl/pyterm#401.
     """
     from pymux.core.upgrade import upgrade
 

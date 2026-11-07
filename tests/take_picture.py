@@ -41,7 +41,7 @@ comparison and it holds the whole of the exception: it runs on
 `IMAGE_FIXTURES` and nothing else, it cuts each drawing out of its
 background so that where a terminal put it is not a difference, and it
 refuses to give a number at all when the two drawings are not the same
-size. Lillecarl/pymux#262.
+size. Lillecarl/pyterm#264.
 
 **A pane takes an image in over two protocols as well as writing it
 out over two**, so the image fixtures are a matrix: `sixel-image-*` is
@@ -67,13 +67,13 @@ bind socket @/tmp/.X11-unix/X0: Address already in use" is in the log
 of every run, and it is the second server stepping aside. Making
 `/tmp/.X11-unix` first is no part of it -- measured, a sandbox that
 starts with an empty /tmp ends with the socket in it either way,
-because each server makes the directory itself. Lillecarl/pymux#177.
+because each server makes the directory itself. Lillecarl/pyterm#179.
 
 "xterm: Xt error: Can't open display" came from neither. An X server
 resets when its last client goes, and a picture here is a terminal
 that starts and is killed, so the client count reaches zero between
 every pair of pictures. `pyterm_pytest.seats` asks for `-noreset`.
-Lillecarl/pymux#431.
+Lillecarl/pyterm#433.
 
 Not every difference is a fault. A pane reads what a program asked for
 and writes the request again in the form the terminal of the user
@@ -183,7 +183,7 @@ ROWS, COLUMNS = 24, 80
 #: settling. It covered two, so a picture whose first two waits both
 #: ran long lost its window before the settle gave up -- and `import`
 #: does not fail on a window that has gone, it waits.
-#: Lillecarl/pymux#462.
+#: Lillecarl/pyterm#464.
 HOLD = 2 * APPEAR_TIMEOUT + SETTLE_TIMEOUT + 10
 
 #: What the pymux side of a picture runs with.
@@ -194,14 +194,14 @@ HOLD = 2 * APPEAR_TIMEOUT + SETTLE_TIMEOUT + 10
 #:
 #: **They are two different fences.** `middleman.py` reads its fence off
 #: the wire, so any sequence pymux passes on serves, and it uses a
-#: notification, which no option gates (Lillecarl/pymux#380). A picture
+#: notification, which no option gates (Lillecarl/pyterm#382). A picture
 #: is taken of a terminal and has no wire to read: the fence is read
 #: back out of the clipboard of that terminal, and only an OSC 52 puts
 #: anything there. So a pane has to be allowed to write the clipboard,
-#: which is "on". Lillecarl/pymux#378.
+#: which is "on". Lillecarl/pyterm#380.
 #: `set-client-option` for the first, because full screen belongs to
 #: the terminal a person is sitting at and the client reads this file
-#: for itself. Lillecarl/pymux#471.
+#: for itself. Lillecarl/pyterm#473.
 PICTURE_CONFIG = "set-client-option full-screen on\nset set-clipboard on\n"
 
 
@@ -321,7 +321,7 @@ IMAGE_WIDTH = 120
 #: and the image leaving slack.
 #:
 #: **Neither is resampled anywhere any more.** Until
-#: Lillecarl/pymux#369 a pane counted every image against a cell size it
+#: Lillecarl/pyterm#371 a pane counted every image against a cell size it
 #: had invented -- ten by twenty, which only xterm has -- and then the
 #: client stretched the image to fill the cells: pymux with `scale_rgba`
 #: for sixel, and the terminal itself for kitty, which was handed the
@@ -392,7 +392,7 @@ def sixel_image(fixture, height):
     is one, sixel where there is not, half blocks where there is
     neither. So the bare picture is the terminal's own sixel decoder and
     the pymux picture is ours, and in kitty they are two different
-    protocols drawing one image. Lillecarl/pymux#262.
+    protocols drawing one image. Lillecarl/pyterm#264.
 
     **Neither re-encoding loses a pixel, and neither resamples one.**
     The sixel path decodes to RGBA and encodes it again, and the colours
@@ -400,7 +400,7 @@ def sixel_image(fixture, height):
     much, because it transmits the image untouched. Neither fits the
     image to the cells it covers: `_put_command` leaves the cell box out
     and `_sixel_for` skips `scale_rgba`, because the pane counted those
-    cells against the cell this client really has. Lillecarl/pymux#369
+    cells against the cell this client really has. Lillecarl/pyterm#371
     is where they stopped.
 
     The bytes are written here and not built with `pymux.graphics.sixel`. An
@@ -459,7 +459,7 @@ def kitty_image(fixture, height):
     measures kitty in and both protocols out, and that is the half of
     the matrix nothing photographed before: every image fixture wrote a
     sixel, so the sixel decoder was always the first thing in the chain.
-    Lillecarl/pymux#262.
+    Lillecarl/pyterm#264.
 
     **It is the only image fixture whose bare side is not empty in
     kitty.** kitty speaks this protocol itself, so the bare picture is
@@ -565,13 +565,13 @@ FIXTURES.update({name: partial(writer, height=height) for name, (writer, height)
 #: does not fail on a window that has gone -- it waits. Measured,
 #: twelve calls of twelve waited until the harness cut them off, and
 #: the picture that timed out was `bare.7` both times somebody saw it:
-#: the last frame of the burst. Lillecarl/pymux#462.
+#: the last frame of the burst. Lillecarl/pyterm#464.
 #:
 #: The longer sleep costs no time. `Seat.running` kills the terminal as
 #: soon as the burst has its frames.
 #:
 #: The burst starts on the fence each one ends its drawing with, not on
-#: the clock. Lillecarl/pymux#588.
+#: the clock. Lillecarl/pyterm#590.
 BLINK_FIXTURES = {
     "cursor-blink": "printf '\\033[2J\\033[H'\nprintf 'the cursor is after this: '\nprintf '\\033[10;1Hx'\n",
 }
@@ -752,7 +752,7 @@ def xterm_argv(command, background="black", foreground="white"):
         # blink phase only when xterm reads its pty, so the phase a
         # picture caught was the count of writes before it: "4 Test of
         # double-sized characters #5" read lit bare and dark through
-        # pymux, steadily, from the same SGR 5. Lillecarl/pymux#597.
+        # pymux, steadily, from the same SGR 5. Lillecarl/pyterm#599.
         "-xrm",
         "xterm*showBlinkAsBold: true",
         "-xrm",
@@ -779,7 +779,7 @@ def foot_argv(command, background="000000", foreground="ffffff", blink=True):
     the same, and a cursor that blinks for ever makes sure they never
     are. `kitty_argv` says the rest; foot needed the same knob, and
     without it the chrome farm lost most of its pictures.
-    Lillecarl/pymux#338, Lillecarl/pymux#362.
+    Lillecarl/pyterm#340, Lillecarl/pyterm#364.
     """
     return [
         "foot",
@@ -830,7 +830,7 @@ def kitty_argv(command, background="#000000", foreground="#ffffff", blink=True):
     are: a chrome fixture that leaves a cursor on the screen cannot
     settle in kitty at all. The comparison run wants the blink,
     because one of its fixtures measures it, so the default stays.
-    Lillecarl/pymux#338.
+    Lillecarl/pyterm#340.
     """
     return [
         "kitty",
@@ -935,11 +935,11 @@ def pymux_command(pane, socket_path, config_path, log_path, error_path):
 
     Its own stderr goes to a file. It shares a terminal with the client
     in this mode, so anything it writes there lands in the picture
-    (Lillecarl/pymux#36), and a traceback would be lost in it.
+    (Lillecarl/pyterm#38), and a traceback would be lost in it.
     """
     # No "--" before the command: the mode word takes what follows it
     # as the program of the first pane, and a "--" reaches the pane as
-    # the first word of that program (Lillecarl/pymux#41).
+    # the first word of that program (Lillecarl/pyterm#43).
     return "exec python3 -m pymux -S %s -f %s --log %s integrated %s 2>%s" % (
         socket_path,
         config_path,
@@ -1049,7 +1049,7 @@ def compare_one(terminal, seat, name, work, out):
 #: speaks both**, which is why this comparison crosses two of them:
 #: WezTerm's sixel is "preliminary and incomplete" and it documents no
 #: kitty graphics, Ghostty has the kitty protocol and no sixel, Contour
-#: has sixel and no kitty protocol. Lillecarl/pymux#262.
+#: has sixel and no kitty protocol. Lillecarl/pyterm#264.
 THE_TWO_PROTOCOLS = ("kitty", "foot")
 BOTH_PROTOCOLS = "%s-against-%s" % THE_TWO_PROTOCOLS
 
@@ -1067,7 +1067,7 @@ def two_protocols_of(name, out):
     has no glyphs. The pixels are the program's, pymux re-encodes them
     for whichever protocol the terminal speaks, and what reaches the
     screen ought to be the same picture either way. That is what
-    Lillecarl/pymux#262 asks for and what nothing else here can answer:
+    Lillecarl/pyterm#264 asks for and what nothing else here can answer:
     `tests/test_both_graphics_paths_draw_the_same.py` compares what
     pymux *asks* for, with no terminal in it at all.
 
@@ -1301,7 +1301,7 @@ def shoot(terminals, names, blink_names, work, out):
         # server that went away makes every picture after it fail, and
         # the terminal's complaint names the display and not the cause.
         # A run that cannot draw has no answer to give.
-        # Lillecarl/pymux#216.
+        # Lillecarl/pyterm#218.
         try:
             seats[terminal.seat].still_there()
         except TheSeatIsGone as gone:

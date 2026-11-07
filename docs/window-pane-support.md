@@ -3,18 +3,18 @@
 A window pane shows a GUI program through the Wayland compositor of
 `pysmithay`. pymux finds out per client which features that client's
 terminal has. This page records which terminals were tried, and what
-each one answered. Lillecarl/pymux#651.
+each one answered. Lillecarl/pyterm#653.
 
 ## The features, and how pymux detects them
 
 | Feature | Detection |
 | --- | --- |
-| Window pane pictures (#620) | the kitty graphics query; without it, a notice |
-| Shared memory frames (#634) | a one-pixel `t=s` probe |
-| VP9 (#639), RGBA (#649), one edit per frame (#644) | follow from the graphics protocol |
-| Pacing by the terminal's answer (#643) | kitty's reply to the last command |
-| Pixel mouse, mode 1016 (#648) | DECRQM |
-| Pointer shapes, OSC 22 (#650) | none: pymux always sends them |
+| Window pane pictures (#622) | the kitty graphics query; without it, a notice |
+| Shared memory frames (#636) | a one-pixel `t=s` probe |
+| VP9 (#641), RGBA (#651), one edit per frame (#646) | follow from the graphics protocol |
+| Pacing by the terminal's answer (#645) | kitty's reply to the last command |
+| Pixel mouse, mode 1016 (#650) | DECRQM |
+| Pointer shapes, OSC 22 (#652) | none: pymux always sends them |
 
 ## What was measured
 

@@ -1,7 +1,7 @@
 """
 A pane's text at another size, kitty's OSC 66, reaches a terminal that
 draws it, and stays cells at one size on one that does not.
-Lillecarl/pymux#890.
+Lillecarl/pyterm#892.
 """
 
 from __future__ import annotations
@@ -75,7 +75,7 @@ def test_a_frame_that_loses_a_block_is_a_full_one():
 
 
 def test_a_float_over_a_block_makes_its_own_frame_a_full_one():
-    "Lillecarl/pymux#911: the frame the float opens in, not the one after it."
+    "Lillecarl/pyterm#913: the frame the float opens in, not the one after it."
     written = Written()
     graphics = _graphics(written)
     screen = _screen(str(BIG))
@@ -160,7 +160,7 @@ POPUP = "the popup"
 
 async def test_a_popup_over_a_block_opens_in_a_full_frame():
     """
-    Lillecarl/pymux#911: the frame that draws the popup erases the
+    Lillecarl/pyterm#913: the frame that draws the popup erases the
     screen first, so kitty never moves the popup's text past the block.
     """
     after = await _answered(SPEAKS, "display-popup -w 100%% -h 100%% -T '%s' 'sleep 30'" % POPUP)

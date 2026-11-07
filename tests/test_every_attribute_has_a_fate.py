@@ -12,7 +12,7 @@ two things:
   it was written for.
 
 A snapshot that missed one field would restore a session that looks
-right and is not, and nothing else would notice. Lillecarl/pymux#399.
+right and is not, and nothing else would notice. Lillecarl/pyterm#401.
 """
 
 from __future__ import annotations
@@ -121,7 +121,7 @@ async def test_every_attribute_has_a_fate(pymux):
             pymux.handle_command("split-window -h")
         await settled(session)
         await pymux.jobs.supervise(pymux.jobs.submit("true"))
-        # A viewer, so a field added to `JobFeed` needs a fate too. Lillecarl/pymux#715.
+        # A viewer, so a field added to `JobFeed` needs a fate too. Lillecarl/pyterm#717.
         with set_app(client_state.app):
             pymux.handle_command("view-job -k 1")
         await settled(session)

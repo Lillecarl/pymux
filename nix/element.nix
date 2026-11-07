@@ -8,7 +8,7 @@
 # - an npm package, so that a front end built with node links the element
 #   as `node_modules/pymux-pane` and imports it by name. Reaching into
 #   another package's `lib/python3.14/site-packages/` would work and would
-#   break on the next interpreter. Lillecarl/pymux#461.
+#   break on the next interpreter. Lillecarl/pyterm#463.
 #
 # **node is here and in nothing pymux installs.** A compiler at build
 # time costs a browser nothing at run time, and it buys the two things a
@@ -50,7 +50,7 @@ let
           types = "./pymux-pane.d.ts";
           default = "./pymux-pane.js";
         };
-        # The player of `record-export -F web`. Lillecarl/pymux#610.
+        # The player of `record-export -F web`. Lillecarl/pyterm#612.
         "./replay" = {
           types = "./replay.d.ts";
           default = "./replay.js";

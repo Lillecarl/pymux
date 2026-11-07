@@ -2,7 +2,7 @@
 `which-key`: while the prefix waits, the keys it leads to draw in a
 box on the view.
 
-The rules this judges, Lillecarl/pymux#29: the popup opens as soon as
+The rules this judges, Lillecarl/pyterm#31: the popup opens as soon as
 the prefix lands; it draws in the top right, the corner that holds the
 least of what a person has on the screen, and steps aside to the
 corner diagonally opposite only when the cursor is in its own way; and
@@ -32,7 +32,7 @@ def which_key_floats(state) -> list[Float]:
     """
     found = []
     # The corner above the status line is the body's float, so it
-    # rises with a status line that wraps. Lillecarl/pymux#723.
+    # rises with a status line that wraps. Lillecarl/pyterm#725.
     layout = state.layout_manager.layout
     for one in layout.floats + layout.content.children[0].floats:
         inner = getattr(one.content, "content", None)
@@ -168,7 +168,7 @@ async def test_box_takes_no_focus():
     """
     The key after the prefix must reach the bindings as it always
     did. A focusable control in the box would eat it, and the popup
-    would be the fast typist's toll. Lillecarl/pymux#29.
+    would be the fast typist's toll. Lillecarl/pyterm#31.
     """
     async with create_session() as (pymux, state):
         ALL_OPTIONS["which-key"].set_value(pymux, "on")

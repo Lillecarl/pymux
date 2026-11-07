@@ -4,7 +4,7 @@ The image on the clipboard of the machine the client runs on.
 A pane on another server cannot reach this machine's clipboard, and a
 terminal's OSC 52 carries text only. So the client reads the image
 itself, the way a program on this machine would, and sends it ahead of
-the Ctrl-V that pastes it. Lillecarl/pymux#956.
+the Ctrl-V that pastes it. Lillecarl/pyterm#958.
 """
 
 from __future__ import annotations

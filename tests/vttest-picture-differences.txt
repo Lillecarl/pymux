@@ -13,7 +13,7 @@
 #
 # Both are written down here, because a gate that is red for a reason
 # everybody already knows is a gate everybody learns to ignore
-# (Lillecarl/pymux#46). This check is not a gate yet either way: the
+# (Lillecarl/pyterm#48). This check is not a gate yet either way: the
 # chain is proven and the judging is not, and `photograph_vttest.py`
 # says which part still flaps.
 #
@@ -44,7 +44,7 @@
 # VT100. kitty, Ghostty and Alacritty implement none of them, esctest
 # has no test for them, and no recorded program in this repository
 # sends one. So a pane reads each of the four and draws the line the
-# plain way. Lillecarl/pymux#141.
+# plain way. Lillecarl/pyterm#143.
 #
 # Every count below is that, and it is the whole of every count. What
 # a person sees: xterm draws each of these lines with glyphs twice as
@@ -74,7 +74,7 @@ xterm 4 Test of double-sized characters #4 17757
 
 # The same again, on a screen that also blinks. xterm draws the blinking
 # text bold for these pictures (`take_picture.py` says why), so both
-# sides show it. Lillecarl/pymux#597.
+# sides show it. Lillecarl/pyterm#599.
 xterm 4 Test of double-sized characters #5 20925
 
 # "Exactly half of the box should remain." vttest draws a box and makes
@@ -82,7 +82,7 @@ xterm 4 Test of double-sized characters #5 20925
 # pane draws the whole box at its ordinary size.
 #
 # The cursor of this screen used to be two columns to the left of where
-# xterm puts it (Lillecarl/pymux#115). It is not any more: the top row
+# xterm puts it (Lillecarl/pyterm#117). It is not any more: the top row
 # of the two pictures is identical to the pixel. The doubling was what
 # moved it.
 xterm 4 Test of double-sized characters #6 10104
@@ -96,7 +96,7 @@ xterm 4 Test of double-sized characters #6 10104
 # cursor moving off one lands a row's width from where xterm puts it.
 # Every count is the emulator's answer, not a fault of pymux, and the
 # pictures to read are the run's `differ/` directory.
-# Lillecarl/pymux#280.
+# Lillecarl/pyterm#282.
 xterm 9 Test of known bugs / 2 Bug B: Scrolling region #1 4360
 xterm 9 Test of known bugs / 2 Bug B: Scrolling region #2 4894
 

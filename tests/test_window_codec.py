@@ -1,6 +1,6 @@
 """
 `window-codec`: how the Wayland windows in a window reach a client.
-Lillecarl/pymux#639.
+Lillecarl/pyterm#641.
 """
 
 from __future__ import annotations

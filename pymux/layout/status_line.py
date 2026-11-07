@@ -1,6 +1,6 @@
 """
 The status line of one client: `status-left`, the list of windows and
-`status-right`, and how many rows the list takes. Lillecarl/pymux#775.
+`status-right`, and how many rows the list takes. Lillecarl/pyterm#777.
 """
 
 from __future__ import annotations
@@ -32,14 +32,14 @@ __all__ = ["PASSTHROUGH_MARK", "StatusLine"]
 #: Before `status-right` while passthrough holds every key: a person
 #: who wonders why the prefix does nothing reads the answer by the
 #: clock. In code and not in the default format, so a person's own
-#: `status-right` gets it too. Lillecarl/pymux#530.
+#: `status-right` gets it too. Lillecarl/pyterm#532.
 PASSTHROUGH_MARK = " PASSTHROUGH "
 
 
 def _tab_style(window: window_tree.Window) -> str:
     """
     The tab colour of the window's active pane, "OSC 6", as a style to
-    add, with black or white over it, whichever reads. Lillecarl/pymux#786.
+    add, with black or white over it, whichever reads. Lillecarl/pyterm#788.
     """
     pane = window.active_pane
     color = pane.screen.tab_color if pane is not None else None
@@ -65,7 +65,7 @@ class StatusLine:
         #: `left` and `right`, while this client renders. The room for
         #: the window list reads both, the status line draws them, and
         #: `what_time_moves` reads them after: three formats a frame of
-        #: what may be a template. Lillecarl/pymux#824.
+        #: what may be a template. Lillecarl/pyterm#826.
         self._frame_sides: dict[str, str] = {}
 
     def frame_changed(self) -> None:
@@ -143,7 +143,7 @@ class StatusLine:
 
         An entry moves to the next row whole, and never breaks across
         two. From `status-max-rows` on, the rest go on the last row and
-        are cut where it ends. Lillecarl/pymux#723.
+        are cut where it ends. Lillecarl/pyterm#725.
 
         **Under this client's application, whoever asks.** The plane
         asks it of every watcher while one of them renders, and which
@@ -232,7 +232,7 @@ class StatusLine:
         A status string, or nothing when the session holds no window to
         format it for. A session is empty before its first window and
         after its last, and a client draws through both.
-        Lillecarl/pymux#581.
+        Lillecarl/pyterm#583.
         """
         if self.client_state.session.arrangement.get_active_window() is None:
             return ""

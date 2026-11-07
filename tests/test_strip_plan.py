@@ -4,7 +4,7 @@ The plan a strip makes: where every pane of the row is.
 `Strip` is the first layout to answer with a `Plan`, and it is the
 hardest one pymux has, which is why it goes first: the row may be
 wider than the screen, so the screen cannot answer "which pane is
-beside this one". Lillecarl/pymux#217.
+beside this one". Lillecarl/pyterm#219.
 
 This file judges the plan on its own, in cells. Two others hold it to
 something outside itself: `test_plane.py` holds every plan to the
@@ -119,7 +119,7 @@ def test_bar_below_pane_costs_stack_row_each_time():
     Two rows between stacked panes when that bar is drawn: the lower
     pane hangs its title bar in one and the upper one hangs the bar
     below in the other. `layout._create_split` leaves the same gap.
-    Lillecarl/pymux#211.
+    Lillecarl/pyterm#213.
     """
     window, panes = create_strip((2,))
 
@@ -305,7 +305,7 @@ def looking_at(window, focus, offset=0, columns=SIZE.columns, size=SIZE):
 def test_column_already_on_screen_moves_nothing():
     """
     What makes moving the focus a round trip: walk right and back, and
-    the strip is where it started. Lillecarl/pymux#207.
+    the strip is where it started. Lillecarl/pyterm#209.
     """
     window, panes = create_strip((1, 1, 1))
 
@@ -317,7 +317,7 @@ def test_view_follows_focus_to_right():
 
     # Three columns of forty cells, and a window eighty wide. The
     # third's panes end at 119, and its border past them is worth no
-    # scroll (#617), so the view stops at 39.
+    # scroll (#619), so the view stops at 39.
     assert looking_at(window, panes[2], offset=0) == 39
 
 
@@ -346,7 +346,7 @@ def test_last_column_border_is_not_worth_a_scroll():
     and the scroll that showed it cut the column on the other side.
     Carl, on a recording: "we don't want to move and show the extra
     border unless there's another column to the left/right as a hint".
-    Lillecarl/pymux#617.
+    Lillecarl/pyterm#619.
     """
     window, panes = create_strip((1, 1))
 
@@ -361,7 +361,7 @@ def test_a_column_that_sticks_out_keeps_its_neighbour_on_screen():
     screen a cell short of two of them. Moving onto the second column
     moves the view by what sticks out, and the first stays in view. It
     snapped the second to the left edge and threw the first away.
-    Lillecarl/pymux#614.
+    Lillecarl/pyterm#616.
     """
     window, panes = create_strip((1, 1, 1))
 
@@ -374,7 +374,7 @@ def test_two_halves_fill_an_odd_width_exactly():
     Carl's 187 columns: each half rounded alone was 94, the row ran a
     cell past the screen, and the cut column was tinted. Rounded from
     the running total they are 93 and 94, and nothing scrolls.
-    Lillecarl/pymux#615.
+    Lillecarl/pyterm#617.
     """
     window, panes = create_strip((1, 1, 1))
     size = Size(rows=24, columns=187)
@@ -404,7 +404,7 @@ def test_column_wider_than_view_shows_its_left_edge():
     Carl: "left should generally be preferred for terminals since
     that's where ~100% of applications begin writing text, it's even
     likely that a missing right column doesn't miss anything."
-    Lillecarl/pymux#218.
+    Lillecarl/pyterm#220.
 
     The rule this was moved from said the same in a comment and did
     the opposite, and the test that judged it could not tell: every
@@ -430,7 +430,7 @@ def test_column_that_fits_is_still_shown_whole():
 
     # And in a view of sixty cells it does not fit at the origin, so
     # the view moves far enough to show its end and no further: the
-    # last cell of its panes, 78, and not the border past them (#617).
+    # last cell of its panes, 78, and not the border past them (#619).
     assert looking_at(window, panes[1], offset=0, columns=60) == 19
 
 

@@ -2,7 +2,7 @@
 The attached client of a connection: what it said of itself and of its
 terminal, what was sent to that terminal, and the packets only a client
 sends. A connection that is a peer link or a tunnel has none.
-Lillecarl/pymux#886.
+Lillecarl/pyterm#888.
 """
 
 from __future__ import annotations
@@ -60,7 +60,7 @@ class ClientRole:
     """
 
     #: What a hot upgrade does with each attribute; `pyte.keep` says.
-    #: The client reconnects to the next server (Lillecarl/pymux#409),
+    #: The client reconnects to the next server (Lillecarl/pyterm#411),
     #: so the attach handshake rebuilds most of this. Saved: the
     #: client's own record and when it came.
     KEEP: ClassVar[dict[str, Keep]] = {
@@ -119,7 +119,7 @@ class ClientRole:
         self.pacing = FramePacing(self)
 
         #: What `record-client` is recording of this client, or None.
-        #: Lillecarl/pymux#612.
+        #: Lillecarl/pyterm#614.
         self.recording: Recording | None = None
 
         # Kitty graphics protocol state of the outer terminal. The same
@@ -140,7 +140,7 @@ class ClientRole:
         )
         # The client sent the shared memory probe with its detection,
         # and only the server reads the terminal's replies.
-        # Lillecarl/pymux#634.
+        # Lillecarl/pyterm#636.
         self.graphics.on_shm = self._terminal_reads_shm
 
         # Colour depth of the outer terminal. The same handshake
@@ -152,56 +152,56 @@ class ClientRole:
         #: client reported it. Empty until it attaches. **Only a client
         #: can say it**: `socket.gethostname()` here answers the
         #: server's own machine, and over ssh that is not the one the
-        #: person sits at. Lillecarl/pymux#287.
+        #: person sits at. Lillecarl/pyterm#289.
         self.hostname = ""
 
         #: The environment of the machine this client runs on, as the
         #: client reported it when it attached. The session keeps the
         #: names "update-environment" lists, and nothing keeps the rest.
-        #: Lillecarl/pymux#271.
+        #: Lillecarl/pyterm#273.
         self.environment: dict[str, str] = {}
 
         #: The terminal this client draws on, as the client named it,
         #: and the process it runs as. Both are of the client's own
         #: machine, so neither means anything here on its own:
         #: `ServerConnection.name` puts the hostname in front.
-        #: Lillecarl/pymux#335.
+        #: Lillecarl/pyterm#337.
         self.ttyname = ""
         self.pid = 0
 
         #: Who the client says it is, the same on every attach of one
         #: client process, or "" from a client that did not say. A
         #: snapshot keys what belongs to a client by this, not by the
-        #: connection, which an upgrade replaces. Lillecarl/pymux#399.
+        #: connection, which an upgrade replaces. Lillecarl/pyterm#401.
         self.client_id = ""
 
         #: Whether this client can forward a port, and what it is
         #: forwarding. Both come from the client: it holds the SSH
         #: connection, so the list here is a copy to draw and never the
-        #: truth. Lillecarl/pymux#436.
+        #: truth. Lillecarl/pyterm#438.
         self.can_forward = False
         self.forwards: list[dict[str, Any]] = []
         #: Whether it sends its table again when asked, and what the
-        #: next table that arrives sets. Lillecarl/pymux#487.
+        #: next table that arrives sets. Lillecarl/pyterm#489.
         self.answers_forwards = False
         self._next_forwards: anyio.Event | None = None
-        #: Whether this client starts browsers. Lillecarl/pymux#653.
+        #: Whether this client starts browsers. Lillecarl/pyterm#655.
         self.starts_browsers = False
-        #: Whether this client saves a download. Lillecarl/pymux#745.
+        #: Whether this client saves a download. Lillecarl/pyterm#747.
         self.saves_files = False
         #: Whether this client sends files for `pymux receive`, and the
-        #: requests that wait for its answer. Lillecarl/pymux#743.
+        #: requests that wait for its answer. Lillecarl/pyterm#745.
         self.sends_files = False
         self.files = Files(self)
-        #: The `show-log` requests that wait for this client. Lillecarl/pymux#934.
+        #: The `show-log` requests that wait for this client. Lillecarl/pyterm#936.
         self.log_asks = LogAsks(self.connection.send_packet)
         #: Whether this client answers kitty's file transfer as the
-        #: terminal. Lillecarl/pymux#912.
+        #: terminal. Lillecarl/pyterm#914.
         self.answers_transfers = False
         #: Whether this client keeps its own options between attaches,
-        #: and so hears them each time one changes. Lillecarl/pymux#957.
+        #: and so hears them each time one changes. Lillecarl/pyterm#959.
         self.keeps_options = False
-        #: This client's sound, when it plays it. Lillecarl/pymux#657.
+        #: This client's sound, when it plays it. Lillecarl/pyterm#659.
         self.audio: AudioLink | None = None
 
         #: When this client attached. A client that reattaches from the
@@ -214,7 +214,7 @@ class ClientRole:
         #: The same handshake asks for them, and either one stays
         #: `None` when the terminal does not say. **Only a client can
         #: find this out**, which is why it is here and not on the
-        #: session. Lillecarl/pymux#223.
+        #: session. Lillecarl/pyterm#225.
         self.default_colors = DefaultColors()
 
         self.clipboard = ClipboardReader(self)
@@ -229,7 +229,7 @@ class ClientRole:
             # Whether this client's terminal counts the modifiers the
             # way the protocol does. It is asked when a key arrives and
             # not now, because the detection has not answered yet.
-            # Lillecarl/pymux#182.
+            # Lillecarl/pyterm#184.
             speaks_protocol=self.replies.keyboard_is_supported,
             pixel_cell=self.replies.pixel_cell,
             pointer_moved=lambda: self.pymux.terminals.pointer_moved(self),
@@ -243,11 +243,11 @@ class ClientRole:
         self._progress_sent = NO_PROGRESS
 
         # The records this client's terminal holds of the panes, as
-        # report payloads by id; None before the first. Lillecarl/pymux#927.
+        # report payloads by id; None before the first. Lillecarl/pyterm#929.
         self._program_status_sent: dict[str, str] | None = None
 
         # The extra cursors this client's terminal draws itself.
-        # Lillecarl/pymux#891.
+        # Lillecarl/pyterm#893.
         self.extra_cursors_sent = ExtraCursorsSent()
 
     def handle(self, packet: Message) -> None:
@@ -283,7 +283,7 @@ class ClientRole:
         (`input.c:3414-3440`), so it is dispatched as
         `tty_cmd_setselection` among the drawing commands
         (`tty.c:2140`). Only its popup case, which has no pane, writes
-        straight to the terminal. Lillecarl/pymux#478.
+        straight to the terminal. Lillecarl/pyterm#480.
 
         An OSC sequence moves no cursor and paints no cell, so it is
         safe anywhere between two frames. `pymux.notify.osc.build_osc` has
@@ -294,7 +294,7 @@ class ClientRole:
         is the pane a person is looking at, so a sync that walks every
         client would hand it the shape of that pointer and the OSC of
         that pane -- read back as garbage after the answer of the
-        command. Lillecarl/pymux#420.
+        command. Lillecarl/pyterm#422.
         """
         if self.state.temporary or self.connection.closed:
             return
@@ -324,7 +324,7 @@ class ClientRole:
         """
         Show this client's terminal the progress of the pane it looks
         at, when it draws one: some terminals take any OSC 9 for a
-        notification. Only a change goes out. Lillecarl/pymux#788.
+        notification. Only a change goes out. Lillecarl/pyterm#790.
         """
         if progress == self._progress_sent or not self.replies.identity.draws_progress():
             return
@@ -338,7 +338,7 @@ class ClientRole:
 
         A clear takes the records beneath its id too, so what is still
         there under one goes again. The first time clears everything,
-        which a server before this one may have left. Lillecarl/pymux#927.
+        which a server before this one may have left. Lillecarl/pyterm#929.
         """
         if not self.replies.program_status:
             return
@@ -385,7 +385,7 @@ class ClientRole:
 
     @_PACKETS.handles(Packet.SOUND, Packet.ECHO, Packet.MICROPHONE, Packet.BEHIND)
     def _on_sound(self, packet: Message) -> None:
-        # Sound from a client that plays it. Lillecarl/pymux#657.
+        # Sound from a client that plays it. Lillecarl/pyterm#659.
         if self.audio is not None:
             self.audio.heard(packet)
 
@@ -396,12 +396,12 @@ class ClientRole:
         self.pipeinput.send_text(self.clipboard.take_answer(packet[Field.DATA]))
         # Input newer than a scheduled redraw makes that frame
         # stale: the renderer skips it and asks for another one
-        # instead, so this is handled first. Lillecarl/pymux#524.
+        # instead, so this is handled first. Lillecarl/pyterm#526.
         self.state.input_tick += 1
 
     @_PACKETS.handles(Packet.CLIPBOARD_IMAGE)
     def _on_clipboard_image(self, packet: Message) -> None:
-        "The image on the person's clipboard, sent ahead of their Ctrl-V. Lillecarl/pymux#956."
+        "The image on the person's clipboard, sent ahead of their Ctrl-V. Lillecarl/pyterm#958."
         self.pymux.wayland.take_client_image(self.state, str(packet.get(Field.DATA) or ""))
 
     @_PACKETS.handles(Packet.DETECT)
@@ -461,7 +461,7 @@ class ClientRole:
         # What this client is forwarding, after it changed or after the
         # link came back. The server keeps a copy and never the truth:
         # it holds no SSH connection, so only the client can say whether
-        # a listener is really open. Lillecarl/pymux#436.
+        # a listener is really open. Lillecarl/pyterm#438.
         reported = packet.get(Field.DATA) or []
         said = packet.get(Field.MESSAGE)
         arrived, self._next_forwards = self._next_forwards, None
@@ -472,7 +472,7 @@ class ClientRole:
         # Every SSH client reports once as it attaches, nearly
         # always with nothing forwarded. A frame that draws the
         # same screen again is a fault of its own
-        # (Lillecarl/pymux#117), so the unchanged case asks for
+        # (Lillecarl/pyterm#119), so the unchanged case asks for
         # none. The time left moves on every report and only a
         # listing reads it, so it is no change.
         changed = _without_left(reported) != _without_left(self.forwards)
@@ -500,7 +500,7 @@ class ClientRole:
         """
         Carry this client's sound, until the connection goes. Only in
         msgpack, which carries bytes. `AudioLink` says why on this
-        connection and not one of its own. Lillecarl/pymux#657.
+        connection and not one of its own. Lillecarl/pyterm#659.
         """
         link = AudioLink(self)
         self.audio = link
@@ -524,13 +524,13 @@ class ClientRole:
         **Each part is awaited before the next is encoded**, so a packet
         sent meanwhile -- a key's echo, a line of text -- takes the write
         lock between two parts, and never waits behind the whole frame.
-        What the terminal was sent before goes first. Lillecarl/pymux#634.
+        What the terminal was sent before goes first. Lillecarl/pyterm#636.
 
         **The checkpoint is what makes that true.** A write to a socket
         with room never suspends, so without it the parts of a frame go
         out in one turn of the loop: on a zstd stream, about 7 ms of
         compression for a 1600x880 frame, and every other task waits.
-        Lillecarl/pymux#632.
+        Lillecarl/pyterm#634.
         """
         self.flush_output()
         self.pacing.window_frame_went_out()
@@ -543,7 +543,7 @@ class ClientRole:
 
     @property
     def pointer_fraction(self) -> tuple[float, float]:
-        "Where in its cell the client's last mouse report was. Lillecarl/pymux#648."
+        "Where in its cell the client's last mouse report was. Lillecarl/pyterm#650."
         return self.pipeinput.pointer_fraction
 
     @property

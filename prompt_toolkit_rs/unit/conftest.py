@@ -2,7 +2,7 @@
 Copied over prompt-toolkit's own tests by `checks.prompt-toolkit-rs-unit`,
 so the whole suite runs with the Rust row and the kernels in place.
 Installed here, before any test module makes a screen.
-Lillecarl/pymux#570.
+Lillecarl/pyterm#572.
 """
 
 from __future__ import annotations

@@ -4,7 +4,7 @@ Key/value tags a caller puts on a session, a window, a pane or a job.
 A tag says what the caller wants to say about the thing, so a script
 or an agent finds its own things by tag, and not by an id it has to
 remember. They are not a pane's user vars: the program in the pane
-sets those. Lillecarl/pymux#762.
+sets those. Lillecarl/pyterm#764.
 """
 
 from __future__ import annotations

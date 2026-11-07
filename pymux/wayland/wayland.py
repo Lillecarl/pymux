@@ -3,7 +3,7 @@ A Wayland compositor the server holds, for the panes that have none.
 
 It is optional twice over. `pysmithay` is an extra, Rust and Linux only,
 and this module imports it or does nothing; `wayland-server` turns it
-off where it loads. Lillecarl/pymux#383.
+off where it loads. Lillecarl/pyterm#385.
 
 What it serves today is the clipboard and the primary selection. A pane
 whose session names no `WAYLAND_DISPLAY` is given this one, so wl-copy
@@ -76,7 +76,7 @@ TEXT_TYPES = ("text/plain;charset=utf-8", "UTF8_STRING", "text/plain", "STRING",
 HELD_TYPES = TEXT_TYPES[:3]
 
 #: What it offers besides while it holds an image from the person's
-#: machine. Lillecarl/pymux#956.
+#: machine. Lillecarl/pyterm#958.
 IMAGE_TYPE = "image/png"
 
 #: OSC 52's letter for each selection.
@@ -193,7 +193,7 @@ class WaylandServer:
         #: The text a pane last copied, per selection.
         self.copied: dict[str, str] = {}
         #: The image the person's machine held at their last Ctrl-V, which
-        #: the clipboard offers as `IMAGE_TYPE`. Lillecarl/pymux#956.
+        #: the clipboard offers as `IMAGE_TYPE`. Lillecarl/pyterm#958.
         self.image: bytes | None = None
         #: Each open window, by the compositor's id, and the pane showing it.
         self.panes: dict[int, Pane] = {}
@@ -300,7 +300,7 @@ class WaylandServer:
                 self._closed(toplevel)
 
     # ------------------------------------------------------------------
-    # Windows in panes. Lillecarl/pymux#620.
+    # Windows in panes. Lillecarl/pyterm#622.
 
     def _opened(self, compositor: Compositor, toplevel: int, launch: Launch | None, tasks: anyio.abc.TaskGroup) -> None:
         widget = WindowWidget(self, toplevel, self.pymux)
@@ -340,7 +340,7 @@ class WaylandServer:
 
         A window no client shows -- in another pymux window, under a
         popup, or on terminals without kitty graphics -- is never let go,
-        and waits as a hidden Wayland window does. Lillecarl/pymux#629.
+        and waits as a hidden Wayland window does. Lillecarl/pyterm#631.
         """
         released = -math.inf
         while True:
@@ -375,7 +375,7 @@ class WaylandServer:
         shared socket for any later connection, whose windows go beside.
         `DISPLAY` is dropped, so a program that would open on an X
         server fails here, where `pymux wl` shows why.
-        Raises OSError when the program cannot start. Lillecarl/pymux#630.
+        Raises OSError when the program cannot start. Lillecarl/pyterm#632.
 
         `XDG_SESSION_TYPE` says Wayland, which is what Chromium and Qt
         pick their platform by: Chromium went to X11 and found no
@@ -388,7 +388,7 @@ class WaylandServer:
         found no EGL and drew black.
 
         Under `wayland-portal private` the session bus is the portal's own,
-        where it answers light or dark. Lillecarl/pymux#812.
+        where it answers light or dark. Lillecarl/pyterm#814.
         """
         compositor, tasks = self.compositor, self._tasks
         if compositor is None or tasks is None or self.display is None:
@@ -448,7 +448,7 @@ class WaylandServer:
         one, on that window or with `-g`. Otherwise the window goes at
         the pace its frames are taken, as a Wayland window on a real
         screen goes at the screen's: the default thirty is for the cells.
-        Lillecarl/pymux#636.
+        Lillecarl/pyterm#638.
         """
         pane = self.panes.get(toplevel)
         found = None if pane is None else self.pymux.place_of_pane_id(pane.pane_id)
@@ -521,7 +521,7 @@ class WaylandServer:
         Text no key of the keymap types, given to the window as text:
         é, å, an emoji. False when the window has no text field enabled
         where its focus is, and then the text goes nowhere, as before.
-        Lillecarl/pymux#624.
+        Lillecarl/pyterm#626.
         """
         compositor = self.compositor
         if compositor is None:
@@ -538,7 +538,7 @@ class WaylandServer:
         """
         Where in the window's pixels the pointer is: the cell, and where in
         it the terminal said, for one that reports pixels; else the middle.
-        Lillecarl/pymux#648. At the cell the window was sized for.
+        Lillecarl/pyterm#650. At the cell the window was sized for.
         """
         width, height = self._cells.get(toplevel) or self._cell_of(toplevel)
         across, down = fraction or self._pointer_fraction()
@@ -721,7 +721,7 @@ class WaylandServer:
         The image a client sent ahead of its Ctrl-V, as base64 PNG, or ""
         for none. It goes to the compositor of the pane the key goes to:
         the owner's, through the peer link, for a mirrored pane, queued
-        ahead of the key. Lillecarl/pymux#956.
+        ahead of the key. Lillecarl/pyterm#958.
         """
         try:
             image = base64.b64decode(data, validate=True) or None
@@ -742,7 +742,7 @@ class WaylandServer:
         Offer `image` on the clipboard as `IMAGE_TYPE`, beside the text,
         or stop offering one. A client sends it ahead of each Ctrl-V, so
         a program that pastes an image on that key -- Claude Code asks
-        `wl-paste -l` -- finds the person's. Lillecarl/pymux#956.
+        `wl-paste -l` -- finds the person's. Lillecarl/pyterm#958.
         """
         logger.info("The clipboard offers an image of %d bytes.", len(image) if image is not None else 0)
         # Nothing to withdraw leaves the selection where it is: under

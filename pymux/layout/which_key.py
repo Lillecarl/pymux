@@ -1,6 +1,6 @@
 """
 The keys the prefix leads to, in a box, while `which-key` is on and the
-prefix waits for its second key. Lillecarl/pymux#29.
+prefix waits for its second key. Lillecarl/pyterm#31.
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ class WhichKey:
         The keys the prefix leads to, in a box.
 
         Built once, for the reason `CommandLine.window` gives.
-        Lillecarl/pymux#29.
+        Lillecarl/pyterm#31.
         """
         if self._box is not None:
             return self._box
@@ -70,7 +70,7 @@ class WhichKey:
         Two columns, the key and the command it runs, the key column
         one width for the whole list so the meanings line up under
         each other. A prefix that leads nowhere says so rather than
-        drawing an empty box. Lillecarl/pymux#29.
+        drawing an empty box. Lillecarl/pyterm#31.
         """
         rows = self.manager.pymux.key_bindings_manager.prefix_keys()
         if not rows:

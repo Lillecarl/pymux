@@ -44,13 +44,13 @@ REPORTS_OFF = "".join(reset_mode(mode) for mode in REPORTS)
 #: kitty's paste events, which the server sets while the focused pane
 #: has them set, and which a detach turns off: a shell does not read
 #: them, and the terminal sends no paste while they are on.
-#: Lillecarl/pymux#893.
+#: Lillecarl/pyterm#895.
 PASTE_EVENTS_ON = set_mode(PrivateMode.PASTE_EVENTS)
 PASTE_EVENTS_OFF = reset_mode(PrivateMode.PASTE_EVENTS)
 
 #: kitty's drag and drop: what a terminal is asked at the detection, and
 #: what a detach says, so that the shell after it gets no drops and
-#: starts no drags it cannot read. Lillecarl/pymux#892.
+#: starts no drags it cannot read. Lillecarl/pyterm#894.
 DND_QUERY = str(DndPacket(DndType.QUERY))
 DND_OFF = str(DndPacket(DndType.STOP_ACCEPTING)) + str(DndPacket(DndType.OFFER, cell_x=STOP_OFFERING))
 
@@ -109,7 +109,7 @@ class FrameOutput(Vt100_Output):
     written when it arrived stood in front of that frame, so a
     clipboard changed before the screen showing the copy, and a harness
     that waits for a pane's notification as a fence still had to wait
-    for silence after it. Lillecarl/pymux#579.
+    for silence after it. Lillecarl/pyterm#581.
 
     **Only a frame's own flush carries it**: one made between the
     application's `before_render` and `after_render`, which
@@ -118,12 +118,12 @@ class FrameOutput(Vt100_Output):
     a frame that the stale-frame check skips flushes nothing at all.
     Carried by any flush, the vterm middleman's fence went out ahead of
     the frame that drew the payload, and libvterm read an empty screen.
-    Lillecarl/pymux#611.
+    Lillecarl/pyterm#613.
 
     A pane draws an image cell as kitty's unicode placeholder, and
     `flush` turns each one into a space unless `keeps_placeholders`
     says this terminal reads them. Once per frame and not once per
-    cell: the renderer writes cell by cell. Lillecarl/pymux#600.
+    cell: the renderer writes cell by cell. Lillecarl/pyterm#602.
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -132,13 +132,13 @@ class FrameOutput(Vt100_Output):
         self._in_frame = False
         self.keeps_placeholders: Callable[[], bool] = lambda: False
         #: Whether the terminal reports the mouse in pixels when the mouse
-        #: is on. Lillecarl/pymux#648.
+        #: is on. Lillecarl/pyterm#650.
         self.pixel_mouse: Callable[[], bool] = lambda: False
         #: Whether U+FE0F goes after a one-column character, which this
-        #: terminal would widen. Lillecarl/pymux#539.
+        #: terminal would widen. Lillecarl/pyterm#541.
         self.narrows_text_emoji: Callable[[], bool] = lambda: False
         #: How to fit each grapheme cluster to the width this terminal
-        #: draws it: `TerminalReplies.cluster_fit`. Lillecarl/pymux#798.
+        #: draws it: `TerminalReplies.cluster_fit`. Lillecarl/pyterm#800.
         self.cluster_fit: Callable[[], str | Drawn | None] = lambda: None
 
     @override
@@ -157,8 +157,8 @@ class FrameOutput(Vt100_Output):
     # Focus, theme and size reports go with the alternate screen: on at
     # the first frame and at a redraw, off at a detach. A window that
     # gains the focus with a click iTerm2 keeps to itself is still a
-    # client in use. Lillecarl/pymux#794, Lillecarl/pymux#796,
-    # Lillecarl/pymux#797.
+    # client in use. Lillecarl/pyterm#796, Lillecarl/pyterm#798,
+    # Lillecarl/pyterm#799.
     @override
     def enter_alternate_screen(self) -> None:
         super().enter_alternate_screen()
@@ -207,7 +207,7 @@ class NoStdout:
     written to the output and flushed there. On a connection that
     carries a command, the person reading the answer got those bytes
     after it, as garbage that came and went with the timing of the
-    writes around it. Lillecarl/pymux#420.
+    writes around it. Lillecarl/pyterm#422.
     """
 
     def write(self, data: str) -> int:
@@ -296,7 +296,7 @@ class ClientInput:
         `__getattr__` forwarded that read to `None` and raised
         `AttributeError` on the terminal of the person who detached.
         `typeahead_hash` below carries the same guard for the same
-        reason. Lillecarl/pymux#109.
+        reason. Lillecarl/pyterm#111.
         """
         if self._input is None:
             return True

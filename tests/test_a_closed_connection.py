@@ -1,7 +1,7 @@
 """
 A server connection that closes lets the far end read what it was sent
-first, even when that end writes into the close. Lillecarl/pymux#710,
-Lillecarl/pymux#766.
+first, even when that end writes into the close. Lillecarl/pyterm#712,
+Lillecarl/pyterm#768.
 """
 
 from __future__ import annotations

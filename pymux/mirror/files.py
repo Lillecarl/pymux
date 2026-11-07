@@ -5,7 +5,7 @@ The owner runs the command and writes each file, as it does for a client
 of its own. Only the peer reaches the person's client, so the owner asks
 the peer, the peer asks its client, and each answer travels back whole.
 The client decides what it sends, as it always does: the peer only
-passes packets on. Lillecarl/pymux#947.
+passes packets on. Lillecarl/pyterm#949.
 """
 
 from __future__ import annotations

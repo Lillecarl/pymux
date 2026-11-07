@@ -3,7 +3,7 @@ A client that runs one command over a unix socket and prints the answer.
 
 `send-keys` from a script, a completion on Tab, a pane's browser shim:
 none of them draws, so none of them imports what draws.
-`tests/test_entry_imports.py` holds that. Lillecarl/pymux#589.
+`tests/test_entry_imports.py` holds that. Lillecarl/pyterm#591.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from .base import Client
 __all__ = ["NO_ANSWER", "CommandClient"]
 
 #: A server ends every command with its exit code. A peer that closes
-#: without one ran no command, or is not a pymux server. Lillecarl/pymux#606.
+#: without one ran no command, or is not a pymux server. Lillecarl/pyterm#608.
 NO_ANSWER = "pymux: %s closed the connection with no answer. Is a pymux server listening there?\n"
 
 

@@ -11,7 +11,7 @@
 # `propagatedBuildInputs` here, and no second copy of the list in
 # `nix/checks.nix`. An environment is a virtualenv rather than a PYTHONPATH,
 # so there is nothing for an older copy to shadow and no module/application
-# distinction to fall off. Lillecarl/pymux#319.
+# distinction to fall off. Lillecarl/pyterm#321.
 #
 # `mkProject` and the three hooks come from the set the collection builds in
 # `pyterm/nix/python-set.nix`. Everything pymux imports comes from that set
@@ -53,7 +53,7 @@
   qutebrowser,
   # The PipeWire a server starts for `audio-server private`. Null leaves
   # them out of the closure, and the server finds them on the PATH or
-  # shares the PipeWire it finds. Lillecarl/pymux#657.
+  # shares the PipeWire it finds. Lillecarl/pyterm#659.
   pipewire ? null,
   wireplumber ? null,
 }:
@@ -96,7 +96,7 @@ let
   # the package is built: `set-option theme base16:<name>` reads it,
   # and a theme that needed a YAML parser to be read would be a theme
   # that could not be read anywhere. Pinned, because a scheme that
-  # changes under a reader is a theme that lies. Lillecarl/pymux#282.
+  # changes under a reader is a theme that lies. Lillecarl/pyterm#284.
   base16-schemes-json = runCommand "pymux-base16-schemes.json"
     {
       base16 = builtins.fetchTarball {
@@ -118,7 +118,7 @@ let
         # The completion scripts of bash, zsh and fish, written from
         # argcomplete and put where a shell loads them. The script that
         # answers a Tab is generic: it makes the shell ask `pymux`, and
-        # pymux answers from its parser tree. Lillecarl/pymux#48.
+        # pymux answers from its parser tree. Lillecarl/pyterm#50.
         #
         # The renderer's own `nativeBuildInputs` carry the hooks, so this
         # appends rather than replaces.
@@ -157,7 +157,7 @@ let
             # The suites name the file by `PYMUX_BASE16_SCHEMES`, so only
             # the installed module can say it finds the file without it.
             # `-P`: the build directory holds the source, which has no file.
-            # Lillecarl/pymux#946.
+            # Lillecarl/pyterm#948.
             env -u PYMUX_BASE16_SCHEMES PYTHONPATH="$out/${python.sitePackages}" \
               ${deps}/bin/python -P -c 'from pymux.style import style_base16; assert style_base16.names(), style_base16.__file__'
           ''
@@ -209,7 +209,7 @@ let
       # pytest reads its settings from the root it finds, and a root with
       # no config file is a root with no settings. `anyio_mode` is in here,
       # so without this a coroutine test fails in the sandbox while passing
-      # in a checkout. Lillecarl/pymux#87.
+      # in a checkout. Lillecarl/pyterm#89.
       ./pyproject.toml
     ];
   };
@@ -235,7 +235,7 @@ let
   # pymux itself is in it. Under nixpkgs it could not be -- `withPackages`
   # drops an application, and with it everything the application propagates
   # -- which is why the old environment repeated pymux's dependency list by
-  # hand. Lillecarl/pymux#319.
+  # hand. Lillecarl/pyterm#321.
   testEnv = mkVirtualEnv "pymux-test-env" {
     pymux = [
       "test"
@@ -245,7 +245,7 @@ let
       # when the extra does not exist, so a `pymux-web` attribute in
       # pyterm asking for an extra that `pyproject.toml` dropped cannot
       # reach whoever installs it. A caller building mid-edit hit exactly
-      # that and asked whether our gates would. Lillecarl/pymux#461.
+      # that and asked whether our gates would. Lillecarl/pyterm#463.
       "web"
     ];
   };

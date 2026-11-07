@@ -74,13 +74,13 @@ class Arrangement:
 
         #: Where `base_index` and `renumber_windows` live: the session's
         #: options, so that `set-option -g` reaches a session that has
-        #: no value of its own. Lillecarl/pymux#756.
+        #: no value of its own. Lillecarl/pyterm#758.
         # An arrangement no session holds reads the declared defaults.
         self.options = options if options is not None else SessionOptions()
 
         # The windows that link-window can put back. An unlinked
         # window keeps its panes running; it is only out of the order
-        # nobody sees. Lillecarl/pymux#297.
+        # nobody sees. Lillecarl/pyterm#299.
         self._unlinked_windows: list[Window] = []
 
         # What a new window starts with, by the attribute the option
@@ -90,7 +90,7 @@ class Arrangement:
         # A window option belongs to one window, and a configuration
         # file is read before there is a window, so without this there
         # was no way for a configuration file to say what a window
-        # should be. Lillecarl/pymux#199.
+        # should be. Lillecarl/pyterm#201.
         #
         # Like tmux, setting one changes no window that is already
         # open. It says what the next one starts as.
@@ -100,7 +100,7 @@ class Arrangement:
         # The windows each client left, the newest last. Closing its
         # window returns it to the newest one still open, as tmux's
         # `session_last` does, and the next index only when there is
-        # none. Lillecarl/pymux#658.
+        # none. Lillecarl/pyterm#660.
         self._window_history_for_cli: WeakKeyDictionary[Application[Any], list[Window]] = WeakKeyDictionary()
 
         # The active window of the last client. Used as default when a new session
@@ -137,14 +137,14 @@ class Arrangement:
         A client that has not looked yet lands on the window the session
         was last on. It cached that window and returned `windows[0]`, so
         the first answer and every answer after it differed as soon as
-        anything had made a window active. Lillecarl/pymux#193.
+        anything had made a window active. Lillecarl/pyterm#195.
 
         **A session that holds no window has no answer, and says so.**
         It answered `windows[0]` of an empty list, which is an
         `IndexError` out of whatever asked -- and an `IndexError` is
         not a `CommandException`, so a bare `resize-window -x 200` over
         the socket reached nobody at all. `get_active_pane_for` already
-        reads this as optional. Lillecarl/pymux#473.
+        reads this as optional. Lillecarl/pyterm#475.
         """
         if not self.windows:
             return None
@@ -163,7 +163,7 @@ class Arrangement:
             # `get_app()` with no client current answers prompt_toolkit's
             # stand-in, and nobody looks through that: an invalidate on
             # a pane's callback cleared the marks it had just raised.
-            # Lillecarl/pymux#767.
+            # Lillecarl/pyterm#769.
             if not isinstance(app, DummyApplication):
                 window.seen()
             return window
@@ -273,7 +273,7 @@ class Arrangement:
         `unlink-window` parked is out of the order nobody sees, and
         `link-window` puts it back where it was; packing an order that
         is not shown would move a window a person never closed.
-        Lillecarl/pymux#297, Lillecarl/pymux#342.
+        Lillecarl/pyterm#299, Lillecarl/pyterm#344.
         """
         for number, window in enumerate(sorted(self.windows, key=lambda one: one.index), start=self.base_index):
             window.index = WindowIndex(number)
@@ -290,7 +290,7 @@ class Arrangement:
         tmux says the same about its own "-a": "the new window is
         inserted at the next index up from the specified target
         window, moving windows up if necessary".
-        Lillecarl/pymux#191.
+        Lillecarl/pyterm#193.
         """
         by_index = {w.index: w for w in self.windows}
 
@@ -372,7 +372,7 @@ class Arrangement:
         in, at the index or after the last window without one. The
         pen in between never escapes this method: the window is out
         of one order and in the other when it returns.
-        Lillecarl/pymux#533.
+        Lillecarl/pyterm#535.
 
         A window that leaves closes its gap under `renumber-windows`,
         as one that closes does: to this order it is gone. tmux
@@ -389,7 +389,7 @@ class Arrangement:
         Put a new pane where an old one sat, in the tree and in the
         focus. The place and the weights stay; the id and the screen
         belong to the program, so they go with it.
-        Lillecarl/pymux#306.
+        Lillecarl/pyterm#308.
         """
         for window in self.windows:
             for split in window.splits:
@@ -407,7 +407,7 @@ class Arrangement:
 
     def swap_window(self, first: Window, second: Window) -> None:
         """
-        Trade the indexes of two windows. Lillecarl/pymux#296.
+        Trade the indexes of two windows. Lillecarl/pyterm#298.
         """
         first.index, second.index = second.index, first.index
 
@@ -419,7 +419,7 @@ class Arrangement:
         Take a pane out of the window that holds it, and add it to
         another one, beside or above the pane that is focused there.
         A window the pane leaves empty is gone, the way a pane whose
-        program ends leaves it. Lillecarl/pymux#297.
+        program ends leaves it. Lillecarl/pyterm#299.
         """
         self.remove_pane(pane)
         window.add_pane(pane, vsplit=vsplit)
@@ -427,7 +427,7 @@ class Arrangement:
     def unlink_window(self, window: Window) -> None:
         """
         Take a window out of the order, with its panes still running.
-        link_window puts it back. Lillecarl/pymux#297.
+        link_window puts it back. Lillecarl/pyterm#299.
         """
         # Focus away first, while the window is still in the order to
         # be counted from.
@@ -444,8 +444,8 @@ class Arrangement:
         Put a window in the order at an index: one that unlink_window
         took out, one that is in the order already, which is a move,
         or one that belongs to no order, which `move_window_to`
-        unlinked from another arrangement. Lillecarl/pymux#297,
-        Lillecarl/pymux#533.
+        unlinked from another arrangement. Lillecarl/pyterm#299,
+        Lillecarl/pyterm#535.
         """
         if window in self._unlinked_windows:
             self._unlinked_windows.remove(window)
@@ -492,7 +492,7 @@ class Arrangement:
         # Walking the list itself skipped the window after each one it
         # removed, and that window is the one this sweep is for: an
         # empty window right behind a closing one stayed in the order
-        # for ever. Lillecarl/pymux#351.
+        # for ever. Lillecarl/pyterm#353.
         for w in list(self.windows):
             w.remove_pane(pane)
 
@@ -515,7 +515,7 @@ class Arrangement:
 
         # A window closing is what `renumber-windows` is about, or one
         # leaving for another session (`move_window_to`). A `move-window`
-        # inside the session that opens a gap leaves it. Lillecarl/pymux#342.
+        # inside the session that opens a gap leaves it. Lillecarl/pyterm#344.
         if closed and self.renumber_windows:
             self.renumber()
 

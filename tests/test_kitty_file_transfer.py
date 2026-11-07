@@ -1,7 +1,7 @@
 """
 kitty's file transfer, OSC 5113: a pane's session goes to a client whose
 terminal transfers files, and the terminal's answers come back to that
-pane. Lillecarl/pymux#912.
+pane. Lillecarl/pyterm#914.
 """
 
 from __future__ import annotations
@@ -136,7 +136,7 @@ async def _sent_more_than_the_pane_holds(tmp_path, program: str, monkeypatch) ->
 
 
 async def test_a_terminal_waits_while_the_pane_reads_what_it_sent(tmp_path, monkeypatch):
-    "Lillecarl/pymux#915."
+    "Lillecarl/pyterm#917."
     heard, wired = await _sent_more_than_the_pane_holds(
         tmp_path,
         "import os, time, tty\ntty.setraw(0)\ntime.sleep(0.2)\nwhile os.read(0, 65536):\n    pass\n",

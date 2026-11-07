@@ -1,7 +1,7 @@
 """
 Two desktop notifications, a moment apart, then quiet: the program of
 a window nobody looks at, for the picture of the notification boxes.
-Lillecarl/pymux#826.
+Lillecarl/pyterm#828.
 """
 
 from __future__ import annotations

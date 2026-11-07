@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 RETRY_EVERY = 0.1
 
 #: How often the client looks whether a browser it started ended, in
-#: seconds. Lillecarl/pymux#653.
+#: seconds. Lillecarl/pyterm#655.
 BROWSER_POLL = 1.0
 
 __all__ = [
@@ -59,7 +59,7 @@ class PosixClient(TerminalClient):
         self.socket.connect(socket_name)
         self.socket.setblocking(True)
 
-        #: Sound, where this machine can play it. Lillecarl/pymux#657.
+        #: Sound, where this machine can play it. Lillecarl/pyterm#659.
         devices = sound_devices()
         self.audio = AudioClient(devices, self.send_packet) if devices is not None else None
 
@@ -74,7 +74,7 @@ class PosixClient(TerminalClient):
 
         # Before `start-gui`, which carries the size: SIGWINCH is ignored
         # until a handler takes it, so a resize between the two was lost
-        # for good, and the pane kept the old size. Lillecarl/pymux#611.
+        # for good, and the pane kept the old size. Lillecarl/pyterm#613.
         signal.signal(signal.SIGWINCH, winch_handler)
         self._start_gui(detach_other_clients, color_depth)
 
@@ -106,7 +106,7 @@ class PosixClient(TerminalClient):
                             # restarting is waited for; any other is
                             # gone, and the way out through the
                             # `finally` puts the terminal back -- once,
-                            # whatever ended the loop. Lillecarl/pymux#404.
+                            # whatever ended the loop. Lillecarl/pyterm#406.
                             if self.restart_wait is not None and self._wait_for_the_next_server(stdin_fd):
                                 reader = PacketReader()
                                 if self.audio is not None:
@@ -124,7 +124,7 @@ class PosixClient(TerminalClient):
                         # socket above ends the loop: `select` reports
                         # an ended fd ready forever, and left alone the
                         # loop spun at full CPU on empty reads.
-                        # Lillecarl/pymux#419.
+                        # Lillecarl/pyterm#421.
                         if not self._process_stdin():
                             return
 
@@ -142,7 +142,7 @@ class PosixClient(TerminalClient):
         Waits `restart_wait` seconds at most, and says so on the screen
         with a way out: q leaves. Returns whether a server answered.
         The modes and keyboard flags the old server pushed come off
-        first; the new one pushes its own. Lillecarl/pymux#409.
+        first; the new one pushes its own. Lillecarl/pyterm#411.
         """
         wait = self.restart_wait
         if wait is None:
@@ -155,7 +155,7 @@ class PosixClient(TerminalClient):
         self._restore_modes()
         self._pop_kitty_flags()
         # The old server's images, which the next server knows nothing
-        # of and would draw its own over. Lillecarl/pymux#399.
+        # of and would draw its own over. Lillecarl/pyterm#401.
         if self.placed_images:
             os.write(sys.stdout.fileno(), DELETE_EVERY_IMAGE)
             self.placed_images = False
@@ -207,7 +207,7 @@ class PosixClient(TerminalClient):
         with no reader. Raising there loses the reason: the person reads
         "BrokenPipeError: [Errno 32] Broken pipe" where "that terminal
         is taken" belongs, and on a loaded machine the close wins that
-        race. Lillecarl/pymux#479.
+        race. Lillecarl/pyterm#481.
 
         Nothing is lost by saying nothing here. The read loop is what
         learns that a connection ended, and it already treats an ended
@@ -235,7 +235,7 @@ def list_clients():
     says why that order and not another, and it is where the room is
     read: this globbed the same two patterns for itself, and the two
     answers differed in the order and in whether they asked if a name
-    was a socket at all. Lillecarl/pymux#451.
+    was a socket at all. Lillecarl/pyterm#453.
     """
     for path in servers_newest_first():
         with contextlib.suppress(OSError):

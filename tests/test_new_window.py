@@ -15,7 +15,7 @@ client, so `Arrangement.get_active_window` reads `get_app()`, and a
 test with no application asks about a client that is not there and is
 answered with the first window.
 
-Lillecarl/pymux#191.
+Lillecarl/pyterm#193.
 """
 
 from __future__ import annotations
@@ -133,7 +133,7 @@ async def test_bare_target_names_index_to_open_at():
 
 async def test_the_end_of_the_stack_is_not_the_window_a_person_is_on():
     """
-    Lillecarl/pymux#381: `new-window -a -t {end}`. The active window
+    Lillecarl/pyterm#383: `new-window -a -t {end}`. The active window
     is the first here, so the default answer of "after it" would put
     the new window at 2, and the word has to reach 6.
     """

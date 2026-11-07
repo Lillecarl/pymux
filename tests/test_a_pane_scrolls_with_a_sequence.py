@@ -3,12 +3,12 @@ A pane that scrolls one line reaches the terminal as a scroll.
 
 prompt_toolkit's renderer sends a scroll region and "CSI S" for rows a
 window proved shifted, instead of repainting them
-(Lillecarl/pymux#518). At 300x90 a repaint is the whole frame, so this
+(Lillecarl/pyterm#520). At 300x90 a repaint is the whole frame, so this
 is the difference between a few hundred cells and tens of thousands
-of them. Lillecarl/pymux#566.
+of them. Lillecarl/pyterm#568.
 
 The main screen moves no rows: it slides over its history, and the
-window says so by how far its view moved. Lillecarl/pymux#569.
+window says so by how far its view moved. Lillecarl/pyterm#571.
 """
 
 from __future__ import annotations
@@ -67,7 +67,7 @@ async def _frames(monkeypatch, screen: str, mode: str, direction: int, pieces: i
         ("alternate", "scroll"),
         ("main", "scroll"),
         # The whole viewport written again, one line further on: the
-        # pane finds the rows by their images. Lillecarl/pymux#570.
+        # pane finds the rows by their images. Lillecarl/pyterm#572.
         ("alternate", "redraw"),
     ],
 )
@@ -86,7 +86,7 @@ async def test_a_redraw_read_in_pieces_still_scrolls(monkeypatch, direction):
     `checks.pymux-scrolling`: down sent 2323 bytes a step, up 7042,
     because a piece that ends inside a row leaves the cursor on it, and
     what the pane remembered drawing there was a line the terminal no
-    longer showed. Lillecarl/pymux#512.
+    longer showed. Lillecarl/pyterm#514.
     """
     frames = await _frames(monkeypatch, "alternate", "redraw", direction, pieces=4)
 

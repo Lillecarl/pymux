@@ -1,10 +1,10 @@
 """
-`update-environment`: the names that follow a client. #271.
+`update-environment`: the names that follow a client. #273.
 
 **The machine a person attaches from is the machine their panes should
 talk to.** `DISPLAY`, `SSH_AUTH_SOCK` and `WAYLAND_DISPLAY` name things
 that live on that machine, and a server outlives the client that
-started it. Over ssh (Lillecarl/pymux#90) an old `DISPLAY` from the
+started it. Over ssh (Lillecarl/pyterm#92) an old `DISPLAY` from the
 server's own start is worse than none: a pane opens a window nobody is
 looking at.
 

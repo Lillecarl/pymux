@@ -2,7 +2,7 @@
 A Wayland window pane on one server, shown by another that mirrors its
 session: the owner sends the window's frames over the peer link, the
 peer draws them, and a person's keys and pointer there reach the window.
-Needs the `wayland` extra. Lillecarl/pymux#888.
+Needs the `wayland` extra. Lillecarl/pyterm#890.
 """
 
 from __future__ import annotations

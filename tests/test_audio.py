@@ -2,7 +2,7 @@
 Sound between panes and a client, through a real PipeWire. Needs
 `pipewire`, `wireplumber` and the PipeWire tools on the PATH, so
 `checks.pymux-audio` runs this and `checks.pymux-unit` skips it.
-Lillecarl/pymux#657.
+Lillecarl/pyterm#659.
 
 The client's sound card is `FakeDevices`: PortAudio has no device in a
 build sandbox. Each fake runs on a thread every 20 ms, as a real
@@ -76,7 +76,7 @@ def loudest(pcm: bytes, channels: int) -> int:
 
     Not one window either. A gap or a dropped frame moves the phase,
     and two of 20 ms in one quarter second move its peak one candidate
-    away: `870 == 880` under the gate, Lillecarl/pymux#683. Glitches
+    away: `870 == 880` under the gate, Lillecarl/pyterm#685. Glitches
     come in a cluster, so the other windows outvote it. A wrong rate
     moves every window the same way, and the median still sees it.
     """
@@ -136,7 +136,7 @@ def _with_gaps(hz: float, gaps_in_second_window: int) -> bytes:
 
 
 def test_two_glitches_move_one_window_and_lose_the_vote():
-    "Measured by hand for Lillecarl/pymux#683, and the reason `loudest` votes."
+    "Measured by hand for Lillecarl/pyterm#685, and the reason `loudest` votes."
     glitched = _with_gaps(880, 2)
     second = struct.unpack("<%dh" % RATE, glitched)[QUARTER : 2 * QUARTER]
     assert _peak(second) != 880
@@ -509,7 +509,7 @@ async def test_a_new_pane_finds_the_private_pipewire(tmp_path):
 
 
 async def test_a_pause_reaps_pipewire_before_it_returns(tmp_path):
-    "An upgrade execs right after it, and a program not reaped stays the new image's zombie. Lillecarl/pymux#739."
+    "An upgrade execs right after it, and a program not reaped stays the new image's zombie. Lillecarl/pyterm#741."
     async with serving(tmp_path) as pymux:
         await once(lambda: pymux.audio.pids(), 10.0, "sound never started")
         processes = list(pymux.audio._processes)

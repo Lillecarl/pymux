@@ -14,7 +14,7 @@ exists today.
 is. Everything after it starts a server, so this is the last place
 where a mistake is still cheap.
 
-Lillecarl/pymux#196.
+Lillecarl/pyterm#198.
 """
 
 from __future__ import annotations

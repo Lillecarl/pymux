@@ -22,7 +22,7 @@ def unforward_port(pymux: Pymux, args: argparse.Namespace) -> None:
     of the name.
 
     The client stops wanting it as well as closing it, so a later
-    reconnect does not bring it back. Lillecarl/pymux#436.
+    reconnect does not bring it back. Lillecarl/pyterm#438.
     """
     if args.local and args.remote:
         raise CommandException("Give -L or -R, not both.")
@@ -40,7 +40,7 @@ def unforward_port(pymux: Pymux, args: argparse.Namespace) -> None:
 
     # No question here, whatever `forward-mode` says. Taking a forward
     # away only ever removes something, so the reason to confirm one
-    # does not apply. Lillecarl/pymux#440.
+    # does not apply. Lillecarl/pyterm#442.
     pymux.forward_requests.send(
         pymux.forward_requests.client().client_state,
         {

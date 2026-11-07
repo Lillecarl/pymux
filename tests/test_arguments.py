@@ -8,7 +8,7 @@ a mistake is still cheap.
 
 What `integrated` runs in its first pane goes by tmux's rule instead
 (`pymux.pane_command`): one word is a string for the shell, several
-are the program and its arguments. Lillecarl/pymux#933.
+are the program and its arguments. Lillecarl/pyterm#935.
 """
 
 from __future__ import annotations
@@ -56,7 +56,7 @@ def test_separator_does_not_become_command():
     argparse consumes one "--" while it assigns positional arguments,
     and the second pass declares none, so it hands the separator back.
     It used to become the first word of the command, and a pane then
-    ran "--" and closed at once. Lillecarl/pymux#41.
+    ran "--" and closed at once. Lillecarl/pyterm#43.
     """
     assert parse("integrated", "--", "htop") == (Mode.INTEGRATED, "htop")
 
@@ -86,7 +86,7 @@ def test_separator_keeps_option_of_program():
 
 
 def test_argument_with_space_stays_one_argument():
-    "Lillecarl/pymux#39 is the other half of this."
+    "Lillecarl/pyterm#41 is the other half of this."
     assert parse("integrated", "python3", "-c", "import sys") == (
         Mode.INTEGRATED,
         ["python3", "-c", "import sys"],
@@ -94,7 +94,7 @@ def test_argument_with_space_stays_one_argument():
 
 
 def test_one_word_is_a_command_for_the_shell():
-    "tmux's rule: `pymux integrated 'a; b'` runs both. Lillecarl/pymux#933."
+    "tmux's rule: `pymux integrated 'a; b'` runs both. Lillecarl/pyterm#935."
     assert parse("integrated", "--", "echo one; sleep 30") == (Mode.INTEGRATED, "echo one; sleep 30")
 
 
@@ -142,7 +142,7 @@ def test_option_after_separator_belongs_to_program():
 # it did not know went into a set nobody reads, and a `--long` one
 # became a word of the command the first pane runs: the session started
 # and nothing was said, on the one route where nobody is watching
-# stderr. Lillecarl/pymux#458.
+# stderr. Lillecarl/pyterm#460.
 
 
 def flags_of(*args):

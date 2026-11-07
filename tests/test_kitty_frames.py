@@ -1,6 +1,6 @@
 """
 A window pane's frame as kitty commands, encoded where the terminal is.
-Lillecarl/pymux#634.
+Lillecarl/pyterm#636.
 """
 
 from __future__ import annotations
@@ -135,7 +135,7 @@ BLUE = bytes([0, 0, 0xFF])
 
 
 def test_a_frame_of_many_rectangles_becomes_their_bounding_box():
-    "kitty uploads the whole image per edit. Lillecarl/pymux#644."
+    "kitty uploads the whole image per edit. Lillecarl/pyterm#646."
     pictures = Pictures()
     assert pictures.merged(7, True, 4, 3, [(0, 0, 4, 3, BLUE * 12)]) == [(0, 0, 4, 3, BLUE * 12)]
     merged = pictures.merged(7, False, 4, 3, [(0, 0, 1, 1, RED), (2, 1, 2, 1, RED * 2)])
@@ -201,7 +201,7 @@ def test_a_frame_goes_in_parts_of_whole_rows():
 
 
 def test_an_encoded_frame_goes_in_parts_with_what_changed_at_the_end():
-    "Lillecarl/pymux#639."
+    "Lillecarl/pyterm#641."
     data = bytes(range(256)) * (FRAME_PART_BYTES // 100)
     parts = video_parts(9, "vp9", (4, False, 64, 32, data, [(0, 0, 16, 16)]), "PUT")
     assert len(parts) > 1
@@ -255,7 +255,7 @@ def test_the_client_writes_a_frame_at_its_last_part(terminal):
 
 
 def test_an_answered_frame_asks_the_terminal_on_its_last_command_only():
-    "Lillecarl/pymux#643."
+    "Lillecarl/pyterm#645."
     rects = [(0, 0, 1, 1, RED), (1, 0, 1, 1, RED)]
     keys = [keys for keys, _ in parsed(frame_commands(7, False, 64, 32, rects, Base64Carrier(), answer=True))]
     assert [one.get("q") for one in keys] == ["2", None]
@@ -264,7 +264,7 @@ def test_an_answered_frame_asks_the_terminal_on_its_last_command_only():
 
 
 def test_a_frame_the_terminal_answers_is_not_answered_by_the_client(terminal):
-    "Lillecarl/pymux#643."
+    "Lillecarl/pyterm#645."
     client, read = terminal
     part = frame_parts(9, (1, False, 20, 10, [(2, 3, 1, 1, RED)]), "")[0]
     client._process({**part, Field.ANSWER: True})
@@ -282,7 +282,7 @@ def test_a_frame_with_nothing_to_write_is_answered_by_the_client(terminal):
 
 
 def test_the_client_sends_a_frame_of_two_edits_as_one(terminal):
-    "Lillecarl/pymux#644."
+    "Lillecarl/pyterm#646."
     client, read = terminal
     client._process(frame_parts(9, (1, True, 20, 10, [(0, 0, 20, 10, RED * 200)]), "")[0])
     read()
@@ -292,7 +292,7 @@ def test_the_client_sends_a_frame_of_two_edits_as_one(terminal):
 
 
 def test_the_client_answers_each_frame_at_its_last_part(terminal):
-    "Lillecarl/pymux#641."
+    "Lillecarl/pyterm#643."
     client, read = terminal
     pixels = bytes(range(256)) * 3000
     parts = frame_parts(9, (1, True, 1000, 256, [(0, 0, 1000, 256, pixels[: 1000 * 256 * 3])]), "")
@@ -319,7 +319,7 @@ def test_a_frame_that_will_not_decode_is_answered_all_the_same(terminal):
 
 
 def test_the_client_decodes_a_frame_and_writes_what_changed(terminal):
-    "Lillecarl/pymux#639."
+    "Lillecarl/pyterm#641."
     client, read = terminal
     decoders: list[_Decoder] = []
     client._decoder_kinds = {"vp9": lambda: decoders.append(_Decoder()) or decoders[-1]}

@@ -72,7 +72,7 @@ def _open_question(url: str, forward: dict[str, Any] | None) -> str:
     Opening a page is one thing; binding a port on the machine somebody
     is sitting at is another, and a question that hid the second would
     be collecting an answer to a smaller question than it asked.
-    Lillecarl/pymux#437.
+    Lillecarl/pyterm#439.
     """
     if forward is None:
         return "Open %s in the browser? (y/n)" % (url,)
@@ -108,12 +108,12 @@ class Outward:
         carries what to forward, and the client binds it before it
         opens anything. `url_forward` decides, and the question below
         says so, because binding a port here is part of what a yes
-        allows. Lillecarl/pymux#437.
+        allows. Lillecarl/pyterm#439.
 
         **A loopback URL of a mirrored pane means the owner's machine.**
         `pane` is the pane the URL came from. This server listens on the
         same port first and tunnels it there (`mirror.tunnel`), and the
-        URL then opens as one of this machine. Lillecarl/pymux#853.
+        URL then opens as one of this machine. Lillecarl/pyterm#855.
         """
         options = self.pymux.current_session.options
         if options.open_url_mode == OpenUrlMode.OFF:
@@ -123,7 +123,7 @@ class Outward:
         # **A `-c` counts only from a person.** It is the answer to a
         # question, and a pane that sends the flag itself answered
         # nothing -- without this, `open-url-mode ask` reads as a gate
-        # and is not one. Lillecarl/pymux#443.
+        # and is not one. Lillecarl/pyterm#445.
         confirmed = confirmed and self.pymux.a_person_asked()
 
         program = pane.process if pane is not None else None
@@ -139,7 +139,7 @@ class Outward:
         "OSC 1337 ; OpenURL" would: here, or at the peer whose person
         used a mirror of the pane last (`who_acts`). A person who sees
         this server only through a peer has no client here.
-        Lillecarl/pymux#944.
+        Lillecarl/pyterm#946.
         """
         param = OPEN_URL_PREFIX + base64.b64encode(url.encode()).decode()
         here, acting = self.who_acts(pane, param)
@@ -197,7 +197,7 @@ class Outward:
         **`None` for nearly every URL**, and for every client that is
         not on another machine. A forward is only the answer when the
         address means "the machine the server runs on" and the browser
-        is somewhere else. Lillecarl/pymux#437.
+        is somewhere else. Lillecarl/pyterm#439.
         """
         if not client_state.client.can_forward:
             return None
@@ -226,7 +226,7 @@ class Outward:
         two servers got the URL twice. The one used last acts: this
         server, or the peer whose person used a mirror after every
         client here. `open-url-target broadcast` lets every server open
-        a URL. A peer without `Capability.ACTS` acts anyway. Lillecarl/pymux#854.
+        a URL. A peer without `Capability.ACTS` acts anyway. Lillecarl/pyterm#856.
         """
         links = [link for link in self.pymux.peer_links() if link.hears(pane)]
         is_url = open_url_of(param) is not None
@@ -242,7 +242,7 @@ class Outward:
         """
         The peer whose link carries `capability`, and whose person used a mirror of
         `pane` after `client`: its terminal answers what the pane's
-        program asks of one. Lillecarl/pymux#902.
+        program asks of one. Lillecarl/pyterm#904.
         """
         links = [link for link in self.pymux.peer_links() if link.hears(pane) and link.can(capability)]
         link = max(links, key=lambda link: link.last_used, default=None)
@@ -266,7 +266,7 @@ class Outward:
         **A peer that watches this server hears it too**, as it came,
         and serves it under its own options for its own clients: a
         mirror holds no screen that could hear it for itself.
-        Lillecarl/pymux#759. `acts` is false at a peer that the owner
+        Lillecarl/pyterm#761. `acts` is false at a peer that the owner
         did not choose to open a URL or save a download (`who_acts`).
         """
         try:
@@ -308,7 +308,7 @@ class Outward:
 
             if code == Osc.PROGRAM_STATUS:
                 # The screen keeps the records, and each client's
-                # terminal is given every pane's. Lillecarl/pymux#927.
+                # terminal is given every pane's. Lillecarl/pyterm#929.
                 self.pymux.terminals.sync_program_status()
                 self.pymux.invalidate(Woke.PANE_PROGRAM_STATUS)
                 return
@@ -379,7 +379,7 @@ class Outward:
 
             # A person looking at the window already sees what the
             # notification says: it stays in the hub, seen. A terminal
-            # without the focus is no look. Lillecarl/pymux#799.
+            # without the focus is no look. Lillecarl/pyterm#801.
             notice = recorded or (code == Osc.NOTIFICATION and not is_question(param))
             if notice and pane.pane_id in self.pymux.notifier.panes_in_sight():
                 logger.debug("Kept a notification of pane %%%d: a terminal with the focus shows it.", pane.pane_id)
@@ -398,7 +398,7 @@ class Outward:
             # terminal shows, and `_emit` spells it once it is
             # finished. Only OSC 99 to a terminal that shows OSC 99 goes
             # as it came: chunks, buttons, closes and all.
-            # Lillecarl/pymux#497.
+            # Lillecarl/pyterm#499.
             for client in self.pymux._client_states:
                 if code in (Osc.SIMPLE_NOTIFICATION, Osc.MESSAGE):
                     continue
@@ -412,7 +412,7 @@ class Outward:
             # nobody looks at draws no frame at all, and a notification
             # from one is what the line above is for. Without this, its
             # escape would sit in a client's buffer until something
-            # else happened to draw. Lillecarl/pymux#478.
+            # else happened to draw. Lillecarl/pyterm#480.
             self.pymux.invalidate(Woke.PANE_WROTE_AN_OSC)
         except Exception:
             logger.exception("Forwarding an OSC sequence failed.")
@@ -452,7 +452,7 @@ class Outward:
         else:
             pane.command_zone = letter
         # The rows copy mode jumps between, as tmux's `input_osc_133`
-        # marks them. Lillecarl/pymux#500.
+        # marks them. Lillecarl/pyterm#502.
         mark = _FTCS_ROW_MARKS.get(letter)
         screen = pane.screen
         if mark is not None and not isinstance(screen, WindowScreen):
@@ -596,7 +596,7 @@ class Outward:
     def _draw_inline_image(self, pane: Pane, finished: FinishedDownload) -> None:
         """
         Place an iTerm2 inline image at the pane's cursor, as pyte places
-        a kitty image. Something that is no image draws nothing. Lillecarl/pymux#789.
+        a kitty image. Something that is no image draws nothing. Lillecarl/pyterm#791.
         """
         screen = pane.screen
         if isinstance(screen, WindowScreen):
@@ -635,7 +635,7 @@ class Outward:
     def send_download(self, pane: Pane, download: FinishedDownload) -> None:
         """
         Give a whole file from a pane to the person, the way the
-        client's `file-transfer` says. Lillecarl/pymux#743.
+        client's `file-transfer` says. Lillecarl/pyterm#745.
         """
         client = self.download_client(pane)
         if client is None:
@@ -669,7 +669,7 @@ class Outward:
         """
         Copy mode is a client's, so what it copied goes to that client's
         terminal and to nobody else's. Another person on the session
-        keeps their own clipboard. Lillecarl/pymux#470.
+        keeps their own clipboard. Lillecarl/pyterm#472.
 
         The copy mode a peer's person reads here sends it to that peer.
         """
@@ -694,7 +694,7 @@ class Outward:
         `set-clipboard`, because a person asking for their own
         clipboard is not a program in a pane asking for it. tmux keeps
         them apart the same way -- a copy asks only that the option is
-        not "off". Lillecarl/pymux#378.
+        not "off". Lillecarl/pyterm#380.
 
         The paste buffer of the session is not written here. Copy mode
         writes it through the clipboard of the application, which is

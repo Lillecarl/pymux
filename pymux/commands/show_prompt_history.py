@@ -17,7 +17,7 @@ def show_prompt_history(pymux: Pymux, args: argparse.Namespace) -> None:
 
     Oldest first, the way the history walks with up. The history is
     the server's one `InMemoryHistory`, and both buffers of every
-    client share it. Lillecarl/pymux#305.
+    client share it. Lillecarl/pyterm#307.
     """
     answer(pymux, "\n".join(pymux.prompt_history.get_strings()))
 

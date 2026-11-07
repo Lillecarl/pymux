@@ -2,11 +2,11 @@
 A command over the socket that moves the active pane moves every client's focus.
 
 The layout focus is what a pane's mouse handler asks: a wheel or a click
-over a pane that has no focus does nothing (Lillecarl/pymux#527). A
+over a pane that has no focus does nothing (Lillecarl/pyterm#529). A
 command from a pane's CLI runs under a client of its own, so the person
 who watches is focused where they were until they press a key. Their
 first wheel over the new pane does nothing, and a script that splits a
-window and then scrolls it never scrolls. Lillecarl/pymux#507.
+window and then scrolls it never scrolls. Lillecarl/pyterm#509.
 """
 
 from __future__ import annotations

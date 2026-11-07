@@ -1,7 +1,7 @@
 """
 A command handler may be a coroutine, and what that means on each route.
 
-Lillecarl/pymux#87 settles the shape. A handler that only reads the
+Lillecarl/pyterm#89 settles the shape. A handler that only reads the
 server is a plain function, and about a hundred of them are. A handler
 that has to wait -- `wait-for` for a channel, `run-shell` for a program
 -- is a coroutine, and `call_command_handler` answers with it instead

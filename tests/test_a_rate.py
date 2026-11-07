@@ -5,8 +5,8 @@ The rules this judges: the first read has nothing to compare with and
 reads zero; later reads divide the bytes since a sample by the seconds
 since it; a count that stopped reads zero once a window has passed;
 and a rate prints in B/s, kB/s, MB/s or GB/s, with a decimal only
-under ten. Lillecarl/pymux#678. A frame rate prints in fps.
-Lillecarl/pymux#596.
+under ten. Lillecarl/pyterm#680. A frame rate prints in fps.
+Lillecarl/pyterm#598.
 """
 
 from __future__ import annotations

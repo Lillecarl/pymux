@@ -5,7 +5,7 @@
 `display-message '#{session_name}'` answered with the format string
 rather than the name, while `display-message -p` beside it formatted
 properly. A binding that asks the session something is the whole use of
-the command, and tmux expands it either way. Lillecarl/pymux#334.
+the command, and tmux expands it either way. Lillecarl/pyterm#336.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ async def test_a_message_is_a_format():
 
 
 async def test_a_message_may_be_a_template():
-    "The other language reaches here too. Lillecarl/pymux#333."
+    "The other language reaches here too. Lillecarl/pyterm#335."
     async with create_session() as (pymux, state):
         await _run(pymux, state, "display-message '{{ session_name | upper }}'")
 
@@ -48,7 +48,7 @@ async def test_a_message_reads_the_client_it_is_shown_to():
     """
     The client is what a `client_` variable reads, and the session is
     that client's. A message drawn for somebody else would answer for
-    whoever happened to ask. Lillecarl/pymux#323.
+    whoever happened to ask. Lillecarl/pyterm#325.
     """
     async with create_session() as (pymux, state):
         state.client.hostname = "buildbox-3"
@@ -76,7 +76,7 @@ async def test_a_named_client_answers_for_itself():
     """
     `-c` prints a template as the status line draws it for that client,
     and shows a message to that client only. Over a real connection,
-    since the in-process client is always 80 columns. Lillecarl/pymux#754.
+    since the in-process client is always 80 columns. Lillecarl/pyterm#756.
     """
     by_width = "{% if client_width|int < 100 %}phone {{ client_width }}{% else %}desk {{ client_width }}{% endif %}"
     async with over_connection() as session:

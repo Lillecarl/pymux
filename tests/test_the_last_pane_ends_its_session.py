@@ -1,6 +1,6 @@
 """
 Killing a session's last pane ends the session, as tmux does.
-Lillecarl/pymux#807.
+Lillecarl/pyterm#809.
 """
 
 from __future__ import annotations

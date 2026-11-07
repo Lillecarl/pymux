@@ -4,7 +4,7 @@ The options of a session, each declared once.
 `Pymux.session_defaults` holds one value of each, which every session
 reads unless it set its own; `Session.options` is that session's view.
 `set-option -g` writes the defaults, and `set-option` without it the
-session's own. Lillecarl/pymux#756. `pymux/options/option_fields.py` says what
+session's own. Lillecarl/pyterm#758. `pymux/options/option_fields.py` says what
 the declaration gives.
 """
 
@@ -25,16 +25,16 @@ __all__ = ["DEFAULT_UPDATE_ENVIRONMENT", "SessionOptions"]
 
 #: tmux's own list, which is every name that points at something on
 #: the machine a person is sitting at: a display, an agent, a session
-#: bus. ("update-environment", `options-table.c`.) Lillecarl/pymux#271.
+#: bus. ("update-environment", `options-table.c`.) Lillecarl/pyterm#273.
 DEFAULT_UPDATE_ENVIRONMENT = (
     "DISPLAY KRB5CCNAME MSYSTEM SSH_ASKPASS SSH_AUTH_SOCK SSH_AGENT_PID "
     "SSH_CONNECTION WAYLAND_DISPLAY WINDOWID XAUTHORITY XDG_CURRENT_DESKTOP "
     "XDG_SESSION_DESKTOP XDG_SESSION_TYPE"
 )
 
-#: tmux's `#I:#W#F`, in jinja (Lillecarl/pymux#960), and then what an
+#: tmux's `#I:#W#F`, in jinja (Lillecarl/pyterm#962), and then what an
 #: agent in the window says it is doing: `blocked`, `working`. Not
-#: `idle`, which needs nothing from the person. Lillecarl/pymux#931.
+#: `idle`, which needs nothing from the person. Lillecarl/pyterm#933.
 WINDOW_STATUS = (
     "{{ window_index }}:{{ window_name or '(noname)' }}{{ window_status_flags }}"
     "{% if window_program_state and window_program_state != 'idle' %} {{ window_program_state }}{% endif %}"
@@ -50,7 +50,7 @@ def _key_profile(value: str) -> str:
 def _renumber(pymux: Pymux, owner: object) -> None:
     # Setting it on closes the gaps that are open already; off changes
     # nothing, because no setting opens one. A default reaches every
-    # session without its own value. Lillecarl/pymux#342.
+    # session without its own value. Lillecarl/pyterm#344.
     for session in pymux.sessions:
         if session.arrangement.renumber_windows:
             session.arrangement.renumber()
@@ -59,7 +59,7 @@ def _renumber(pymux: Pymux, owner: object) -> None:
 def _recolor(pymux: Pymux, owner: object) -> None:
     # A pane's colour base comes from which theme owns the screen, and
     # whether it does. A pane that exists heard the old answer.
-    # Lillecarl/pymux#283.
+    # Lillecarl/pyterm#285.
     pymux.terminals.sync_color_bases()
 
 
@@ -77,7 +77,7 @@ class SessionOptions(Options):
         False,
         doc=(
             "Whether closing a window packs the ones above it down, so the order has no gaps. Off, "
-            "the way tmux ships it: window 4 stays window 4 until a person says otherwise. Lillecarl/pymux#342."
+            "the way tmux ships it: window 4 stays window 4 until a person says otherwise. Lillecarl/pyterm#344."
         ),
         on_set=_renumber,
     )
@@ -99,7 +99,7 @@ class SessionOptions(Options):
         PaneBrowser.AGENTS,
         doc=(
             'Which programs in a pane find `pymux-browser` as their browser: "agents", "all" or "off". '
-            "`PaneBrowser` says why. Only new panes see it. Lillecarl/pymux#653."
+            "`PaneBrowser` says why. Only new panes see it. Lillecarl/pyterm#655."
         ),
     )
     notify_shim: bool = option(
@@ -113,7 +113,7 @@ class SessionOptions(Options):
         True,
         doc=(
             "Bring the port with a loopback URL: localhost on the browser of the machine at the "
-            "keyboard means a service on that machine, which is the wrong one. Lillecarl/pymux#437."
+            "keyboard means a service on that machine, which is the wrong one. Lillecarl/pyterm#439."
         ),
     )
     open_url_forward_idle: int = option(
@@ -126,7 +126,7 @@ class SessionOptions(Options):
     )
     history_limit: int = option(
         2000,
-        doc="How many lines above the screen a pane keeps: tmux's two thousand. Lillecarl/pymux#8.",
+        doc="How many lines above the screen a pane keeps: tmux's two thousand. Lillecarl/pyterm#10.",
         choices=[200, 500, 1000, 2000, 5000, 10000],
     )
     strip_animation_time: int = option(
@@ -136,7 +136,7 @@ class SessionOptions(Options):
     )
     cut_shade_width: int = option(
         4,
-        doc="How many cells the shade fades over where the view cuts a pane; zero for none. Lillecarl/pymux#616.",
+        doc="How many cells the shade fades over where the view cuts a pane; zero for none. Lillecarl/pyterm#618.",
         choices=[0, 2, 4, 6, 8],
     )
     cut_shade_strength: int = option(
@@ -152,40 +152,40 @@ class SessionOptions(Options):
         False,
         doc=(
             'Draw the ":" command line as a box in the middle of the screen, with room for what a '
-            "completion means and a usage line. Off, so the bar does not move unasked. Lillecarl/pymux#158."
+            "completion means and a usage line. Off, so the bar does not move unasked. Lillecarl/pyterm#160."
         ),
     )
     which_key: bool = option(
         False,
-        doc="Draw the keys a prefix leads to while it waits. Off, for a person who knows them. Lillecarl/pymux#29.",
+        doc="Draw the keys a prefix leads to while it waits. Off, for a person who knows them. Lillecarl/pyterm#31.",
     )
     chooser_session_lines: bool = option(
         True,
-        doc="Start each session on a line of its own in the window chooser, so sessions read as groups. Lillecarl/pymux#531.",
+        doc="Start each session on a line of its own in the window chooser, so sessions read as groups. Lillecarl/pyterm#533.",
     )
     status_keys: EditingKeys = option(
         factory=editor_keys,
         doc=(
             "Which keys the command line takes. The person's $EDITOR says, as in tmux: a vi gives vi "
-            "keys, hx gives Helix keys. Lillecarl/pymux#375, Lillecarl/pymux#749."
+            "keys, hx gives Helix keys. Lillecarl/pyterm#377, Lillecarl/pyterm#751."
         ),
     )
     mode_keys: EditingKeys = option(
         factory=editor_keys,
-        doc="Which keys copy mode takes, from $EDITOR like `status-keys`. Lillecarl/pymux#375.",
+        doc="Which keys copy mode takes, from $EDITOR like `status-keys`. Lillecarl/pyterm#377.",
     )
     steal_focus: bool = option(
         False,
         doc=(
             "Whether a program's OSC 1337 StealFocus takes each client on the session to its pane. Off, "
-            "because a program that moves people at will is a nuisance. Lillecarl/pymux#785."
+            "because a program that moves people at will is a nuisance. Lillecarl/pyterm#787."
         ),
     )
     notification_click_shows_pane: bool = option(
         True,
         doc=(
             "A click on a desktop notification takes the clicked client to the pane it came from, "
-            "where the terminal reports clicks (OSC 99). Lillecarl/pymux#779."
+            "where the terminal reports clicks (OSC 99). Lillecarl/pyterm#781."
         ),
     )
     copy_mode_wheel_lines: int = option(
@@ -206,18 +206,18 @@ class SessionOptions(Options):
     status_left_length: int = option(20, doc="The most cells the left of the status line takes.", choices=[20])
     status_max_rows: int = option(
         3,
-        doc="The most rows the window list wraps to; a window past the last row is cut. Lillecarl/pymux#723.",
+        doc="The most rows the window list wraps to; a window past the last row is cut. Lillecarl/pyterm#725.",
         choices=[1, 2, 3, 5],
     )
     window_status_format: str = option(WINDOW_STATUS, doc="How the status line names a window.")
     window_status_current_format: str = option(WINDOW_STATUS, doc="How the status line names the active window.")
     bell_symbol: str = option(
         "!",
-        doc="What `#F` writes for a bell. ASCII, so every font has it; a configuration may set icons. Lillecarl/pymux#767.",
+        doc="What `#F` writes for a bell. ASCII, so every font has it; a configuration may set icons. Lillecarl/pyterm#769.",
     )
-    activity_symbol: str = option("#", doc="What `#F` writes for activity. Lillecarl/pymux#767.")
-    silence_symbol: str = option("~", doc="What `#F` writes for silence. Lillecarl/pymux#767.")
-    notification_symbol: str = option("?", doc="What `#F` writes for a notification. Lillecarl/pymux#767.")
+    activity_symbol: str = option("#", doc="What `#F` writes for activity. Lillecarl/pyterm#769.")
+    silence_symbol: str = option("~", doc="What `#F` writes for silence. Lillecarl/pyterm#769.")
+    notification_symbol: str = option("?", doc="What `#F` writes for a notification. Lillecarl/pyterm#769.")
     default_shell: str = option(factory=get_default_shell, doc="What a new pane runs when no command is given.")
     status_justify: Justify = option(Justify.LEFT, doc="Where the window list sits in the status line.")
     status_interval: int = option(
@@ -229,7 +229,7 @@ class SessionOptions(Options):
         DEFAULT_UPDATE_ENVIRONMENT,
         doc=(
             "The names a client brings with it, space separated, each one a pattern. "
-            "`environment.take_environment_from` says what happens to them. Lillecarl/pymux#271."
+            "`environment.take_environment_from` says what happens to them. Lillecarl/pyterm#273."
         ),
     )
     synthesize_key_events: bool = option(
@@ -243,7 +243,7 @@ class SessionOptions(Options):
         "kitty",
         doc=(
             "Whose answer a program in the legacy encoding gets where the terminals split, for a client "
-            "whose terminal pymux cannot name. Lillecarl/pymux#706."
+            "whose terminal pymux cannot name. Lillecarl/pyterm#708."
         ),
         choices=KEY_PROFILES,
         parse=_key_profile,
@@ -257,7 +257,7 @@ class SessionOptions(Options):
         doc=(
             "Draw a pane with the palette entries its program set (OSC 4), as fixed colours. Off: a "
             "palette colour reaches the terminal as its number, and the terminal's theme paints it. "
-            "Lillecarl/pymux#16."
+            "Lillecarl/pyterm#18."
         ),
     )
     paint_screen: bool = option(
@@ -265,7 +265,7 @@ class SessionOptions(Options):
         doc=(
             "Draw the theme's own background behind every cell, so a theme is the colour of the whole "
             "screen. Off: a program that relies on the terminal's background keeps it. "
-            "Lillecarl/pymux#273, Lillecarl/pymux#283."
+            "Lillecarl/pyterm#275, Lillecarl/pyterm#285."
         ),
         on_set=_recolor,
     )

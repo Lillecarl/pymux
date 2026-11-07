@@ -44,10 +44,10 @@ class Waking:
         only when it differs from what the last frame drew. A clock
         that says `%H:%M` changes once a minute, and the interval is
         four seconds, so fourteen of every fifteen ticks stop here.
-        Lillecarl/pymux#154.
+        Lillecarl/pyterm#156.
 
         A pane that writes invalidates its own client. It never needed
-        the clock. Lillecarl/pymux#117.
+        the clock. Lillecarl/pyterm#119.
 
         `but_not` is the application that already asked for a frame, so
         that `client_asked_for_frame` can ask about the others and
@@ -57,7 +57,7 @@ class Waking:
             # Every scheduled redraw records the tick, for its own
             # client and the skipped one alike: the renderer compares
             # it against the input since, and skips a frame that
-            # input arrived after. Lillecarl/pymux#524.
+            # input arrived after. Lillecarl/pyterm#526.
             client_state.schedule_tick = client_state.input_tick
             if client_state.app is but_not:
                 continue
@@ -90,7 +90,7 @@ class Waking:
         already happened before this runs.
 
         Two things are left for the clients that cannot see it, and
-        both are why this is not simply nothing. Lillecarl/pymux#224.
+        both are why this is not simply nothing. Lillecarl/pyterm#226.
 
         - Every client's status line names the other windows, through
           `window-status-format`. `what_time_moves` reads exactly that
@@ -107,7 +107,7 @@ class Waking:
         # DEBUG: this is the line that says a pane is animating. A
         # server drew eleven frames a second with nobody typing, and a
         # line each is what made one log 86 MB in four days.
-        # Lillecarl/pymux#248.
+        # Lillecarl/pyterm#250.
         logger.debug("Drawing 1 of the clients: %s", Woke.APPLICATION)
 
         self.refresh_what_time_moves(but_not=app)
@@ -125,7 +125,7 @@ class Waking:
         which window each client looks at, and `set_app` answers that
         by writing an `AppSession` that every client shares. A thread
         that writes it while a render reads it hands that render
-        another client's application. Lillecarl/pymux#155.
+        another client's application. Lillecarl/pyterm#157.
 
         The interval is read each turn, so a `set-option
         status-interval` reaches the tick after this one. One timer
@@ -174,7 +174,7 @@ class Waking:
         left behind pymux's back: iTerm2 leaves it on a prompt start it
         reads, and the frames after went to its main screen. On a
         terminal that never left, it clears a screen this redraws
-        anyway. Lillecarl/pymux#791.
+        anyway. Lillecarl/pyterm#793.
 
         The erase takes kitty's placements with it, so the images go too,
         and each is sent and placed again. A window pane left as it was

@@ -22,14 +22,14 @@ A server runs for weeks, so a log that grows is a log that fills a disk.
 One left running for four days reached **86 MB**, because the level was
 DEBUG and a server writes a line for every frame it draws: eleven lines
 a second with nobody typing, on a session where the panes animate.
-Lillecarl/pymux#248.
+Lillecarl/pyterm#250.
 
 Two things follow, and neither of them is "log less".
 
 **The per-frame lines are DEBUG**, and a server that nobody asked to
 debug is at INFO. The lines themselves are good ones -- `Woke` exists so
 that a frame drawn for no reason can be traced to what asked for it
-(Lillecarl/pymux#180), and it is what made a live server readable. They
+(Lillecarl/pyterm#182), and it is what made a live server readable. They
 are just not what a person wants by default, and `pymux counters` gives
 the same finding with nothing written down at all.
 
@@ -42,7 +42,7 @@ not the last four days.
 time: the moment a person wants debug logging is when a server is
 already misbehaving, and a restart loses the thing they wanted to look
 at. `set-option log-level debug` reaches a running server, and
-`level` is what `show-options` reads back. Lillecarl/pymux#252.
+`level` is what `show-options` reads back. Lillecarl/pyterm#254.
 """
 
 from __future__ import annotations
@@ -99,10 +99,10 @@ logger = logging.getLogger(__package__)
 #: pymux's by themselves, and the library gives its own logger a null
 #: handler so that an embedder gets no stderr. Without this line the
 #: warning that names a socket room somebody else owns would be written
-#: nowhere. Lillecarl/pymux#405. ptyhost is one too: "Feeding the
-#: terminal emulator failed" went nowhere. Lillecarl/pymux#737. And
+#: nowhere. Lillecarl/pyterm#407. ptyhost is one too: "Feeding the
+#: terminal emulator failed" went nowhere. Lillecarl/pyterm#739. And
 #: ptterm, which logs a sequence its ground timer drops.
-#: Lillecarl/pymux#935.
+#: Lillecarl/pyterm#937.
 LOGGERS = [
     logger,
     logging.getLogger("libpymux"),
@@ -141,7 +141,7 @@ def tail(lines: int) -> str:
     """
     The last `lines` lines of this machine's pymux log, each cut at
     `LINE_LIMIT`. **It blocks.** Raises `OSError` when there is no log
-    to read. Lillecarl/pymux#934.
+    to read. Lillecarl/pyterm#936.
     """
     path = logfile() or default_logfile()
     with path.open(encoding="utf-8", errors="replace") as log:

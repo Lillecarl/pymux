@@ -37,9 +37,9 @@ class Mode(StrEnum):
     RENICE = "renice"
     WEB = "web"
     #: Send files to the person, from a pane. Not `send`, which is
-    #: tmux's name for `send-keys`. Lillecarl/pymux#743.
+    #: tmux's name for `send-keys`. Lillecarl/pyterm#745.
     SEND_FILE = "send-file"
-    #: Show images in the terminal it runs in. Lillecarl/pymux#764.
+    #: Show images in the terminal it runs in. Lillecarl/pyterm#766.
     IMGCAT = "imgcat"
     #: An upgrade's check of the new build, and its new server.
     #: `pymux/core/upgrade.py`.

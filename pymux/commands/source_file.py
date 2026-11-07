@@ -32,7 +32,7 @@ def _read_lines(pymux: Pymux, filename: str, lines: list[tuple[int, str]]):
 
     A line that waits takes the lines under it with it, so a
     configuration file means the same thing whether or not one of its
-    commands has to wait. Lillecarl/pymux#87.
+    commands has to wait. Lillecarl/pyterm#89.
     """
     # A line that fails names the file and the line it is on. Without
     # that a person reads "Invalid option: -g" and has to find which of

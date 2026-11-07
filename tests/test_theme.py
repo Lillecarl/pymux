@@ -12,7 +12,7 @@ a client that is already attached follows.
 
 **A theme belongs to one client.** Only a client can know what its
 terminal is, so two people on one session, one on a light screen and
-one on a dark one, choose separately. Lillecarl/pymux#223.
+one on a dark one, choose separately. Lillecarl/pyterm#225.
 
 **The tests ask the client, not the option.** `client.options.theme` says what
 was set and nothing else; whether a client draws with it is the
@@ -20,7 +20,7 @@ question, and `app.style` is where a client reads it. An application
 that was handed the scheme itself passes every test on the attribute
 and fails these.
 
-Lillecarl/pymux#194, Lillecarl/pymux#195.
+Lillecarl/pyterm#196, Lillecarl/pyterm#197.
 """
 
 from __future__ import annotations
@@ -55,7 +55,7 @@ NOTHING = "%s -c pass" % (sys.executable,)
 #: The last two are not green. A picture of the theme showed the pane
 #: index of the focused pane on pure red and its number on orange,
 #: which are the two loudest things on a screen whose whole point is
-#: that it is quiet. Lillecarl/pymux#161.
+#: that it is quiet. Lillecarl/pyterm#163.
 LOUD_ONES = frozenset(
     {
         "terminal.focused border",
@@ -134,7 +134,7 @@ async def test_client_draws_with_theme_it_starts_on():
     """
     A client starts on the search, and a client whose terminal has
     said nothing draws the default while it says nothing.
-    Lillecarl/pymux#346.
+    Lillecarl/pyterm#348.
     """
     async with create_client() as (pymux, client):
         assert client.options.theme == NEAREST
@@ -146,10 +146,10 @@ async def test_the_active_pane_s_number_reads_louder_than_the_others():
     """
     The number a display-panes draws in the active pane is the one a
     person reads first: it says which pane the next key will hit, in
-    the mode that holds the numbers for its stay and out of it. #161
+    the mode that holds the numbers for its stay and out of it. #163
     chose the loud colour for it; the rule was keyed with a class
     nothing ever added, so every number drew the same.
-    Lillecarl/pymux#161. Lillecarl/pymux#395.
+    Lillecarl/pyterm#163. Lillecarl/pyterm#397.
     """
     async with create_client() as (pymux, client):
         loud = client.app.style.get_attrs_for_style_str("class:terminal.focused class:panenumber")
@@ -188,7 +188,7 @@ async def test_the_theme_belongs_to_one_client():
     """
     Two people on one session, one on a light screen and one on a dark
     one. The server held one theme before, so they drew the same
-    colours. Lillecarl/pymux#223.
+    colours. Lillecarl/pyterm#225.
     """
     async with create_client() as (pymux, one):
         two = _another_client(pymux)
@@ -243,7 +243,7 @@ RULES = {
     "message": "bg:#bbee88 #222222",
     # No role in them: a selection on a reversed pane is turned back
     # whatever the theme's colours are, because the pane's own reverse
-    # is what it has to be told from. Lillecarl/pymux#99.
+    # is what it has to be told from. Lillecarl/pyterm#101.
     "reversed-pane selected": "noreverse",
     "reversed-pane incsearch.current": "noreverse",
     "background": "#888888",
@@ -357,7 +357,7 @@ def test_pane_painting_is_option():
     while `paint-screen` is on, and the default is off: a program that
     relies on the terminal's background through its default cells
     keeps seeing the terminal until a person asks for the whole
-    screen. Lillecarl/pymux#273.
+    screen. Lillecarl/pyterm#275.
     """
     pymux = Pymux()
     # `conftest.py` gives every server in this suite `paint-screen` on,
@@ -425,7 +425,7 @@ def test_names_are_offered_for_completion():
     Which is what `get_all_values` is for. Every source, because a
     person completes a name out of whichever one they use -- and the
     nearest search reads the same list to know what it may match.
-    Lillecarl/pymux#346.
+    Lillecarl/pyterm#348.
     """
     from pymux.style.style_base16 import names as base16_names
     from pymux.style.style_pygments import names

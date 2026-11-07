@@ -18,7 +18,7 @@ def swap_window(pymux: Pymux, args: argparse.Namespace) -> None:
     The windows trade indexes, and without `-d` the window swapped
     into the active one's place takes the focus, the way tmux's does.
     A relative target, `+1` or `-1`, counts from the active window:
-    the tmux spell is `swap-window -t -1`. Lillecarl/pymux#296.
+    the tmux spell is `swap-window -t -1`. Lillecarl/pyterm#298.
     """
     dst = args.dst_window
     active = the_window(pymux, None)

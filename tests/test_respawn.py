@@ -2,7 +2,7 @@
 `respawn-pane` and `respawn-window`: a program of a pane restarts in
 the place and the size the pane holds.
 
-The rules this judges, Lillecarl/pymux#306: a pane whose program
+The rules this judges, Lillecarl/pyterm#308: a pane whose program
 still runs refuses without `-k`; a respawn keeps the pane in its
 place in the tree -- the count and the window are the same -- and
 the pane that runs there is a new one, with a new id and an empty
@@ -25,7 +25,7 @@ from pymux.commands.respawn_pane import respawn_pane
 
 
 async def test_an_upgrading_server_refuses_a_command():
-    "From the sweep to the exec, a killed pane's program would be ended and reaped by neither image. Lillecarl/pymux#740."
+    "From the sweep to the exec, a killed pane's program would be ended and reaped by neither image. Lillecarl/pyterm#742."
     async with create_session() as (pymux, state):
         panes = set(pymux.panes_by_id)
         pymux.refusing_commands = True
@@ -68,7 +68,7 @@ async def test_respawn_keeps_place_and_replaces_pane():
 
 
 async def test_respawn_keeps_the_share_of_the_split():
-    "A pane resized to take more of its split keeps that share. #306."
+    "A pane resized to take more of its split keeps that share. #308."
     async with create_session() as (pymux, state):
         with set_app(state.app):
             await run_as(pymux, state, "split-window")
@@ -95,7 +95,7 @@ async def test_pane_whose_program_ended_is_gone_and_says_so():
             pane.process.kill()
             # The pane leaving the tree, and not the process ending:
             # under load the second came first, and the command still
-            # found the pane. Lillecarl/pymux#705.
+            # found the pane. Lillecarl/pyterm#707.
             await once(
                 lambda: pymux.session_holding(pane) is None,
                 10.0,

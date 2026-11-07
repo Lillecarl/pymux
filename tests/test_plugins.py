@@ -1,6 +1,6 @@
 """
 A module in `pymux/plugins/` is a command like any other.
-Lillecarl/pymux#529.
+Lillecarl/pyterm#531.
 """
 
 from __future__ import annotations

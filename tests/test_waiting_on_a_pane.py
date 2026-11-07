@@ -1,5 +1,5 @@
 """
-`wait-pane`: hold until a pane meets a condition. Lillecarl/pymux#388.
+`wait-pane`: hold until a pane meets a condition. Lillecarl/pyterm#390.
 """
 
 from __future__ import annotations
@@ -310,7 +310,7 @@ async def test_what_cannot_be_read_is_refused(pymux, arguments, message):
 
 
 async def test_a_wait_from_nobody_is_refused(pymux):
-    "A key binding that waited would leave a task nobody reads. Lillecarl/pymux#302."
+    "A key binding that waited would leave a task nobody reads. Lillecarl/pyterm#304."
     pane = the_pane(pymux)
     errors = []
     pymux.add_command_error = errors.append

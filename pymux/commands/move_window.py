@@ -34,11 +34,11 @@ def move_window(pymux: Pymux, args: argparse.Namespace) -> None:
     about its own `-a`: "moving windows up if necessary".
     `-k` kills whatever is at the index and takes its place.
     tmux spells all three on this command (`cmd-move-window.c:93`),
-    so a script written for tmux runs. Lillecarl/pymux#343.
+    so a script written for tmux runs. Lillecarl/pyterm#345.
 
     Across sessions the insert and the kill run against the
     destination: the room is made where the window lands, and what
-    dies is what was in its way there. Lillecarl/pymux#533.
+    dies is what was in its way there. Lillecarl/pyterm#535.
 
     A session and no index -- `work:`, or `work` alone when no window
     index reads that way -- puts the window after the last one there,
@@ -95,7 +95,7 @@ def move_window(pymux: Pymux, args: argparse.Namespace) -> None:
 
     if args.after or args.before or args.kill:
         # **After the kill, not before it.** A kill can renumber the
-        # windows (`renumber-windows`, Lillecarl/pymux#342), so what
+        # windows (`renumber-windows`, Lillecarl/pyterm#344), so what
         # is in the way is only known once it has happened.
         arrangement.make_room_at(new_index)
     elif occupant is not None:

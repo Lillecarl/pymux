@@ -20,7 +20,7 @@ def unlink_window(pymux: Pymux, args: argparse.Namespace) -> None:
     to put it back in an order -- its own or another session's --
     and no client can see it while it waits. The last window of the
     session refuses: there would be nothing left to watch.
-    Lillecarl/pymux#297.
+    Lillecarl/pyterm#299.
     """
     window = the_window(pymux, args.target_window)
 

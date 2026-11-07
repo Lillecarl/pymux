@@ -24,7 +24,7 @@ from middleman import Pane
 #: longer. The real ones leave a timer thread 25 ms to land a write,
 #: and a loaded aarch64-darwin builder missed that twice. The tests are
 #: about how the two waits relate, which scaling keeps.
-#: Lillecarl/pymux#573.
+#: Lillecarl/pyterm#575.
 QUIET = middleman.QUIET * 10
 FIRST_BYTE = middleman.FIRST_BYTE * 10
 
@@ -67,7 +67,7 @@ def test_a_frame_that_starts_late_is_still_caught(a_pane):
     Measured on an idle machine, through the `colored_reset` recording
     of the Alacritty references: pymux took 0.114s to start the frame,
     `settle` gave up at 0.053s with nothing, and the judge read a wire
-    of 551 bytes where the whole exchange is 9115. Lillecarl/pymux#425.
+    of 551 bytes where the whole exchange is 9115. Lillecarl/pyterm#427.
     """
     pane, writer = a_pane
 

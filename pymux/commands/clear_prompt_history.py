@@ -18,7 +18,7 @@ def clear_prompt_history(pymux: Pymux, args: argparse.Namespace) -> None:
 
     The history is replaced rather than emptied: a fresh one goes to
     the server and to the buffers of every client it holds, which is
-    all the readers there are. Lillecarl/pymux#305.
+    all the readers there are. Lillecarl/pyterm#307.
     """
     pymux.prompt_history = InMemoryHistory()
     for client_state in pymux._client_states.values():

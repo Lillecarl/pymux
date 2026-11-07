@@ -14,7 +14,7 @@ between a page somebody happens to have open and their shell, and it is a
 weak one: a page may simply omit the header. So every upgrade carries a
 token that this prints once. `--bind` widens it and says what that costs.
 
-It needs `pymux[web]`. Lillecarl/pymux#461.
+It needs `pymux[web]`. Lillecarl/pyterm#463.
 """
 
 from __future__ import annotations
@@ -54,7 +54,7 @@ TOKEN_BYTES = 32
 
 #: The path of the whole session, as one client of it sees it. `/pane/<id>`
 #: is one pane's own screen; this is what a client draws over and around
-#: the panes. Lillecarl/pymux#481.
+#: the panes. Lillecarl/pyterm#483.
 SESSION = "/session"
 
 #: What may be served, by name. A list and not a directory walk: a path
@@ -73,7 +73,7 @@ SERVED = {
     "/keys.d.ts": ("keys.d.ts", "text/plain; charset=utf-8"),
     "/retry.js": ("retry.js", "text/javascript; charset=utf-8"),
     "/retry.d.ts": ("retry.d.ts", "text/plain; charset=utf-8"),
-    # The player of `record-export -F web`. Lillecarl/pymux#610.
+    # The player of `record-export -F web`. Lillecarl/pyterm#612.
     "/replay.html": ("replay.html", "text/html; charset=utf-8"),
     "/replay.js": ("replay.js", "text/javascript; charset=utf-8"),
     "/replay.d.ts": ("replay.d.ts", "text/plain; charset=utf-8"),
@@ -235,8 +235,8 @@ async def _serve_a_session(socket_path: str, connection: ServerConnection, query
     """
     One viewer as one client of the session, with everything a client
     draws. `rows` and `columns` in the query are the element's first size;
-    a `size` message moves it after. Lillecarl/pymux#481. `options` is
-    the client options the page kept, as JSON. Lillecarl/pymux#957.
+    a `size` message moves it after. Lillecarl/pyterm#483. `options` is
+    the client options the page kept, as JSON. Lillecarl/pyterm#959.
     """
     import anyio
 

@@ -21,12 +21,12 @@ def choose_window(pymux: Pymux, args: argparse.Namespace) -> None:
     it is on. With a command as its argument, the chooser runs that
     command on the chosen window instead of switching to it, with `%%`
     in the command standing for the `session:index` target of the
-    window, the way the command-prompt does. Lillecarl/pymux#295.
-    Lillecarl/pymux#323.
+    window, the way the command-prompt does. Lillecarl/pyterm#297.
+    Lillecarl/pyterm#325.
 
     The command line has no view to open a chooser on, so an asker
     that reads stdout gets nothing -- the same shape as the pop-ups.
-    Lillecarl/pymux#272.
+    Lillecarl/pyterm#274.
     """
     if pymux.answer is not None:
         return

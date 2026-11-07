@@ -29,7 +29,7 @@ def _sessions(pymux: Pymux, args: argparse.Namespace) -> list[Session]:
     target-session does: a bare name is a session and not a window of
     this one, and a `session:window` target keeps its session part.
     Without either it is the session the client is on.
-    Lillecarl/pymux#550.
+    Lillecarl/pyterm#552.
     """
     if args.a:
         return list(pymux.sessions)

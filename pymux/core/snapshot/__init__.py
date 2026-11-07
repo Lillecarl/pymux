@@ -2,7 +2,7 @@
 A server's window management, in an sqlite file a new build can load.
 
 A hot upgrade writes this, and the new build reads it back
-(Lillecarl/pymux#399). `sql` reads the same tables under `live`,
+(Lillecarl/pyterm#401). `sql` reads the same tables under `live`,
 built from the objects as a question starts (`pymux/query.py`), so
 they are shaped for a person or an agent to query: one row per
 session, window, split and pane, and a column named after the

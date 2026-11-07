@@ -1,6 +1,6 @@
 """
 A client sends the image on its machine's clipboard ahead of a Ctrl-V,
-and nothing typed after the key overtakes it. Lillecarl/pymux#956.
+and nothing typed after the key overtakes it. Lillecarl/pyterm#958.
 """
 
 from __future__ import annotations

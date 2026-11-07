@@ -6,7 +6,7 @@ the server and the table on the client both need, so it sits where
 neither owns it. `client/forwards.py` is the half that opens one.
 
 The spelling is openssh's, because a person who wants a forward already
-knows `ssh -L`. Lillecarl/pymux#436.
+knows `ssh -L`. Lillecarl/pyterm#438.
 """
 
 from __future__ import annotations
@@ -65,7 +65,7 @@ LOOPBACK: Final = "localhost"
 #: A forward that binds one of these is private to whoever is at that
 #: keyboard. A forward that binds anything else publishes a service to
 #: the network the machine is on, which is a different decision and is
-#: why `ForwardRequests.needs_asking` separates them. Lillecarl/pymux#440.
+#: why `ForwardRequests.needs_asking` separates them. Lillecarl/pyterm#442.
 LOOPBACK_NAMES: Final = frozenset({"localhost", "127.0.0.1", "::1", "ip6-localhost"})
 
 #: The port number that asks the operating system for a free one. The
@@ -122,7 +122,7 @@ def the_far_side_may_narrow(forward: Forward) -> bool:
     `tcpip-forward` reply carries one number and no address -- read in
     asyncssh 2.24.0, `connection.py`: a `get_uint32()` for the port and
     then `check_end()`. A listener reports back the address it asked
-    for, because that is the only one it has. Lillecarl/pymux#444.
+    for, because that is the only one it has. Lillecarl/pyterm#446.
     """
     return forward.direction is Direction.REMOTE and forward.listen_host not in LOOPBACK_NAMES
 
@@ -182,7 +182,7 @@ def parse_listen(spec: str) -> tuple[str, int]:
 
 # ----------------------------------------------------------------------
 # A URL that names a port on the machine the server runs on.
-# Lillecarl/pymux#437.
+# Lillecarl/pyterm#439.
 
 
 #: The port a scheme means when a URL names none.

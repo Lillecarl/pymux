@@ -1,7 +1,7 @@
 """
 The peer's side of a mirrored window pane: the owner's frames, decoded
 into a picture here, and shown to this server's clients as a window pane
-of its own would be. Lillecarl/pymux#888.
+of its own would be. Lillecarl/pyterm#890.
 
 The picture is the whole window, so a client that starts to show the
 pane, or one that fell behind, gets it whole or as the box that changed

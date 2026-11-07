@@ -50,7 +50,7 @@ def complaints(pymux, command: str) -> list:
 
     A command that fails does not raise. It records the message, which
     is how a line of a configuration file reaches the first client
-    (Lillecarl/pymux#38), and `startup_errors` is where it lands
+    (Lillecarl/pyterm#40), and `startup_errors` is where it lands
     before the startup is done.
     """
     before = len(pymux.startup_errors)

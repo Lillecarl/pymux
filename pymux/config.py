@@ -6,7 +6,7 @@ announced by the client that holds it, so the client has to find the
 same file the server finds -- and over SSH they are two files on two
 machines, which is the point. So this cannot live in the entry point:
 `client/` would have to import one to ask a question about a path.
-Lillecarl/pymux#223.
+Lillecarl/pyterm#225.
 """
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ def config_paths(environ: Mapping[str, str] | None = None) -> list[str]:
     `$XDG_CONFIG_HOME` has to be an absolute path. The specification
     says an implementation ignores a relative one, and this does.
 
-    Lillecarl/pymux#196.
+    Lillecarl/pyterm#198.
     """
     return [
         os.path.join(_config_home(environ), "pymux", "pymux.conf"),
@@ -93,7 +93,7 @@ def client_options_in(path: str | None) -> list[tuple[str, str]]:
     The client options a configuration file names, in its own order.
 
     A client announces these when it attaches, so that a person can
-    say in configuration what their terminal is. Lillecarl/pymux#223.
+    say in configuration what their terminal is. Lillecarl/pyterm#225.
 
     **This reads the file and does not run it.** The file is the
     server's, and the server runs all of it; a client takes the two or

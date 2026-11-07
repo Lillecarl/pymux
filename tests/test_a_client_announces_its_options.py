@@ -5,7 +5,7 @@ A client option belongs to the terminal a person is sitting at, and
 only that side can read the file that names it: over SSH the server's
 configuration is another machine's. So the client takes the
 `set-client-option` lines out of its own file and sends them with
-`start-gui`. Lillecarl/pymux#223.
+`start-gui`. Lillecarl/pyterm#225.
 """
 
 from __future__ import annotations
@@ -139,7 +139,7 @@ async def _attached(pymux: Pymux, announced) -> ServerConnection:
 
     # A context of its own, which is what both real transports do. Two
     # clients in one default context save and restore each other's
-    # application, and the second one never starts. Lillecarl/pymux#230.
+    # application, and the second one never starts. Lillecarl/pyterm#232.
     context = contextvars.copy_context()
     connection = context.run(lambda: ServerConnection(pymux, server_end))
     pymux.connections.append(connection)
@@ -179,7 +179,7 @@ async def test_the_client_draws_with_what_it_announced():
 async def test_a_client_that_announces_nothing_starts_on_the_search():
     """
     Which draws the default until its terminal says something.
-    Lillecarl/pymux#346.
+    Lillecarl/pyterm#348.
     """
     async with a_server() as pymux:
         client = (await _attached(pymux, [])).client.state
@@ -218,7 +218,7 @@ def test_the_server_reads_the_same_line_and_does_nothing(tmp_path):
     The server reads the whole file, this line included, and it has no
     client to set it on. A command that raised here would take
     `source-file` with it and pymux would draw nothing at all, which is
-    what Lillecarl/pymux#199 was.
+    what Lillecarl/pyterm#201 was.
     """
     from pymux.commands import handle_command
 

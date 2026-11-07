@@ -163,7 +163,7 @@ class PaneView(NamedTuple):
     screen: Screen | None = None
     #: What the client drew over the pane, in cells of its screen: a
     #: popup, a menu, the which-key box. An image is cut around them.
-    #: `layout.pane_covers`. Lillecarl/pymux#816.
+    #: `layout.pane_covers`. Lillecarl/pyterm#818.
     covered: tuple[Rect, ...] = ()
 
 
@@ -189,7 +189,7 @@ class OuterImageIds:
     after. The ids start at a random offset, so that pymux does not
     overwrite the images of another program that shares the terminal,
     and stay under 24 bits, so no placeholder needs the third mark.
-    Lillecarl/pymux#600.
+    Lillecarl/pyterm#602.
     """
 
     def __init__(self) -> None:
@@ -284,7 +284,7 @@ class ClientGraphics:
         #: its cell size from a client, and a default is not an answer:
         #: a terminal that never replied must not hold the pane at ten
         #: by twenty while a client that did reply waits behind it.
-        #: Lillecarl/pymux#369.
+        #: Lillecarl/pyterm#371.
         self.cell_size_known = False
 
         #: What the terminal answered XTVERSION with, or "".
@@ -306,7 +306,7 @@ class ClientGraphics:
         self.cells = CellImages(self)
 
         #: The text of the panes at another size, OSC 66.
-        #: Lillecarl/pymux#890.
+        #: Lillecarl/pyterm#892.
         self.text_sizes = ClientTextSizes(self)
 
         #: The scrolls the renderer wrote since the placements were last
@@ -340,7 +340,7 @@ class ClientGraphics:
 
         The fit is the terminal's own, so the picture is the one it draws
         without pymux. A placement that pymux fitted instead was off by
-        the rounding of each run. Lillecarl/pymux#600.
+        the rounding of each run. Lillecarl/pyterm#602.
 
         Answering the graphics query is not enough: WezTerm does and
         draws no placeholder. The id travels in the foreground colour,
@@ -375,7 +375,7 @@ class ClientGraphics:
         and changes its cell, so the server asks again at each resize.
         kitty on a Mac answered 19x35 at attach, 10x18 later with the same
         342 columns, and reported the mouse in the second all along: each
-        click landed at half its column. Lillecarl/pymux#774.
+        click landed at half its column. Lillecarl/pyterm#776.
         """
         return self.set_cell_size(width=report.width, height=report.height)
 
@@ -418,7 +418,7 @@ class ClientGraphics:
         if was_detected:
             return
         # What the window pane features rest on, per terminal.
-        # Lillecarl/pymux#651.
+        # Lillecarl/pyterm#653.
         logger.info(
             "The terminal %s: kitty graphics %s, sixel %s.",
             self.terminal_version or "with no version",
@@ -439,7 +439,7 @@ class ClientGraphics:
         """
         The renderer wrote these scrolls to this client's terminal. A
         kitty terminal moved each image wholly inside one, so the next
-        frame puts it back where pymux has it. Lillecarl/pymux#821.
+        frame puts it back where pymux has it. Lillecarl/pyterm#823.
         """
         if scrolls and self.kitty_supported:
             self._scrolled_placements.extend(scrolls)
@@ -543,7 +543,7 @@ class ClientGraphics:
         nothing to do but fit the image to it. A client whose cell is
         larger fits as well and leaves more slack; drawing in the slack
         would stretch the image to a size nobody asked for.
-        Lillecarl/pymux#369.
+        Lillecarl/pyterm#371.
         """
         if placement.virtual or placement.asked_for_the_box:
             return False
@@ -707,7 +707,7 @@ class ClientGraphics:
     async def _transmit_in_thread(self, key: tuple[int, int], image: GraphicsImage, outer_id: int) -> None:
         """
         Prepare one transmission in a worker thread, and send it.
-        Lillecarl/pymux#576.
+        Lillecarl/pyterm#578.
 
         A transmission that fails keeps its pending entry, so the frames
         after it do not try the same image again.

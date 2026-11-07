@@ -7,12 +7,12 @@ terminal with the client drawing on it, and a logger with no handler
 writes to `sys.stderr`, which is that terminal. One exception in a
 background task then paints its traceback over the frame.
 
-Lillecarl/pymux#36.
+Lillecarl/pyterm#38.
 
 It also runs for weeks, so a log that grows is a log that fills a disk.
 One left running for four days reached 86 MB, because the level was
 DEBUG and a server writes a line for every frame it draws -- eleven a
-second on a session where the panes animate. Lillecarl/pymux#248.
+second on a session where the panes animate. Lillecarl/pyterm#250.
 """
 
 from __future__ import annotations
@@ -93,7 +93,7 @@ def test_message_reaches_file(tmp_path):
 
 @pytest.mark.parametrize("package", ["libpymux", "ptyhost"])
 def test_a_package_of_its_own_reaches_file(tmp_path, package):
-    "ptyhost's records went nowhere in a server. Lillecarl/pymux#737."
+    "ptyhost's records went nowhere in a server. Lillecarl/pyterm#739."
     wanted = tmp_path / "server.log"
     log.configure(str(wanted))
     logging.getLogger("%s.somewhere" % package).warning("said by %s", package)
@@ -221,7 +221,7 @@ def test_person_debugging_asks_for_it():
 def test_frame_is_not_logged_at_info():
     """
     The lines are good ones -- `Woke` exists so that a frame drawn for
-    no reason can be traced to what asked for it (Lillecarl/pymux#180).
+    no reason can be traced to what asked for it (Lillecarl/pyterm#182).
     They are just not what a person wants by default, and `pymux
     counters` gives the same finding with nothing written down.
     """
@@ -239,7 +239,7 @@ def test_pane_that_writes_is_still_logged():
     The line that says a pane is animating.
 
     A pane's write does not come through `Pymux.invalidate` any more --
-    it wakes only the clients that can see it (Lillecarl/pymux#224) --
+    it wakes only the clients that can see it (Lillecarl/pyterm#226) --
     so the line that found eleven frames a second has to be on the path
     that a write does take.
     """

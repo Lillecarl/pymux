@@ -42,13 +42,13 @@ pane may write the clipboard only where `set-clipboard` says "on", so
 every harness that used this fence carried that line. The day the value
 pymux ships changed, five checks waited their whole timeout for a fence
 pymux was holding back. A notification passes under no option at all.
-Lillecarl/pymux#380.
+Lillecarl/pyterm#382.
 
 **It proves the frame arrived too.** pymux sends what a pane passes on
 behind the next frame, and the frame that drew the payload is that one
 or one before it. A write waited for silence after the fence until
 pymux did: a tenth of a second and more, on each of the hundreds of
-writes a suite makes. Lillecarl/pymux#579.
+writes a suite makes. Lillecarl/pyterm#581.
 
 The fence is taken back out before anything sees the wire. A judge
 would only ignore it, but a stream that holds our own scaffolding is a
@@ -108,7 +108,7 @@ os.system("stty -opost -echo")
 # **SIGWINCH waits while one report runs.** A signal in the middle of a
 # report ran a second one, which wrote the new size, and then the first
 # finished and wrote the old size over it; no later signal came, so the
-# file held the old size for good. Lillecarl/pymux#545. A signal held
+# file held the old size for good. Lillecarl/pyterm#547. A signal held
 # here runs its report when the mask comes off, after this one.
 def report(*_):
     signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGWINCH})
@@ -188,8 +188,8 @@ class Pane:
         # `set-client-option`, because full screen belongs to the
         # terminal a person is sitting at. The client reads this file
         # for itself and announces the line when it attaches.
-        # Lillecarl/pymux#471. The fences are OSC 99 notifications, and
-        # a box for each would draw over the screen. Lillecarl/pymux#826.
+        # Lillecarl/pyterm#473. The fences are OSC 99 notifications, and
+        # a box for each would draw over the screen. Lillecarl/pyterm#828.
         config.write_text("set-client-option full-screen on\nset-client-option notification-popups off\n")
 
         size = self.size_file
@@ -214,7 +214,7 @@ class Pane:
         self.terminal.wait_for_queries()
         # The fence is a notification, and one from the window a person
         # looks at stays inside pymux. A terminal has the focus until it
-        # says otherwise, so this one looks away. Lillecarl/pymux#799.
+        # says otherwise, so this one looks away. Lillecarl/pyterm#801.
         self.terminal.write(b"\x1b[O" + SHOWS_OSC_99)
         self.terminal.drain(0.5)
         self.wait_for_size()
@@ -329,7 +329,7 @@ class Pane:
         machine breaks it, so nothing judges what this reads: a fence
         does that. This keeps the wire drained while `wait_for_size`
         polls, because an integrated pymux whose terminal is not read
-        stops serving (Lillecarl/pymux#585).
+        stops serving (Lillecarl/pyterm#587).
 
         **The two waits are different waits.** `FIRST_BYTE` is how long
         a frame may take to start, and it is paid in full only when no
@@ -342,7 +342,7 @@ class Pane:
         Measured, on an idle machine, with the `colored_reset`
         recording of the Alacritty references: `settle: 0.053s, 0 bytes`
         and a 551 byte wire, where the same test gives 9115 bytes when
-        the frame is waited for. Lillecarl/pymux#425.
+        the frame is waited for. Lillecarl/pyterm#427.
         """
         assert self.terminal is not None
         started = time.monotonic()

@@ -1,6 +1,6 @@
 """
 What a pane answers XTVERSION with: pymux's own name, and a lie to a
-program that picks its path by a terminal's brand. Lillecarl/pymux#593.
+program that picks its path by a terminal's brand. Lillecarl/pyterm#595.
 """
 
 from __future__ import annotations

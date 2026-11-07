@@ -4,7 +4,7 @@ A restarting server's images come off the client's terminal.
 The next server knows none of the kitty images the old one placed, and
 draws its own over them, so the client deletes them when it hears the
 restart. A terminal that never had one is never sent the APC: one with
-no kitty graphics may print it. Lillecarl/pymux#399.
+no kitty graphics may print it. Lillecarl/pyterm#401.
 """
 
 from __future__ import annotations

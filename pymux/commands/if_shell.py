@@ -27,13 +27,13 @@ def if_shell(pymux: Pymux, args: argparse.Namespace):
     **A question for a shell is a question this answers later.** The
     client that asked waits for it and the server does not, which is
     what `run-shell` beside this says. -F asks a format, which is
-    answered here and now. Lillecarl/pymux#297, #311.
+    answered here and now. Lillecarl/pyterm#299, #313.
     """
     if args.F or args.J:
         # No program runs, so there is nothing to wait for and -b
         # changes nothing. tmux answers this one on the spot as well.
         # `-F` asks a tmux format and `-J` the same question written as
-        # a template. Lillecarl/pymux#333.
+        # a template. Lillecarl/pyterm#335.
         answer = format_pymux_string(
             pymux,
             args.shell_command,
@@ -53,7 +53,7 @@ async def _ask_the_shell(pymux: Pymux, args: argparse.Namespace) -> None:
     # would otherwise go to whatever the server's stdout is: /dev/null
     # under a daemon, and the person's own terminal in the integrated
     # route, where it draws over the frame. tmux sends
-    # it to /dev/null for the same reason. Lillecarl/pymux#312.
+    # it to /dev/null for the same reason. Lillecarl/pyterm#314.
     done = await anyio.run_process(as_a_person_runs(args.shell_command), check=False)
 
     answer = _then_run(pymux, args, done.returncode == 0)

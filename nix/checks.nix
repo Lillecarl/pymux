@@ -17,7 +17,7 @@
   # depends on, and its `test` extra. `default.nix` builds it from
   # `pyproject.toml`, so what a suite may import is what the package
   # declares, and there is no second dependency list here to fall out of
-  # step with the first. Lillecarl/pymux#319.
+  # step with the first. Lillecarl/pyterm#321.
   testEnv,
   # testEnv with the `wayland` extra, for the one suite that needs it.
   waylandTestEnv,
@@ -76,11 +76,11 @@
   noto-fonts-monochrome-emoji,
   lib,
   # The CJK glyphs DejaVu does not have, so a wide character draws as
-  # itself and not as a box. Lillecarl/pymux#548.
+  # itself and not as a box. Lillecarl/pyterm#550.
   wqy_microhei,
   perl,
   # The PipeWire that `checks.pymux-audio` plays through and records
-  # from. Null on a system without it. Lillecarl/pymux#657.
+  # from. Null on a system without it. Lillecarl/pyterm#659.
   pipewire ? null,
   wireplumber ? null,
   # paplay and parecord: most programs reach a speaker through Pulse.
@@ -89,11 +89,11 @@
   # parsing of its bytes and nothing else, and only a real terminal
   # program writes the way that measures it: a screenful at a steady
   # rate, forever. A writer in a `python -c` loop does not reproduce
-  # the fault these caught. Lillecarl/pymux#253.
+  # the fault these caught. Lillecarl/pyterm#255.
   # A real sshd, for the one suite that does not want a stand-in. The
   # `ssh://` client is tested against asyncssh on both sides
   # everywhere else, which cannot say whether openssh agrees.
-  # Lillecarl/pymux#436.
+  # Lillecarl/pyterm#438.
   openssh,
   # What lets sshd accept the sandbox's user: a passwd database in
   # front of the one whose shell is `/noshell`.
@@ -157,8 +157,8 @@ let
   # and nobody learns which test stopped. Measured while moving the
   # server to anyio: 28 minutes of a wedged run told nothing, and the
   # same hang under this told everything in 45 seconds.
-  # Lillecarl/pymux#87. pytest's own `faulthandler_timeout` dumps and
-  # does not exit, which is why the conftest arms it. Lillecarl/pymux#482.
+  # Lillecarl/pyterm#89. pytest's own `faulthandler_timeout` dumps and
+  # does not exit, which is why the conftest arms it. Lillecarl/pyterm#484.
   #
   # The slowest test of this suite takes under ten seconds.
   # `PYMUX_HANG_SECONDS` changes it for one run.
@@ -207,12 +207,12 @@ let
   # `PYMUX_OPENSSH_TESTS=narrows nix build --file . checks.pymux-openssh`.
   # Several builds at once with expressions that pick the same test,
   # `narrows or a1` and `narrows or a2`, are how a race that needs load
-  # is run under it. Lillecarl/pymux#549.
+  # is run under it. Lillecarl/pyterm#551.
   openSshTests = builtins.getEnv "PYMUX_OPENSSH_TESTS";
 
   # asyncio's debug mode for the openssh suite, which names where each
   # callback was made: `PYMUX_ASYNCIO_DEBUG=1`. An error raised from a
-  # loop callback says nothing else. Lillecarl/pymux#587.
+  # loop callback says nothing else. Lillecarl/pyterm#589.
   asyncioDebug = builtins.getEnv "PYMUX_ASYNCIO_DEBUG";
 
   # Which conformance tests run. It is a regular expression that the suite
@@ -359,7 +359,7 @@ let
   # says why an instruction count cannot answer it.
   keystrokeCallers = builtins.getEnv "PYMUX_KEYSTROKE_CALLERS";
   # How many functions each stage names, and whether to count the
-  # containers the per-key walk crosses. Lillecarl/pymux#317.
+  # containers the per-key walk crosses. Lillecarl/pyterm#319.
   keystrokeWhere = builtins.getEnv "PYMUX_KEYSTROKE_WHERE";
   keystrokeCensus = builtins.getEnv "PYMUX_KEYSTROKE_CENSUS";
 
@@ -370,7 +370,7 @@ let
   # The terminal a round trip is measured on. A round trip carries a
   # frame, and a frame costs what the screen costs.
   # `PYMUX_LATENCY_ROWS=74 PYMUX_LATENCY_COLUMNS=342 nix build --file . checks.pymux-latency.run`.
-  # Lillecarl/pymux#434.
+  # Lillecarl/pyterm#436.
   latencyRows = builtins.getEnv "PYMUX_LATENCY_ROWS";
   latencyColumns = builtins.getEnv "PYMUX_LATENCY_COLUMNS";
 
@@ -412,7 +412,7 @@ let
 
   # The same two, by exact name and comma separated. They beat the
   # substrings: three fixtures that share no substring are what a probe
-  # of the judge asks for. Lillecarl/pymux#365.
+  # of the judge asks for. Lillecarl/pyterm#367.
   chromeList = builtins.getEnv "PYMUX_CHROME_LIST";
   chromeTerminalsList = builtins.getEnv "PYMUX_CHROME_TERMINALS_LIST";
 
@@ -542,7 +542,7 @@ let
     cp -r ${testSources}/pymux ${testSources}/tests ${testSources}/examples .
     # pytest reads its settings from the root it runs in. `anyio_mode` is
     # in this file, and without it a coroutine test fails here while
-    # passing in a checkout. Lillecarl/pymux#87.
+    # passing in a checkout. Lillecarl/pyterm#89.
     cp ${testSources}/pyproject.toml .
     chmod -R +w .
     # macOS takes 104 bytes for a socket's path, and its build sandbox
@@ -578,7 +578,7 @@ let
   # The theme gallery in pieces: one derivation per terminal and per
   # batch of themes. The pairs come out of the matrix below, the site
   # gathers the runs, and a rerun rebuilds only the combos that
-  # failed. Lillecarl/pymux#284.
+  # failed. Lillecarl/pyterm#286.
   makeThemePictures =
     {
       name,
@@ -662,7 +662,7 @@ in
   # theme a terminal is nearest to is chosen out of every theme pymux
   # offers, and a run with no collection would judge that search
   # against fifty-five themes rather than four hundred.
-  # Lillecarl/pymux#346.
+  # Lillecarl/pyterm#348.
   unit =
     runInSandbox
       {
@@ -680,7 +680,7 @@ in
           PYMUX_TEST_FALLBACK = "${unifont.out}/share/fonts/opentype/unifont/unifont.otf";
           # What fontconfig finds when a picture draws with the system's
           # font, and falls back to for a glyph it lacks.
-          # Lillecarl/pymux#815.
+          # Lillecarl/pyterm#817.
           FONTCONFIG_FILE = makeFontsConf {
             fontDirectories = [
               nerd-fonts.jetbrains-mono
@@ -691,17 +691,17 @@ in
           # suite judges the lazy program a person runs.
           DEFERIMPORT_POLICY = "deny=hypothesis,asyncssh,olefile";
           # kitty's python package, whose drag and drop code judges what
-          # pymux sends a terminal. Lillecarl/pymux#892.
+          # pymux sends a terminal. Lillecarl/pyterm#894.
           PYMUX_KITTY = "${kitty}/lib/kitty";
           # The kitten that speaks kitty's file transfer to the pymux
-          # client. Lillecarl/pymux#912.
+          # client. Lillecarl/pyterm#914.
           PYMUX_KITTEN = "${kitty}/bin/kitten";
         };
       }
       # `--durations` names what the suite spends its time on, and
       # `-n` spreads it over the cores the build was given: most of a
       # test is waiting on a server, so the cores are free for the
-      # next one. Lillecarl/pymux#579.
+      # next one. Lillecarl/pyterm#581.
       # A build given every core says 0, which to xdist means none.
       #
       # `worksteal`, because most tests here take milliseconds. Under
@@ -727,12 +727,12 @@ in
 
   # The compositor a server holds for panes with no display, against real
   # wl-copy and wl-paste. The one suite with the `wayland` extra, so its
-  # python is named: `testEnv` is first on the PATH. Lillecarl/pymux#383.
+  # python is named: `testEnv` is first on the PATH. Lillecarl/pyterm#385.
   wayland =
     runInSandbox
       {
         name = "pymux-wayland";
-        # dbus-daemon, for the portal's buses. Lillecarl/pymux#812.
+        # dbus-daemon, for the portal's buses. Lillecarl/pyterm#814.
         inputs = [
           wl-clipboard
           dbus
@@ -749,7 +749,7 @@ in
   # How long the loop stalls while mpv plays in a window pane, and what
   # it ran meanwhile. Not a gate: it judges nothing, and the sandbox runs
   # beside other jobs. `PYMUX_STALL_SECONDS` sets how long mpv plays.
-  # Lillecarl/pymux#632.
+  # Lillecarl/pyterm#634.
   loopStalls =
     runInSandbox
       {
@@ -764,7 +764,7 @@ in
       '';
 
   # A real Firefox in a window pane: it paints only what changed, which
-  # the probe window does not reproduce. Lillecarl/pymux#753.
+  # the probe window does not reproduce. Lillecarl/pyterm#755.
   # `PYMUX_FIREFOX_TESTS` is a pytest `-k` expression, for instance
   # `PYMUX_FIREFOX_TESTS="still and late" nix build --file . checks.pymux-firefox`.
   firefox =
@@ -783,8 +783,8 @@ in
 
   # pymux-mcp's browsers against a real server: Chromium, qutebrowser
   # and Firefox headless as a job, and headful in a window pane.
-  # Lillecarl/pymux#822. And `pymux web`'s page in Chromium, for where
-  # a glyph lands. Lillecarl/pymux#948.
+  # Lillecarl/pyterm#824. And `pymux web`'s page in Chromium, for where
+  # a glyph lands. Lillecarl/pyterm#950.
   browsers =
     runInSandbox
       {
@@ -813,7 +813,7 @@ in
   # Sound between panes and a client, through a real PipeWire and a
   # WirePlumber the server starts. A suite of its own because it needs
   # both on the PATH, and `unit` skips it without them.
-  # Lillecarl/pymux#657.
+  # Lillecarl/pyterm#659.
   audio =
     runInSandbox
       {
@@ -835,7 +835,7 @@ in
   # `entry_points/run_pymux.py` matches on `Mode` and ends every arm with
   # `typing.assert_never`, so a member added and not handled is meant to
   # fail the build. pytest never runs a checker, so that promise was a
-  # run-time raise until now. Lillecarl/pymux#486.
+  # run-time raise until now. Lillecarl/pyterm#488.
   #
   # `pyrefly` reads its site-packages from the interpreter it is pointed
   # at, so it sees exactly the dependencies a suite runs on and not the
@@ -912,7 +912,7 @@ in
 
   # What images cost pyte and pymux, in instructions as `frame` counts.
   # pymux decodes PNG itself and nothing else, so the panorama goes from
-  # JPEG to PNG here, outside the count. Lillecarl/pymux#604.
+  # JPEG to PNG here, outside the count. Lillecarl/pyterm#606.
   images =
     runInSandbox
       {
@@ -986,7 +986,7 @@ in
   # parsing of its bytes and nothing else. cmatrix in a background
   # window pegged a core and drew five frames in five seconds while it
   # did, because `ptyhost` polled for an idle loop that never comes.
-  # Lillecarl/pymux#253.
+  # Lillecarl/pyterm#255.
   #
   # **The programs are real ones, and that is the point.** The first
   # shape of this measured a writer in a `python -c` loop and saw 7%
@@ -1093,7 +1093,7 @@ in
   # left nothing running it. It rotted: a server built outside an event
   # loop stopped working when pymux moved to anyio, and the crash sat
   # there unseen, because the one tool that would have caught it was
-  # the tool that broke. Lillecarl/pymux#360.
+  # the tool that broke. Lillecarl/pyterm#362.
   #
   # Two panes, one frame, one phase, and no animated program, so it
   # costs a second and proves the only thing it can prove.
@@ -1162,7 +1162,7 @@ in
   # It holds the shortest keystroke of the run and judges nothing else.
   # The program in the pane is another process, so under load its answer
   # can miss a poll and pay for a second redraw; that adds turns and
-  # never takes one away. Lillecarl/pymux#232.
+  # never takes one away. Lillecarl/pyterm#234.
   turns =
     runInSandbox
       {
@@ -1217,7 +1217,7 @@ in
   # How long a wheel step takes to show, down and up, with a pane beside
   # it quiet and streaming. Not a gate, for the reason the latency is
   # not. `tests/measure_scrolling.py` says what runs.
-  # Lillecarl/pymux#507, Lillecarl/pymux#512.
+  # Lillecarl/pyterm#509, Lillecarl/pyterm#514.
   scrolling =
     runInSandbox
       {
@@ -1254,7 +1254,7 @@ in
   # A suite of its own rather than part of `unit`, because it starts a
   # daemon. `PYMUX_SSHD` is an absolute path on purpose -- sshd refuses
   # to start when it was found on PATH, and the message says so only
-  # once you capture its stderr. Lillecarl/pymux#436.
+  # once you capture its stderr. Lillecarl/pyterm#438.
   openssh-interop =
     runInSandbox
       {
@@ -1301,7 +1301,7 @@ in
   # The flags are a consumer's and not ours -- ours are in
   # `pymux/web/client/tsconfig.json`. Somebody else's compiler settings on
   # our declarations is the whole of what this measures.
-  # Lillecarl/pymux#461.
+  # Lillecarl/pyterm#463.
   #
   # **And it runs the part of the element that can be run.** Importing
   # the element itself needs a browser -- it subclasses `HTMLElement` and
@@ -1309,7 +1309,7 @@ in
   # decision that is a table of cases, and `node --test` reads the
   # compiled `keys.js` out of `pymux/web/static/`. Two faults reached a
   # person through that table, the second being Control typing
-  # `C-Control`. Lillecarl/pymux#468.
+  # `C-Control`. Lillecarl/pyterm#470.
   #
   # A pattern and not a list of files, so a test added here runs without
   # anything being told about it. It is quoted because node expands it
@@ -1336,7 +1336,7 @@ in
           tests/uses_the_element.ts
       '';
 
-  # TEMPORARY scratch measurement for Lillecarl/pymux#258. Not a
+  # TEMPORARY scratch measurement for Lillecarl/pyterm#260. Not a
   # gate, judges nothing: it prints what crosses the wire, in bytes.
   # Remove it when the investigation lands or is abandoned.
   wire =
@@ -1479,7 +1479,7 @@ in
   # Unmodified TUI applications, driven step by step and shown at once
   # by a bare terminal and by pymux in one: yazi on a tree of its own,
   # and claude-code against aimock. `tests/photograph_scenarios.py` is
-  # the harness. Not a gate. Lillecarl/pymux#593.
+  # the harness. Not a gate. Lillecarl/pyterm#595.
   scenarios =
     runInSandbox
       {
@@ -1511,11 +1511,11 @@ in
   # input device, so nothing could press a key to open any of it.
   # `tests/drive_in_terminal.py` is the way round, and
   # `tests/photograph_chrome.py` is the harness around it.
-  # Lillecarl/pymux#161.
+  # Lillecarl/pyterm#163.
   #
   # Every view a server holds, photographed in a real terminal before
   # and after `upgrade-server`, and judged: each pair has to be the same
-  # pixels. `tests/photograph_upgrade.py`. Lillecarl/pymux#408.
+  # pixels. `tests/photograph_upgrade.py`. Lillecarl/pyterm#410.
   upgradePictures =
     runInSandbox
       {
@@ -1541,7 +1541,7 @@ in
 
   # What each real terminal holds while a client is attached and after
   # it detaches, asked with DECRQM: `tests/ask_the_terminal.py`.
-  # `PYMUX_STATE_TERMINALS=kitty` narrows it to one. Lillecarl/pymux#800.
+  # `PYMUX_STATE_TERMINALS=kitty` narrows it to one. Lillecarl/pyterm#802.
   terminalState =
     runInSandbox
       {
@@ -1596,7 +1596,7 @@ in
   # A Wayland window in a pane, photographed in every terminal: kitty
   # shows the window's pixels, the rest a notice. The one picture that
   # needs the `wayland` extra, so its python goes first on the PATH.
-  # Not a gate. Lillecarl/pymux#620.
+  # Not a gate. Lillecarl/pyterm#622.
   #
   #     nix build --file . checks.pymux-window-pane-pictures.run
   #
@@ -1633,8 +1633,8 @@ in
   # picture is the chrome coloured by its theme, and a theme that left
   # the chrome hardcoded would show in every one of them. The chrome
   # check used to photograph the two hand themes beside these; the
-  # second copy went, drift and all. Lillecarl/pymux#194,
-  # Lillecarl/pymux#195, Lillecarl/pymux#278.
+  # second copy went, drift and all. Lillecarl/pyterm#196,
+  # Lillecarl/pyterm#197, Lillecarl/pyterm#280.
   themePictures =
     runInSandbox
       {

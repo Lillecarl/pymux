@@ -6,7 +6,7 @@ facts: the TERM and whether a terminfo entry answers it, the locale,
 the socket and whether a server is listening, and whether the outer
 terminal answers a query at all. Today they are gathered by hand.
 This module gathers them once, so a person pastes one output.
-Lillecarl/pymux#391.
+Lillecarl/pyterm#393.
 
 **Everything here is read-only.** The farthest this goes into a server
 is a `list-sessions`, which is what a detached command does anyway.
@@ -15,7 +15,7 @@ is a `list-sessions`, which is what a detached command does anyway.
 module on a mode word, and a detached command must not pay for a
 toolkit it never draws with -- the same rule
 `tests/test_entry_imports.py` holds for the entry itself.
-Lillecarl/pymux#392.
+Lillecarl/pyterm#394.
 """
 
 from __future__ import annotations
@@ -119,7 +119,7 @@ def _socket_report(socket_name: str | None) -> dict[str, Any]:
     # The import rides here and not at the top of the module: the
     # client package is the detachable part of the entry, and a
     # diagnose that never reaches a server pays nothing for it.
-    # Lillecarl/pymux#392.
+    # Lillecarl/pyterm#394.
     from pymux.client import command_client
     from pymux.client.command import CommandClient
 

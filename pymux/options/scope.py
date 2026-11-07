@@ -1,6 +1,6 @@
 """
 Start the server in a systemd scope of its own, apart from the login
-that started it. Lillecarl/pymux#736.
+that started it. Lillecarl/pyterm#738.
 
 A daemonised server leaves its process group and session, and stays in
 the cgroup of the ssh login that started it. Where logind kills a

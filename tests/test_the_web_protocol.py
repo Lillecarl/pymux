@@ -8,7 +8,7 @@ wants five a second; sending the screen is the thing being avoided.
 `pymux.web.protocol` does no I/O and holds no socket, so none of this
 needs a server, a websocket or a pty. That is the reason the protocol is
 a module of its own: the transport carries frames and decides nothing,
-and it is the deciding that is worth testing. Lillecarl/pymux#461.
+and it is the deciding that is worth testing. Lillecarl/pyterm#463.
 """
 
 from __future__ import annotations
@@ -140,7 +140,7 @@ def test_two_viewers_of_one_pane_share_nothing():
     """
     One pane has several viewers and no reader may empty a set another
     one reads, which is why the state is the viewer's.
-    Lillecarl/pymux#126.
+    Lillecarl/pyterm#128.
     """
     screen = a_screen()
     feed(screen, "hello")
@@ -169,7 +169,7 @@ def test_a_spelling_is_sent_once_and_numbered():
     entry = frame["styles"][str(numbers[0])]
 
     # A class of the stylesheet the client already has, and not the
-    # declaration again. Lillecarl/pymux#460.
+    # declaration again. Lillecarl/pyterm#462.
     assert "pyte-bold" in entry["c"]
     assert "s" not in entry
     assert numbers[0] != PLAIN_STYLE
@@ -368,7 +368,7 @@ def test_a_cursor_off_the_screen_says_so():
 
 
 # ----------------------------------------------------------------------
-# Images. Lillecarl/pymux#480.
+# Images. Lillecarl/pyterm#482.
 
 #: Two by two RGBA pixels, every one different.
 PIXELS = bytes(range(16))
@@ -527,7 +527,7 @@ def test_empty_composed_text_is_allowed():
 
 
 def test_a_mouse_message_is_what_the_mouse_did_at_a_cell():
-    "Lillecarl/pymux#950."
+    "Lillecarl/pyterm#952."
     assert mouse_of(
         {
             "type": "mouse",

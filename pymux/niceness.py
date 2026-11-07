@@ -14,7 +14,7 @@ server of anybody else.
 
 A program a person runs takes none of it: `ptyhost.spawn.at_normal_priority`
 runs before every exec of a pane, and `as_a_person_runs` wraps every
-other start. Lillecarl/pymux#673.
+other start. Lillecarl/pyterm#675.
 
 **Light imports.** The server imports `as_a_person_runs`; the command
 imports psutil when it runs.

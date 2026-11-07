@@ -1,7 +1,7 @@
 """
 A browser a program on the server drives, on the client's machine: the
 server's half. The client is the test, which answers the `browser`
-packet itself. Lillecarl/pymux#653.
+packet itself. Lillecarl/pyterm#655.
 """
 
 from __future__ import annotations
@@ -70,7 +70,7 @@ async def test_a_no_refuses_the_launch_at_once():
 
 
 async def test_a_program_cannot_answer_the_question_itself():
-    "Only a person's yes counts, as with `open-url -c`. Lillecarl/pymux#443."
+    "Only a person's yes counts, as with `open-url -c`. Lillecarl/pyterm#445."
     async with over_connection() as session:
         state, _got, launch = await asked(session, [])
         answered = await session.command("launch-browser -c %s" % (launch,))

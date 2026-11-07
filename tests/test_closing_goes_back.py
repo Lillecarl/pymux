@@ -1,7 +1,7 @@
 """
 Closing the window or the pane a client is on returns it to the newest
 one it left that is still open, as tmux does (`session_last`), and not
-to the next index. Lillecarl/pymux#658.
+to the next index. Lillecarl/pyterm#660.
 """
 
 from __future__ import annotations

@@ -6,14 +6,14 @@ SSH is the one that makes that worth something: the panes run on the
 other machine and they survive a link that drops, so a drop should cost
 a pause here and not the whole client. This holds the three parts of
 that pause -- how long to wait, which failures are worth waiting for,
-and what the person looks at meanwhile. Lillecarl/pymux#256.
+and what the person looks at meanwhile. Lillecarl/pyterm#258.
 
 **The unix socket does not retry.** There the server is on this
 machine and its socket is gone with it, so a link that ends is a server
 that ended. A client that waits for that one to come back waits for
 ever. The one exception is a server that said it is restarting: the
 client then waits a bounded time for the next one, and `draw` shows
-it. Lillecarl/pymux#409.
+it. Lillecarl/pyterm#411.
 """
 
 from __future__ import annotations

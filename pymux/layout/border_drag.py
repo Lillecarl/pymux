@@ -1,6 +1,6 @@
 """
 Resize panes by dragging the line between them, as tmux does with
-`mouse on`. Lillecarl/pymux#772.
+`mouse on`. Lillecarl/pyterm#774.
 
 **The drag owns the mouse from the press to the release.** One cell
 off the line the pointer is over a pane, and a pane that has the mouse
@@ -137,7 +137,7 @@ def _tell_the_owner(pymux: Pymux, client_state: ClientState, drag: BorderDrag) -
     resize it is: the child before the line grows by the cells the line
     moved, which `resize-pane -R` or `-D` on a pane inside it does. The
     weights set here show the drag until that tree comes with the same
-    ones. Lillecarl/pymux#871.
+    ones. Lillecarl/pyterm#873.
     """
     session = pymux.session_of_window(drag.window)
     if session is None or session.remote is None or drag.in_strip or not drag.moved:

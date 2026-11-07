@@ -1,7 +1,7 @@
 """
 The desktop portal a server serves the programs in window panes, on a
 real dbus-daemon, read back by a real D-Bus client. `checks.pymux-wayland`
-runs this and `checks.pymux-unit` skips it. Lillecarl/pymux#812.
+runs this and `checks.pymux-unit` skips it. Lillecarl/pyterm#814.
 
 `test_color_scheme.py` judges which scheme the server decides on.
 """

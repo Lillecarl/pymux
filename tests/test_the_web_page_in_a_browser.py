@@ -102,7 +102,7 @@ async def test_a_glyph_of_another_width_moves_nothing_after_it(server):
     """
     A glyph whose advance is not a cell's -- a fallback font's, here every
     glyph of a proportional one -- left the border between two panes
-    leaning. Each run is now its cells wide. Lillecarl/pymux#948.
+    leaning. Each run is now its cells wide. Lillecarl/pyterm#950.
     """
     async with a_page(server, "printf 'iiiiiiiiii\\342\\224\\202x'; sleep 60"):
         with anyio.fail_after(20):
@@ -145,7 +145,7 @@ TWO_STREAMS = """
 async def test_a_new_stream_draws_with_its_own_style_table(server):
     """
     A reconnect, after an upgrade or a dropped network, numbers the
-    styles from one again. Lillecarl/pymux#953.
+    styles from one again. Lillecarl/pyterm#955.
     """
     async with a_page(server, "sleep 60"):
         with anyio.fail_after(20):
@@ -158,7 +158,7 @@ async def test_a_new_stream_draws_with_its_own_style_table(server):
 
 
 async def test_the_button_fills_the_screen_with_the_pane(server):
-    "Lillecarl/pymux#951."
+    "Lillecarl/pyterm#953."
     async with a_page(server, "sleep 60"):
         with anyio.fail_after(20):
             while not await call(
@@ -303,7 +303,7 @@ async def test_the_escape_button_aborts_and_leaves_the_keys_on_the_terminal(serv
 
 
 async def test_a_session_view_keeps_its_client_options_over_a_reload(server):
-    "Each stream is a new client; the page names what was set on the last. Lillecarl/pymux#957."
+    "Each stream is a new client; the page names what was set on the last. Lillecarl/pyterm#959."
 
     async def names() -> list[str]:
         listed = await server.cmd(["list-clients", "-F", "#{client_name}"])
@@ -342,7 +342,7 @@ async def test_a_click_on_the_page_reaches_a_program_that_asked_for_the_mouse(se
     """
     The whole way: Chromium's click, the element's cell, the server's
     report. The tty echoes the report, so the pane shows it.
-    Lillecarl/pymux#950.
+    Lillecarl/pyterm#952.
     """
     async with a_page(server, "printf '\\033[?1000h\\033[?1006hready'; cat", writable=True) as pane:
         with anyio.fail_after(20):

@@ -6,7 +6,7 @@ into the object to write on: the server, the active window, or the
 client a command means. Three option classes once wrote to the server
 whatever their scope said, so a client option's value went to the server
 while `show-client-options` read it back off the client.
-Lillecarl/pymux#348.
+Lillecarl/pyterm#350.
 
 This judges `FieldOption`, which every scope's options go through. Which
 options exist is each scope's dataclass; what a scope does is here.

@@ -3,7 +3,7 @@ A grapheme cluster fitted to a terminal wcwidth has no table for.
 
 The terminal answers `CLUSTER_WIDTH_PROBE` with where the cursor went
 after each cluster, and the frames after are fitted to the answers.
-Lillecarl/pymux#801.
+Lillecarl/pyterm#803.
 """
 
 from __future__ import annotations

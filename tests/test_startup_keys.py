@@ -7,7 +7,7 @@ mapping table does not know is dropped, and a command name with a typo
 in it fails only when somebody presses the key.
 
 The strip's three commands added five lines to that file and made both
-worth testing. Lillecarl/pymux#212.
+worth testing. Lillecarl/pyterm#214.
 """
 
 from __future__ import annotations
@@ -80,7 +80,7 @@ def test_a_mode_binds_its_own_keys_beside_the_prefix_table():
     """
     The same key is two bindings when the tables differ: `h` follows
     the prefix as one thing and answers in pane-management as
-    another. Lillecarl/pymux#395.
+    another. Lillecarl/pyterm#397.
     """
     tables = {(table, key) for table, key, _ in bindings()}
 
@@ -110,7 +110,7 @@ def test_braces_are_still_tmux_s_own():
     """
     niri moves a window between columns on the two bracket keys, and
     those are `swap-pane` here. tmux's keys stay tmux's, so the strip
-    took `<` and `>`. Lillecarl/pymux#212.
+    took `<` and `>`. Lillecarl/pyterm#214.
     """
     assert ("prefix", "{", "swap-pane") in bindings()
     assert ("prefix", "}", "swap-pane") in bindings()

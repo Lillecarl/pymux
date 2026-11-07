@@ -5,7 +5,7 @@ A session has no window before the first one is made and after the
 last one goes, and a client can be attached through either moment.
 The status line formatted `status-left` against the active window and
 raised "No active window to format for", so the client's last frame
-crashed the application as it detached. Lillecarl/pymux#581.
+crashed the application as it detached. Lillecarl/pyterm#583.
 """
 
 from __future__ import annotations

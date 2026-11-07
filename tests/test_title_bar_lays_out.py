@@ -7,7 +7,7 @@ returns as one string, because that is what a person sees.
 
 The picture check is what says whether it reads as one bar. This says
 whether the cells are where they were meant to be.
-Lillecarl/pymux#207.
+Lillecarl/pyterm#209.
 """
 
 from __future__ import annotations

@@ -1,6 +1,6 @@
 """
 A browser a program on the server drives: the client's half, against a
-stand-in browser that answers the way Chrome does. Lillecarl/pymux#653.
+stand-in browser that answers the way Chrome does. Lillecarl/pyterm#655.
 """
 
 from __future__ import annotations
@@ -103,7 +103,7 @@ async def test_the_client_with_a_loop_starts_one_too(fake, tmp_path):
 
 
 def test_a_mac_app_starts_through_open_as_its_own_app(tmp_path, monkeypatch):
-    "Firefox started as a child of the client could not find its profile. Lillecarl/pymux#653."
+    "Firefox started as a child of the client could not find its profile. Lillecarl/pyterm#655."
     monkeypatch.setattr(sys, "platform", "darwin")
     program = "/Applications/Firefox.app/Contents/MacOS/firefox"
     monkeypatch.setattr(browser, "program_of", lambda _asked: program)

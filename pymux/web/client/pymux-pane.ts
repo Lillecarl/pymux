@@ -3,7 +3,7 @@
  *
  * This is the example client, and it is meant to be read as well as run:
  * it is the only complete account of what a frame holds. The protocol is
- * Lillecarl/pymux#461, and `pymux/web/protocol.py` is the other half.
+ * Lillecarl/pyterm#463, and `pymux/web/protocol.py` is the other half.
  *
  * **The types here are the published ones.** `tsc` emits
  * `pymux-pane.js` and `pymux-pane.d.ts` from this file, so what a
@@ -56,7 +56,7 @@ export interface StyleEntry {
    * Most of a rendition carries no value -- bold, the lines, the
    * underline shapes, the themed colours -- so the server names a rule
    * it already serves rather than sending the declarations again.
-   * Lillecarl/pymux#460.
+   * Lillecarl/pyterm#462.
    */
   c?: string;
   /** The `href` of a link the program opened, already allowlisted. */
@@ -92,7 +92,7 @@ export interface Welcome {
 
 /**
  * The client options a person set on a session view's client, each time
- * they change, as `set-option` takes them back. Lillecarl/pymux#957.
+ * they change, as `set-option` takes them back. Lillecarl/pyterm#959.
  */
 export interface ClientOptions {
   type: "client-options";
@@ -122,7 +122,7 @@ export interface Frame {
   palette?: string;
   /**
    * Images this stream has not sent before, by number: a PNG, in base64.
-   * Lillecarl/pymux#480.
+   * Lillecarl/pyterm#482.
    */
   images?: Record<string, string>;
   /**
@@ -169,7 +169,7 @@ export interface PasteMessage {
 /**
  * How many cells the element holds. Only `/session` reads it: a pane has
  * a size of its own, and a client's size is its terminal's.
- * Lillecarl/pymux#481.
+ * Lillecarl/pyterm#483.
  */
 export interface SizeMessage {
   type: "size";
@@ -180,7 +180,7 @@ export interface SizeMessage {
 /**
  * What the mouse did at a cell of the screen, counted from zero. The
  * server spells it the way the program, or the pymux client, asked for:
- * a viewer never sends a mouse report's bytes. Lillecarl/pymux#950.
+ * a viewer never sends a mouse report's bytes. Lillecarl/pyterm#952.
  */
 export interface MouseMessage {
   type: "mouse";
@@ -308,7 +308,7 @@ const OWN_RULES = `
    from a fallback font, wider or narrower than a cell, moves nothing
    after it. In flowing text one bent the border between two panes.
    The height holds the row too: a taller fallback glyph no longer
-   grows it. Lillecarl/pymux#948. */
+   grows it. Lillecarl/pyterm#950. */
 .row > * {
   display: inline-block;
   vertical-align: top;
@@ -347,7 +347,7 @@ export interface PymuxPane {
   ): void;
   /**
    * A stream this element opened, which once worked, closed and opens
-   * again. Fires after `closed`. Lillecarl/pymux#492.
+   * again. Fires after `closed`. Lillecarl/pyterm#494.
    */
   addEventListener(
     type: "reconnecting",
@@ -357,7 +357,7 @@ export interface PymuxPane {
   /**
    * The client options set on a session view's client changed. The
    * element names them when it connects again; a page that keeps
-   * `detail` names them in the next `src` it sets. Lillecarl/pymux#957.
+   * `detail` names them in the next `src` it sets. Lillecarl/pyterm#959.
    */
   addEventListener(
     type: "client-options",
@@ -691,7 +691,7 @@ export class PymuxPane extends HTMLElement {
    * Ctrl-N -- and the Keyboard Lock API hands them to the page, which
    * Chromium honours only in full screen. Firefox and Safari have no
    * Keyboard Lock, so there full screen is the whole gain. Holding Escape
-   * still leaves. Lillecarl/pymux#951.
+   * still leaves. Lillecarl/pyterm#953.
    */
   async fullscreen(): Promise<void> {
     if (document.fullscreenElement !== this) await this.requestFullscreen();
@@ -815,7 +815,7 @@ export class PymuxPane extends HTMLElement {
    *
    * A replay has no socket: its messages come out of a file at the times
    * they were recorded, and this is where a player hands each one over.
-   * Lillecarl/pymux#610.
+   * Lillecarl/pyterm#612.
    */
   receive(frame: Welcome | Frame): void {
     if (frame.type === "welcome") {
@@ -825,7 +825,7 @@ export class PymuxPane extends HTMLElement {
       // **A new stream numbers its styles from one again.** A table kept
       // from the last stream gave each number its old meaning: after a
       // reconnect, bold drew on a background and the status line in the
-      // theme before the last. Lillecarl/pymux#953.
+      // theme before the last. Lillecarl/pyterm#955.
       this.#styles.clear();
       this.#styleSheet.replaceSync("");
       this.#cellWidths.clear();

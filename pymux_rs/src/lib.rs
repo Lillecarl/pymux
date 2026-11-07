@@ -4,7 +4,7 @@
 //! released, so a worker
 //! thread encodes beside the event loop. pymux's `kernels.install()` puts
 //! them in place; this package imports nothing of pymux, which depends on
-//! it. Lillecarl/pymux#574.
+//! it. Lillecarl/pyterm#576.
 
 mod rsync;
 mod vp9;

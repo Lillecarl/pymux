@@ -11,7 +11,7 @@ The session would belong to two terminals while one of them holds the
 process: `ctrl+b d` in that one ends the session for both, whatever the
 person meant. So a connection that arrives over the socket of such a
 server may run commands and may not attach, and `ctrl+b d` means quit
-with nothing to argue about. Lillecarl/pymux#159.
+with nothing to argue about. Lillecarl/pyterm#161.
 """
 
 from __future__ import annotations
@@ -78,7 +78,7 @@ async def test_a_refused_client_is_told_what_to_leave_with():
     """
     A refusal is not a detach. Both end with the server closing the
     connection, so the code is the only thing that tells a script which
-    of the two happened. Lillecarl/pymux#332.
+    of the two happened. Lillecarl/pyterm#334.
     """
     pymux = _server()
 

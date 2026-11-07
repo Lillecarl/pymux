@@ -2,7 +2,7 @@
 The parts of sound that need no PipeWire: the jitter buffer, the round
 trip, which mode a server runs, and which client hears it.
 `tests/test_audio.py` runs them against a real PipeWire.
-Lillecarl/pymux#657.
+Lillecarl/pyterm#659.
 """
 
 from __future__ import annotations
@@ -516,7 +516,7 @@ def test_a_speaker_that_ran_dry_reports_only_a_gap(monkeypatch, comes_back_after
 
 
 def test_an_open_microphone_takes_a_new_bitrate():
-    "The server says a bitrate, and the next frame encodes at it. Lillecarl/pymux#674."
+    "The server says a bitrate, and the next frame encodes at it. Lillecarl/pyterm#676."
     pytest.importorskip("opuslib")
     from pymux.client import audio as client_audio
 

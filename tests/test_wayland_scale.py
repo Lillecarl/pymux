@@ -1,6 +1,6 @@
 """
 `wayland-scale`: how dense a Wayland window in a pane draws.
-Lillecarl/pymux#637.
+Lillecarl/pyterm#639.
 """
 
 from __future__ import annotations

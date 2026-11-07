@@ -4,7 +4,7 @@
 The flag rides on the `start-gui` packet, which is where the server
 reads it. **The session, and not the server**: tmux's rule is one
 line, and `detach-client -a` is the gesture for every client there is.
-Lillecarl/pymux#344, Lillecarl/pymux#345.
+Lillecarl/pyterm#346, Lillecarl/pyterm#347.
 """
 
 from __future__ import annotations
@@ -74,7 +74,7 @@ async def _attach(pymux: Pymux, detach_others: bool = False) -> ServerConnection
     server_end, client_end = connect_in_memory()
 
     # A context of its own, which is what both real transports do.
-    # Lillecarl/pymux#230.
+    # Lillecarl/pyterm#232.
     context = contextvars.copy_context()
     connection = context.run(lambda: ServerConnection(pymux, server_end))
     pymux.connections.append(connection)
@@ -138,7 +138,7 @@ async def test_it_reaches_this_session_and_no_other():
     tmux detaches the clients of the session being attached to and
     nobody else: `if (c_loop->session != s || c == c_loop) continue;`
     (`cmd-attach-session.c:127`). `detach-client -a` is the gesture for
-    the whole server. Lillecarl/pymux#345.
+    the whole server. Lillecarl/pyterm#347.
 
     **The rule, not the roles.** A client with no session named lands
     on the one a person looked at last, so which of these two is taken
@@ -188,7 +188,7 @@ async def test_the_command_detaches_the_others(monkeypatch):
     the wrong client: `Pymux.detach_client` takes an app and then
     ignores it, reading `get_app()` instead. So the loop detached the
     client that ran the command, once for each of the others, and left
-    every one of them attached. Lillecarl/pymux#347.
+    every one of them attached. Lillecarl/pyterm#349.
     """
     async with a_server() as pymux:
         here = await _a_session_with_a_window(pymux, "here")
@@ -231,7 +231,7 @@ async def test_a_command_that_is_running_is_not_a_client():
     `pymux.connections` holds every connection and not every client. A
     connection that arrived to run a command was closed mid-answer, so
     somebody's `list-sessions` died and read as a server that went
-    away. Lillecarl/pymux#345.
+    away. Lillecarl/pyterm#347.
     """
     async with a_server() as pymux:
         asking = _running_a_command(pymux)

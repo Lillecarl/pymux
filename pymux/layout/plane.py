@@ -1,7 +1,7 @@
 """
 The plane: one place that answers "where is every pane".
 
-`docs/layout-engine-plan.md` holds the design and Lillecarl/pymux#217
+`docs/layout-engine-plan.md` holds the design and Lillecarl/pyterm#219
 holds the argument for it. The short form: four places decide geometry
 today, and the clearest symptom is that "which pane is beside this
 one" has two answers, one read off the last frame and one walked out
@@ -50,7 +50,7 @@ all work on one plane at a time.
 
 A floating *window* -- a pane a person parks somewhere and leaves
 there -- is therefore not a second list beside `rects`. It is a slot
-on a higher plane. Lillecarl/pymux#228.
+on a higher plane. Lillecarl/pyterm#230.
 
 **What is not here.** No layout: a plan arrives already laid out, and
 the classes that lay one out (`Strip`, `Divided`, `Masonry`) come in
@@ -136,7 +136,7 @@ class Seam:
 
     **Equal by the split's identity**, not its contents: a plan is
     compared with the last one on every frame, and a split is a list
-    of everything under it. Lillecarl/pymux#772.
+    of everything under it. Lillecarl/pyterm#774.
     """
 
     __slots__ = ("index", "sideways", "split")
@@ -149,7 +149,7 @@ class Seam:
 
     @property
     def pointer_shape(self) -> str:
-        "The OSC 22 shape of a pointer over the line. Lillecarl/pymux#819."
+        "The OSC 22 shape of a pointer over the line. Lillecarl/pyterm#821."
         return COLUMN_RESIZE if self.sideways else ROW_RESIZE
 
     def __eq__(self, other: object) -> bool:
@@ -229,7 +229,7 @@ class View:
         Whether any cell of that rectangle is in this view.
 
         This is what says a pane is worth drawing, and later what says
-        a client is worth waking. Lillecarl/pymux#224.
+        a client is worth waking. Lillecarl/pyterm#226.
         """
         return self.rect.overlaps(rect)
 
@@ -241,7 +241,7 @@ class View:
         **A cut pane is the one case where what a person sees is not
         what the program wrote**, and the cells give nothing away: a
         pane whose program wrote nothing past the cut looks exactly
-        like a pane that ends there. Lillecarl/pymux#222.
+        like a pane that ends there. Lillecarl/pyterm#224.
         """
         return self.shows(rect) and not self.rect.encloses(rect)
 
@@ -256,13 +256,13 @@ class View:
         **A rectangle already wholly inside the view moves nothing.**
         That is what makes walking to a pane and back a round trip,
         rather than dragging the view a little every time the focus
-        lands somewhere it can already see. Lillecarl/pymux#207.
+        lands somewhere it can already see. Lillecarl/pyterm#209.
 
         **A rectangle too big to show whole shows its start.** Carl:
         "left should generally be preferred for terminals since that's
         where ~100% of applications begin writing text, it's even
         likely that a missing right column doesn't miss anything."
-        Lillecarl/pymux#218. The same rule holds down the page, for
+        Lillecarl/pyterm#220. The same rule holds down the page, for
         the same reason.
 
         Every layout shares this. A tiling measured to fit its view
@@ -531,7 +531,7 @@ class Plan:
     priority is". The key is the plane's number, a higher one draws
     over a lower one, and `GROUND` is where every layout writes today.
     A floating window is therefore a slot on a higher plane and not a
-    second list beside the panes. Lillecarl/pymux#228.
+    second list beside the panes. Lillecarl/pyterm#230.
 
     **These numbers are not prompt_toolkit's `Z_INDEX`.** A plan
     stacks what the *window* owns. The chrome around it -- the status
@@ -540,7 +540,7 @@ class Plan:
 
     **The numbers are derived, not held, and focus never changes one.**
     Carl decided this before anything builds a float
-    (Lillecarl/pymux#357). A window keeps its floats in an order, and
+    (Lillecarl/pyterm#359). A window keeps its floats in an order, and
     `measure()` numbers the planes from that order on every frame:
     `GROUND` for the tiled tree, then 1, 2, 3 for the floats, bottom to
     top. A float is appended when it opens, moved to the end when it is
@@ -591,7 +591,7 @@ class Plan:
         #: *panes* are and not where the plane ends.
         if len(planes) == 1:
             # One plane is every plan anything builds today, and a
-            # plan is measured on every frame (Lillecarl/pymux#336).
+            # plan is measured on every frame (Lillecarl/pyterm#338).
             # So the flat view *is* that plane's dictionary and its box
             # is the plan's box. Neither is ever written to.
             self.rects: dict[Slot, Rect] = planes[0].rects
@@ -650,7 +650,7 @@ class Plan:
         **Topmost, because this is what a person points at.** A higher
         plane draws over a lower one, so the slot a person can see at a
         cell is the one on the highest plane that covers it. A float
-        nobody can click is not a float. Lillecarl/pymux#356.
+        nobody can click is not a float. Lillecarl/pyterm#358.
 
         `Layer.at` is the other reading and stays exact: it answers
         within one plane, which is what every geometry service needs --
@@ -697,11 +697,11 @@ class Plan:
 
         **On that slot's own plane.** Across two planes the question
         has no answer: they may overlap, so "beyond this edge" stops
-        being a place. Lillecarl/pymux#228.
+        being a place. Lillecarl/pyterm#230.
 
         **Kept, because a plan is a value.** Every title bar asks three
         sides of its pane on every frame, and a plan that `same_as`
-        the last one is kept across frames. Lillecarl/pymux#578.
+        the last one is kept across frames. Lillecarl/pyterm#580.
         """
         # `get` and not `try`: a fresh plan misses every time, and a
         # raised KeyError costs more than the lookup it guards.
@@ -755,7 +755,7 @@ class Plan:
         pane that neither of them hides alone.
 
         Nothing draws from this yet: `PlanContainer` still walks
-        `rects`. Lillecarl/pymux#355.
+        `rects`. Lillecarl/pyterm#357.
         """
         over: list[Rect] = []
         kept: list[dict[Slot, Rect]] = []

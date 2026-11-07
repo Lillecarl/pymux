@@ -6,7 +6,7 @@ client's rate once each `status-interval`, and each read keeps a
 sample. The rate is the bytes since the newest sample at least
 `RATE_WINDOW` old, over the seconds since it: a client that went quiet
 reads zero a window later, never a falling average over its uptime.
-A count that nobody reads costs nothing. Lillecarl/pymux#678.
+A count that nobody reads costs nothing. Lillecarl/pyterm#680.
 
 A rate in a status line moves, so the line redraws each tick on an
 idle client, and the bytes of that frame are in the next rate. That is
@@ -40,7 +40,7 @@ class Rate:
         self._samples: deque[tuple[float, int]] = deque()
         #: What `read_now` takes the time from. A test sets its own, so
         #: a rate it checks does not depend on how fast the machine is.
-        #: Lillecarl/pymux#844.
+        #: Lillecarl/pyterm#846.
         self.clock: Callable[[], float] = time.monotonic
 
     def read_now(self, total: int) -> float:

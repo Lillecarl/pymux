@@ -19,7 +19,7 @@ packets stay plain msgpack -- keystrokes, too small for zstd to win on.
 msgpack because measured on what a client is sent -- a busy text pane
 and a video in a window pane -- it costs a twenty-sixth of json across
 encode and decode, and text is 23% smaller with no `\\u001b` for every
-escape. Lillecarl/pymux#633.
+escape. Lillecarl/pyterm#635.
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ __all__ = [
 MSGPACK = "msgpack"
 #: msgpack frames inside one zstd stream, flushed at every packet. For a
 #: link that crosses a network: it makes text 6.5x smaller at 570 MB/s,
-#: and on a local socket it would only cost the CPU. Lillecarl/pymux#633.
+#: and on a local socket it would only cost the CPU. Lillecarl/pyterm#635.
 MSGPACK_ZSTD = "msgpack+zstd"
 FORMATS = (MSGPACK_ZSTD, MSGPACK)
 
@@ -55,7 +55,7 @@ FORMATS = (MSGPACK_ZSTD, MSGPACK)
 _LENGTH = 4
 
 #: zstd's fastest level: 15% of the wire for text, against 14% at
-#: level 3, and twice the speed on video. Measured in #633.
+#: level 3, and twice the speed on video. Measured in #635.
 _LEVEL = 1
 
 

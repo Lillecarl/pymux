@@ -45,7 +45,7 @@ class MemoryConnection(PipeConnection):
     this is a memory object stream: the end that goes away closes the
     stream of its peer, and the peer's next read says so rather than
     waiting for a packet that a sentinel value has to stand in for.
-    Lillecarl/pymux#87.
+    Lillecarl/pyterm#89.
     """
 
     def __init__(self) -> None:
@@ -56,7 +56,7 @@ class MemoryConnection(PipeConnection):
         self._ready: list[Message] = []
         #: The bytes the client on this end holds for its terminal, which
         #: has not taken them yet. `MemoryClient` sets it.
-        #: Lillecarl/pymux#585.
+        #: Lillecarl/pyterm#587.
         self.held_for_terminal: Callable[[], int] = lambda: 0
         self.bytes_out = 0
         self.bytes_in = 0

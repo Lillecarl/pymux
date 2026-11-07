@@ -50,7 +50,7 @@ async def record_export(pymux: Pymux, args: argparse.Namespace) -> None:
     player knows nothing of images or of pymux's other extensions.
 
     `-i` is the longest pause a player shows, and replaces the one the
-    recording was made with. Lillecarl/pymux#610.
+    recording was made with. Lillecarl/pyterm#612.
     """
     session_file = the_session_file(args.name)
     if not session_file.exists():

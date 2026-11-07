@@ -24,7 +24,7 @@ def set_hook(pymux: Pymux, args: argparse.Namespace) -> None:
     A hook holds the commands it was given, in order; -u forgets the
     hook and everything it was given. -g is accepted for tmux and
     changes nothing: there is one session per server, so every scope
-    is the global one. Lillecarl/pymux#297.
+    is the global one. Lillecarl/pyterm#299.
     """
     if args.u:
         pymux.hooks.forget(args.hook)

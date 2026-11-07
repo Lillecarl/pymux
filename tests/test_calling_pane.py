@@ -96,7 +96,7 @@ async def test_the_commands_with_no_target_reach_the_calling_pane():
     """
     Each of these read the active pane itself, so an agent's
     `rename-pane` renamed the pane a person had focused.
-    Lillecarl/pymux#506.
+    Lillecarl/pyterm#508.
     """
     async with two_panes() as (pymux, state, session, caller, active):
         with set_app(state.app), calling_as(pymux, session, caller_pane_id=caller.pane_id):
@@ -132,7 +132,7 @@ async def test_a_command_from_nowhere_says_what_it_acts_on():
     """
     No target and no pane behind it, or one that has gone: the command
     still acts on what a person used last, as tmux does, and says which
-    on stderr. It still succeeds. Lillecarl/pymux#506.
+    on stderr. It still succeeds. Lillecarl/pyterm#508.
     """
     async with over_connection() as session:
         pymux = session.pymux

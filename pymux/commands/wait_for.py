@@ -20,10 +20,10 @@ function can only wait on the server's own event loop -- and the client
 that would signal the channel is answered by that same loop. The
 canonical pair (`wait-for done` in one pane, `wait-for -S done` in
 another) would deadlock, which is why this handler answers with a
-coroutine the caller awaits. Lillecarl/pymux#302.
+coroutine the caller awaits. Lillecarl/pyterm#304.
 
 A handler may answer later now, so the waiting is one task and the
-server keeps serving. Lillecarl/pymux#87.
+server keeps serving. Lillecarl/pyterm#89.
 """
 
 from __future__ import annotations

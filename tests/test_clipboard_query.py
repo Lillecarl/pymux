@@ -1,5 +1,5 @@
 """
-Reading a client's clipboard with an OSC 52 query. Lillecarl/pymux#383.
+Reading a client's clipboard with an OSC 52 query. Lillecarl/pyterm#385.
 
 The answer is cut out of the client's input before the key parser sees
 it, because that parser caps a string reply at a kilobyte: a longer
@@ -43,7 +43,7 @@ async def test_an_empty_clipboard_answers_at_once_with_nothing():
     'ESC ] 52 ; c ; BEL' is an answer: no wait, and the terminal is asked
     again. A read that waited out `CLIPBOARD_READ_SECONDS` sets `answers`
     to False, so the last line says it did not wait, with no deadline
-    that a loaded machine can miss. Lillecarl/pymux#907.
+    that a loaded machine can miss. Lillecarl/pyterm#909.
     """
     terminal = ClipboardTerminal()
     async with attached(terminal) as state:

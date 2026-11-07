@@ -1,7 +1,7 @@
 /**
  * When `<pymux-pane>` opens a closed stream again. Reads the compiled
  * `retry.js` out of `pymux/web/static/`, as `keys.test.mjs` does.
- * Lillecarl/pymux#492.
+ * Lillecarl/pyterm#494.
  */
 
 import { strict as assert } from "node:assert";

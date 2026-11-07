@@ -6,7 +6,7 @@ every stream, so `test -t` passes where a piped job fails; the
 waiting and the reading stay the same -- `run -w` answers with the
 output, `wait-job` holds and reports, `show-job` reads it -- with
 the whole terminal output in the stdout tail and nothing in stderr;
-and `list-jobs` names which jobs hold a terminal. Lillecarl/pymux#556.
+and `list-jobs` names which jobs hold a terminal. Lillecarl/pyterm#558.
 """
 
 from __future__ import annotations
@@ -149,7 +149,7 @@ async def test_kill_ends_a_pty_job(session):
 
 @pytest.mark.parametrize("pty", [True, False], ids=["on a terminal", "on pipes"])
 async def test_a_running_job_ends_with_its_server(pty):
-    "The scope's end kills it, and does not wait for it to end on its own. Lillecarl/pymux#736."
+    "The scope's end kills it, and does not wait for it to end on its own. Lillecarl/pyterm#738."
     with anyio.fail_after(10):
         async with create_session() as (pymux, _state):
             job = pymux.jobs.submit("exec sleep 60", None, [], None, pty)

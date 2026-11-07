@@ -105,7 +105,7 @@ def main(log_path: str, animate: bool, idle: bool, text: bool) -> None:
     shown = []
     #: The frame callback not yet answered. pywayland holds a proxy only
     #: weakly, in a cycle, so one nobody holds dies at the next garbage
-    #: collection and is never answered. Lillecarl/pymux#711.
+    #: collection and is never answered. Lillecarl/pyterm#713.
     waiting = []
 
     def ask_for_frame() -> None:
@@ -141,7 +141,7 @@ def main(log_path: str, animate: bool, idle: bool, text: bool) -> None:
 
     # With --text, a text field, as a toolkit has one: text input enabled
     # whenever the window has the keyboard, and each committed string
-    # written. Lillecarl/pymux#624.
+    # written. Lillecarl/pyterm#626.
     if text:
         text_inputs = bind(ZwpTextInputManagerV3)
         text_input = text_inputs.get_text_input(seat)

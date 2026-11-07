@@ -4,7 +4,7 @@ The plan a divided layout makes: where every pane of the tree is.
 `Divided` is what pymux does unless a person asks for something else,
 so this is the layout the other tests in this suite have been drawing
 all along. It answers with a `Plan` now, the way `Strip` does, and
-`PlanContainer` draws it. Lillecarl/pymux#217.
+`PlanContainer` draws it. Lillecarl/pyterm#219.
 
 This file judges the plan on its own, in cells. `test_plane.py`
 holds it to the promises every layout makes, and the cell tests

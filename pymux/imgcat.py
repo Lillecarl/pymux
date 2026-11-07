@@ -6,7 +6,7 @@ kitty graphics protocol: the image as PNG, in chunks, put at the cursor
 over the cells it covers. pymux reads that from any program and draws
 it for each client as that client can -- kitty graphics, sixel or half
 blocks -- so this writes and nothing on the server is new. A kitty or a
-Ghostty outside pymux shows it as well. Lillecarl/pymux#764.
+Ghostty outside pymux shows it as well. Lillecarl/pyterm#766.
 
 The size in cells comes from the image's pixels over the terminal's
 cell, which a pane's pty reports with its size, and is held to the
@@ -119,7 +119,7 @@ def _shown(source: bytes, cell: tuple[int, int], room: int | None, width: int | 
 
     libmagic names the type. An SVG is drawn at the pixels of those
     cells, so it is as sharp as the terminal's cell allows.
-    Lillecarl/pymux#805.
+    Lillecarl/pyterm#807.
     """
     kind = magic.from_buffer(source, mime=True)
     if kind == _SVG:

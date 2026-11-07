@@ -1,6 +1,6 @@
 """
 `pymux <command> --help` prints that command's own help, for every
-command and every mode word, with no server. Lillecarl/pymux#845.
+command and every mode word, with no server. Lillecarl/pyterm#847.
 """
 
 from __future__ import annotations

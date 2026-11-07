@@ -4,7 +4,7 @@ examples a property test draws.
 
 A property test with no seed is a different test every run, and a gate
 that is red by luck teaches everybody to run it again instead of to
-look. `pyte` learned that the hard way (Lillecarl/pymux#180), so the
+look. `pyte` learned that the hard way (Lillecarl/pyterm#182), so the
 gate here takes a pinned profile from the first property test this
 suite has.
 
@@ -59,7 +59,7 @@ def pytest_runtest_protocol(item):
     Not pytest's `faulthandler_timeout`: it dumps and then waits on, so a
     deadlocked run never wrote its log or its status. Measured: one run
     still going after twenty minutes, another after hours.
-    Lillecarl/pymux#482.
+    Lillecarl/pyterm#484.
     """
     if HANG_SECONDS:
         faulthandler.dump_traceback_later(HANG_SECONDS, exit=True, file=_stacks_go_to)
@@ -188,9 +188,9 @@ def no_application_left_current():
     application of a finished test stays current. The next test on that
     worker then reads another server's application through `get_app()`:
     `test_full_screen.py` found no client watching its window, at random.
-    Lillecarl/pymux#752. A task that holds `set_app` across an await
+    Lillecarl/pyterm#754. A task that holds `set_app` across an await
     needs `create_app_session()` around it, as the server's connections
-    have (Lillecarl/pymux#230).
+    have (Lillecarl/pyterm#232).
 
     The fixture blames the test that leaked and clears it, so the next
     test starts clean whatever happened.
@@ -239,7 +239,7 @@ def every_pty_this_test_opened(monkeypatch):
     last words and exits, and the kernel still holds them; the reader
     picks them up on the turns of the loop after the kill and
     `Backend.close` runs when that read reaches the end of the file
-    (Lillecarl/pymux#121). A test ends before any of those turns, so
+    (Lillecarl/pyterm#123). A test ends before any of those turns, so
     the descriptors stayed open -- two per pane, in a suite that makes
     a hundred and eighty of them.
 

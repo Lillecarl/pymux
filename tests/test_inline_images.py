@@ -1,6 +1,6 @@
 """
 iTerm2's inline images: `OSC 1337 ; File=inline=1`, drawn in the pane
-as any image of it. Lillecarl/pymux#789.
+as any image of it. Lillecarl/pyterm#791.
 """
 
 from __future__ import annotations

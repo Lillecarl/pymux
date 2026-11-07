@@ -1,6 +1,6 @@
 """
 What a question sees: virtual tables over the server's objects, built
-as the question reads them, and nothing stored. Lillecarl/pymux#722.
+as the question reads them, and nothing stored. Lillecarl/pyterm#724.
 """
 
 from __future__ import annotations

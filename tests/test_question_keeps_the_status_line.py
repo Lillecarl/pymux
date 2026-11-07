@@ -13,7 +13,7 @@ where a person reads which window they are on, and `kill-window #W?`
 is the moment they want it: the question names something the window
 list is the context for.
 
-Lillecarl/pymux#339.
+Lillecarl/pyterm#341.
 """
 
 from __future__ import annotations

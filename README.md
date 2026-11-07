@@ -3,7 +3,7 @@
 > This repository is a copy. Work on pymux happens in
 > [pyterm](https://github.com/Lillecarl/pyterm), which exports its `pymux/`
 > directory here on every push. Send changes there, and issues to
-> [Lillecarl/pymux](https://github.com/Lillecarl/pymux/issues).
+> [Lillecarl/pyterm](https://github.com/Lillecarl/pyterm/issues).
 > The docs are at <https://lillecarl.github.io/pymux/>.
 
 <!-- The lines above are pyterm's nix/shared/readme-head.md, written by sync-sources. -->

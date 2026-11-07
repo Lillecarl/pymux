@@ -2,13 +2,13 @@
 `run-shell` and `if-shell`: the server runs a shell for a command.
 
 run-shell shows what the command said; if-shell runs one of two
-commands by its answer. Lillecarl/pymux#297.
+commands by its answer. Lillecarl/pyterm#299.
 
 **Neither one holds the server any more.** Both are handlers that
 answer later: the shell runs in a task, so the client that asked waits
 and every pane keeps reading its pty meanwhile. `run-shell 'sleep 30'`
 used to stop every pane and every client for thirty seconds.
-Lillecarl/pymux#311, on the shape Lillecarl/pymux#87 settled.
+Lillecarl/pyterm#313, on the shape Lillecarl/pyterm#89 settled.
 
 So a test awaits what the command answered with, and the ones that do
 not -- the `-F` form of if-shell, which asks a format and no shell --
@@ -66,7 +66,7 @@ async def test_run_shell_says_why_a_shell_that_will_not_start_failed(monkeypatch
     Starting a process raises OSError when there is no shell to run.
     The pane route ran it in a bare daemon thread, so what it raised
     went nowhere and the person who typed the command got an empty
-    listing and no reason for it. Lillecarl/pymux#311.
+    listing and no reason for it. Lillecarl/pyterm#313.
     """
 
     async def refuse(*arguments, **named):
@@ -106,7 +106,7 @@ async def test_run_shell_with_b_does_not_make_the_caller_wait():
 
 async def test_run_shell_lets_the_server_serve_while_it_runs():
     """
-    The point of Lillecarl/pymux#311. The shell is in a task, so the
+    The point of Lillecarl/pyterm#313. The shell is in a task, so the
     loop turns while it runs.
     """
     turned = []
@@ -153,7 +153,7 @@ async def test_if_shell_keeps_the_question_output_off_the_terminal(capfd):
     """
     Only the status is read. The output used to go to the server's own
     stdout, which is the person's terminal in the integrated route, and
-    drew over the frame. Lillecarl/pymux#312.
+    drew over the frame. Lillecarl/pyterm#314.
     """
     async with create_session() as (pymux, state):
         await run_as(pymux, state, "if-shell 'echo scribble; echo noise >&2' 'display yes'")

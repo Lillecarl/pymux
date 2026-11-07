@@ -4,7 +4,7 @@ multipart form. `downloads.DownloadReader` joins the file, this turns it
 into a PNG and a box of cells, and pyte places it at the cursor
 (`GraphicsState.add_png`). From there it is any other image of the pane,
 drawn for each client as that client can: kitty graphics, sixel or half
-blocks. Lillecarl/pymux#789.
+blocks. Lillecarl/pyterm#791.
 
 The size comes from `width` and `height`, each a number of cells, a
 number of pixels (`Npx`), a share of the pane (`N%`) or `auto`, and

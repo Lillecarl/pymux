@@ -2,7 +2,7 @@
  * The player of `record-export -F web`, run on the compiled `replay.js`.
  *
  * The element needs a browser, and the player needs only something with
- * `receive`, so a list stands in for it. Lillecarl/pymux#610.
+ * `receive`, so a list stands in for it. Lillecarl/pyterm#612.
  */
 
 import { strict as assert } from "node:assert";

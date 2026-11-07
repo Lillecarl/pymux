@@ -21,7 +21,7 @@ class Turns:
 
     `anyio.Lock` is first come, first served, so a packet of sound waited
     behind every part of a window pane's frame that was queued before it.
-    Here it waits only for the part already going out. Lillecarl/pymux#657.
+    Here it waits only for the part already going out. Lillecarl/pyterm#659.
     """
 
     def __init__(self) -> None:
@@ -68,7 +68,7 @@ class PipeConnection(ABC):
 
     #: The bytes this end sent and the bytes it took in, as the wire
     #: carried them: after zstd, so a client over ssh counts what the
-    #: network moved. Lillecarl/pymux#677.
+    #: network moved. Lillecarl/pyterm#679.
     bytes_out: int
     bytes_in: int
 
@@ -114,7 +114,7 @@ class PipeConnection(ABC):
     #: Whether `outstanding` is the client's terminal falling behind,
     #: so frames wait for it rather than pile up. A socket bounds its
     #: own instead, and leaves a client behind past `TOO_SLOW_BYTES`.
-    #: Lillecarl/pymux#585.
+    #: Lillecarl/pyterm#587.
     holds_frames_while_behind = False
 
     async def drained(self) -> None:

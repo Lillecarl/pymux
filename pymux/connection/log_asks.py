@@ -1,7 +1,7 @@
 """
 `show-log` on another machine: the request one end sends over a
 client's connection or a peer link, and the answer the other end
-reads off its own disk. Lillecarl/pymux#934.
+reads off its own disk. Lillecarl/pyterm#936.
 """
 
 from __future__ import annotations

@@ -1,7 +1,7 @@
 # The layout engine: the plan we agreed
 
 **This file is temporary.** It exists so that the design survives a lost
-session, and it is deleted when the work lands. Lillecarl/pymux#217 holds
+session, and it is deleted when the work lands. Lillecarl/pyterm#219 holds
 the same design and the argument for it; this is the short form a person
 picks up cold.
 
@@ -26,7 +26,7 @@ reads where panes were drawn last frame, and a title bar cannot use that
 because it is drawn *during* a frame, so `Window.pane_to_the_left` walks
 the tree instead. The second symptom is that every general feature has
 been paid for twice, once for divided layouts and once for the strip:
-Lillecarl/pymux#206, #198, #210, #211.
+Lillecarl/pyterm#208, #200, #212, #213.
 
 ## The name
 
@@ -132,7 +132,7 @@ is where the behaviour belongs.
    general `trace(origin, angle)` with the four cardinal directions as a
    separate cheap path that tests band overlap instead of casting.
 9. **Numbering is insertion order in the base, overridable.** `Divided`
-   and `Strip` override with reading order (Lillecarl/pymux#210).
+   and `Strip` override with reading order (Lillecarl/pyterm#212).
    **It counts the panes a person sees**, one per slot: Carl, on the
    tabbed case, "in a stack the visible pane is the only thing to be
    concerned with (at least for now)". So a stack is one number, a
@@ -221,7 +221,7 @@ of them reimplements one: `at(point)`, `slot_of(pane)`,
 
 **A plan does not number the panes.** A pane number is what
 `select-pane -t 1` takes and what a title bar draws, and it comes from
-`Window.panes`, the order of the tree (Lillecarl/pymux#210); the plan
+`Window.panes`, the order of the tree (Lillecarl/pyterm#212); the plan
 holds no numbering of its own. A hidden pane keeps its slot's
 rectangle, so its pty already has the size it will be shown at.
 
@@ -321,7 +321,7 @@ the chrome stay. Three details worth copying:
   (`window.c:721`).
 
 **That is exactly `Zoomed(inner)`**, and it is why zoom is a wrapper
-and not a flag. pymux's flag is what makes Lillecarl/pymux#215: a
+and not a flag. pymux's flag is what makes Lillecarl/pyterm#217: a
 zoomed strip is not a strip, because `_build_layout` tests
 `window.zoom` before `window.strip`.
 
@@ -355,7 +355,7 @@ every cell of them was spelled first. So `PlanContainer` draws nothing
 whose rectangle does not reach the view: a strip of sixteen columns
 went from 168k bytecode instructions a frame to 89k, and a divided
 window whose panes run past the bottom from 53k to 41k.
-Lillecarl/pymux#224 holds the reasoning. The rest of that issue -- that
+Lillecarl/pyterm#226 holds the reasoning. The rest of that issue -- that
 a client should not be woken by a pane it cannot see -- is done, and
 not by `View.shows`. **The thing that looked like the obstacle was the
 answer.** A pane that writes wakes its client through prompt_toolkit
@@ -370,7 +370,7 @@ Two smaller rules that follow:
 
 - **The cursor** is hidden while the focused pane is out of view. The
   terminal has one cursor and `Screen.cursor_positions` places it from
-  the focused pane. Lillecarl/pymux#201 made exactly this decision
+  the focused pane. Lillecarl/pyterm#203 made exactly this decision
   inside `ScrollablePane`.
 - **The layout cache gets simpler.** Today the container tree encodes
   geometry as weights, so any geometry change rebuilds it. Under a plan
@@ -430,7 +430,7 @@ Two smaller rules that follow:
      keeps a cell, so a window shrunk far enough runs past its own
      edge; the next child then has to start past what the one before
      it really used, or two slots share cells.
-   - **Zoom is a wrapper and it closed Lillecarl/pymux#215** with the
+   - **Zoom is a wrapper and it closed Lillecarl/pyterm#217** with the
      fourth column-width preset beside it. A zoomed pane keeps the row
      its title bar hangs in, which it did not have before.
 5. **`View` per client, with an offset**, and the `window-size` policy
@@ -484,9 +484,9 @@ somewhere, kept between frames -- so it is the first one that has
 nowhere to read from, and writing it is what says where the tree
 belongs. `Masonry` comes after it.
 
-One thing slice 5 left for whoever picks it up: Lillecarl/pymux#225
+One thing slice 5 left for whoever picks it up: Lillecarl/pyterm#227
 holds the `resize-window` flags that are not `-x` and `-y`. The second
-half of Lillecarl/pymux#224 -- waking only the clients that can see a
+half of Lillecarl/pyterm#226 -- waking only the clients that can see a
 change -- is done, and `View.shows` was not what did it. The section
 above says what did.
 
@@ -519,7 +519,7 @@ floating window support "everywhere" makes sense, so it belongs to
 **`Plane` and not to `Masonry`**: every subclass gets it.
 
 **A floating window is not a second list.** Carl settled this in
-Lillecarl/pymux#228, and the shape is his:
+Lillecarl/pyterm#230, and the shape is his:
 
 > We have multiple separate planes, the higher up the Z plane we are
 > the higher our drawing priority is. [...] Rectangles can't overlap

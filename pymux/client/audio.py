@@ -1,6 +1,6 @@
 """
 The client's half of sound: play what the panes play, and lend the
-microphone while a program on the server records. Lillecarl/pymux#657.
+microphone while a program on the server records. Lillecarl/pyterm#659.
 
 It rides the connection the client attached on: the server writes sound
 in an urgent lane there (`pymux/audio.py` says why), measures the round

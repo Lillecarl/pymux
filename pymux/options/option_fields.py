@@ -5,7 +5,7 @@ One declaration per option: a field of its scope's dataclass.
 name is the field's with `-` for `_`, and its type is the default's.
 The rest is derived from that one place: what `set-option` parses, what
 Tab offers, what `show-options` prints, the hot upgrade's fate, and the
-snapshot's column. Lillecarl/pymux#769.
+snapshot's column. Lillecarl/pyterm#771.
 
 **A value is a plain slot.** A frame reads several options, so a read
 must cost what an attribute costs. Only a write runs code, and only for

@@ -2,7 +2,7 @@
 The browsers a client starts on its own machine for the server.
 
 A program on the server drives one through `browser.open`, and the URL
-a pane opens goes to this machine's browser too. Lillecarl/pymux#653.
+a pane opens goes to this machine's browser too. Lillecarl/pyterm#655.
 """
 
 from __future__ import annotations

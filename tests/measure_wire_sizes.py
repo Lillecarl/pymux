@@ -1,7 +1,7 @@
 """
 What crosses the wire between server and client, in bytes.
 
-Scratch measurement for Lillecarl/pymux#258. TEMPORARY: not a gate,
+Scratch measurement for Lillecarl/pyterm#260. TEMPORARY: not a gate,
 judges nothing, prints a report. It drives a real `ServerConnection`
 over `pipes.memory` -- the transport of `pymux integrated` -- and
 records every packet the server sends, encoded the way the socket route

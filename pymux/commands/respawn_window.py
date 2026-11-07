@@ -22,7 +22,7 @@ def respawn_window(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None]:
     window of pymux has no command of its own, only the panes in it,
     so this respawns the active pane of the window the target names,
     or of the active one. The same `-k` rule as respawn-pane has.
-    Lillecarl/pymux#306.
+    Lillecarl/pyterm#308.
     """
     window = the_window(pymux, args.target_window)
 

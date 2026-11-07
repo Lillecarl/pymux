@@ -1,7 +1,7 @@
 """
 A pane that scrolls goes out as a scroll region across the whole width,
 and kitty moves an image of the pane beside it with the region. The
-image is put back in the same frame's graphics. Lillecarl/pymux#821.
+image is put back in the same frame's graphics. Lillecarl/pyterm#823.
 """
 
 from __future__ import annotations

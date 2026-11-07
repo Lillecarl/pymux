@@ -18,7 +18,7 @@ still through a DECSCNM and an "OSC 4" -- measured -- each of which
 changes what a reader draws. A reader inside the server compares those
 itself, the way `ptterm` compares reverse video. A reader holding only
 this number cannot, so the number has to be the wider one.
-Lillecarl/pymux#387.
+Lillecarl/pyterm#389.
 """
 
 from __future__ import annotations
@@ -85,7 +85,7 @@ async def waited(mux, command: str, *arguments) -> str:
     A command that answers later, awaited the way the server awaits it.
 
     `call_command_handler` hands back a coroutine and the server's own
-    task awaits it (Lillecarl/pymux#87). A test that dropped it would
+    task awaits it (Lillecarl/pyterm#89). A test that dropped it would
     leave the wait unrun and say nothing about it.
     """
     mux.answer = Answer()
@@ -348,7 +348,7 @@ async def test_a_wait_from_nobody_is_refused(pymux):
     """
     `bind-key X wait-pane-change` would put a task in the server's group
     per press and nobody would read the answer. The same rule as
-    `wait-for`. Lillecarl/pymux#302.
+    `wait-for`. Lillecarl/pyterm#304.
     """
     pane = the_pane(pymux)
     errors = []

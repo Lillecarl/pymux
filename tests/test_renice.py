@@ -1,6 +1,6 @@
 """
 `pymux renice` and `list-processes`: pymux's own processes take a
-niceness, and a program a person runs does not. Lillecarl/pymux#673.
+niceness, and a program a person runs does not. Lillecarl/pyterm#675.
 
 The sandbox may not lower a niceness, so the end to end run raises it,
 which any user may. The lowered case is judged with `os.getpriority`

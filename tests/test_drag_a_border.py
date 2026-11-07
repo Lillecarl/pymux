@@ -1,7 +1,7 @@
 """
 Dragging the line between two panes resizes them, as tmux does with
 `mouse on`. The events go through prompt_toolkit's own mouse binding
-and the handlers a real frame registered. Lillecarl/pymux#772.
+and the handlers a real frame registered. Lillecarl/pyterm#774.
 """
 
 from __future__ import annotations
@@ -234,7 +234,7 @@ def _since(sent: list[str], shape: str) -> str:
     ("command", "shape"), [("split-window -h", "sb_h_double_arrow"), ("split-window -v", "sb_v_double_arrow")]
 )
 async def test_the_pointer_takes_the_resize_shape_over_a_line(command, shape):
-    "And drops it off the line. Lillecarl/pymux#819."
+    "And drops it off the line. Lillecarl/pyterm#821."
     async with _client_with_two_panes(command) as (_state, sent, (x, y), report):
         report(MOVE, x, y)
         await once(lambda: _shape(shape) in "".join(sent), 10.0, "the pointer never took the shape")
@@ -243,7 +243,7 @@ async def test_the_pointer_takes_the_resize_shape_over_a_line(command, shape):
 
 
 async def test_the_pointer_keeps_the_shape_while_a_drag_lasts():
-    "Off the line, until the release. Lillecarl/pymux#819."
+    "Off the line, until the release. Lillecarl/pyterm#821."
     async with _client_with_two_panes("split-window -h") as (state, sent, (x, y), report):
         report(PRESS, x, y)
         report(DRAG, x - 4, y)

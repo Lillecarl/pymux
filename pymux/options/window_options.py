@@ -23,7 +23,7 @@ __all__ = ["DEFAULT_FRAME_RATE", "WindowOptions"]
 #:
 #: **Thirty, because a frame is expensive and an eye is not fast.** A
 #: frame at 187x59 costs about 19 ms of CPU, nearly all of it building
-#: cells that a diff then throws away (Lillecarl/pymux#254). A pane
+#: cells that a diff then throws away (Lillecarl/pyterm#256). A pane
 #: that animates asks for one on every write, and three of them
 #: together asked for seventeen a second. Thirty is above what a person
 #: reads text at and below what a program writes at, so it costs
@@ -77,7 +77,7 @@ class WindowOptions(Options):
         doc=(
             "Where the message of an agent in the pane shows, on a row under its bar (OSC 7501, such as "
             '"blocked: Approve edit?"): "take" makes the program one row shorter while it shows, "cover" '
-            'draws it over the first row of the pane, "off" shows none. Lillecarl/pymux#931.'
+            'draws it over the first row of the pane, "off" shows none. Lillecarl/pyterm#933.'
         ),
         on_set=_redraw,
     )
@@ -88,11 +88,11 @@ class WindowOptions(Options):
     )
     monitor_bell: bool = option(
         True,
-        doc="Whether a bell nobody saw flags the window and the pane it rang in. Lillecarl/pymux#501.",
+        doc="Whether a bell nobody saw flags the window and the pane it rang in. Lillecarl/pyterm#503.",
     )
     monitor_activity: bool = option(
         True,
-        doc="Whether output in a window nobody looks at flags it. On, where tmux has it off. Lillecarl/pymux#767.",
+        doc="Whether output in a window nobody looks at flags it. On, where tmux has it off. Lillecarl/pyterm#769.",
     )
     monitor_silence: int = option(
         0,
@@ -100,14 +100,14 @@ class WindowOptions(Options):
         choices=[0, 10, 30, 60],
     )
     monitor_notification: bool = option(
-        True, doc="Whether a notification from a window nobody looks at flags it. Lillecarl/pymux#767."
+        True, doc="Whether a notification from a window nobody looks at flags it. Lillecarl/pyterm#769."
     )
     strip: bool = option(
         False,
         doc=(
             "Lay the panes out as a strip that may run past the edge of the screen, the way niri's "
             "scrollable tiling works, instead of dividing the window between them. "
-            "`select-layout` turns it off. Lillecarl/pymux#198."
+            "`select-layout` turns it off. Lillecarl/pyterm#200."
         ),
         on_write=_shape_for_strip,
     )
@@ -116,7 +116,7 @@ class WindowOptions(Options):
         doc=(
             "Which client's terminal decides how big the window's plane is, when more than one watches it. "
             '"smallest" shows every client the whole window; "largest" gives it to the biggest client, '
-            "and a smaller one moves its view over it. Lillecarl/pymux#217."
+            "and a smaller one moves its view over it. Lillecarl/pyterm#219."
         ),
         on_set=_freeze_manual,
     )
@@ -124,20 +124,20 @@ class WindowOptions(Options):
         DEFAULT_FRAME_RATE,
         doc=(
             "The most frames a second a client draws while it looks at the window. Zero is as many as "
-            "it can. Setting it also caps the Wayland windows in it. Lillecarl/pymux#254, Lillecarl/pymux#636."
+            "it can. Setting it also caps the Wayland windows in it. Lillecarl/pyterm#256, Lillecarl/pyterm#638."
         ),
         choices=[0, 10, 30, 60, 120],
         on_set=_frame_rate_chosen,
     )
     wayland_scale: str = option(
         DEFAULT_WAYLAND_SCALE,
-        doc="How dense the Wayland windows in it draw: `auto` reads it off the client's cell. Lillecarl/pymux#637.",
+        doc="How dense the Wayland windows in it draw: `auto` reads it off the client's cell. Lillecarl/pyterm#639.",
         choices=["auto", "auto+0.5", "auto*1.5", "1", "2"],
         parse=parse_scale,
         on_set=_rescale,
     )
     window_codec: WindowCodec = option(
         WindowCodec.LOSSLESS,
-        doc="Whether its Wayland windows reach a client as the pixels that changed or as VP9. Lillecarl/pymux#639.",
+        doc="Whether its Wayland windows reach a client as the pixels that changed or as VP9. Lillecarl/pyterm#641.",
         on_set=_redraw,
     )

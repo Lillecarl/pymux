@@ -1,7 +1,7 @@
 //! `prompt_toolkit_rs.Row`: one row of a composed screen, stored by column
 //! in one contiguous vector. It behaves as `prompt_toolkit.layout.screen.
 //! _new_row` does, a defaultdict of `Char`: a column nobody wrote reads the
-//! row's default and keeps it. Lillecarl/pymux#570.
+//! row's default and keeps it. Lillecarl/pyterm#572.
 
 use std::collections::BTreeMap;
 

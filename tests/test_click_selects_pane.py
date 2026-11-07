@@ -6,7 +6,7 @@ none; the arrangement follows, or the next keypress syncs the
 layout focus straight back to the pane that is active. A press
 selects nothing -- the focus lands on the release, the way the
 clock does -- and a wheel over a pane that has no focus does
-nothing at all. Lillecarl/pymux#527.
+nothing at all. Lillecarl/pyterm#529.
 """
 
 from __future__ import annotations

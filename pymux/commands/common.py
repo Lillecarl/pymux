@@ -43,7 +43,7 @@ def session_part(pymux: Pymux, target: str) -> tuple[Session | None, str]:
     that asks. A name before the colon that no session has gives
     `None`, which every caller answers as "not found": a target that
     names a session that is not there must not quietly answer with a
-    window of another one. Lillecarl/pymux#323.
+    window of another one. Lillecarl/pyterm#325.
     """
     if ":" not in target:
         return pymux.current_session, target
@@ -110,7 +110,7 @@ def the_window(pymux: Pymux, target: str | None) -> Window:
 
     `can't find window: None` was what came out of every caller that
     spelled the message itself, because the caller had nothing to name.
-    Lillecarl/pymux#473.
+    Lillecarl/pyterm#475.
     """
     window = find_window(pymux, target)
     if window is not None:
@@ -160,7 +160,7 @@ def _sent_from_nowhere(pymux: Pymux) -> bool:
     pymux, or one from a pane that has gone. It falls back to what a
     person used last, as tmux does, and says so: an agent read back
     a window a person had open, and nothing told it.
-    Lillecarl/pymux#506.
+    Lillecarl/pyterm#508.
     """
     try:
         asking = pymux.get_client_state()
@@ -235,7 +235,7 @@ def the_pane(pymux: Pymux, target: str | None) -> Pane:
     `the_window` above says why the two failures want different words.
     The same holds one level down: a caller over the socket is looking
     at no pane either. tmux spells both messages in lower case
-    (`cmd-find.c:1263-1268`). Lillecarl/pymux#473.
+    (`cmd-find.c:1263-1268`). Lillecarl/pyterm#475.
     """
     pane = find_pane(pymux, target)
     if pane is not None:
@@ -279,7 +279,7 @@ def send_key(pane: Pane, event: KeyEvent, written: str) -> None:
     **The pane decides what it can read, so the pane is asked.** A
     legacy pane turns super+a into "a" and ctrl+shift+a into ctrl+a,
     and sending it those in silence is wrong: nobody typing `send-keys
-    super+a` means "type an a". Lillecarl/pymux#237.
+    super+a` means "type an a". Lillecarl/pyterm#239.
     """
     terminal = terminal_of(pane)
     try:
@@ -293,7 +293,7 @@ def terminal_of(pane: Pane) -> Terminal:
     """
     The terminal of a pane, for a command that needs one: a pane that
     shows a Wayland window has no screen, no history and no pty.
-    Lillecarl/pymux#620.
+    Lillecarl/pyterm#622.
     """
     terminal = pane.terminal
     if not isinstance(terminal, Terminal):
@@ -325,7 +325,7 @@ def clients_named(pymux: Pymux, wanted: str) -> list[ClientState]:
     machines can each have a `/dev/pts/3` -- and a chosen one is not
     checked, so `detach-client -t desk` detaches every terminal called
     `desk`, which is what the words say. A command that can only act
-    on one takes the first. Lillecarl/pymux#335, Lillecarl/pymux#340.
+    on one takes the first. Lillecarl/pyterm#337, Lillecarl/pyterm#342.
     """
     found = [
         client_state
@@ -397,7 +397,7 @@ def answer(pymux: Pymux, text: str) -> None:
     A command that arrives over the command line gets stdout, which
     is what an answer says. A person typing at the prompt of a
     pane gets the message line, because there is no stdout to write
-    to. Lillecarl/pymux#289.
+    to. Lillecarl/pyterm#291.
     """
     if pymux.answer is not None:
         pymux.print_command_line(text)
@@ -417,7 +417,7 @@ def refuse_without_a_waiter(pymux: Pymux, what: str) -> Answer:
 
     An answer is what says a client is reading it: the
     socket route makes one and a key binding, a hook and a configuration
-    file do not. Lillecarl/pymux#302.
+    file do not. Lillecarl/pyterm#304.
     """
     reply = pymux.answer
     if reply is None:
@@ -449,7 +449,7 @@ def show_listing(pymux: Pymux, title: str, text: str) -> None:
     a fault. That asker reads stdout, so the listing is printed there, which is
     what an answer says: the same question
     `print_command_line` asks. tmux prints a listing to stdout,
-    always. Lillecarl/pymux#288.
+    always. Lillecarl/pyterm#290.
     """
     if pymux.answer is not None:
         pymux.print_command_line(text)
@@ -475,7 +475,7 @@ def add_format_arguments(parser: argparse.ArgumentParser, help_text: str) -> Non
 
     Neither is sniffed. `-F` is tmux format, which is what libtmux and
     libpymux read; `-J` is a jinja2 template, for a person who wants a
-    condition or a filter in what they print. Lillecarl/pymux#333.
+    condition or a filter in what they print. Lillecarl/pyterm#335.
 
     **`J` means something else on `capture-pane`**, where it is tmux's
     own flag for joining the pieces a wrapped line was cut into. The

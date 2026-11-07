@@ -11,7 +11,7 @@ what it was, the rendering path it uses is untouched, and
 back. These tests say all three of those things, because "not the only
 mode" is the requirement and not a side effect.
 
-Lillecarl/pymux#198.
+Lillecarl/pyterm#200.
 """
 
 from __future__ import annotations

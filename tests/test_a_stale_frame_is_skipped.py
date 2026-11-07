@@ -6,7 +6,7 @@ it would draw predates the input, so the renderer skips it and asks
 for another one instead, which the input's own handling brings.
 Equality is the steady state -- every scheduled redraw records the
 tick, so a frame whose input has been handled always draws.
-Lillecarl/pymux#524.
+Lillecarl/pyterm#526.
 """
 
 from __future__ import annotations

@@ -63,7 +63,7 @@ def _rows(pymux, window):
     is written down.** A weight is a share of a split, so a delta means
     nothing until the weights say what each pane measures now; the
     layout writes that first (`write_sizes_into_weights`) and this
-    reads what came out. Lillecarl/pymux#217.
+    reads what came out. Lillecarl/pyterm#219.
     """
     plan = plan_of(pymux, window)
     return [plan.rect_of(pane).height for pane in window.panes]

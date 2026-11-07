@@ -2,7 +2,7 @@
 Reaching a server on another machine, over SSH.
 
 `pymux -S ssh://carl@dynhetz/tmp/pymux.sock.carl.0 attach` draws the
-panes here and runs them there. Lillecarl/pymux#90.
+panes here and runs them there. Lillecarl/pyterm#92.
 
 **The round trip runs against a real SSH stack.** An `asyncssh` server
 stands in for sshd: it generates a host key, accepts one client key,
@@ -160,7 +160,7 @@ async def create_ssh_server(
     them fails a forwarding test as `ChannelOpenError` and reads like a
     client bug. `allow_forward=False` is how a test asks for that
     refusal on purpose -- it is what `AllowTcpForwarding no` does.
-    Lillecarl/pymux#436.
+    Lillecarl/pyterm#438.
 
     `session_env` is the environment a session runs its command in,
     and `None` inherits this process's, the way an sshd session
@@ -208,7 +208,7 @@ async def create_ssh_server(
             # connection back down the link.
             #
             # `0.0.0.0` is allowed so a test can reach the case
-            # Lillecarl/pymux#444 is about. asyncssh binds what it is
+            # Lillecarl/pyterm#446 is about. asyncssh binds what it is
             # told and does not narrow the way openssh under
             # `GatewayPorts no` does, so this models the permissive
             # server; `checks.pymux-openssh` is where the narrowing
@@ -255,7 +255,7 @@ async def live_servers(socket_path: str, **server_options):
 
     # The bind is what names the server; the accepting is a task of
     # `running()`. A server that binds and does not serve takes no
-    # client at all. Lillecarl/pymux#87.
+    # client at all. Lillecarl/pyterm#89.
     async with pymux.running():
         await pymux.panes.create_window(PANE_COMMAND)
         await anyio.sleep(0.5)
@@ -302,7 +302,7 @@ async def test_command_reaches_server_over_ssh():
 async def test_a_server_in_its_room_is_found():
     """
     `ssh://host` with no path, and a server that bound in the per-UID
-    room of Lillecarl/pymux#405.
+    room of Lillecarl/pyterm#407.
 
     `pymux find` really runs, through a shell, on the far side of the
     fake sshd: its `$XDG_RUNTIME_DIR` is where this test put the

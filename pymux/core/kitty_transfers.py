@@ -1,7 +1,7 @@
 """
 kitty's file transfer protocol (OSC 5113) between the panes and the
 terminals of the clients. https://sw.kovidgoyal.net/kitty/file-transfer-protocol/.
-Lillecarl/pymux#912.
+Lillecarl/pyterm#914.
 
 **A session goes to one client.** A program starts one with `send` or
 `receive`. pymux gives it to the client a download would go to

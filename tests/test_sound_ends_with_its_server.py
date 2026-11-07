@@ -3,7 +3,7 @@ A server that is killed takes its private PipeWire with it.
 
 On 2026-10-22 two sets of PipeWire, WirePlumber and pw-cat ran on with
 parent 1, one from a server killed that morning and one from a week
-before. Lillecarl/pymux#729.
+before. Lillecarl/pyterm#731.
 """
 
 from __future__ import annotations

@@ -38,7 +38,7 @@ def test_option_brings_tmux_default_back():
 
 
 # ----------------------------------------------------------------------
-# Putting a window at an index. Lillecarl/pymux#191.
+# Putting a window at an index. Lillecarl/pyterm#193.
 
 
 def _indexes(arrangement):

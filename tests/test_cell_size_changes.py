@@ -3,7 +3,7 @@ A terminal's cell can change while it stays attached: kitty moved to a
 display of another density keeps its columns and changes its cell. The
 server asks again at each resize, and reads the answer whenever it
 comes. With the first cell kept, every pixel mouse report landed at
-half its column. Lillecarl/pymux#774.
+half its column. Lillecarl/pyterm#776.
 """
 
 from __future__ import annotations

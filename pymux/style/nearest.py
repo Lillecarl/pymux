@@ -6,7 +6,7 @@ answers arrive as OSC replies: the default background, the default
 foreground and the first sixteen palette entries
 (`COLOR_QUERIES` in `colors.py`). pymux holds hundreds of themes that
 name the same colours. So the theme of a terminal is not something to
-invent -- it is a search. Lillecarl/pymux#346.
+invent -- it is a search. Lillecarl/pyterm#348.
 
 **The distance is OKLab, not RGB.** Two colours that are the same
 distance apart in RGB can be obviously different and barely different

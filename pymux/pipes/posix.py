@@ -30,7 +30,7 @@ __all__ = [
 #: **An upgrade takes no client for about a second**, from the pause to
 #: the new image's first accept, and every client comes back in that
 #: second. At 0 the kernel queued one: the rest were refused, and an
-#: SSH client heard "open failed" and left. Lillecarl/pymux#750.
+#: SSH client heard "open failed" and left. Lillecarl/pyterm#752.
 BACKLOG = 128
 
 
@@ -44,7 +44,7 @@ def bind_and_listen_on_posix_socket(
     places.** A server binds before `daemonize` forks, because the name
     is what the client that started it connects to; it accepts in the
     task group of `Pymux.running`, which exists only once the loop
-    turns. Lillecarl/pymux#87.
+    turns. Lillecarl/pyterm#89.
 
     :param accept_callback: Called with `PosixSocketConnection` when a
         new connection is established.
@@ -106,7 +106,7 @@ class PosixSocketListener:
             # send: the partial-send loop in `_send_all` is also what
             # keeps a packet whole on OS X, where a non blocking send
             # of more than the buffer holds sends part of it.
-            # Lillecarl/pymux#418.
+            # Lillecarl/pyterm#420.
             self._accept_callback(PosixSocketConnection(connection))
 
     def close(self) -> None:
@@ -114,7 +114,7 @@ class PosixSocketListener:
         Stop taking clients. A client that connects after this is
         refused at once: a restart closes the listening first, so a
         waiting client never reaches the server that is going.
-        Lillecarl/pymux#409.
+        Lillecarl/pyterm#411.
         """
         with contextlib.suppress(OSError, RuntimeError):
             # Wakes `serve` with `ClosedResourceError`. Outside the loop
@@ -146,7 +146,7 @@ def _bind_or_take_over(sock: socket.socket, socket_name: str) -> None:
     A name that something answers on stays where it is: the caller
     sees the EADDRINUSE it would have seen. So does a name that holds
     anything but a socket -- a file somebody else put there is not
-    ours to delete. Lillecarl/pymux#453.
+    ours to delete. Lillecarl/pyterm#455.
     """
     try:
         sock.bind(socket_name)
@@ -169,7 +169,7 @@ def _bind_or_take_over(sock: socket.socket, socket_name: str) -> None:
     # explicit path reports and the room's loop reads as a name to step
     # past. The per-UID room is 0700 so only an explicitly named socket
     # in a directory somebody else can write is exposed at all, which
-    # is the shape of Lillecarl/pymux#405 again. Lillecarl/pymux#455.
+    # is the shape of Lillecarl/pyterm#407 again. Lillecarl/pyterm#457.
     lock = os.open(
         socket_name + ".lock",
         os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW,
@@ -219,7 +219,7 @@ def _bind_posix_socket(socket_name: str | None = None):
         # given `PYMUX=pymux.sock,%1`, so a program inside it could not
         # find the server it runs in unless it happened to share the
         # directory pymux was started from. tmux writes `TMUX` absolute
-        # for that reason. Lillecarl/pymux#322.
+        # for that reason. Lillecarl/pyterm#324.
         socket_name = os.path.abspath(socket_name)
         _bind_or_take_over(s, socket_name)
         return socket_name, s
@@ -238,9 +238,9 @@ def _bind_posix_socket(socket_name: str | None = None):
             # person read a bigger one in `PYMUX` every time, and
             # after a hundred of them no server could start at all.
             # The explicit path has answered this since
-            # Lillecarl/pymux#453 and the room gets the same answer.
+            # Lillecarl/pyterm#455 and the room gets the same answer.
             # A name something answers on raises EADDRINUSE here,
-            # which is the next index. Lillecarl/pymux#454.
+            # which is the next index. Lillecarl/pyterm#456.
             _bind_or_take_over(s, socket_name)
             return socket_name, s
         except OSError:
@@ -260,13 +260,13 @@ def _bind_posix_socket(socket_name: str | None = None):
 #: and an animating pane would pile up one parked write after another
 #: for as long as the server runs. tmux leaves such a client behind
 #: too ("client is too slow"): the person who comes back reads an
-#: ended attachment, and the server goes on. Lillecarl/pymux#418.
+#: ended attachment, and the server goes on. Lillecarl/pyterm#420.
 TOO_SLOW_BYTES = 1024 * 1024
 
 #: A packet this big or bigger is compressed in a worker thread. zstd
 #: lets go of the GIL while it works, and a window pane's raw frame of
 #: 5.6 MB takes 5 to 9 ms at level 1. A smaller packet costs less on the
-#: loop than the trip to a thread. Lillecarl/pymux#632.
+#: loop than the trip to a thread. Lillecarl/pyterm#634.
 COMPRESS_IN_A_THREAD = 64 * 1024
 
 #: How long a closed connection reads on, for the far end to read what
@@ -286,7 +286,7 @@ class PosixSocketConnection(PipeConnection):
         self.socket = socket
         # Non blocking. A send that finds no room parks this
         # connection's write and never the loop (`write`).
-        # Lillecarl/pymux#418.
+        # Lillecarl/pyterm#420.
         self.socket.setblocking(False)
         self._reader = PacketReader()
         self._ready: list[Message] = []
@@ -294,7 +294,7 @@ class PosixSocketConnection(PipeConnection):
 
         #: Bytes given to `write` and not yet taken by the kernel.
         self._outstanding = 0
-        #: One write at a time, sound first. Lillecarl/pymux#657.
+        #: One write at a time, sound first. Lillecarl/pyterm#659.
         self._turns = Turns()
         #: Set while `_outstanding` is zero; waited on by `drained`.
         self._empty: anyio.Event | None = None
@@ -362,11 +362,11 @@ class PosixSocketConnection(PipeConnection):
         waits for room on its own connection and the loop goes on:
         list-sessions, a later attach and every other client of the
         server keep working while this one holds a full buffer. Past
-        `TOO_SLOW_BYTES` the client is left behind. Lillecarl/pymux#418.
+        `TOO_SLOW_BYTES` the client is left behind. Lillecarl/pyterm#420.
 
         **Compressed under the lock**, so the zstd stream holds the
         frames in the order they go out, which is the order the client
-        decompresses them in. Lillecarl/pymux#633.
+        decompresses them in. Lillecarl/pyterm#635.
         """
         if self._closed:
             raise BrokenPipeError
@@ -378,7 +378,7 @@ class PosixSocketConnection(PipeConnection):
         # packets (one send, then the next, never interleaved), and
         # this count is what bounds how much they may hold together.
         # Judged on what already waits and not on this packet: a window
-        # pane's frame alone can be megabytes. Lillecarl/pymux#629.
+        # pane's frame alone can be megabytes. Lillecarl/pyterm#631.
         if self._outstanding > TOO_SLOW_BYTES:
             raise BrokenPipeError
         self._outstanding += len(data)
@@ -438,7 +438,7 @@ class PosixSocketConnection(PipeConnection):
         # next write, and an asyncio peer -- asyncssh's forwarder, in
         # front of an SSH client -- then drops what it had not read yet:
         # the exit packet of a hangup, the notice of a restart.
-        # Lillecarl/pymux#710, Lillecarl/pymux#766.
+        # Lillecarl/pyterm#712, Lillecarl/pyterm#768.
         with contextlib.suppress(OSError):
             self.socket.shutdown(socket.SHUT_WR)
         # Wake whatever is parked on this descriptor. No loop here:

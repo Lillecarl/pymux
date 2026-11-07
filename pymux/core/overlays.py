@@ -3,7 +3,7 @@ A session's overlay: one pane in the middle of the screen, over the
 windows, that every client of the session sees. It runs a program or
 shows a job, and it takes the keyboard while it is open. A job also
 opens here as a window of its own, or runs again to be taken over.
-Lillecarl/pymux#324, Lillecarl/pymux#528.
+Lillecarl/pyterm#326, Lillecarl/pyterm#530.
 """
 
 from __future__ import annotations
@@ -51,7 +51,7 @@ class Overlays:
         command line reaches it: the temporary client that runs such a
         command is gone before the next render, and it is on the
         session of the pane the command was typed in.
-        Lillecarl/pymux#324.
+        Lillecarl/pyterm#326.
         """
         if session is None:
             session = self.pymux.current_session
@@ -112,7 +112,7 @@ class Overlays:
         saying how it ended. Closing stops the follow and never
         touches the job, which runs on until it ends on its own. A
         second call replaces the first, the way overlays do.
-        Lillecarl/pymux#528.
+        Lillecarl/pyterm#530.
         """
         if session is None:
             session = self.pymux.current_session
@@ -137,7 +137,7 @@ class Overlays:
         A viewer, read-only, that replays the tail and follows the
         rest; nothing forks and no program runs. Closing the window
         never touches the job. Without a session it is the session of
-        the client that asks. Lillecarl/pymux#528.
+        the client that asks. Lillecarl/pyterm#530.
         """
         if session is None:
             session = self.pymux.current_session
@@ -161,7 +161,7 @@ class Overlays:
         (`run` starts one on `/dev/null`). The recorded job is
         untouched -- it runs on, and detaching never kills it -- and
         the new program answers to the session's environment, not the
-        job's. Lillecarl/pymux#528.
+        job's. Lillecarl/pyterm#530.
         """
         if session is None:
             session = self.pymux.current_session

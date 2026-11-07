@@ -4,7 +4,7 @@ A text emoji with U+FE0F, drawn for the terminal in front of the client.
 A pane holds `✳️` one column wide, as six emulators of seven do. kitty
 draws it two wide and over the next cell, so a client whose terminal
 answers the probe that way is sent the character without the selector.
-Lillecarl/pymux#539, and deviation 27 in `ptterm/tests/DEVIATIONS.md`.
+Lillecarl/pyterm#541, and deviation 27 in `ptterm/tests/DEVIATIONS.md`.
 """
 
 from __future__ import annotations

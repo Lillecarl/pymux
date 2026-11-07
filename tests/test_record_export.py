@@ -1,6 +1,6 @@
 """
 `record-export` turns a recording into a web replay or an asciicast.
-Lillecarl/pymux#610.
+Lillecarl/pyterm#612.
 """
 
 from __future__ import annotations

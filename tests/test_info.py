@@ -83,7 +83,7 @@ async def test_tree_lists_every_window_and_pane():
 
 
 async def test_the_tree_names_the_socket_it_came_from():
-    "Two servers' answers side by side still say which is which. Lillecarl/pymux#525."
+    "Two servers' answers side by side still say which is which. Lillecarl/pyterm#527."
     async with create_session() as (pymux, state):
         pymux.socket_name = "/run/user/1000/pymux.sock.default"
         await run_as(pymux, state, "info")

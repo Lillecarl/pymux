@@ -7,7 +7,7 @@ text/uri-list (`X=1`). The paths name files there, so pymux pulls each
 one over the protocol into a directory of its own on the server, and
 pastes those paths instead. A directory arrives as a list of names under
 a handle, and each name is asked for in turn, breadth first, as the
-spec recommends. Lillecarl/pymux#892.
+spec recommends. Lillecarl/pyterm#894.
 """
 
 from __future__ import annotations
@@ -304,7 +304,7 @@ def remove_old_drops(base: Path, keep_days: int, now: float | None = None) -> li
     """
     Remove each drop's copy under `base` older than `keep_days`, by the
     time of its directory, and answer what went. Zero keeps every one.
-    It blocks: a copy may be a large tree. Lillecarl/pymux#904.
+    It blocks: a copy may be a large tree. Lillecarl/pyterm#906.
     """
     if keep_days <= 0:
         return []

@@ -187,7 +187,7 @@ def test_forced_depth_beats_probe():
 # colours it takes, but which two it uses when nothing says otherwise.
 # pymux draws its status line and its title bars over that background,
 # so what it is decides whether its own colours land or fight.
-# Lillecarl/pymux#223.
+# Lillecarl/pyterm#225.
 
 
 def test_queries_ask_for_two_defaults_and_sixteen_ansi():
@@ -256,7 +256,7 @@ def test_reply_this_cannot_read_changes_nothing(code, payload):
 #
 # The pane answers the queries of its program with what this terminal
 # paints, so the handshake asks for the theme that the person is
-# looking at. Lillecarl/pymux#283.
+# looking at. Lillecarl/pyterm#285.
 
 
 def test_ansi_reply_is_read():
@@ -336,7 +336,7 @@ async def test_theme_that_owns_screen_gives_pane_its_palette():
     """
     A pane has one palette and its clients may have two themes, so it
     answers with the theme of the client a person used last.
-    Lillecarl/pymux#223.
+    Lillecarl/pyterm#225.
     """
     async with a_client() as (pymux, client):
         pymux.session_defaults.paint_screen = True
@@ -385,7 +385,7 @@ def test_detection_asks_outer_terminal_for_its_colours():
 
 @pytest.mark.parametrize("report", ["\x1b[?997;1n", "\x1b[?997;2n"])
 def test_theme_report_asks_for_colours_again(report):
-    "A switch between light and dark says only which. Lillecarl/pymux#796."
+    "A switch between light and dark says only which. Lillecarl/pyterm#798."
 
     class Output:
         def __init__(self):
@@ -413,7 +413,7 @@ def test_theme_report_asks_for_colours_again(report):
 def test_in_band_size_report_sets_size_and_cell():
     """
     DEC 2048 says the cells and the pixels in one report, so a resize
-    after it asks no cell size. Lillecarl/pymux#797.
+    after it asks no cell size. Lillecarl/pyterm#799.
     """
 
     class Output:

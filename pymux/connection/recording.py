@@ -6,8 +6,8 @@ to it, keys and the answers pymux gave its queries alike. `record-client`
 keeps what pymux drew on one client's terminal and the keys that client
 sent: every pane, the borders, the status line, whatever floats. Both
 write the three files `ptyhost-record` writes, so the same checks replay
-them and `record-export` converts either. Lillecarl/pymux#609,
-Lillecarl/pymux#612.
+them and `record-export` converts either. Lillecarl/pyterm#611,
+Lillecarl/pyterm#614.
 
 `ptyhost-record` runs the program on a pty of its own, with a plain
 `TERM` and no `COLORTERM`. Claude Code drew no colour at all under it, so
@@ -62,7 +62,7 @@ class Recording:
         self.stop: Callable[[], None] = lambda: None
         #: Set by `record-client` on a mirrored session: gives the
         #: written files to the owner and says where they went, or
-        #: answers None when it cannot. Lillecarl/pymux#955.
+        #: answers None when it cannot. Lillecarl/pyterm#957.
         self.forward: Callable[[list[Path]], str | None] | None = None
         self._timestamp = int(time.time())
         self._started = time.monotonic()

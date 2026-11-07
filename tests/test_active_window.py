@@ -19,7 +19,7 @@ The clients here are real, because `set_active_window` reads `get_app()`
 and a session that nobody has looked at has no last active window to
 land on.
 
-Lillecarl/pymux#193.
+Lillecarl/pyterm#195.
 """
 
 from __future__ import annotations

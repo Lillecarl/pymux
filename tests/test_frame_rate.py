@@ -4,7 +4,7 @@ Capping how many frames a second a client draws.
 A frame is expensive and an eye is not fast. A pane that animates asks
 for a frame on every write, and three of them together asked a real
 server for seventeen a second. `frame-rate` refuses the ones nobody
-sees. Lillecarl/pymux#254.
+sees. Lillecarl/pyterm#256.
 
 **It belongs to a window**, because a window is what a client looks at
 and what holds the programs that animate: the one with cmatrix in it
@@ -45,7 +45,7 @@ async def test_window_starts_at_thirty(pymux):
     assert DEFAULT_FRAME_RATE == 30
     assert window(pymux).options.frame_rate == 30
     # Thirty that nobody chose, which does not cap a Wayland window.
-    # Lillecarl/pymux#636.
+    # Lillecarl/pyterm#638.
     assert not window(pymux).frame_rate_set
 
 
@@ -80,7 +80,7 @@ async def test_negative_rate_is_refused(pymux):
 async def test_global_form_says_what_new_window_starts_with(pymux):
     """
     `-g` on a window option is the default for the next window, and
-    changes none that is open. Lillecarl/pymux#199.
+    changes none that is open. Lillecarl/pyterm#201.
     """
     was = window(pymux).options.frame_rate
     pymux.handle_command("set-window-option -g frame-rate 15")
@@ -155,7 +155,7 @@ async def test_a_pane_that_draws_keeps_the_pacing_of_a_terminal_behind(rate):
     Every invalidate syncs the frame rate, and a pane that animates
     invalidates many times a second. The pacing of a terminal whose
     bytes pile up in this process must survive that, or the client asks
-    for a frame on every turn of the loop. Lillecarl/pymux#811.
+    for a frame on every turn of the loop. Lillecarl/pyterm#813.
     """
     async with create_session() as (mux, state):
         with set_app(state.app):
@@ -176,7 +176,7 @@ async def test_a_frame_held_for_the_terminals_answer_asks_for_no_other():
     """
     The answer asks for the next frame, so a skip asks for none and sets
     no pacing whose timer the answer would then wait for.
-    Lillecarl/pymux#824.
+    Lillecarl/pyterm#826.
     """
     async with create_session() as (mux, state):
         asked = []

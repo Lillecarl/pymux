@@ -7,7 +7,7 @@ the second one stayed 1, 3 for good. tmux has a session option for it
 and ships it off; this is the same option and the same default, and
 its trigger is the close. One difference, on purpose: setting the
 option on packs an order that is open already, where tmux leaves the
-gap until the next close. Lillecarl/pymux#342.
+gap until the next close. Lillecarl/pyterm#344.
 """
 
 from __future__ import annotations
@@ -137,7 +137,7 @@ async def test_an_unlinked_window_keeps_its_index():
     `unlink-window` parks a window out of the order, and
     `link-window` puts it back where it was. Packing an order nobody
     sees would move a window a person never closed.
-    Lillecarl/pymux#297.
+    Lillecarl/pyterm#299.
     """
     async with running_server() as pymux:
         await _three_windows(pymux)

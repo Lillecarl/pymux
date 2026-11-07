@@ -94,7 +94,7 @@ def test_a_scroll_that_moved_a_placement_puts_it_back():
     """
     kitty moves an image wholly inside a scrolled region, so the unchanged
     placement goes out again; a region that only holds part of it moves
-    nothing. Lillecarl/pymux#821.
+    nothing. Lillecarl/pyterm#823.
     """
     client, written = make_client()
     state = make_state(placement())
@@ -136,7 +136,7 @@ SIXEL_DATA = store_payload('0;1;0q"1;1;2;2#1;2;100;0;0#1~~')
 
 
 def test_sixel_is_sent_as_its_pixels():
-    "Kitty takes no sixel, so the client decodes it. Lillecarl/pymux#575."
+    "Kitty takes no sixel, so the client decodes it. Lillecarl/pyterm#577."
     client, written = make_client()
     client.render([view(make_state(placement(), data=SIXEL_DATA, format=PixelFormat.SIXEL))])
 
@@ -232,7 +232,7 @@ def test_placement_over_right_edge_is_cropped():
 
 # ----------------------------------------------------------------------
 # What the client draws over a pane: an image goes under it.
-# Lillecarl/pymux#816.
+# Lillecarl/pyterm#818.
 
 
 def _cells_of(put: str) -> set[tuple[int, int]]:
@@ -346,7 +346,7 @@ def test_replacing_image_of_pane_id_re_transmits():
 
     assert "\x1b_Ga=d,d=I,i=%i,q=2\x1b\\" % first_id in "".join(written)
     assert len(transmissions(written)) == 1
-    # The id stays, because a pane's text names it (Lillecarl/pymux#600),
+    # The id stays, because a pane's text names it (Lillecarl/pyterm#602),
     # and the delete took the placement with it.
     assert outer_id(written) == first_id
     assert "\x1b_Ga=p,i=%i," % first_id in "".join(written)
@@ -382,7 +382,7 @@ def test_reset_removes_images():
 
 
 # ----------------------------------------------------------------------
-# Transmitting in a worker thread. Lillecarl/pymux#576.
+# Transmitting in a worker thread. Lillecarl/pyterm#578.
 
 
 def make_spawning_client():

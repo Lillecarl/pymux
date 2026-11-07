@@ -18,7 +18,7 @@ def lock_server(pymux: Pymux, args: argparse.Namespace):
 
     An overlay belongs to one session, so this opens one on each --
     which is what "the server" means with more than one session, and
-    what separates this from lock-session. Lillecarl/pymux#324.
+    what separates this from lock-session. Lillecarl/pyterm#326.
     """
     return _lock_each(pymux)
 

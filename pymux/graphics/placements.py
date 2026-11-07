@@ -54,7 +54,7 @@ def moved_by(rows: range, scrolls: Sequence[Scroll]) -> bool:
     """
     Whether a scroll moved what lies on these rows: kitty moves an image
     that lies wholly inside a scrolled region, and only such an image
-    (`scroll_filter_margins_func`, `kitty/graphics.c`). Lillecarl/pymux#821.
+    (`scroll_filter_margins_func`, `kitty/graphics.c`). Lillecarl/pyterm#823.
     """
     return bool(rows) and any(top <= rows[0] and rows[-1] <= bottom for top, bottom, _distance in scrolls)
 
@@ -108,7 +108,7 @@ def _uncovered(placed: Placed, covered: Sequence[Rect]) -> Iterator[Placed]:
     """
     The parts of one placement that nothing in `covered` hides, each
     with the pixels of the image it shows: the placement itself when
-    nothing does, nothing when they hide it whole. Lillecarl/pymux#816.
+    nothing does, nothing when they hide it whole. Lillecarl/pyterm#818.
 
     **Cut, not lowered.** A window pane's picture goes under every cell
     with a background of its own (`WINDOW_Z`), so a float covers it with
@@ -330,7 +330,7 @@ def put_command(
     is at most the `columns` and `rows` the pane reserved whenever the
     image fits the box. So nothing below the image is overdrawn.
     `draws_at_its_own_size` is where that is decided, and it also
-    refuses a box the program asked for. Lillecarl/pymux#369.
+    refuses a box the program asked for. Lillecarl/pyterm#371.
     """
     keys: dict[GraphicsKey, Value] = {
         GraphicsKey.ACTION: Action.PUT,

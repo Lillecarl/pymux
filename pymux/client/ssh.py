@@ -8,7 +8,7 @@ panes here and runs them there.
 unix socket. openssh carries a unix socket over a channel of its own,
 `direct-streamlocal@openssh.com`, and `asyncssh` opens one with
 `conn.open_unix_connection(path)`. So the far side is a normal sshd and
-the packets are the same packets. Lillecarl/pymux#90.
+the packets are the same packets. Lillecarl/pyterm#92.
 
 **Why not `ssh host -t pymux attach`.** That starts a shell to start a
 client to reach a socket on the far side, and the terminal in the
@@ -24,19 +24,19 @@ is what `pymux attach` answers on that machine. So the client runs
 client that owns a terminal -- and opens the channel to the path it
 was given. A discovery that lived here would drift from the one
 that binds there, which is how the room changed and this client
-kept looking in `/tmp`. Lillecarl/pymux#405.
+kept looking in `/tmp`. Lillecarl/pyterm#407.
 
 **It connects when it attaches, not when it is made.** The connection
 has to live in the loop that reads it, and `create_client` is called
 outside one.
 
 This does not start a server. `ssh://` names a machine that is already
-running one; spawning one is the other half of Lillecarl/pymux#90.
+running one; spawning one is the other half of Lillecarl/pyterm#92.
 
 **A link that drops is a pause and not the end.** The panes are on the
 other machine, so this client shows a notice and opens the link again.
 `client/relink.py` and `client/reconnect.py` hold that part.
-Lillecarl/pymux#256.
+Lillecarl/pyterm#258.
 """
 
 from __future__ import annotations
@@ -88,7 +88,7 @@ __all__ = [
 #: that slept, a network that changed. The read waits for ever, so the
 #: notice never comes and there is nothing to retry. asyncssh sends
 #: `keepalive@openssh.com`, which is what `ssh -o ServerAliveInterval`
-#: sends. Lillecarl/pymux#256.
+#: sends. Lillecarl/pyterm#258.
 #:
 #: **The wait is four intervals, not three.** asyncssh counts up and
 #: ends the connection when the count passes the maximum, so the
@@ -97,14 +97,14 @@ __all__ = [
 #: that went, and the keepalive costs one small packet per five
 #: seconds of silence. openssh's own habit is fifteen, which is
 #: chosen for a login session that may sit idle for hours, not for a
-#: screen somebody is looking at. Lillecarl/pymux#445.
+#: screen somebody is looking at. Lillecarl/pyterm#447.
 KEEPALIVE_INTERVAL = 5
 KEEPALIVE_MISSES = 3
 
 #: How long a way out waits for a closed connection to finish closing.
 #: asyncssh closes through loop callbacks, and one that ran after the
 #: scope it belonged to completed a future whose waiter was gone.
-#: Lillecarl/pymux#587.
+#: Lillecarl/pyterm#589.
 CLOSE_SECONDS = 2.0
 
 #: What runs on the other machine when the address named no path. It
@@ -220,7 +220,7 @@ async def find_socket(connection: SSHClientConnection) -> str:
     **One command runs on the other machine, and it only prints.**
     `pymux find` answers with the socket a local attach would
     take, found by the same `servers_newest_first` that binds and
-    attaches on that machine -- the room of Lillecarl/pymux#405
+    attaches on that machine -- the room of Lillecarl/pyterm#407
     and the flat place before it, newest first. The client
     guesses no shape at all: a discovery that lived here would
     drift from the one that binds there, which is how the room
@@ -279,7 +279,7 @@ class SshClient(TerminalClient):
     can_forward = True
 
     #: This link crosses a network, so the frames come compressed:
-    #: zstd makes text 6.5x smaller. Lillecarl/pymux#633.
+    #: zstd makes text 6.5x smaller. Lillecarl/pyterm#635.
     wire_formats = (MSGPACK_ZSTD, MSGPACK)
 
     def __init__(self, socket_name: str, **connect_with: Any) -> None:
@@ -295,10 +295,10 @@ class SshClient(TerminalClient):
         self._writer: SSHWriter[bytes] | None = None
         #: What changed about the forwards when the link came back, for
         #: `_attached` to say once it has a client to say it to.
-        #: Lillecarl/pymux#442.
+        #: Lillecarl/pyterm#444.
         self._forwards_moved = ""
         #: The link while it is gone. Lambdas, so a test that replaces
-        #: `connect` is the one dialled. Lillecarl/pymux#256.
+        #: `connect` is the one dialled. Lillecarl/pyterm#258.
         self.relink: Relink[Link] = Relink(
             TerminalWaiting(self),
             dial=lambda timeout: self.connect(timeout),
@@ -307,11 +307,11 @@ class SshClient(TerminalClient):
         #: The ports this client was asked to forward. It outlives a
         #: connection on purpose: `connect` opens the wanted set again
         #: on the new one, so a link that dropped gives the tunnels
-        #: back with the panes. Lillecarl/pymux#436.
+        #: back with the panes. Lillecarl/pyterm#438.
         self.forwards = Forwards()
         #: The loop that writes to the server, for sound from a thread.
         self._loop: asyncio.AbstractEventLoop | None = None
-        #: Sound, where this machine can play it. Lillecarl/pymux#657.
+        #: Sound, where this machine can play it. Lillecarl/pyterm#659.
         devices = sound_devices()
         self.audio = AudioClient(devices, self._send_from_a_thread) if devices is not None else None
 
@@ -358,7 +358,7 @@ class SshClient(TerminalClient):
         #
         # What moved is kept for `_attached` to report, because the
         # server has no client to hang a message on until `start-gui`
-        # has been sent. Lillecarl/pymux#442.
+        # has been sent. Lillecarl/pyterm#444.
         self._forwards_moved = await self.forwards.reopen(connection)
 
         return connection, reader
@@ -449,7 +449,7 @@ class SshClient(TerminalClient):
                 # channel. The next one takes over the socket, so this
                 # is a link to open again and not a detach. The old
                 # server's images go: the next one knows none of them.
-                # Lillecarl/pymux#409.
+                # Lillecarl/pyterm#411.
                 until = anyio.current_time() + self.restart_wait
                 self.restart_wait = None
                 if self.placed_images:
@@ -460,7 +460,7 @@ class SshClient(TerminalClient):
                 # `attach -x` on another terminal told this client to
                 # leave. The link going while that packet was on its way
                 # is still the end of this attachment: coming back would
-                # be coming back uninvited. Lillecarl/pymux#347.
+                # be coming back uninvited. Lillecarl/pyterm#349.
                 return None
             # None is the server closing the connection: a detach.
             return lost
@@ -511,7 +511,7 @@ class SshClient(TerminalClient):
                 with its input gone there is nothing left to serve.
                 The connection is closed, and the read loop ends the
                 way a closed link does, through the `finally` that
-                restores the terminal. Lillecarl/pymux#419.
+                restores the terminal. Lillecarl/pyterm#421.
                 """
                 while True:
                     await self.input_released()
@@ -539,7 +539,7 @@ class SshClient(TerminalClient):
                 #
                 # It carries a message only when something moved, so a
                 # first attach and a reconnect that changed nothing are
-                # both silent. Lillecarl/pymux#442.
+                # both silent. Lillecarl/pyterm#444.
                 report_forwards(self, self._forwards_moved)
                 self._forwards_moved = ""
 
@@ -562,7 +562,7 @@ class SshClient(TerminalClient):
                         # machine to the browser and the other machine
                         # to the pane that printed it. The port has to
                         # be here before the page is.
-                        # Lillecarl/pymux#437.
+                        # Lillecarl/pyterm#439.
                         tasks.start_soon(
                             self._while_the_link_holds,
                             open_asked,
@@ -649,7 +649,7 @@ class SshClient(TerminalClient):
         mean opposite things to a client that can reconnect. Measured
         against a real asyncssh server: a deliberate detach and a clean
         `close()` both give end of file, and an aborted connection
-        gives `ConnectionLost`. Lillecarl/pymux#256.
+        gives `ConnectionLost`. Lillecarl/pyterm#258.
         """
         packets = PacketReader()
 

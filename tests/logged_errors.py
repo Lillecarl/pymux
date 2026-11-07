@@ -3,7 +3,7 @@ Every error the server logged while a measurement ran.
 
 A measurement that logged one is red even when every number is in
 budget. A redraw that raised in the background passed pymux-busy for
-weeks (Lillecarl/pymux#580), and a stub with no `forward_osc` filled
+weeks (Lillecarl/pyterm#582), and a stub with no `forward_osc` filled
 pymux-leaks with tracebacks while it passed.
 """
 

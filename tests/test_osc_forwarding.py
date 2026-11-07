@@ -111,7 +111,7 @@ class FakeConnection:
     def __init__(self):
         self.written = []
         self._pointer_shape_sent = ""
-        # A kitty: it shows OSC 99. Lillecarl/pymux#497.
+        # A kitty: it shows OSC 99. Lillecarl/pyterm#499.
         self.replies = SimpleNamespace(notification_osc=Osc.NOTIFICATION)
         self.pointer_cell = None
 
@@ -138,7 +138,7 @@ class FakeClientState:
     session = FakeSession()
     temporary = False
     border_drag = None
-    # Out of sight, so a notification goes out. Lillecarl/pymux#799.
+    # Out of sight, so a notification goes out. Lillecarl/pyterm#801.
     terminal_focused = False
     chooser = None
     popups: tuple = ()
@@ -205,7 +205,7 @@ def test_notification_reaches_every_client():
 
 
 def test_notification_without_identifier_gets_one():
-    "So a click on it can be routed. Lillecarl/pymux#779."
+    "So a click on it can be routed. Lillecarl/pyterm#781."
     pymux, connections = make_pymux()
     pymux.outward.forward_osc(FakePane(), "99", "d=0;half a message")
     assert connections[0].written == [sequence("99", "i=1:d=0:a=report;half a message")]
@@ -235,7 +235,7 @@ FROM = {
     ],
 )
 def test_each_terminal_gets_a_notification_in_the_osc_it_shows(source, shows, wanted):
-    "Every notification OSC in, every one out, per client. Lillecarl/pymux#497."
+    "Every notification OSC in, every one out, per client. Lillecarl/pyterm#499."
     pymux, (connection, _other) = make_pymux()
     connection.replies.notification_osc = shows
     for code, param in FROM[source]:
@@ -342,7 +342,7 @@ def test_a_pane_is_refused_the_clipboard_by_default():
     tmux ships "external", where a copy the person makes goes out and
     a program in a pane does not: a program on the far side of an ssh
     connection would otherwise write what that person pastes next.
-    Lillecarl/pymux#378.
+    Lillecarl/pyterm#380.
     """
     assert Pymux().options.set_clipboard is Clipboard.EXTERNAL
 

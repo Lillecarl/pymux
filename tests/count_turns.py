@@ -5,7 +5,7 @@ How many turns of the event loop one keystroke costs.
 `checks.pymux-latency` times the whole thing across three processes. The
 first is exact and sees no waiting; the second sees the waiting and
 belongs to the machine that read it. **The gap between them was 45% of
-a keystroke and nothing could say what it was.** Lillecarl/pymux#232.
+a keystroke and nothing could say what it was.** Lillecarl/pyterm#234.
 
 A turn of the loop is the number that can. It goes up when pymux hands
 control back and waits, which is exactly what an instruction count
@@ -146,7 +146,7 @@ PATIENCE = 10.0
 #: "is the loop idle yet" and reposted itself with
 #: `call_soon_threadsafe`, whose write to the loop's self-pipe put a
 #: reader into `_ready` -- so its own question answered "no" every time.
-#: Lillecarl/pymux#247.
+#: Lillecarl/pyterm#249.
 #:
 #: A run that says another number is not wrong. Read the traces, and
 #: write the new one here with what moved it.
@@ -374,7 +374,7 @@ def report(counted: list, traced: list) -> int:
         "\nThe shortest keystroke took %d turns. Nothing judges the rest of"
         "\nthe distribution: a loaded machine misses a poll and pays for a"
         "\nsecond redraw, which is a property of the machine."
-        "\nLillecarl/pymux#232." % (BEST,)
+        "\nLillecarl/pyterm#234." % (BEST,)
     )
     return 0
 

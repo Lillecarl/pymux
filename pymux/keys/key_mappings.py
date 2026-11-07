@@ -16,7 +16,7 @@ They were not, for 52 of them. ptterm carried a second copy of this
 file, built the other way round, and `send-keys Up` sent the
 application cursor form to a pane that never asked for it while a press
 of the same key sent the plain one. One table now, and
-`tests/test_send_keys.py` reads the bytes. Lillecarl/pymux#119.
+`tests/test_send_keys.py` reads the bytes. Lillecarl/pyterm#121.
 """
 
 from __future__ import annotations
@@ -87,7 +87,7 @@ def pymux_key_to_prompt_toolkit_key_sequence(key: str) -> tuple[Keys | str, ...]
     """
     # super, hyper and meta, which no `Keys` member names and no list
     # could. The name is built the same way the reader builds it, so
-    # the two meet in the middle. Lillecarl/pymux#181.
+    # the two meet in the middle. Lillecarl/pyterm#183.
     built = _built_name(key)
     if built is not None:
         return (built,)
@@ -120,7 +120,7 @@ def pymux_key_to_prompt_toolkit_key_sequence(key: str) -> tuple[Keys | str, ...]
         # time, which left out every other single character: "M-J",
         # which tmux binds, answered "Invalid key". A list of the ones
         # somebody thought of is not the rule, and the rule is one
-        # line. Lillecarl/pymux#204.
+        # line. Lillecarl/pyterm#206.
         #
         # The table keeps those entries because it is also the list
         # that completes a key (`commands/completer.py`,
@@ -178,7 +178,7 @@ def _keys_to_data() -> dict[Keys, str]:
 #: `ANSI_SEQUENCES` cannot answer, because nothing in it produces one
 #: of these keys: they reach pymux through the reader in `keys.py`,
 #: out of a terminal that speaks a newer encoding.
-#: Lillecarl/pymux#168.
+#: Lillecarl/pyterm#170.
 _CTRL_SHIFT_TO_VT100 = {getattr(Keys, "ControlShift%s" % chr(ord("A") + i)): chr(i + 1) for i in range(26)}
 
 _PROMPT_TOOLKIT_KEY_TO_VT100 = {**_keys_to_data(), **_CTRL_SHIFT_TO_VT100}
@@ -263,7 +263,7 @@ def _built_name_as_legacy_bytes(key: str) -> str | None:
 #: and ctrl+shift+a are one control code there. So a binding can name
 #: the key and `prompt_toolkit_key_to_vt100_key` gives what ctrl alone
 #: gives, which is what a legacy keyboard would have sent.
-#: Lillecarl/pymux#168.
+#: Lillecarl/pyterm#170.
 _CTRL_SHIFT_LETTERS: dict[str, tuple[str, ...]] = {
     "C-S-%s" % chr(ord("a") + i): (getattr(Keys, "ControlShift%s" % chr(ord("A") + i)),) for i in range(26)
 }
@@ -497,7 +497,7 @@ PYMUX_TO_PROMPT_TOOLKIT_KEYS: dict[str, tuple[str, ...]] = {
     # Enter` has to send "\r" as well. Naming the line feed here made
     # both wrong, and a special case in `prompt_toolkit_key_to_vt100_key`
     # answered "\r" for `ControlJ` to hide it. redis-cli is the program
-    # that found that. Lillecarl/pymux#119.
+    # that found that. Lillecarl/pyterm#121.
     "Enter": (Keys.ControlM,),
     "Home": (Keys.Home,),
     "Escape": (Keys.Escape,),

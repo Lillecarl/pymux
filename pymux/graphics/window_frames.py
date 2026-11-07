@@ -4,7 +4,7 @@ frames are edits of the last one, placed under every cell with a
 background of its own. The frame is encoded off the event loop and
 written when it is ready, one update per window at a time; a client
 that encodes pixels itself gets them raw or as VP9 instead.
-Lillecarl/pymux#631, Lillecarl/pymux#634, Lillecarl/pymux#639.
+Lillecarl/pyterm#633, Lillecarl/pyterm#636, Lillecarl/pyterm#641.
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ class WindowView(NamedTuple):
     `codec` is the window's `window-codec`. `await video(encoder)` answers
     the next frame in `encoder`'s VP9 stream, as
     `pysmithay.Compositor.vp9_frame` does, and `encoder()` makes one: a
-    client holds one stream per window pane. Lillecarl/pymux#639.
+    client holds one stream per window pane. Lillecarl/pyterm#641.
     """
 
     pane_id: int
@@ -73,7 +73,7 @@ def frame_parts(image_id: int, frame: FrameRects, after: str) -> list[Message]:
     """
     A frame as `window-frame` packets of at most `FRAME_PART_BYTES` of
     pixels each: every rectangle cut into bands of whole rows, which the
-    client puts back together. Lillecarl/pymux#634.
+    client puts back together. Lillecarl/pyterm#636.
     """
     _serial, whole, width, height, rects = frame
     head: Message = {
@@ -105,7 +105,7 @@ def video_parts(image_id: int, codec: Codec, frame: VideoFrame, after: str) -> l
     """
     An encoded frame as `window-frame` packets of at most
     `FRAME_PART_BYTES` each. The last part says what changed, which the
-    client takes from the frame it decodes. Lillecarl/pymux#639.
+    client takes from the frame it decodes. Lillecarl/pyterm#641.
     """
     _serial, keyframe, width, height, data, rects = frame
     head: Message = {
@@ -134,7 +134,7 @@ UNDER_BACKGROUNDS = -(1 << 30)
 #: with a background colour of its own. The pane's cells take the default
 #: background, so the picture shows there, and a prompt, a menu or a
 #: message drawn over the pane covers it. Zero or above would draw it
-#: over them all. Lillecarl/pymux#647.
+#: over them all. Lillecarl/pyterm#649.
 WINDOW_Z = UNDER_BACKGROUNDS - 1
 
 
@@ -158,14 +158,14 @@ class WindowFrames:
 
         #: Writes a window pane's frame as `window-frame` packets, for a
         #: client that encodes the pixels for its terminal itself; None
-        #: when the frame goes as kitty commands. Lillecarl/pymux#634.
+        #: when the frame goes as kitty commands. Lillecarl/pyterm#636.
         self.send_frame: Callable[[list[Message]], Awaitable[None]] | None = None
         #: Waits until the client answered the window frames it was
         #: sent, for a client that answers; a window pane's next frame
-        #: is read only after it. Lillecarl/pymux#641.
+        #: is read only after it. Lillecarl/pyterm#643.
         self.frame_room: Callable[[], Awaitable[None]] | None = None
         #: The codecs this client decodes, as its `start-gui` says.
-        #: Lillecarl/pymux#639.
+        #: Lillecarl/pyterm#641.
         self.codecs: frozenset[str] = frozenset()
         #: Pane id -> what this client holds of that window pane.
         self._shown: dict[int, _ShownWindow] = {}
@@ -179,7 +179,7 @@ class WindowFrames:
         self._pending: dict[int, int] = {}
         #: Pane id -> how often it left view. Leaving deletes this
         #: client's image, so an update encoded before is for an image
-        #: that is gone. Lillecarl/pymux#753.
+        #: that is gone. Lillecarl/pyterm#755.
         self._departures: dict[int, int] = {}
         #: The ones that drew again meanwhile, and the view to send it by.
         self._again: dict[int, WindowView] = {}
@@ -204,7 +204,7 @@ class WindowFrames:
             self.graphics.flush()
 
     def is_frame_answer(self, reply: GraphicsReply) -> bool:
-        "Whether `reply` is the terminal's answer to a window pane's frame. Lillecarl/pymux#643."
+        "Whether `reply` is the terminal's answer to a window pane's frame. Lillecarl/pyterm#645."
         return reply.image_id is not None and any(window.outer_id == reply.image_id for window in self._shown.values())
 
     def render(self, views: Iterable[WindowView]) -> None:
@@ -219,7 +219,7 @@ class WindowFrames:
         ready, by `_update`. One update per window is out at a
         time; a frame drawn meanwhile goes with the next one, as damage
         the two share. A window that moved is put again at once, without
-        waiting for its pixels. Lillecarl/pymux#631.
+        waiting for its pixels. Lillecarl/pyterm#633.
         """
         if not self.graphics.kitty_supported or self.graphics.spawn is None:
             return
@@ -256,7 +256,7 @@ class WindowFrames:
 
         Only for a window the last frame placed. A frame drawn while
         an update is out goes with the next one, which starts as soon
-        as that one is written. Lillecarl/pymux#636.
+        as that one is written. Lillecarl/pyterm#638.
         """
         if not self.graphics.kitty_supported or self.graphics.spawn is None or view.pane_id not in self._places:
             return
@@ -327,7 +327,7 @@ class WindowFrames:
         # counts the frame. A client already up to date shows the frame
         # too: a commit that drew nothing waits on its callback as well,
         # and Firefox paints nothing until it is answered.
-        # Lillecarl/pymux#638.
+        # Lillecarl/pyterm#640.
         view.shown(bool(update))
 
     async def _send_frame(
@@ -338,7 +338,7 @@ class WindowFrames:
         since: int | None,
         generation: int,
     ) -> None:
-        "The same as raw pixels, for a client that encodes them for its terminal. Lillecarl/pymux#634."
+        "The same as raw pixels, for a client that encodes them for its terminal. Lillecarl/pyterm#636."
         try:
             frame = await view.rects(since)
         except Exception:
@@ -368,7 +368,7 @@ class WindowFrames:
         outer_id: int,
         generation: int,
     ) -> None:
-        "The window pane's next frame in this client's VP9 stream. Lillecarl/pymux#639."
+        "The window pane's next frame in this client's VP9 stream. Lillecarl/pyterm#641."
         assert view.video is not None and view.encoder is not None
         encoder = self._encoders.get(view.pane_id)
         if encoder is None:
@@ -390,7 +390,7 @@ class WindowFrames:
         view.shown(bool(data))
 
     def _answered(self, parts: list[Message]) -> list[Message]:
-        "Ask a client that answers frames to let its terminal answer this one. Lillecarl/pymux#643."
+        "Ask a client that answers frames to let its terminal answer this one. Lillecarl/pyterm#645."
         if self.frame_room is not None:
             parts[-1][Field.ANSWER] = True
         return parts

@@ -9,7 +9,7 @@ that only mirrors the pane passes the tunnel one hop on, so any depth
 works with no code per hop. The port stays the program's unless it is
 taken here, because a redirect URL of a login flow names it. The URL
 then opens the way any URL does, so a client attached over SSH forwards
-the port once more. Lillecarl/pymux#853.
+the port once more. Lillecarl/pyterm#855.
 """
 
 from __future__ import annotations

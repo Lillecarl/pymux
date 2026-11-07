@@ -7,7 +7,7 @@ not prove a key arrived: it travels through the forwarder pane, which
 is alive whether or not a split happened. One run of
 `cut-follows-the-terminal` drew one pane where the fixture asks for
 two, stayed green, and its server log has no second process in it.
-Lillecarl/pymux#353.
+Lillecarl/pyterm#355.
 """
 
 from __future__ import annotations
@@ -52,7 +52,7 @@ def test_a_knob_that_names_nothing_narrows_nothing(monkeypatch):
 
 
 def test_a_knob_names_fixtures_that_share_no_substring(monkeypatch):
-    "Which is the case `PYMUX_CHROME` cannot do. Lillecarl/pymux#365."
+    "Which is the case `PYMUX_CHROME` cannot do. Lillecarl/pyterm#367."
     monkeypatch.setenv("PYMUX_CHROME_LIST", "which-key,clock,copy-mode")
     assert exact_list("PYMUX_CHROME_LIST") == ["which-key", "clock", "copy-mode"]
 
@@ -66,7 +66,7 @@ def test_one_misspelt_name_in_an_exact_list_stops_the_run():
     And not "did any of them match". A list of four where one is
     misspelt would otherwise run the other three, and a batch that
     quietly shrank is a gap in the gallery nobody sees.
-    Lillecarl/pymux#365.
+    Lillecarl/pyterm#367.
     """
     with pytest.raises(SystemExit) as raised:
         chosen_by_name(["clock", "which-key"], ["clock", "which_key"], "fixture")
@@ -84,7 +84,7 @@ def test_a_fixture_asks_for_no_mode_and_no_prefix_unless_it_says_otherwise():
     """
     The quiet answer is the default, so a fixture that says nothing is
     still judged: a run that left copy mode open or the prefix held
-    where none was asked for goes red. Lillecarl/pymux#363.
+    where none was asked for goes red. Lillecarl/pyterm#365.
     """
     assert Fixture("").mode == ""
     assert Fixture("").prefix is False
@@ -102,6 +102,6 @@ def test_every_fixture_says_what_its_keys_build(name):
     assert all(one >= 1 for one in fixture.panes)
     # A mode is named the way tmux names one, and nothing else is a
     # mode: pymux draws the chooser and the palette over a pane too,
-    # and part two of Lillecarl/pymux#363 is what to call those.
+    # and part two of Lillecarl/pyterm#365 is what to call those.
     assert fixture.mode in MODES
     assert isinstance(fixture.prefix, bool)

@@ -2,9 +2,9 @@
 `set-option status-keys vi`, and the way out of the command line.
 
 tmux gives Escape to vi when the status keys are vi's: it leaves insert
-mode and the line stays open, which Lillecarl/pymux#157 decided. Nothing
+mode and the line stays open, which Lillecarl/pyterm#159 decided. Nothing
 took the press after that, so with vi status keys **no number of
-Escapes closed the line at all**. Lillecarl/pymux#255.
+Escapes closed the line at all**. Lillecarl/pyterm#257.
 
 Carl: "if we're in vi mode we should display current editing mode, if
 we're in normal mode esc should close (so in insert mode esc goes to
@@ -60,7 +60,7 @@ async def test_one_escape_closes_with_emacs_status_keys():
 async def test_the_first_escape_goes_to_normal_mode_and_keeps_the_line():
     """
     Escape belongs to vi in insert mode: it leaves insert mode and the
-    line stays open. Lillecarl/pymux#157 decided that, and it is what
+    line stays open. Lillecarl/pyterm#159 decided that, and it is what
     the second press was missing.
     """
     async with create_session() as (pymux, state):
@@ -73,7 +73,7 @@ async def test_the_first_escape_goes_to_normal_mode_and_keeps_the_line():
 
 
 async def test_the_second_escape_closes():
-    "The whole of Lillecarl/pymux#255: normal mode, Escape, gone."
+    "The whole of Lillecarl/pyterm#257: normal mode, Escape, gone."
     async with create_session() as (pymux, state):
         _vi(pymux, state)
         in_command_mode(state)

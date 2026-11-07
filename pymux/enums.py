@@ -26,7 +26,7 @@ class EditingKeys(StrEnum):
     EMACS = "emacs"
     VI = "vi"
     #: Helix's modal keys, through ptkhx. The command line and prompts
-    #: only, so far. Lillecarl/pymux#749.
+    #: only, so far. Lillecarl/pyterm#751.
     HELIX = "helix"
 
 
@@ -61,7 +61,7 @@ class WindowCodec(StrEnum):
     that changed, or as a VP9 stream, which costs some sharpness and a
     few milliseconds of encoding for far fewer bytes on a slow link. A
     client that cannot decode the codec gets the pixels.
-    Lillecarl/pymux#639.
+    Lillecarl/pyterm#641.
     """
 
     LOSSLESS = "lossless"
@@ -72,7 +72,7 @@ class PaneBrowser(StrEnum):
     """
     Which programs in a pane find `pymux-browser` as their browser, and
     so drive the browser on the machine of the person instead of one on
-    the server. Each launch is still asked. Lillecarl/pymux#653.
+    the server. Each launch is still asked. Lillecarl/pyterm#655.
     """
 
     #: None of them.
@@ -90,7 +90,7 @@ class AudioServerMode(StrEnum):
     """
     Whose PipeWire holds the speaker and the microphone that panes play
     into and record from, which pymux carries to the client used last.
-    `pymux/audio.py` says what each costs. Lillecarl/pymux#657.
+    `pymux/audio.py` says what each costs. Lillecarl/pyterm#659.
     """
 
     #: Private when the build carries PipeWire, shared otherwise.
@@ -106,7 +106,7 @@ class WaylandPortal(StrEnum):
     """
     Where the desktop portal's appearance settings for the programs in
     window panes are served. `pymux/wayland/portal.py` says what each costs.
-    Lillecarl/pymux#812.
+    Lillecarl/pyterm#814.
     """
 
     #: The host's session bus, while no real portal holds or can start there.
@@ -117,7 +117,7 @@ class WaylandPortal(StrEnum):
 
 
 class ClientAudio(StrEnum):
-    "What a client does with the sound of the server. Lillecarl/pymux#657."
+    "What a client does with the sound of the server. Lillecarl/pyterm#659."
 
     #: Play it, and lend the microphone while a program records.
     ON = "on"
@@ -130,7 +130,7 @@ class AudioFrame(StrEnum):
     """
     How much sound one packet carries, in milliseconds: every size Opus
     encodes. Shorter is less delay, because each end buffers two frames
-    and its device one; longer is fewer packets. Lillecarl/pymux#657.
+    and its device one; longer is fewer packets. Lillecarl/pyterm#659.
 
     `auto` starts at the shortest and goes up a size each time the link
     cannot keep up (`AudioLink` in `pymux/audio.py`).
@@ -154,7 +154,7 @@ class FileTransfer(StrEnum):
     """
     Who saves a file that a program in a pane sends to the person: the
     terminal of the client, or the pymux client itself.
-    Lillecarl/pymux#743.
+    Lillecarl/pyterm#745.
     """
 
     #: `passthrough` for a client on the machine of the server, and
@@ -167,7 +167,7 @@ class FileTransfer(StrEnum):
 
 
 class NotificationPopups(StrEnum):
-    "Whether a client shows a notification as a box inside pymux. Lillecarl/pymux#826."
+    "Whether a client shows a notification as a box inside pymux. Lillecarl/pyterm#828."
 
     #: Only when the client's terminal is not known to show desktop
     #: notifications itself (`TerminalReplies.notification_osc`).
@@ -182,7 +182,7 @@ class WindowScroll(StrEnum):
     window. kitty sends a trackpad as one event per cell of finger
     travel, and a mouse wheel as one per notch: the terminal says which
     it was nowhere, so the person at the client does.
-    Lillecarl/pymux#652.
+    Lillecarl/pyterm#654.
     """
 
     #: One cell of pixels, which the program scrolls exactly: a trackpad.
@@ -192,7 +192,7 @@ class WindowScroll(StrEnum):
 
 
 class MessageRow(StrEnum):
-    "Where a pane's agent message goes, under the pane's bar. Lillecarl/pymux#931."
+    "Where a pane's agent message goes, under the pane's bar. Lillecarl/pyterm#933."
 
     #: A row of the pane's own, so the program is one row shorter while it shows.
     TAKE = "take"
@@ -241,10 +241,10 @@ class Woke(StrEnum):
     What asked the clients for a frame.
 
     `Pymux.invalidate` writes it into the log. A frame that goes out
-    when the screen did not change is a fault (Lillecarl/pymux#117),
+    when the screen did not change is a fault (Lillecarl/pyterm#119),
     and the check that catches one could only say which bytes it saw.
     The reason is what makes such a run readable: it names what woke
-    the client, at the moment it did. Lillecarl/pymux#180.
+    the client, at the moment it did. Lillecarl/pyterm#182.
 
     `APPLICATION` is the one reason pymux cannot name, and it is the
     default for that reason. It is what `client_asked_for_frame`
@@ -290,22 +290,22 @@ class Woke(StrEnum):
     #: frame, so that it lands with the screen that shows what it is
     #: about. A pane in a window nobody looks at draws no frame of its
     #: own, and its notification has to go out anyway, so this asks for
-    #: one. Lillecarl/pymux#478.
+    #: one. Lillecarl/pyterm#480.
     PANE_WROTE_AN_OSC = "a pane wrote an escape for the terminal of a client"
     NOTIFICATION_SENT = "pymux sent a notification to the terminal of a client"
     PANE_PROGRESSED = "a pane said how far along it is"
     PANE_PROGRAM_STATUS = "a pane's program said what it is doing"
     #: A clipboard query goes behind a frame, after any copy queued
     #: before it, so a paste reads what was just copied.
-    #: Lillecarl/pymux#383.
+    #: Lillecarl/pyterm#385.
     CLIPBOARD_ASKED = "a pane pasted, so a client's terminal is asked for its clipboard"
     #: A copy for the person's clipboard goes behind a frame too.
     CLIPBOARD_WRITTEN = "a copy goes to the clipboard of the clients"
-    #: Window panes. Lillecarl/pymux#620.
+    #: Window panes. Lillecarl/pyterm#622.
     WINDOW_PANE_OPENED = "a Wayland window opened in a pane"
     WINDOW_PANE_CHANGED = "a Wayland window took a title or an app id"
     #: Another server's sessions changed, and the mirrors here follow.
-    #: Lillecarl/pymux#759.
+    #: Lillecarl/pyterm#761.
     TREE_MIRRORED = "the sessions of another server changed"
     #: A server that mirrors this one has another size for a window.
     PEER_RESIZED = "a server that mirrors a window here has another size for it"
@@ -383,7 +383,7 @@ class ForwardMode(StrEnum):
     than loopback, and one that a program in a pane made rather than
     the person, are confirmed whatever this says: `ForwardRequests.needs_asking`
     holds the two. The port belongs to the machine somebody is sitting
-    at. Lillecarl/pymux#440.
+    at. Lillecarl/pyterm#442.
     """
 
     ON = "on"

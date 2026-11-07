@@ -1,7 +1,7 @@
 """
 Clients with different cells: the panes take the cell of the client a
 person used last, so the terminal in front of them draws a window pane
-pixel for pixel. Lillecarl/pymux#753.
+pixel for pixel. Lillecarl/pyterm#755.
 """
 
 from __future__ import annotations

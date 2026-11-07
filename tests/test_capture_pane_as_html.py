@@ -13,7 +13,7 @@ again. So `pyte.html` runs here, and a caller needs no pyte at all.
 
 `show-html-stylesheet` is the other half. The spans name custom
 properties, so a page that defines none of them draws nothing.
-Lillecarl/pymux#452.
+Lillecarl/pyterm#454.
 """
 
 from __future__ import annotations
@@ -109,7 +109,7 @@ class _Read(HTMLParser):
         The classes and the attribute together, because a reader should
         not have to know which half a rendition took: most of them are
         a class of the stylesheet now, and a colour with a value in it
-        is not. Lillecarl/pymux#460.
+        is not. Lillecarl/pyterm#462.
         """
         for piece, classes, style, _href in self.pieces:
             if wanted in piece:
@@ -187,7 +187,7 @@ async def test_the_default_range_is_the_visible_pane(pymux):
     not ten thousand rows of history.
 
     The text capture took the whole buffer when this was written, and
-    the two agree now: Lillecarl/pymux#457 gave it the same default,
+    the two agree now: Lillecarl/pyterm#459 gave it the same default,
     and `-S -` is what still reaches the history on both sides.
     """
     create_pane(pymux, NINE_LINES)

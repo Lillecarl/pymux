@@ -92,7 +92,7 @@ def test_ctrl_shift_text_key():
     """
     The legacy encoding has no shift for a ctrl+letter combination, so
     this key used to arrive as ctrl+x and could not be bound on its
-    own. It has a name now. Lillecarl/pymux#168.
+    own. It has a name now. Lillecarl/pyterm#170.
     """
     assert parse("\x1b[120;6u") == [(Keys.ControlShiftX, "\x1b[120;6u")]
 
@@ -152,7 +152,7 @@ def test_f3_arrives_as_number_and_not_as_letter():
     position report. So a modified F3 from any terminal that speaks the
     protocol used to reach nothing: prompt_toolkit's table knows plain
     "CSI 13~" from rxvt and stops there, and pyte read the number as a
-    tilde key that pymux has no name for. Lillecarl/pymux#242.
+    tilde key that pymux has no name for. Lillecarl/pyterm#244.
     """
     assert parse("\x1b[13~") == [(Keys.F3, "\x1b[13~")]
     assert parse("\x1b[13;5~") == [(Keys.ControlF3, "\x1b[13;5~")]
@@ -163,7 +163,7 @@ def test_a_legacy_modified_f3_is_the_key_and_not_a_cursor_report():
     """
     xterm, foot, WezTerm, Ghostty, Alacritty, VTE and tmux all send
     "CSI 1;5R" for ctrl+F3, which is also a cursor report of row 1.
-    Lillecarl/pymux#244.
+    Lillecarl/pyterm#246.
     """
     assert parse("\x1b[1;5R") == [(Keys.ControlF3, "\x1b[1;5R")]
     for modifier in range(2, 9):
@@ -255,7 +255,7 @@ def test_da1_reply_goes_to_reply_callback():
 
 
 def test_focus_reports_go_to_reply_callback():
-    "A window gaining or losing the focus is no key press. Lillecarl/pymux#794."
+    "A window gaining or losing the focus is no key press. Lillecarl/pyterm#796."
     pressed = []
     replies = []
     parser = KittyVt100Parser(pressed.append, reply_callback=replies.append)
@@ -265,7 +265,7 @@ def test_focus_reports_go_to_reply_callback():
 
 
 def test_theme_report_goes_to_reply_callback():
-    "DEC 2031's report of a light or dark switch. Lillecarl/pymux#796."
+    "DEC 2031's report of a light or dark switch. Lillecarl/pyterm#798."
     pressed = []
     replies = []
     parser = KittyVt100Parser(pressed.append, reply_callback=replies.append)
@@ -492,7 +492,7 @@ def test_spelled_out_escape_ends_key_buffer():
     binding may start with escape, and the key processor holds a bare
     Escape in case a second key completes one. That is what made the
     command line take two presses of Escape to close.
-    Lillecarl/pymux#164.
+    Lillecarl/pyterm#166.
     """
     assert fed("\x1b[27u")[-1] is _Flush
 
@@ -532,11 +532,11 @@ def create_unnamed_key(data: str) -> Unnamed:
 def test_key_with_no_name_is_one_key_and_not_taken_apart():
     """
     A key pymux cannot name is one `Keys.UnnamedKey`, whose binding
-    hands the sequence to the pane. Lillecarl/pymux#707.
+    hands the sequence to the pane. Lillecarl/pyterm#709.
 
     Not a `None`: that means "not a key sequence", and the parser then
     hands the characters of the sequence out one by one.
-    Lillecarl/pymux#167.
+    Lillecarl/pyterm#169.
     """
     assert parse("\x1b[57358u") == [(Keys.UnnamedKey, "\x1b[57358u")]  # caps lock
     assert parse("\x1b[57428u") == [(Keys.UnnamedKey, "\x1b[57428u")]  # play
@@ -587,7 +587,7 @@ def test_super_hyper_and_meta_get_name_of_their_own():
     Five modifiers over every key is more combinations than anybody
     would write down, so the name is built rather than looked up.
     `KeyName` is what prompt_toolkit gives an application for exactly
-    this. Lillecarl/pymux#181.
+    this. Lillecarl/pyterm#183.
     """
     assert parse("\x1b[97;9u") == [("super-a", "\x1b[97;9u")]
     assert parse("\x1b[97;17u") == [("hyper-a", "\x1b[97;17u")]
@@ -621,7 +621,7 @@ def test_high_modifier_is_read_here_and_not_from_table():
     the fourth is meta; the protocol has eight and the fourth is super.
     So "CSI 1;9A" is alt+Up to prompt_toolkit's table and super+Up to a
     terminal that speaks the protocol, and pymux asks every terminal to
-    speak it. Lillecarl/pymux#182.
+    speak it. Lillecarl/pyterm#184.
     """
     assert parse("\x1b[1;9A") == [("super-up", "\x1b[1;9A")]
     # Below that, prompt_toolkit's table still answers, because it
@@ -663,7 +663,7 @@ def test_control_and_shift_on_letter_is_its_own_key():
     Only a terminal that says more than the legacy encoding can tell
     these apart: ctrl+a and ctrl+shift+a are the same control code
     there. The shift used to be dropped, so a person could bind
-    neither on its own. Lillecarl/pymux#168.
+    neither on its own. Lillecarl/pyterm#170.
     """
     assert parse("\x1b[97;6u") == [(Keys.ControlShiftA, "\x1b[97;6u")]
     assert parse("\x1b[122;6u") == [(Keys.ControlShiftZ, "\x1b[122;6u")]
@@ -726,7 +726,7 @@ def test_log_says_key_and_reason(caplog):
 
 @pytest.mark.parametrize("data", ["\x1b[57376u", "\x1b[57363;5u", "\x1b[49;5u", "\x1b[99;5~"])
 def test_a_key_with_no_name_goes_on_with_its_sequence(data):
-    "F13, ctrl+Menu, ctrl+1 and a tilde key nobody names: a pane may read each. Lillecarl/pymux#707."
+    "F13, ctrl+Menu, ctrl+1 and a tilde key nobody names: a pane may read each. Lillecarl/pyterm#709."
     assert [(press.key, press.data) for press in fed(data)] == [(Keys.UnnamedKey, data)]
 
 
@@ -734,7 +734,7 @@ def test_a_plain_parser_in_the_same_process_reads_as_it_always_did():
     """
     pymux's parser waits on its own prefixes and changes no other parser:
     prompt_toolkit's plain one, which ptterm's application in the same
-    process may hold, still hands out "ESC _ G" at once. Lillecarl/pymux#697.
+    process may hold, still hands out "ESC _ G" at once. Lillecarl/pyterm#699.
     """
     pressed = []
     Vt100Parser(pressed.append).feed("\x1b_G")
@@ -769,7 +769,7 @@ def test_two_keys_with_no_name_each_write_line(caplog):
 
 # ----------------------------------------------------------------------
 # SGR pixel mouse (1016): pixels in, cells out, and where in the cell.
-# Lillecarl/pymux#648.
+# Lillecarl/pyterm#650.
 
 
 def test_a_pixel_report_becomes_its_cell_and_where_in_it():
@@ -779,7 +779,7 @@ def test_a_pixel_report_becomes_its_cell_and_where_in_it():
 
 
 def test_a_terminal_that_counts_from_1_gets_the_same_cell():
-    "xterm and foot number the first pixel 1, kitty 0. Lillecarl/pymux#651."
+    "xterm and foot number the first pixel 1, kitty 0. Lillecarl/pyterm#653."
     assert pixels_to_cells("\x1b[<0;41;21M", 10, 20, 1)[0] == "\x1b[<0;5;2M"
     assert pixels_to_cells("\x1b[<0;40;20M", 10, 20, 1)[0] == "\x1b[<0;4;1M"
     assert pixels_to_cells("\x1b[<0;40;20M", 10, 20, 0)[0] == "\x1b[<0;5;2M"
@@ -794,7 +794,7 @@ def test_a_leave_is_dropped():
 
 
 def test_a_leave_takes_the_pointer_off_every_cell():
-    "kitty's leave report reaches no handler, and says where the pointer is not. Lillecarl/pymux#899."
+    "kitty's leave report reaches no handler, and says where the pointer is not. Lillecarl/pyterm#901."
     pressed = []
     moved = []
     parser = KittyVt100Parser(pressed.append, pixel_cell=lambda: (10, 20, 0), pointer_moved=lambda: moved.append(1))

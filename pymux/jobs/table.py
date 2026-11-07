@@ -86,7 +86,7 @@ class JobTable:
         #: a restored server never hands one out again.
         self.last_id = 0
         #: The questions a person or an agent saved, by name: their SQL
-        #: and description. Only these reach a snapshot. Lillecarl/pymux#547.
+        #: and description. Only these reach a snapshot. Lillecarl/pyterm#549.
         self.saved_queries: dict[str, tuple[str, str | None]] = {}
         #: The seeds somebody took away. An upgrade keeps them away, and
         #: brings every seed it adds.

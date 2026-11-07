@@ -1,8 +1,8 @@
 """
 What a server asks of an SSH client's link: a port to forward, a URL
 whose port has to come here first, and a browser whose port has to go
-the other way. Lillecarl/pymux#436, Lillecarl/pymux#437,
-Lillecarl/pymux#653.
+the other way. Lillecarl/pyterm#438, Lillecarl/pyterm#439,
+Lillecarl/pyterm#655.
 
 **The server asks and this side acts**, the way it does for a URL to
 open: only the machine a person sits at can bind their port, and only
@@ -39,7 +39,7 @@ __all__ = [
 #: It decides only how late a reap is, never whether one happens: the
 #: idle time itself is measured against the clock. Half a minute is
 #: nothing beside the ten minutes a URL forward is given.
-#: Lillecarl/pymux#437.
+#: Lillecarl/pyterm#439.
 REAP_POLL = 30.0
 
 
@@ -50,7 +50,7 @@ async def forward_asked(client: SshClient, connection: SSHClientConnection, pack
     The answer is the whole table and not the one that changed. It is a
     handful of lines, it makes the server's copy right after a
     reconnect as well as after a change, and a person reading
-    `list-forwards` wants the set anyway. Lillecarl/pymux#261.
+    `list-forwards` wants the set anyway. Lillecarl/pyterm#263.
     """
     if packet.get(Field.REMOVE):
         where = (
@@ -97,7 +97,7 @@ async def forward_asked(client: SshClient, connection: SSHClientConnection, pack
         # asked for.** Saying "Forwarding -R 0.0.0.0:2222" flat
         # would be the client asserting something it cannot know:
         # the reply to `tcpip-forward` carries a port and no
-        # address. Lillecarl/pymux#444.
+        # address. Lillecarl/pyterm#446.
         said = "%s Asked for %s, but %s." % (
             said,
             forward.listen_host,
@@ -118,7 +118,7 @@ async def open_asked(client: SshClient, connection: SSHClientConnection, packet:
     The URL moves when its own port is taken here. Nothing else can say
     so: the server named the address that a pane printed, and by the
     time this knows the real number the packet has already been sent.
-    So the message about it comes from this side. Lillecarl/pymux#437.
+    So the message about it comes from this side. Lillecarl/pyterm#439.
     """
     url = packet[Field.DATA]
     asked = packet[Field.FORWARD]
@@ -154,7 +154,7 @@ async def browser_asked(client: SshClient, connection: SSHClientConnection, pack
     Start the browser a program on the server asked for, forward its
     port from the server's machine to this one, and say where it
     listens, or why it does not. The forward goes with the browser.
-    Lillecarl/pymux#653.
+    Lillecarl/pyterm#655.
     """
     port = packet[Field.PORT]
 

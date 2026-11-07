@@ -5,7 +5,7 @@ composed screen.
 `install()` puts each kernel in place of the Python function it
 replaces, the way `pyte_rs` does for pyte. prompt-toolkit itself only
 names the functions, so its source stays what upstream could take;
-the Rust lives here. Lillecarl/pymux#566, Lillecarl/pymux#570.
+the Rust lives here. Lillecarl/pyterm#568, Lillecarl/pyterm#572.
 """
 
 from __future__ import annotations

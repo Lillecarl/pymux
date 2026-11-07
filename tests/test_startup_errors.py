@@ -9,7 +9,7 @@ dropped and the file looked as though it had run.
 
 That cost an hour once: `set -g status off` is the tmux spelling, pymux
 took `set-option <option> <value>` with no flags, and the line never
-ran. Lillecarl/pymux#38.
+ran. Lillecarl/pyterm#40.
 
 pymux takes `-g` now, so that line works and is no longer the example
 of one that fails. `test_window_defaults.py` says what it does.
@@ -50,7 +50,7 @@ def test_line_with_word_too_many_is_reported(tmp_path):
     """
     docopt rejects it with the usage string. That message says nothing
     about which word was wrong, which is the argument of
-    Lillecarl/pymux#48. What matters here is that it is said at all.
+    Lillecarl/pyterm#50. What matters here is that it is said at all.
     """
     _pymux, errors = source(tmp_path, "set status off please\n")
     assert len(errors) == 1

@@ -23,7 +23,7 @@ def show_environment(pymux: Pymux, args: argparse.Namespace) -> None:
     values for the shell. A name that no scope set and the server
     does not hold reads as an error. With `-g`, only what the global
     scope holds: an unset prints as `-NAME`, and nothing that the
-    server holds on its own shows. Lillecarl/pymux#270.
+    server holds on its own shows. Lillecarl/pyterm#272.
     """
     name = args.name
     escaped = args.s

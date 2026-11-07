@@ -1,6 +1,6 @@
 """
 A server that shows the panes of another server, and the server that
-lets it. Lillecarl/pymux#759.
+lets it. Lillecarl/pyterm#761.
 
 The other server owns each pane it lends: its screen, its program, its
 history and its size. A peer holds a mirror, a pane whose screen shows

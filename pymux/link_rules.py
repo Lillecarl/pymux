@@ -5,11 +5,11 @@ though it is not one, such as an issue number.
 They live in a `pymux.toml`, the nearest one up from the pane's
 directory. The search stops at a directory that holds `.git` or `.jj`,
 so a repository's rules never reach past it, and at `/`.
-Lillecarl/pymux#776.
+Lillecarl/pyterm#778.
 
     [[links]]
     match = '(?<![\\w/])#(\\d+)\\b'
-    url = "https://github.com/Lillecarl/pymux/issues/{1}"
+    url = "https://github.com/Lillecarl/pyterm/issues/{1}"
 
 `url` is a `str.format` template: `{0}` is the whole match, `{1}` the
 first group, and a named group goes by its name.

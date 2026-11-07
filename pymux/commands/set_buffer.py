@@ -18,7 +18,7 @@ def set_buffer(pymux: Pymux, args: argparse.Namespace) -> None:
 
     `-b` names one of the named buffers; without it the text lands in
     the session's one buffer, which `paste-buffer` pastes.
-    Lillecarl/pymux#303.
+    Lillecarl/pyterm#305.
     """
     text = args.value or ""
     if args.buffer_name:

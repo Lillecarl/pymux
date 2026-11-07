@@ -24,7 +24,7 @@ def send_prefix(pymux: Pymux, args: argparse.Namespace) -> None:
     # binds it, and those re-spell as chords: "c-b" is "ctrl+b". So the
     # one command that sends a key pymux keeps for itself goes the same
     # road as `send-keys`, and says the same thing when a pane cannot
-    # hear it. Lillecarl/pymux#237.
+    # hear it. Lillecarl/pyterm#239.
     for key in pymux.key_bindings_manager.prefix:
         send_key(pane, event_however_it_is_written(key), key)
 

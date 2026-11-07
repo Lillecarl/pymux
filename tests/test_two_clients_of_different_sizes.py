@@ -1,5 +1,5 @@
 """
-Two clients, two sizes, one window. Slice 5 of Lillecarl/pymux#217.
+Two clients, two sizes, one window. Slice 5 of Lillecarl/pyterm#219.
 
 **A plane is shared and a view is not.** A pane has one pty, so it has
 one size however many clients look at it -- decision 10 of
@@ -220,7 +220,7 @@ async def test_focus_in_uses_client():
     """
     A terminal whose window gains the focus says so, and that counts as
     using it: iTerm2 keeps the click that focuses its window, so no key
-    arrives until a person types. Lillecarl/pymux#794.
+    arrives until a person types. Lillecarl/pyterm#796.
     """
     async with two_clients(["set-window-option window-size latest"]) as (pymux, big, _small):
         connection = ServerConnection(pymux, FakePipe())
@@ -238,7 +238,7 @@ async def test_pane_that_asks_hears_its_terminal_focus():
     """
     A pane with DEC 1004 set learns when the terminal it shows on gains
     and loses the focus, once each and not once per client.
-    Lillecarl/pymux#795.
+    Lillecarl/pyterm#797.
     """
     async with two_clients() as (pymux, big, small):
         (pane,) = window(pymux).panes
@@ -312,7 +312,7 @@ async def test_nudge_counts_from_size_window_has_now():
     """
     Which is the whole point of a nudge, and why it is the one a
     person binds to a key: an absolute size means knowing the size
-    first. Lillecarl/pymux#225.
+    first. Lillecarl/pyterm#227.
     """
     async with two_clients() as (pymux, big, _small):
         was = plane(pymux)

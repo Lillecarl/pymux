@@ -138,7 +138,7 @@ def _person_paths(prefix: str, **_) -> list[str]:
     The paths on the person's machine that start with `prefix`, asked
     of the server of this pane: `list-person-files` on the directory
     the prefix names. Nothing, outside a pane or when the client says
-    nothing. Lillecarl/pymux#748.
+    nothing. Lillecarl/pyterm#750.
     """
     from pymux.connection.uploads import LIST_SECONDS
 

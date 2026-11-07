@@ -4,7 +4,7 @@ when it is shown the session and not one pane.
 
 A pane stream cannot show what pymux draws over a pane. A client draws
 it, so `SessionScreen` is a client, attached the way a terminal's is,
-and these read back what it drew. Lillecarl/pymux#481.
+and these read back what it drew. Lillecarl/pyterm#483.
 
 The pane runs the shell that a first client's session gets, because
 that is the session a person attaching to a new server gets too.
@@ -83,7 +83,7 @@ async def attached(pymux, read_only: bool = False, client_options=None):
 
     # Every packet the server sends is a call of `write_encoded`, made when it
     # is sent and awaited later. The calls against the packets taken is
-    # the fence `caught_up` waits on. Lillecarl/pymux#572.
+    # the fence `caught_up` waits on. Lillecarl/pyterm#574.
     # Patched on the class: an attribute on the connection is state the
     # hot upgrade would have to give a fate.
     session.written = session.taken = 0
@@ -203,7 +203,7 @@ async def test_copy_mode_is_drawn(pymux):
 
 
 async def test_a_click_selects_the_pane_under_it(pymux):
-    "A browser's click is this terminal's mouse report. Lillecarl/pymux#950."
+    "A browser's click is this terminal's mouse report. Lillecarl/pyterm#952."
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
         said(session, type="input", keys="C-b %")
@@ -218,7 +218,7 @@ async def test_a_click_selects_the_pane_under_it(pymux):
 
 
 async def test_the_wheel_scrolls_into_copy_mode(pymux):
-    "Lillecarl/pymux#949."
+    "Lillecarl/pyterm#951."
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
         said(session, type="text", text="seq 100")
@@ -240,7 +240,7 @@ async def test_a_status_line_that_wraps_takes_its_rows_from_the_panes(pymux):
     """
     A window list that grows past one row makes the status line taller,
     and the pane under it gives up the row: its program is told, and no
-    row of it hides under the bar. Lillecarl/pymux#954.
+    row of it hides under the bar. Lillecarl/pyterm#956.
     """
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
@@ -268,7 +268,7 @@ async def test_a_program_status_that_wraps_the_window_list_takes_its_rows_from_t
     """
     Carl's case: Claude Code's OSC 7501 lengthens what the status line
     shows, the window list wraps, and the pane must give up the row.
-    Lillecarl/pymux#954.
+    Lillecarl/pyterm#956.
     """
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
@@ -302,7 +302,7 @@ async def test_a_program_status_that_wraps_the_window_list_takes_its_rows_from_t
 async def test_a_view_names_the_options_it_kept_and_hears_each_change(pymux):
     """
     Each stream is a new client, so the page keeps what the person set
-    on the last one and names it in the next. Lillecarl/pymux#957.
+    on the last one and names it in the next. Lillecarl/pyterm#959.
     """
     async with pymux.running(), attached(pymux, client_options=[["name", "desk"]]) as session:
         await shows(session, "$")
@@ -342,7 +342,7 @@ async def test_a_frame_carries_an_image_the_pane_shows(pymux):
     """
     pymux's client sends kitty graphics only to a terminal that answers
     the support query, and this screen is that terminal.
-    Lillecarl/pymux#718.
+    Lillecarl/pyterm#720.
     """
     pixels = base64.b64encode(bytes(range(16))).decode()
     async with pymux.running(), attached(pymux) as session:
@@ -430,7 +430,7 @@ async def wire_differs(session: SessionScreen, client_state) -> list[str]:
     **And once the terminal has every byte sent for it.** A frame is
     committed when it renders and its packet is written later, so a
     quiet terminal is not a caught-up one: under load the comparison
-    met the title bar of the frame before. Lillecarl/pymux#572.
+    met the title bar of the frame before. Lillecarl/pyterm#574.
     """
     app = client_state.app
     with anyio.fail_after(10):
@@ -502,7 +502,7 @@ async def a_frame_after(session: SessionScreen, client_state, since: int) -> Non
     The test runs while no frame does, so a frame that begins later
     draws what the test changed. That is the event a step waits for,
     and not a quiet screen: a wait for quiet cost each step 50 ms and
-    more, about 260 s of pymux-unit. Lillecarl/pymux#579.
+    more, about 260 s of pymux-unit. Lillecarl/pyterm#581.
     """
     app = client_state.app
     with anyio.fail_after(10):
@@ -666,7 +666,7 @@ async def test_redraw_writes_what_the_terminal_lost(pymux):
 async def test_redraw_brings_back_the_alternate_screen_the_terminal_left(pymux):
     """
     iTerm2 3.7 leaves the alternate screen on a prompt start it reads
-    (Lillecarl/pymux#791): every frame after drew on its main screen,
+    (Lillecarl/pyterm#793): every frame after drew on its main screen,
     and a redraw that kept writing there left the old frames around it.
     A redraw enters the alternate screen again, which costs nothing on
     a terminal that never left it.
@@ -717,7 +717,7 @@ async def test_which_key_leaves_nothing_behind(pymux):
 
 
 async def test_a_key_the_prefix_does_not_bind_ends_the_prefix(pymux):
-    "C-g after the prefix binds nothing, so it lets go. Lillecarl/pymux#540."
+    "C-g after the prefix binds nothing, so it lets go. Lillecarl/pyterm#542."
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
         client_state = pymux.connections[-1].client.state
@@ -1021,7 +1021,7 @@ def test_a_dangling_sequence_does_not_swallow_the_next_output():
     """
     The parser here is the outer terminal, and a program can leave a
     sequence open. Without the ground timer the viewer would show the
-    wrong screen for ever. Lillecarl/pymux#485.
+    wrong screen for ever. Lillecarl/pyterm#487.
     """
     session = SessionScreen(ROWS, COLUMNS, lambda packet: None)
     session.take_packet({"cmd": Packet.OUT, "data": "abc\x1b[1;"})

@@ -2,7 +2,7 @@
 The prompt history: what the command line and the prompts took is
 remembered, listed oldest first, and clearable.
 
-The rules this judges, Lillecarl/pymux#305: a command typed at the
+The rules this judges, Lillecarl/pyterm#307: a command typed at the
 `:` prompt lands in the server's one history, `show-prompt-history`
 reads it back through `answer`, `clear-prompt-history` empties it,
 and both buffers of every client share it.

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-A standalone proof for the hot-upgrade exec seam. Lillecarl/pymux#408.
+A standalone proof for the hot-upgrade exec seam. Lillecarl/pyterm#410.
 
 An "old server" forks pane children on ptys and binds a unix socket,
 then execve's THIS script back as the "new server", same process, same

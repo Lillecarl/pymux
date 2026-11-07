@@ -1,7 +1,7 @@
 """
 `show-log` reads the log of this server, and over the link it already
 holds, the log of the machine a client or a peer runs on.
-Lillecarl/pymux#934.
+Lillecarl/pyterm#936.
 """
 
 from __future__ import annotations

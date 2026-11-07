@@ -1,7 +1,7 @@
 """
 The compositor a server holds for panes with no display, against real
 wl-copy and wl-paste. Needs the `wayland` extra, so `checks.pymux-wayland`
-runs this and `checks.pymux-unit` skips it. Lillecarl/pymux#383.
+runs this and `checks.pymux-unit` skips it. Lillecarl/pyterm#385.
 """
 
 from __future__ import annotations
@@ -116,7 +116,7 @@ async def test_an_image_from_the_persons_clipboard_is_offered_and_pasted(mux):
     """
     Claude Code lists the types, then reads image/png. A client sends the
     image ahead of Ctrl-V, and none when there is none, which withdraws
-    it. Lillecarl/pymux#956.
+    it. Lillecarl/pyterm#958.
     """
     mux.wayland.hold_image(A_PNG)
     types, image = await types_and_image(mux)

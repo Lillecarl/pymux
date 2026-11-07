@@ -4,7 +4,7 @@ Hold the cost of laying a window out to a budget.
 Every check in this repository asks whether pymux draws the right
 cells. None of them asks what drawing them costs, so a change that
 makes a frame ten times more expensive passes all of them, and nobody
-notices until pymux feels wrong under a hand. Lillecarl/pymux#217
+notices until pymux feels wrong under a hand. Lillecarl/pyterm#219
 rewrote the layout engine, which is exactly the kind of change that
 could do it.
 
@@ -188,7 +188,7 @@ class _Pymux:
         same answer here: the measurement has one client and it is not
         in full screen. A real server takes the same short way out when
         nobody is, which is what keeps this off the frame path.
-        Lillecarl/pymux#471.
+        Lillecarl/pyterm#473.
         """
         return self.show_pane_status
 

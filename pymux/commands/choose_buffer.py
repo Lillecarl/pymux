@@ -18,10 +18,10 @@ def choose_buffer(pymux: Pymux, args: argparse.Namespace) -> None:
     Enter makes the chosen buffer the session's one buffer, which is
     what `paste-buffer` pastes. The chooser runs the keys of the
     window chooser: `/` searches, j and k with the arrows move, q and
-    Escape leave. Lillecarl/pymux#304.
+    Escape leave. Lillecarl/pyterm#306.
 
     The command line has no view to open a chooser on, so an asker
-    that reads stdout gets nothing. Lillecarl/pymux#272.
+    that reads stdout gets nothing. Lillecarl/pyterm#274.
     """
     if pymux.answer is not None:
         return

@@ -23,7 +23,7 @@ def kill_server(pymux: Pymux, args: argparse.Namespace):
 
     `-r` says a new server is coming on the same socket. Each attached
     client then waits for it, up to 30 seconds, instead of leaving.
-    Lillecarl/pymux#409.
+    Lillecarl/pyterm#411.
     """
     if not args.restarting:
         return pymux.hang_up_and_stop()

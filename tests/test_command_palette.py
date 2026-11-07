@@ -6,7 +6,7 @@ only thing it can show is the text typed so far and whatever the menu
 under the cursor can squeeze in. A box in the middle has room for a
 completion beside what it means, for a usage line, and for more than
 twelve rows of completions. tmux has no such thing.
-Lillecarl/pymux#158.
+Lillecarl/pyterm#160.
 
 The two draw the same window, so nothing about command mode changes but
 where it is. What the tests below read is which container the layout

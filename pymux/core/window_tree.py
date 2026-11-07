@@ -41,7 +41,7 @@ __all__ = ["DEFAULT_COLUMN_WIDTH", "PRESET_COLUMN_WIDTHS", "LayoutTypes", "Windo
 #: leaves the row, and a strip is for staying in it with the
 #: neighbours one scroll away. It is not a special case either -- the
 #: view already shows one column and part of the next when a column is
-#: wider than it fits. Lillecarl/pymux#215.
+#: wider than it fits. Lillecarl/pyterm#217.
 PRESET_COLUMN_WIDTHS = (1 / 3, 1 / 2, 2 / 3, 1.0)
 
 
@@ -105,7 +105,7 @@ class Window:
         self.root: VSplit | HSplit = HSplit()
         self._active_pane: Pane | None = None
         #: The panes this window left, the newest last: closing the
-        #: active one returns to the newest still here. Lillecarl/pymux#658.
+        #: active one returns to the newest still here. Lillecarl/pyterm#660.
         self._pane_history: list[ref[Pane]] = []
         self.chosen_name: str | None = None
         self.previous_selected_layout: LayoutTypes | None = None
@@ -131,14 +131,14 @@ class Window:
         #: How big this window is while nobody watches it, when its
         #: session named no size: the size it had when somebody last
         #: watched it, and before that what the clients gave it when it
-        #: was made. Lillecarl/pymux#817.
+        #: was made. Lillecarl/pyterm#819.
         self.unwatched_size: Size | None = None
 
         #: How big the owner made this window, when it is a mirror of
         #: another server's. The panes' screens come at that size, so
         #: the layout here takes it too, and the room around it shows
         #: as it does around any window smaller than a client.
-        #: Lillecarl/pymux#930.
+        #: Lillecarl/pyterm#932.
         self.owner_size: Size | None = None
 
         #: A server that mirrors this window shows it to a client there
@@ -155,17 +155,17 @@ class Window:
         #: Whether a person set `frame-rate` on this window. Only then
         #: does it cap the Wayland windows in it, which otherwise draw
         #: as fast as the link to each client takes their frames.
-        #: Lillecarl/pymux#636.
+        #: Lillecarl/pyterm#638.
         self.frame_rate_set = False
 
         #: A pane in it rang the bell while no client looked at it.
         #: A client that makes it its window clears it, and
         #: `#{window_bell_flag}` and the `!` of `#F` are it.
-        #: Lillecarl/pymux#501.
+        #: Lillecarl/pyterm#503.
         self.bell = False
 
         #: The marks the `monitor-*` options raise in a window no
-        #: client looks at. Lillecarl/pymux#767.
+        #: client looks at. Lillecarl/pyterm#769.
         self.activity = False
         self.silence = False
         self.notified = False
@@ -183,7 +183,7 @@ class Window:
         self._silence_armed = False
         #: When a client last looked, in `time.time()` like a
         #: notification's `at`: the hub reads a newer one as unread.
-        #: Lillecarl/pymux#768.
+        #: Lillecarl/pyterm#770.
         self.seen_at = 0.0
 
         # Give unique ID.
@@ -218,7 +218,7 @@ class Window:
         by a step: a person picks between a few widths that fit
         together, instead of nudging a border until it looks right. The
         step is what a divided layout offers and `resize-pane` still
-        does. Lillecarl/pymux#198.
+        does. Lillecarl/pyterm#200.
 
         A width nobody chose is the default, and the cycle starts from
         wherever that sits in the list.
@@ -249,7 +249,7 @@ class Window:
         children of the root, `column_widths` is keyed by the column's
         `node_key` so each column keeps the width it was given, and
         `invalidation_hash` names every pane in the order they sit in,
-        so the layout is rebuilt. Lillecarl/pymux#202.
+        so the layout is rebuilt. Lillecarl/pyterm#204.
         """
         column = self._column_of(pane)
         where = place_of(self.root, column)
@@ -275,7 +275,7 @@ class Window:
         `consume-or-expel-window-left`, and the "or" is the point: a
         person holds the key and the pane walks in and out of the
         columns, without ever choosing which of the two moves they
-        meant. Lillecarl/pymux#213.
+        meant. Lillecarl/pyterm#215.
 
         The two are each other's opposite, so walking one way and back
         again puts the pane where it started.
@@ -371,7 +371,7 @@ class Window:
 
         Polled, and not raised from the read of each pane: a read is
         the hottest path pymux has, and a revision count costs nothing
-        there. Lillecarl/pymux#767.
+        there. Lillecarl/pyterm#769.
 
         **Output is not activity; a change to what is shown is.** A
         revision moves on any read, and an idle program still writes:
@@ -472,7 +472,7 @@ class Window:
         is the whole of what the mode is for: the panes already open
         keep their widths and the row grows past the edge of the
         screen. A vertical split still stacks inside the column, which
-        is what a niri column holds. Lillecarl/pymux#198.
+        is what a niri column holds. Lillecarl/pyterm#200.
 
         `select` makes the new pane the active one. Without it the
         active pane and the pane history stay as they were, which is
@@ -577,7 +577,7 @@ class Window:
         pane in a nested split, whatever their place on the screen. A
         strip meets that at once: turning `strip` on wraps the window
         into a row, so the first column is a nested split, and its panes
-        would come last. Lillecarl/pymux#210.
+        would come last. Lillecarl/pyterm#212.
 
         `get_pane_index` reads this, and that number is what
         `select-pane -t`, `display-panes` and every title bar say. So
@@ -628,7 +628,7 @@ class Window:
 
         The bar under a pane names those two, so a window with no stack
         in it has nothing to put there and does not reserve the row.
-        Lillecarl/pymux#211.
+        Lillecarl/pyterm#213.
         """
         return any(isinstance(split, HSplit) and len(split) > 1 for split in self.splits)
 
@@ -702,7 +702,7 @@ class Window:
 
         This turns a strip off. Each of these five divides the window
         between the panes, which is the one thing a strip does not do,
-        so asking for one is asking to leave. Lillecarl/pymux#198.
+        so asking for one is asking to leave. Lillecarl/pyterm#200.
         """
         self.options.strip = False
 

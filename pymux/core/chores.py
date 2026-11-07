@@ -29,7 +29,7 @@ __all__ = ["seen_of", "sweep", "watch_the_loop", "watch_window_output"]
 #: How often the loop watch wakes, and how late a wake may be before it
 #: is logged, in seconds. A live pane's reads once stood still 3.85s
 #: with nothing in the log to say whether the server was the one held.
-#: Lillecarl/pymux#936.
+#: Lillecarl/pyterm#938.
 LOOP_TICK = 0.25
 LOOP_STALL = 1.0
 
@@ -41,7 +41,7 @@ async def watch_the_loop(tick: float = LOOP_TICK, stall: float = LOOP_STALL, sta
     With `stacks`, faulthandler's own thread writes every stack there
     while the loop is still held: a log line after the stall cannot
     say what held it. The C timer needs no GIL, so a stall inside one C
-    call is caught too. Lillecarl/pymux#936.
+    call is caught too. Lillecarl/pyterm#938.
     """
     try:
         while True:
@@ -66,7 +66,7 @@ WINDOW_OUTPUT_INTERVAL = 1.0
 
 
 async def watch_window_output(pymux: Pymux) -> None:
-    "Raise the activity and silence marks, once a second. Lillecarl/pymux#767."
+    "Raise the activity and silence marks, once a second. Lillecarl/pyterm#769."
     while True:
         await anyio.sleep(WINDOW_OUTPUT_INTERVAL)
         now = anyio.current_time()

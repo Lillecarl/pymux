@@ -117,7 +117,7 @@ def info(pymux: Pymux, args: argparse.Namespace) -> None:
 
     `socket` is the server's socket, so an answer pasted, logged or set
     beside another server's still says where it came from
-    (Lillecarl/pymux#525); `caller` is the window and pane the command
+    (Lillecarl/pyterm#527); `caller` is the window and pane the command
     arrived from; `clients` is what every attached person looks at;
     `sessions` holds every window and pane, with the directory each
     reported, the variables each published and the command each runs.

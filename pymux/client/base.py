@@ -23,31 +23,31 @@ class Client(ABC):
     #: **A client option is announced by the client that holds it.**
     #: Over SSH the server's configuration file is another machine's,
     #: and the terminal a person is sitting at is here.
-    #: Lillecarl/pymux#223.
+    #: Lillecarl/pyterm#225.
     config_file: str | None = None
 
     #: What `pymux attach -n` called this terminal, when it named one.
     #: It is announced as a client option like any other, after the
     #: ones the configuration file gave, so the flag wins: a file is
     #: one machine's and a flag is this terminal's.
-    #: Lillecarl/pymux#340.
+    #: Lillecarl/pyterm#342.
     chosen_name: str | None = None
 
     #: Whether `pymux attach -x` asked for the other clients of the
     #: session to be hung up as well as detached. It rides on the
     #: `start-gui` packet, beside the flag for `-d`.
-    #: Lillecarl/pymux#347.
+    #: Lillecarl/pyterm#349.
     hang_up_others: bool = False
 
     #: Whether `pymux attach -r` asked to only watch. It rides on the
     #: same packet: the flag belongs to the client the server is about
     #: to make, and `attach-session -r` is the other way to ask, for a
-    #: client that is already attached. Lillecarl/pymux#467.
+    #: client that is already attached. Lillecarl/pyterm#469.
     read_only: bool = False
 
     #: Whether the server said to hang up as well as to leave. `attach
     #: -x` and `detach-client -P` are what say it.
-    #: Lillecarl/pymux#347.
+    #: Lillecarl/pyterm#349.
     hang_up_asked: bool = False
 
     def run_command(self, command: str, pane_id: str | None = None) -> int:
@@ -79,7 +79,7 @@ class Client(ABC):
         (`client.c:415`), and it skips the signal when the parent is
         init -- a client whose parent already went would otherwise
         hang up a process that is not the one it means.
-        Lillecarl/pymux#347.
+        Lillecarl/pyterm#349.
 
         **After the attachment, never during it.** A signal sent while
         the alternate screen is up leaves the terminal as pymux had it.

@@ -5,7 +5,7 @@ The element draws rows of styled runs and holds no terminal of its own,
 so a recording's bytes go through a pyte screen here, and `PaneView`
 says after each piece what changed -- the same welcome and frames a
 live viewer gets, each with the time it came at. Any player that can
-hand the element a message plays it. Lillecarl/pymux#610.
+hand the element a message plays it. Lillecarl/pyterm#612.
 
 **The idle limit is applied here, and the header says which one.** An
 asciicast keeps the true times and leaves the limit to the player, so

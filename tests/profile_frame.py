@@ -214,7 +214,7 @@ async def server(panes: int):
             # A command that fails says so in a message, and the message
             # floats over the panes in every frame the profile draws.
             # That broke every scroll the renderer could have sent, and
-            # nothing said so. Lillecarl/pymux#566.
+            # nothing said so. Lillecarl/pyterm#568.
             if state.message is not None:
                 raise SystemExit("setting the profile up failed: %s" % (state.message,))
             try:
@@ -739,7 +739,7 @@ async def main() -> int:
                 # and not a frame -- and the plan gives each pane its
                 # rectangle while it draws, so a phase that fills its
                 # pane reads the size a client would give it rather
-                # than the size with no client. Lillecarl/pymux#224.
+                # than the size with no client. Lillecarl/pyterm#226.
                 create_frame(state)()
 
                 work = phase(pymux, state, frames)

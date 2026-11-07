@@ -6,12 +6,12 @@ whole file in one sequence. `MultipartFile=args`, then `FilePart=b64`
 any number of times, then `FileEnd`, carries it in parts, so that no one
 sequence grows with the file. The argument `inline=1` makes the file an
 image to draw, which is not a download: this module reads it the same
-way and marks it, and the pane draws it (Lillecarl/pymux#789).
+way and marks it, and the pane draws it (Lillecarl/pyterm#791).
 
 `DownloadReader` reads the sequences of one pane and gives back each
 finished file. `Outward.send_download` decides who saves it, and
 `pymux send` writes the multipart form with `multipart_sequences`.
-Lillecarl/pymux#743.
+Lillecarl/pyterm#745.
 
 The command line of `pymux send-file` imports this module, so it
 imports only the standard library, the protocol and the enums.
@@ -112,7 +112,7 @@ class FinishedDownload:
     data: bytes
     multipart: bool
     #: `inline=1`: an image to draw in the pane, not a file to save.
-    #: Lillecarl/pymux#789.
+    #: Lillecarl/pyterm#791.
     inline: bool = False
     #: Every argument the sender gave, which an image's size is read from.
     arguments: dict[str, str] = field(default_factory=dict, compare=False)

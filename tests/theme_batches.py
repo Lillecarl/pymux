@@ -4,7 +4,7 @@ The batches the theme gallery builds in, as JSON.
 The gallery is a derivation per terminal and per batch of themes: nix
 schedules the derivations, a rerun rebuilds only the combos that
 failed, and a timeout kills one combo instead of the tail of the
-whole gallery. Lillecarl/pymux#284. This prints the (terminal, batch
+whole gallery. Lillecarl/pyterm#286. This prints the (terminal, batch
 of themes) pairs the gallery builds -- one seat boot per batch, which
 is what the cost of a combo is -- and the check reads it back with
 `fromJSON`.

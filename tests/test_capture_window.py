@@ -2,7 +2,7 @@
 `capture-window` draws a window as its layout lays it out, with no
 client: every pane at its place and the border lines between them. An
 agent working in a session of its own reads its work this way.
-Lillecarl/pymux#818.
+Lillecarl/pyterm#820.
 """
 
 from __future__ import annotations

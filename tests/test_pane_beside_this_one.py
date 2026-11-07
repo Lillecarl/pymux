@@ -2,8 +2,8 @@
 Which pane is to the left of this one, and which is to the right.
 
 A title bar names its neighbours, so that a person can see what is out
-there without it being drawn. Lillecarl/pymux#207. The same answer
-moves the focus, which is the point of Lillecarl/pymux#217: a key and a
+there without it being drawn. Lillecarl/pyterm#209. The same answer
+moves the focus, which is the point of Lillecarl/pyterm#219: a key and a
 bar that name different panes are two bugs waiting.
 
 **The plan answers, and it is the only thing that does.** Two

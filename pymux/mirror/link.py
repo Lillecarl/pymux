@@ -120,9 +120,9 @@ class PeerLink:
         self.connection = connection
         #: The machine of the peer, as its `peer` said; "" from one without `Capability.LOGS`.
         self.host = host
-        #: The `show-log -p` requests that wait for the peer. Lillecarl/pymux#934.
+        #: The `show-log -p` requests that wait for the peer. Lillecarl/pyterm#936.
         self.log_asks = LogAsks(self.queue)
-        #: The `pymux receive` requests that wait for the peer's client. Lillecarl/pymux#947.
+        #: The `pymux receive` requests that wait for the peer's client. Lillecarl/pyterm#949.
         self.files = LinkFiles(self.queue)
         #: The version of the link both sides speak (`peer_version`).
         self.version = version
@@ -130,7 +130,7 @@ class PeerLink:
         #: peer named nothing (`capabilities_in_common`).
         self.capabilities = capabilities if capabilities is not None else capabilities_in_common(version, None)
         self.sources: dict[PaneId, MirrorSource] = {}
-        #: The window panes the peer mirrors. Lillecarl/pymux#888.
+        #: The window panes the peer mirrors. Lillecarl/pyterm#890.
         self.windows: dict[PaneId, MirrorWindowSource] = {}
         #: What the terminals at the peer say, once it said.
         self.terminal: PeerTerminal | None = None
@@ -188,7 +188,7 @@ class PeerLink:
         "Write what is queued until the connection goes, then let every pane go."
         if self.can(Capability.PINGS):
             # A peer whose machine slept leaves this link a ghost that
-            # still sizes the panes it watched. Lillecarl/pymux#877.
+            # still sizes the panes it watched. Lillecarl/pyterm#879.
             self.connection.spawn(self.connection.watch_liveness(self.ping))
         try:
             while not self.connection.closed:
@@ -254,7 +254,7 @@ class PeerLink:
         """
         Send the OSC 7501 records of `pane` whole, when they changed since
         the last send. Not the reports one by one: a prompt or the end of
-        the process drops records with no report. Lillecarl/pymux#928.
+        the process drops records with no report. Lillecarl/pyterm#930.
         """
         statuses = getattr(pane.screen, "program_status", None)
         if not self.can(Capability.PROGRAM_STATUS) or statuses is None or not self.hears(pane):
@@ -350,7 +350,7 @@ class PeerLink:
         Send the tree next though nothing in it changed: the peer did
         something here and holds what it did as a preview until the tree
         says what came of it. A command that changed nothing here still
-        has to undo a preview there. Lillecarl/pymux#873.
+        has to undo a preview there. Lillecarl/pyterm#875.
         """
         self._answer_owed = True
         self._tree_changed.set()
@@ -363,7 +363,7 @@ class PeerLink:
             tree = tree_of(pymux)
             owed, self._answer_owed = self._answer_owed, False
             # The size each window has here, which the peer lays it out
-            # at. A peer of an older build ignores it. Lillecarl/pymux#930.
+            # at. A peer of an older build ignores it. Lillecarl/pyterm#932.
             sizes = sorted(
                 {
                     (int(window.window_id), size.rows, size.columns)
@@ -457,7 +457,7 @@ class PeerLink:
 
     @_PACKETS.handles(Packet.MIRROR_CLIPBOARD_IMAGE)
     def _on_clipboard_image(self, packet: Message) -> None:
-        "The image a person's Ctrl-V brings, for this server's compositor to offer. Lillecarl/pymux#956."
+        "The image a person's Ctrl-V brings, for this server's compositor to offer. Lillecarl/pyterm#958."
         try:
             image = base64.b64decode(str(packet.get(Field.DATA) or ""), validate=True) or None
         except ValueError:
@@ -470,7 +470,7 @@ class PeerLink:
         """
         A piece of a client recording the peer made on a session of this
         server: it goes where this server's own recordings go, beside a
-        `.part` until its last piece. Lillecarl/pymux#955.
+        `.part` until its last piece. Lillecarl/pyterm#957.
         """
         name = str(packet.get(Field.NAME) or "")
         # Only a file name: a peer writes nowhere but the recordings.
@@ -522,7 +522,7 @@ class PeerLink:
         self.send_program_status(pane)
 
     def _mirror_window(self, pane: Pane, widget: WindowWidget, packet: Message) -> None:
-        "Lend a window pane: its frames as pixels. Lillecarl/pymux#888."
+        "Lend a window pane: its frames as pixels. Lillecarl/pyterm#890."
         pane_id = pane.pane_id
         if pane_id in self.windows:
             return

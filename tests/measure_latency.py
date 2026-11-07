@@ -1,10 +1,10 @@
 """
 What pymux costs a keystroke, in milliseconds.
 
-Lillecarl/pymux#8 asked for three numbers. Throughput and CPU were
+Lillecarl/pyterm#10 asked for three numbers. Throughput and CPU were
 answered by the instruction budgets, which count bytecode and so mean
 the same thing on every machine. **Latency is the third, and nothing
-had touched it.** Lillecarl/pymux#140.
+had touched it.** Lillecarl/pyterm#142.
 
 It is the number a person feels. Every other check here says whether
 pymux draws the right cells; none of them says whether it draws them
@@ -102,7 +102,7 @@ SAMPLES = int(os.environ.get("PYMUX_LATENCY_SAMPLES") or 200)
 #:     PYMUX_LATENCY_ROWS=74 PYMUX_LATENCY_COLUMNS=342 \
 #:       nix build --file . checks.pymux-latency.run
 #:
-#: Lillecarl/pymux#434.
+#: Lillecarl/pyterm#436.
 ROWS = int(os.environ.get("PYMUX_LATENCY_ROWS") or 24)
 COLUMNS = int(os.environ.get("PYMUX_LATENCY_COLUMNS") or 80)
 

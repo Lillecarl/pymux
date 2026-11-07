@@ -1,5 +1,5 @@
 """
-The ssh:// client against a real openssh sshd. Lillecarl/pymux#436.
+The ssh:// client against a real openssh sshd. Lillecarl/pyterm#438.
 
 `test_ssh_client.py` says what this is for: both sides of that suite
 are asyncssh, so it does not gate openssh interop. Here the far side is
@@ -232,7 +232,7 @@ class _Echo:
     **A test waits for `quiet` before it cancels the listener.** Each
     stream ends on its own once its far side closed; cancelled mid-flight
     instead, its channel's close callbacks outlived their scopes.
-    Lillecarl/pymux#587.
+    Lillecarl/pyterm#589.
     """
 
     def __init__(self) -> None:
@@ -277,11 +277,11 @@ async def _bounded():
     A test's task group, which fails rather than waits past
     `A_TEST_TAKES`. A hang under load showed only an idle event loop;
     a timeout shows the await it was in, and the fixture's teardown
-    then prints what sshd said. Lillecarl/pymux#549.
+    then prints what sshd said. Lillecarl/pyterm#551.
     """
     # anyio's runner keeps the exception of a failed loop callback and
     # drops its context, whose handle names the callback and the future.
-    # #587 fails as InvalidStateError from such a callback, and nothing
+    # #589 fails as InvalidStateError from such a callback, and nothing
     # more. asyncio's own, because the context is asyncio's.
     loop = asyncio.get_running_loop()
     passed_on = loop.get_exception_handler()
@@ -402,7 +402,7 @@ async def test_openssh_takes_the_unix_channel_the_client_lives_on(sshd):
             # then the connection, then the handler that saw its stream
             # end -- before the listener is cancelled. Torn down at
             # once, a callback completed a future whose waiter was
-            # already cancelled: InvalidStateError. Lillecarl/pymux#587.
+            # already cancelled: InvalidStateError. Lillecarl/pyterm#589.
             async with _connect_to(sshd) as connection:
                 reader, writer = await connection.open_unix_connection(socket_path)
                 writer.write(b"hello")
@@ -465,7 +465,7 @@ async def test_openssh_narrows_a_remote_forward_rather_than_refusing_it(sshd):
     carries a port and no address. That is why `forward-port` says so
     in the question instead of claiming the address afterwards --
     `the_far_side_may_narrow` holds the rule.
-    Lillecarl/pymux#440, Lillecarl/pymux#444.
+    Lillecarl/pyterm#442, Lillecarl/pyterm#446.
     """
     async with _bounded() as tasks:
         echo = await _echoing(tasks)

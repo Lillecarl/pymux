@@ -6,7 +6,7 @@ Enter shows the pointed job in this session's overlay, read-only;
 again, interactively, in a new window. `/` searches the commands
 and the tags. None of the three touches the recorded job: closing
 the viewer stops the follow, and detaching never kills.
-Lillecarl/pymux#528.
+Lillecarl/pyterm#530.
 """
 
 from __future__ import annotations

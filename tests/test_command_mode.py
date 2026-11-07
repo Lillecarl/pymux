@@ -4,7 +4,7 @@ Leaving command mode.
 `:` opens a command line at the bottom. Escape is the key most people
 reach for to back out of a mode, and it did nothing: only Ctrl-C and
 Ctrl-G were bound. The typed text stayed and the command line kept the
-keyboard. Lillecarl/pymux#157.
+keyboard. Lillecarl/pyterm#159.
 
 `status-keys vi` gives Escape to vi, where it leaves insert mode. tmux
 draws the same line, so the binding here is for emacs status keys only.
@@ -142,7 +142,7 @@ async def test_spelled_out_escape_leaves_on_press():
     A terminal that disambiguates says it in the key itself: it writes
     the Escape key as "CSI 27 u", and no other key can follow that.
     Nothing flushes in this test, so the binding runs on the press or
-    it does not run at all. Lillecarl/pymux#164.
+    it does not run at all. Lillecarl/pyterm#166.
     """
     async with create_session() as (pymux, state):
         in_command_mode(state)

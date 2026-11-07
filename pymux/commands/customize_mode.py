@@ -20,7 +20,7 @@ def customize_mode(pymux: Pymux, args: argparse.Namespace) -> None:
     should hold, with what it holds as the default answer -- which is
     the editing half of what tmux's customize-mode does, and the
     other half is the listing, which is what show-options reads.
-    Lillecarl/pymux#297.
+    Lillecarl/pyterm#299.
     """
     try:
         state = pymux.get_client_state()

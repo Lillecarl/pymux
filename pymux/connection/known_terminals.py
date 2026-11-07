@@ -1,5 +1,5 @@
 """
-What pymux knows about a terminal by its name. Lillecarl/pymux#827.
+What pymux knows about a terminal by its name. Lillecarl/pyterm#829.
 
 No query answers these questions, so pymux asks the terminal for its
 name and version (XTVERSION) and looks the answer up in `TERMINALS`. A
@@ -8,7 +8,7 @@ version is unknown: an ability that starts at a version does not count.
 
 A person teaches pymux about a terminal in `config.terminals_file`, a
 Python file that defines `TERMINALS` the way this one does. An entry
-there wins over one here with the same name. Lillecarl/pymux#828.
+there wins over one here with the same name. Lillecarl/pyterm#830.
 """
 
 from __future__ import annotations
@@ -43,28 +43,28 @@ class KnownTerminal:
     terms: frozenset[str] = frozenset()
     #: The first version that draws kitty's Unicode placeholders.
     #: WezTerm and Konsole answer the graphics query and draw none.
-    #: Lillecarl/pymux#607.
+    #: Lillecarl/pyterm#609.
     placeholders: Version | None = None
     #: The first version that draws ConEmu's progress, "OSC 9 ; 4". Any
     #: other terminal may show an OSC 9 as a notification.
-    #: Lillecarl/pymux#788.
+    #: Lillecarl/pyterm#790.
     progress: Version | None = None
     #: The notification OSC it shows, for a terminal that does not
-    #: answer the OSC 99 query. Lillecarl/pymux#826.
+    #: answer the OSC 99 query. Lillecarl/pyterm#828.
     notification: Osc | None = None
     #: Whether it saves an iTerm2 download. Ghostty parses one and drops
-    #: it (`src/terminal/osc/parsers/iterm2.zig`). Lillecarl/pymux#746.
+    #: it (`src/terminal/osc/parsers/iterm2.zig`). Lillecarl/pyterm#748.
     saves_downloads: bool = False
     #: The first version pymux sends kitty's file transfer, OSC 5113.
     #: kitty 0.49.2 stopped a remote program from skipping its
     #: confirmation, and the program in a pane is remote to it.
-    #: Lillecarl/pymux#912.
+    #: Lillecarl/pyterm#914.
     file_transfer: Version | None = None
     #: The number of the first pixel in a mouse report in pixels.
-    #: Lillecarl/pymux#648.
+    #: Lillecarl/pyterm#650.
     first_pixel: int = 1
     #: Its entry in pyte's `KEY_PROFILES`: what it writes for a key with
-    #: no kitty keyboard protocol. Lillecarl/pymux#706.
+    #: no kitty keyboard protocol. Lillecarl/pyterm#708.
     key_profile: str | None = None
 
 

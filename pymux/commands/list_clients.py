@@ -18,7 +18,7 @@ from pymux.format import format_pymux_string
 #: The machine stays beside it although the name already carries one.
 #: The name is there to be typed and the hostname to be read, and a
 #: reader that wants one of them should not have to cut the other out
-#: of it. Lillecarl/pymux#335.
+#: of it. Lillecarl/pyterm#337.
 DEFAULT_FORMAT = (
     "#{client_name}: #{client_hostname} #{session_name} "
     "[#{client_width}x#{client_height} #{client_termname}]"
@@ -31,7 +31,7 @@ def list_clients(pymux: Pymux, args: argparse.Namespace) -> None:
     List the clients of this server, one to a line.
 
     With `-t`, only the clients of that session. With `-F` each line is
-    that format, and with `-J` it is that template. Lillecarl/pymux#330.
+    that format, and with `-J` it is that template. Lillecarl/pyterm#332.
     """
     session = None
     if args.target_session:

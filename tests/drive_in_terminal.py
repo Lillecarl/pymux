@@ -9,7 +9,7 @@ press a key. A headless compositor owns no input device
 terminal, so there is nowhere to write. Every fixture is therefore
 bytes a program writes, which photographs what a pane draws and never
 what pymux draws around it: the status line, a title bar, the command
-palette, the overlay pane. Lillecarl/pymux#161.
+palette, the overlay pane. Lillecarl/pyterm#163.
 
 This is the way round. It runs as the terminal's child, opens a pty of
 its own, runs the program on that, and copies what the program writes
@@ -28,7 +28,7 @@ terminal answers on the tty's input -- which is this process's stdin,
 not the program's. Nothing read it, so every answer was lost: the
 colours the terminal draws with, the keyboard flags, the graphics
 protocol, the cell size. A picture then showed a pymux that had asked
-its terminal everything and heard nothing back. Lillecarl/pymux#350.
+its terminal everything and heard nothing back. Lillecarl/pyterm#352.
 
 The keys file is one step a line: how long to wait, then the bytes as a
 Python literal. Everything after a "#" is a comment, and a blank line
@@ -67,7 +67,7 @@ for its modes, with DECRQM, and writes what it answered to
 directory asks with that line as the label, and the end of the program
 asks once more as `detached`. Beside the answers goes what the program
 meant: the last `CSI ? N h` or `l` it wrote for each mode. The answers
-are taken out of what the program is given. Lillecarl/pymux#800.
+are taken out of what the program is given. Lillecarl/pyterm#802.
 
 ## The timeline
 
@@ -76,7 +76,7 @@ came, when each key went in and how late it was, and whether the fence
 came back. A run that photographed the wrong state has that file and
 the program's own log beside it, and the two read together say which
 key the program never acted on. Before this the file was empty, and a
-lost key was a guess. Lillecarl/pymux#353.
+lost key was a guess. Lillecarl/pyterm#355.
 """
 
 from __future__ import annotations
@@ -111,7 +111,7 @@ CHUNK = 65536
 #: the keys are pressed at the end of this rather than never.
 BOOT_TIMEOUT = 10.0
 
-#: The modes asked of the terminal. Lillecarl/pymux#800.
+#: The modes asked of the terminal. Lillecarl/pyterm#802.
 ASKED_MODES = (1, 25, 1000, 1002, 1003, 1004, 1006, 1016, 1049, 2004, 2026, 2031, 2048)
 _MODE_REPORT = re.compile(rb"\x1b\[\?(\d+);(\d)\$y")
 _ATTRIBUTES = re.compile(rb"\x1b\[\?[\d;]*c")
@@ -189,7 +189,7 @@ def take_input(fd):
     wait for a key nobody is going to press.
 
     A terminal that this cannot be done to is one whose answers stay
-    unread, which is where this started. Lillecarl/pymux#350.
+    unread, which is where this started. Lillecarl/pyterm#352.
     """
     try:
         attributes = termios.tcgetattr(fd)
@@ -220,7 +220,7 @@ def carry_the_answer(master, stdin_fd, ready) -> None:
 #: otherwise, so the relay says it looked away (`frame_and_fence`), and a
 #: terminal that reports its focus once pymux asks would undo that. Only
 #: notifications and a pane's focus reports read the focus, so no
-#: picture changes. Lillecarl/pymux#799, Lillecarl/pymux#806.
+#: picture changes. Lillecarl/pyterm#801, Lillecarl/pyterm#808.
 FOCUS_IN = b"\x1b[I"
 FOCUS_OUT = b"\x1b[O"
 
@@ -235,7 +235,7 @@ class TerminalStream:
     focus report written between two pieces broke the answer it landed
     in. pymux never counted that answer to its status report, held
     every frame after it for good, and the fence behind a frame never
-    came. Lillecarl/pymux#806.
+    came. Lillecarl/pyterm#808.
     """
 
     def __init__(self) -> None:
@@ -249,7 +249,7 @@ class TerminalStream:
             self._step(byte)
         if self.looking_away and self.state == "ground":
             # And says it shows OSC 99, which a fence is: xterm shows
-            # none, and pymux would keep the fence. Lillecarl/pymux#497.
+            # none, and pymux would keep the fence. Lillecarl/pyterm#499.
             os.write(master, FOCUS_OUT + SHOWS_OSC_99)
             self.looking_away = False
 
@@ -388,7 +388,7 @@ class Quiet(float):
     A key sent a fixed time after a program starts races it: the demo
     redraws when the terminal's colour replies come in, so copy mode
     opened over one line of history more or less depending on load.
-    Lillecarl/pymux#541. A quiet wait gives up after `QUIET_LIMIT`, so
+    Lillecarl/pyterm#543. A quiet wait gives up after `QUIET_LIMIT`, so
     a program that never stops writing cannot hold a run.
     """
 
@@ -490,11 +490,11 @@ def settle(master, seen, out, copied, stdin_fd=None):
     is called finished after 256 bytes of questions. The keys then go
     into a pymux that has not drawn and is not reading them yet. So the
     quiet is measured, and only real silence counts.
-    Lillecarl/pymux#353.
+    Lillecarl/pyterm#355.
 
     **A window pane is never silent.** Its program draws, and pymux
     sends every frame on, so the quiet gives up after `QUIET_LIMIT` as
-    a quiet step does. Lillecarl/pymux#806.
+    a quiet step does. Lillecarl/pyterm#808.
     """
     quiet_since = time.monotonic()
     deadline = quiet_since + FIRST_BYTE
@@ -527,7 +527,7 @@ def wait_for_first_frame(master, seen, out, copied, started, writer, stdin_fd=No
     questions, measured -- and then waits for the answers. Taking those
     for the frame pressed the prefix into a program that was not
     reading keys yet, and one run of `cut-follows-the-terminal` lost
-    the split exactly there. Lillecarl/pymux#353.
+    the split exactly there. Lillecarl/pyterm#355.
 
     So the boot is fenced, the way the keys are fenced at the end. The
     pane runs the forwarder, so the fence comes back on the wire only
@@ -542,7 +542,7 @@ def wait_for_first_frame(master, seen, out, copied, started, writer, stdin_fd=No
     notification from a window a terminal with the focus shows, and a
     pymux still starting read the relay's focus report only after the
     first fence: that fence was kept, and the boot waited out all ten
-    seconds. Lillecarl/pymux#806.
+    seconds. Lillecarl/pyterm#808.
     """
     deadline = started + BOOT_TIMEOUT
     came = False
@@ -575,7 +575,7 @@ def copy_unfenced(seen, out, copied):
     answers it, and a pane's notification goes out behind a frame. A
     terminal that never saw the question never answers, so the fence
     never came once a window pane drew. Only a tail that could still
-    become a fence waits for more. Lillecarl/pymux#806.
+    become a fence waits for more. Lillecarl/pyterm#808.
     """
     end = len(seen)
     start = seen.rfind(b"\x1b", copied)
@@ -685,7 +685,7 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None, ask_dir=None):
     # This terminal's own input, where its answers arrive. A run with
     # no terminal -- a test that gives this a pipe -- has none, and
     # then the program hears nothing back, as before.
-    # Lillecarl/pymux#350.
+    # Lillecarl/pyterm#352.
     stdin_fd = sys.stdin.fileno()
     if not os.isatty(stdin_fd):
         stdin_fd = None
@@ -769,7 +769,7 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None, ask_dir=None):
                 # during that wait. Taking the mark there left the
                 # fence waiting for a frame nothing was going to draw,
                 # and `which-key` never produced a picture.
-                # Lillecarl/pymux#364.
+                # Lillecarl/pyterm#366.
                 mark = len(seen) if keys else None
 
             if waiting:

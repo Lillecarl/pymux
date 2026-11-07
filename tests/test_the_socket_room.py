@@ -6,7 +6,7 @@ front of the bind: the next "pymux attach" lands on the squatter. So
 the sockets live in `<base>/pymux-<uid>`, a directory the first server
 creates mode 0700 and every user of it verifies before it uses, the
 way tmux keeps its sockets in `tmux-<uid>`.
-Lillecarl/pymux#405.
+Lillecarl/pyterm#407.
 """
 
 from __future__ import annotations
@@ -93,7 +93,7 @@ def test_the_platform_runtime_dir_comes_before_the_temp_dir(bases, monkeypatch):
     the platform's own runtime directory is the second base: on Linux
     `/run/user/<uid>`, on macOS what Apple prefers, on the BSDs their
     own. A socket room there is private by the platform's rule, and
-    dies with the session. Lillecarl/pymux#421.
+    dies with the session. Lillecarl/pyterm#423.
     """
     platform = bases / "platform"
     platform.mkdir()

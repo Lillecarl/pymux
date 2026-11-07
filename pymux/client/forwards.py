@@ -5,7 +5,7 @@ The forwarded ports of one SSH client, and the listeners behind them.
 forward is a call on the `asyncssh` connection that `client/ssh.py`
 already has, so only this side can make one, and the far side is a
 normal sshd that gains nothing. It is the property the whole `ssh://`
-client is built on. Lillecarl/pymux#436.
+client is built on. Lillecarl/pyterm#438.
 
 **A reconnect is what this class is for.** `Relink.again`
 builds a new connection, and every listener of the old one dies with
@@ -51,7 +51,7 @@ class Wanted(NamedTuple):
     remove it. A forward pymux opened by itself, for a loopback URL,
     has one -- and with it comes the licence to move, because the URL
     is rewritten to whatever port was really free, so the number was
-    never the person's to begin with. Lillecarl/pymux#437.
+    never the person's to begin with. Lillecarl/pyterm#439.
     """
 
     forward: Forward
@@ -72,12 +72,12 @@ class Opened(NamedTuple):
     was taken here. `error` is why it is not open, and is empty while
     it is. `ours` is whether pymux opened it by itself, for a loopback
     URL; one of those is reaped when idle, so the listing says so.
-    Lillecarl/pymux#448.
+    Lillecarl/pyterm#450.
 
     `live` is how many connections it carries now, and `left` how many
     seconds one of pymux's has until it is reaped: `None` for a
     person's, and for one in use, whose clock has not started.
-    Lillecarl/pymux#487.
+    Lillecarl/pyterm#489.
     """
 
     forward: Forward
@@ -170,7 +170,7 @@ class Forwards:
         is what says it is one: pymux chose the port from a URL, and a
         person who typed `forward-port` for that same port chose it on
         purpose. Taking theirs away would be pymux answering a question
-        nobody asked it. Lillecarl/pymux#437.
+        nobody asked it. Lillecarl/pyterm#439.
         """
         where = _where(forward)
         wanted = Wanted(forward, idle)
@@ -205,7 +205,7 @@ class Forwards:
         number that was free, so the number on screen is the only one a
         person can type back. An exact key still wins, so a spelling
         that names the entry itself is never read as a neighbour's.
-        Lillecarl/pymux#441.
+        Lillecarl/pyterm#443.
         """
         key = self._named(where)
         return None if key is None else self._discard(key)
@@ -277,7 +277,7 @@ class Forwards:
 
         So the clock starts when the last connection ends, and measures
         a forward that nothing is using rather than one that is quiet.
-        Lillecarl/pymux#437.
+        Lillecarl/pyterm#439.
         """
         if now is None:
             now = self._now()
@@ -319,7 +319,7 @@ class Forwards:
         pointed at the old number -- a browser tab, a CDP client, a
         script -- is pointing at nothing. Saying the new number is the
         only way to find out short of `list-forwards`.
-        Lillecarl/pymux#442.
+        Lillecarl/pyterm#444.
         """
         # A forward whose idle time ran out while the link was down has
         # nothing to come back for.
@@ -366,7 +366,7 @@ class Forwards:
         #: the one really bound, and the URL is rewritten to that. Two
         #: URL forwards that both fall back therefore keep their own
         #: entries -- with `ANY_PORT` in the name they would share one
-        #: and the second would close the first. Lillecarl/pymux#441.
+        #: and the second would close the first. Lillecarl/pyterm#443.
         tries = [forward]
         if wanted.may_move and forward.listen_port != ANY_PORT:
             tries.append(forward._replace(listen_port=ANY_PORT))
@@ -498,7 +498,7 @@ def _same_host(one: str, other: str) -> bool:
     **Every loopback name does.** `localhost`, `127.0.0.1` and `::1`
     are the machine itself, and neither which one a person wrote nor
     which one a default supplied may decide whether a forward is found.
-    Lillecarl/pymux#441.
+    Lillecarl/pyterm#443.
     """
     return one == other or (one in LOOPBACK_NAMES and other in LOOPBACK_NAMES)
 
@@ -523,7 +523,7 @@ def _counting_forwarder() -> type:
     loudly, which is the failure worth having.
 
     Built on first use, so that importing this module still costs no
-    asyncssh. Lillecarl/pymux#437.
+    asyncssh. Lillecarl/pyterm#439.
     """
     global _counting
 

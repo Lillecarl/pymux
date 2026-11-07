@@ -1,6 +1,6 @@
 """
 A window pane shown again after its window was switched away draws
-again. Lillecarl/pymux#753.
+again. Lillecarl/pyterm#755.
 
 Leaving view deletes the client's image of the pane. An update encoded
 before that, against the image as it was, must not land on the empty

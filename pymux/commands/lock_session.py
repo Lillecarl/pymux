@@ -19,7 +19,7 @@ def lock_session(pymux: Pymux, args: argparse.Namespace):
 
     The overlay that covers the screen belongs to the session, so
     this locks every client of this session and no other.
-    Lillecarl/pymux#324.
+    Lillecarl/pyterm#326.
     """
     return lock(pymux, args)
 

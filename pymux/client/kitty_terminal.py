@@ -1,6 +1,6 @@
 """
 The pymux client as the terminal of kitty's file transfer, for a
-terminal that is not kitty. Lillecarl/pymux#912.
+terminal that is not kitty. Lillecarl/pyterm#914.
 
 `Transfers` does the work and blocks on the file system, so it runs off
 the loop that draws, one step at a time and in the order the commands

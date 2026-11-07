@@ -8,7 +8,7 @@ wrong twice over: it is late by half its period, and it costs a round
 trip per pane per tick while nothing happens.
 
 So the caller hands over the revision it last saw and this holds until
-the pane leaves it. Lillecarl/pymux#387.
+the pane leaves it. Lillecarl/pyterm#389.
 """
 
 from __future__ import annotations

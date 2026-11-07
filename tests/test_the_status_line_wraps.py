@@ -6,7 +6,7 @@ session name and the clock. Cut, the windows past the edge are not
 there to read or click, so the status line takes more rows instead:
 an entry moves to the next row whole, up to `status-max-rows`, and the
 panes and everything drawn above the status line move up with it.
-Lillecarl/pymux#723.
+Lillecarl/pyterm#725.
 """
 
 from __future__ import annotations
@@ -71,7 +71,7 @@ async def test_a_frame_formats_each_side_of_the_status_line_once():
     """
     The room for the window list, the status line and `what_time_moves`
     after the frame all read both sides, and a side may be a template.
-    Lillecarl/pymux#824.
+    Lillecarl/pyterm#826.
     """
     async with in_this_process() as session:
         state = await with_windows(session, DESK)

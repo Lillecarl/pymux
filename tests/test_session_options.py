@@ -3,7 +3,7 @@ A session's options: its own values over the server's defaults.
 
 `SessionOptions` holds what one session set itself, and reads the
 default on `Pymux` for the rest, the way tmux's `options_get` walks to
-the parent table. Lillecarl/pymux#756.
+the parent table. Lillecarl/pyterm#758.
 """
 
 from __future__ import annotations
@@ -92,7 +92,7 @@ async def test_a_configuration_line_sets_the_default(two):
 
 
 async def test_g_renumber_windows_reaches_a_session_made_earlier(two):
-    "What #756 was first seen as: renumber-windows -g reached one session."
+    "What #758 was first seen as: renumber-windows -g reached one session."
     await run(two, "set-option", "-g", "renumber-windows", "on")
 
     assert all(session.arrangement.renumber_windows for session in two.sessions)

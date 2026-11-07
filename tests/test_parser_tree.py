@@ -4,7 +4,7 @@ One description of a command, three readers of it.
 The tree of argparse parsers is what parses a command, what the shell
 completes through, and what the command bar of a client completes
 from -- in process, through argcomplete. These tests ask each reader
-the questions a person asks it. Lillecarl/pymux#307.
+the questions a person asks it. Lillecarl/pyterm#309.
 """
 
 from __future__ import annotations
@@ -83,7 +83,7 @@ def test_dropped_double_dash_still_separates(completed_first):
 
     Also after the command bar completed a line: argcomplete patched the
     tree that runs commands, and `--` then became part of the key.
-    Lillecarl/pymux#735.
+    Lillecarl/pyterm#737.
     """
     if completed_first:
         list(create_command_completer(Pymux()).get_completions(Document("bind-key x "), None))
@@ -102,7 +102,7 @@ def test_word_too_many_is_named():
     """
     docopt answered a bad line with the usage string and nothing
     about which word was wrong, which is the cost that started
-    Lillecarl/pymux#38 and Lillecarl/pymux#48. argparse names it.
+    Lillecarl/pyterm#40 and Lillecarl/pyterm#50. argparse names it.
     """
     pymux = Pymux()
     call_command_handler("set-option", pymux, ["-g", "status", "off", "please"])
@@ -187,7 +187,7 @@ def test_word_matches_anywhere_in_command():
     """
     The command bar is where the tmux spellings live, and
     remembering them exactly is the failure mode: `option` reaches
-    `set-option` without the set. Lillecarl/pymux#269.
+    `set-option` without the set. Lillecarl/pyterm#271.
     """
     pymux = Pymux()
     text = [word for word, _said in _offered("option", pymux)]
@@ -197,10 +197,10 @@ def test_word_matches_anywhere_in_command():
 
 def test_flag_offers_itself_without_dash():
     """
-    The ask of Lillecarl/pymux#148 went one further: a flag lists
+    The ask of Lillecarl/pyterm#150 went one further: a flag lists
     without the dash at all. A flag says nothing about itself, and
     its help says plenty, so the help is what a dashless word
-    matches. Lillecarl/pymux#269.
+    matches. Lillecarl/pyterm#271.
     """
     pymux = Pymux()
     offered = dict(_offered("new-window unfocus", pymux))
@@ -252,7 +252,7 @@ def test_bind_key_offers_key_then_command_then_its_arguments():
 def test_bare_tab_after_command_lists_its_flags():
     """
     An empty word is the question, and the flags are one part of the
-    answer. Lillecarl/pymux#148.
+    answer. Lillecarl/pyterm#150.
     """
     pymux = Pymux()
     offered = [word for word, _said in _offered("split-window ", pymux)]
@@ -420,7 +420,7 @@ def test_the_completer_reads_the_server_it_was_made_for():
     The finder owning the tree is the design. Binding the server once was
     not: the second `Pymux` in a process completed against the first, and a
     suite that makes one per test got an answer that depended on test order.
-    Lillecarl/pymux#310.
+    Lillecarl/pyterm#312.
     """
     first = Pymux()
     second = Pymux()
@@ -435,7 +435,7 @@ def test_the_completer_reads_the_server_it_was_made_for():
 
 
 # ----------------------------------------------------------------------
-# The command bar and the forwards it can name. Lillecarl/pymux#441.
+# The command bar and the forwards it can name. Lillecarl/pyterm#443.
 
 
 def _offered_words(line, pymux):
@@ -449,7 +449,7 @@ async def test_unforward_port_offers_the_listenings_that_were_shown():
     The offer reads the copy `list-forwards` draws, so the number it
     suggests is the number that can be removed. Only forwards of the
     direction the flag names are offered, and the flag decides that and
-    not the word being typed. Lillecarl/pymux#441.
+    not the word being typed. Lillecarl/pyterm#443.
     """
     from prompt_toolkit.data_structures import Size
     from session import over_connection

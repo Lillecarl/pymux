@@ -8,7 +8,7 @@ own instead, moved to where the pane is drawn: kitty draws them with
 the blink and the colours of its cursor. kitty holds one colour pair
 for every extra cursor, so only one pane can have its colours, and that
 is the pane the person works in; the others keep the drawn cells.
-Lillecarl/pymux#891.
+Lillecarl/pyterm#893.
 """
 
 from __future__ import annotations

@@ -2,7 +2,7 @@
 `set-environment` and `show-environment`: the two scopes a new pane
 takes its environment from, with the unset that falls through.
 
-The rules this judges, Lillecarl/pymux#270: the session scope sits
+The rules this judges, Lillecarl/pyterm#272: the session scope sits
 over the global one and both over the server's own; a `-u` in one
 scope takes the name out so a session unset falls back to the global
 value rather than to nothing; and a name unset in both scopes leaves
@@ -84,7 +84,7 @@ async def test_a_pane_starts_with_the_scopes_over_what_ptterm_prepared(monkeypat
     The scopes merge onto the pane's copy, which ptterm has already
     told it runs on a pyte screen. Merged onto the server's own
     environment instead, they brought back the outer terminal's names.
-    Lillecarl/pymux#553.
+    Lillecarl/pyterm#555.
     """
     monkeypatch.setenv("KITTY_WINDOW_ID", "1")
     async with create_session() as (pymux, state):

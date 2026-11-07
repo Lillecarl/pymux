@@ -23,7 +23,7 @@ def consume_or_expel(pymux: Pymux, args: argparse.Namespace) -> None:
     alone in its column joins the next column, at the bottom. niri
     binds this to one key each way, and the "or" is the point: a
     person holds the key and the pane walks in and out of the columns
-    without deciding which move they wanted. Lillecarl/pymux#213.
+    without deciding which move they wanted. Lillecarl/pyterm#215.
 
     `move-column` moves a whole column along the row, and `break-pane`
     takes a pane out to a window of its own. This is the move between
@@ -37,7 +37,7 @@ def consume_or_expel(pymux: Pymux, args: argparse.Namespace) -> None:
     `Mod+BracketRight`, and `{` and `}` are the same two keys behind
     the prefix, but tmux already binds those to `swap-pane -U` and
     `-D` and pymux keeps tmux's keys. Which keys the three commands of
-    the strip take is Lillecarl/pymux#212.
+    the strip take is Lillecarl/pyterm#214.
     """
     window = the_window(pymux, None)
 

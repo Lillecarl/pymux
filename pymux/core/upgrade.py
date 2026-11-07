@@ -4,7 +4,7 @@ A server that replaces its own build while every pane goes on.
 `upgrade-server` execs the new build into this same process. The pane
 programs and the jobs are children of this pid and their ptys and pipes
 are fds of it, so none of them notices: what they write while no build
-reads waits in the kernel. Lillecarl/pymux#399, Lillecarl/pymux#736.
+reads waits in the kernel. Lillecarl/pyterm#401, Lillecarl/pyterm#738.
 
 The order:
 
@@ -99,7 +99,7 @@ async def upgrade(pymux: Pymux, command: list[str]) -> None:
     pymux.finish_recordings()
     # A Wayland window lives on this server's compositor, which ends with
     # the exec, so its pane goes now and not into the snapshot.
-    # Lillecarl/pymux#620.
+    # Lillecarl/pyterm#622.
     pymux.panes.close_window_panes()
 
     path = Path(socket_directory()) / ("pymux.core.upgrade.%d.sqlite" % os.getpid())
@@ -107,7 +107,7 @@ async def upgrade(pymux: Pymux, command: list[str]) -> None:
     paused = False
     try:
         # Sound stops too: the PipeWire is this server's child, and the
-        # new image would not know it. Lillecarl/pymux#657.
+        # new image would not know it. Lillecarl/pyterm#659.
         await pymux.audio.pause()
         # And the portal's private bus, for the same reason.
         await pymux.portal.pause()
@@ -120,7 +120,7 @@ async def upgrade(pymux: Pymux, command: list[str]) -> None:
                 if connection.peer is not None or (client is not None and not client.state.temporary):
                     await connection.say_restarting(RESTART_WAIT, UPGRADING)
             # From the sweep on, a command that ends a pane would leave a
-            # program neither image ends or reaps. Lillecarl/pymux#740.
+            # program neither image ends or reaps. Lillecarl/pyterm#742.
             pymux.refusing_commands = True
             await _end_the_hung_up(pymux)
 
@@ -135,7 +135,7 @@ async def upgrade(pymux: Pymux, command: list[str]) -> None:
 
         logger.info("Upgrading to %s.", shlex.join(command))
         # Before the exec, which closes the connection: a client that
-        # reads no answer says so and fails. Lillecarl/pymux#606.
+        # reads no answer says so and fails. Lillecarl/pyterm#608.
         await _answer_the_caller(pymux)
         _exec([*command, *log_arguments(), RESUME, str(path)], carried(pymux))
     except BaseException:
@@ -185,7 +185,7 @@ async def _answer_the_caller(pymux: Pymux) -> None:
     """
     Tell the client that ran `upgrade-server` that it worked. The exec
     closes its connection before the command returns, so the answer that
-    every command sends at its end never goes. Lillecarl/pymux#606.
+    every command sends at its end never goes. Lillecarl/pyterm#608.
     """
     try:
         client = pymux.get_client_state().client
@@ -365,7 +365,7 @@ def welcome_back(pymux: Pymux, client_state: ClientState, client_id: str) -> Non
     Give a client that attaches again after `upgrade-server` the
     view and the settings it left with. A record names ids, and one
     whose session or window has gone since is skipped.
-    Lillecarl/pymux#409.
+    Lillecarl/pyterm#411.
     """
     record = pymux.returning_clients.pop(client_id, None) if client_id else None
     if record is None:

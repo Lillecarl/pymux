@@ -1,7 +1,7 @@
 """
 The terminal's half of kitty's file transfer, OSC 5113, on the machine
 the person sits at. https://sw.kovidgoyal.net/kitty/file-transfer-protocol/.
-Lillecarl/pymux#912.
+Lillecarl/pyterm#914.
 
 A program in a pane speaks to its terminal, and only kitty answers. For
 any other terminal the server passes each command here, and this client

@@ -1,5 +1,5 @@
 """
-The server drops a client that stops answering. Lillecarl/pymux#446.
+The server drops a client that stops answering. Lillecarl/pyterm#448.
 
 **A closed socket was the only thing that dropped a client**, and a
 socket outlives the person. A laptop that sleeps leaves a dead TCP
@@ -12,7 +12,7 @@ What the ghost costs is not the socket. `window-size smallest` is the
 default, so a ghost holding a stale terminal size keeps the window that
 size for whoever is really looking at it.
 
-Lillecarl/pymux#445 is the other half and the other side: there the
+Lillecarl/pyterm#447 is the other half and the other side: there the
 client notices its own machine slept. This is what the server does
 about the client it was left with.
 """

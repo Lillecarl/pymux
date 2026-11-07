@@ -1,7 +1,7 @@
 # What pymux is and what it needs. `setup.py` used to say this, and a build
 # read it by running it. Nix reads this file instead, at evaluation time, so
 # the dependency list here is the one the package is built from and there is no
-# second copy in a `.nix` file to fall out of step. Lillecarl/pymux#319.
+# second copy in a `.nix` file to fall out of step. Lillecarl/pyterm#321.
 [project]
 name = "pymux"
 version = "0.15"
@@ -23,21 +23,21 @@ dependencies = [
     # that, so it is written once, in the library both import.
     "libpymux",
     # pyte's per-cell loops in Rust, which `pymux/core/main.py` installs
-    # over the Python ones. Lillecarl/pymux#566.
+    # over the Python ones. Lillecarl/pyterm#568.
     "pyte_rs",
     # And prompt_toolkit's, in `prompt_toolkit_rs/` beside this file.
     "prompt_toolkit_rs",
-    # And pymux's own image loops, in `pymux_rs/`. Lillecarl/pymux#574.
+    # And pymux's own image loops, in `pymux_rs/`. Lillecarl/pyterm#576.
     "pymux_rs",
     # Every import lazy, installed by `pymux/entry_points/__init__.py`.
     "deferimport",
     # Helix's keys on the command line, with `status-keys helix`.
-    # Lillecarl/pymux#749.
+    # Lillecarl/pyterm#751.
     "ptkhx",
     # The shell completes the command line through argcomplete: the
     # generated scripts of `share/bash-completion` and friends make the
     # shell ask `pymux`, and it answers from the parsers of the commands.
-    # Lillecarl/pymux#48.
+    # Lillecarl/pyterm#50.
     "argcomplete>=3.0.0",
     # `pymux profile` asks a running server where its time went. A person
     # wants that on the server they already have, not on one they built
@@ -48,62 +48,62 @@ dependencies = [
     "psutil",
     # `-S ssh://host/path` reaches a server on another machine, over a
     # `direct-streamlocal@openssh.com` channel to its unix socket.
-    # Lillecarl/pymux#90.
+    # Lillecarl/pyterm#92.
     "asyncssh>=2.14.0",
     # `pymux-browser` carries Playwright's `--remote-debugging-pipe` to
     # the browser's WebSocket on the client's machine. Only it imports
-    # this. Lillecarl/pymux#655.
+    # this. Lillecarl/pyterm#657.
     "websockets>=13.0",
     # Sound between the panes and the person's machine: Opus on the
     # wire, encoded and decoded on both ends, and the client's speaker
     # and microphone through PortAudio, on macOS and Linux alike.
-    # Lillecarl/pymux#657.
+    # Lillecarl/pyterm#659.
     "opuslib>=3.0.0",
     "sounddevice>=0.4.0",
     # `set-option theme pygments:<name>` takes one of the forty-nine styles
     # pygments carries, and anything a package installs beside them.
-    # Lillecarl/pymux#194.
+    # Lillecarl/pyterm#196.
     "pygments>=2.15.0",
     # kitty's rsync deltas hash blocks with XXH3-64 and a whole file with
-    # XXH3-128. Lillecarl/pymux#912.
+    # XXH3-128. Lillecarl/pyterm#914.
     "xxhash>=3.0.0",
     # The key `kitten transfer --permissions-bypass` encrypts its password
-    # to: X25519 and AES-256-GCM, as kitty's `kitty-1`. Lillecarl/pymux#917.
+    # to: X25519 and AES-256-GCM, as kitty's `kitty-1`. Lillecarl/pyterm#919.
     "cryptography",
     # The async of the server: task groups, a memory object stream, and
     # `wait_readable` in place of a callback nobody owns. 4.7 is what
     # `notify_closing` needs, and the posix pipe needs that to wake a
-    # reader parked on a socket that is closing. Lillecarl/pymux#87.
+    # reader parked on a socket that is closing. Lillecarl/pyterm#89.
     "anyio>=4.7.0",
     # SQL over the server's objects: `sql` answers from virtual tables
     # that read the jobs, sessions, windows and panes where they live,
     # so nothing is copied into a database while the server runs. apsw,
     # because the stdlib `sqlite3` has no virtual tables, and its async
     # connections keep a query off the event loop. 3.52 brought those.
-    # Lillecarl/pymux#528, Lillecarl/pymux#722.
+    # Lillecarl/pyterm#530, Lillecarl/pyterm#724.
     "apsw>=3.52",
     # The template language a person writes. A status line holding `{{`
     # or `{%` is rendered by jinja2, and everything else takes the tmux
     # format path; `-F` stays tmux format, because libtmux reads it.
-    # Lillecarl/pymux#333.
+    # Lillecarl/pyterm#335.
     "jinja2>=3.1.0",
     # `capture-pane --png` draws a pane's cells with a font, for an
-    # agent that reads pictures. Lillecarl/pymux#763.
+    # agent that reads pictures. Lillecarl/pyterm#765.
     "pillow>=10.0.0",
     # And reads which characters each font has, to fall back per glyph.
     "fonttools>=4.0.0",
     # `imgcat` draws an SVG, which Pillow cannot read, at the pixels of
-    # the cells it covers. Lillecarl/pymux#805.
+    # the cells it covers. Lillecarl/pyterm#807.
     "resvg-py",
     # And asks libmagic what a file is, so each reader gets only its own.
     "python-magic",
     # `capture-client -o` saves to the pictures directory: XDG user-dirs
-    # on Linux, ~/Pictures on macOS. Lillecarl/pymux#813.
+    # on Linux, ~/Pictures on macOS. Lillecarl/pyterm#815.
     "platformdirs",
     # `@override` on every override: the type check asks for it.
     # `typing` carries it from 3.12, so on this floor the shim is
     # vestigial; it stays until somebody rewrites the imports that
-    # name it, which is its own change. Lillecarl/pymux#510.
+    # name it, which is its own change. Lillecarl/pyterm#512.
     "typing-extensions",
 ]
 
@@ -113,21 +113,21 @@ dependencies = [
 docs = ["sphinx", "myst-parser", "furo"]
 # The four flavours of the pastel, found by pygments through the entry
 # points the package carries. Optional: pymux runs without it, and the
-# environment that installs pymux asks for it. Lillecarl/pymux#195.
+# environment that installs pymux asks for it. Lillecarl/pyterm#197.
 catppuccin = ["catppuccin>=2.0.0"]
 # `pymux web` serves a pane to a browser. Optional because it is an
 # adapter that runs beside a server rather than a part of one: a server
 # never imports this, and a caller with a front end of its own relays
 # `stream-pane` over the socket and needs nothing here.
-# Lillecarl/pymux#461.
+# Lillecarl/pyterm#463.
 web = ["websockets>=13.0"]
 # A Wayland compositor for panes with no display, so wl-copy and wl-paste
 # work there (`wayland-server`). Rust and Linux only, and pymux runs the
 # same without it: `pymux/wayland/wayland.py` imports it or does nothing.
-# Lillecarl/pymux#383.
+# Lillecarl/pyterm#385.
 #
 # dbus-fast serves the desktop portal those programs read light or dark
-# from (`wayland-portal`). Lillecarl/pymux#812.
+# from (`wayland-portal`). Lillecarl/pyterm#814.
 wayland = ["pysmithay; sys_platform == 'linux'", "dbus-fast; sys_platform == 'linux'"]
 # What the suites need on top of what pymux needs. It is an extra and not a
 # `[dependency-groups]` entry because only an extra reaches a resolver: Nix
@@ -150,7 +150,7 @@ test = [
     # `tests/test_pymux_mcp.py` and `check_pymux_mcp` judge it, and the
     # second one needs a real server, which is why its tests are here.
     "pymux-mcp",
-    # TEMPORARY for the Lillecarl/pymux#258 scratch measurement. Remove
+    # TEMPORARY for the Lillecarl/pyterm#260 scratch measurement. Remove
     # with `tests/measure_wire_sizes.py` and the `wire` check.
     "msgpack",
 ]
@@ -161,7 +161,7 @@ test = [
 # never involved. Nothing in the sandbox runs it, so `test` would put this
 # in the closure of every pymux check for nothing.
 #
-# The driver does not pass today. Lillecarl/pymux#321.
+# The driver does not pass today. Lillecarl/pyterm#323.
 dev = ["libtmux"]
 
 [project.urls]
@@ -169,7 +169,7 @@ Homepage = "https://github.com/Lillecarl/pymux"
 Documentation = "https://lillecarl.github.io/pymux/"
 # Work happens in the monorepo this repository is exported from.
 Source = "https://github.com/Lillecarl/pyterm"
-Issues = "https://github.com/Lillecarl/pymux/issues"
+Issues = "https://github.com/Lillecarl/pyterm/issues"
 
 [project.scripts]
 pymux = "pymux.entry_points.run_pymux:run"
@@ -198,7 +198,7 @@ packages = ["pymux"]
 # `pymux-pane.js`, `pymux-pane.d.ts` and `page.js` into the directory
 # below. hatchling alone therefore builds a wheel with no element in it;
 # `nix/element.nix` is what compiles, and `default.nix` installs the
-# result. Lillecarl/pymux#461.
+# result. Lillecarl/pyterm#463.
 artifacts = ["pymux/web/static/*"]
 
 [tool.pytest.ini_options]
@@ -207,7 +207,7 @@ artifacts = ["pymux/web/static/*"]
 # Without this, pytest fails an "async def test" with "async def
 # functions are not natively supported". `tests/session.py` answered that
 # with `@in_loop`, which runs the coroutine in a loop of its own; a new
-# async test needs neither now. Lillecarl/pymux#87.
+# async test needs neither now. Lillecarl/pyterm#89.
 #
 # `testSources` in `default.nix` carries this file to the suite. A setting
 # the check cannot read is a setting that holds by hand and not where it
@@ -217,7 +217,7 @@ anyio_mode = "auto"
 [tool.pyrefly]
 # The strict preset, which `checks.pymux-types` passes on the command
 # line: every parameter annotated, and no Any that nobody wrote
-# (Lillecarl/pymux#511). The three codes below are strict's already;
+# (Lillecarl/pyterm#513). The three codes below are strict's already;
 # they stay named so the file says what a default-preset run misses.
 #
 # Third-party code is a boundary by construction: the check passes

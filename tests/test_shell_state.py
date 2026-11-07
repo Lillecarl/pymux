@@ -49,7 +49,7 @@ class FakeConnection:
     def __init__(self):
         self.written = []
         # An iTerm2: it shows OSC 9, and an attention request as it came.
-        # Lillecarl/pymux#497.
+        # Lillecarl/pyterm#499.
         self.replies = SimpleNamespace(notification_osc=Osc.MESSAGE)
 
     def forward_osc(self, data):
@@ -101,7 +101,7 @@ def make_pymux(clipboard=Clipboard.ON):
     pymux = Pymux()
     pymux.options.set_clipboard = clipboard
     connections = [FakeConnection(), FakeConnection()]
-    # Clients out of sight, so a notification goes out. Lillecarl/pymux#799.
+    # Clients out of sight, so a notification goes out. Lillecarl/pyterm#801.
     pymux._client_states = {
         connection: SimpleNamespace(
             terminal_focused=False,
@@ -250,7 +250,7 @@ def test_copy_rejects_empty_and_not_base64(param):
         ("D;0", ("D", 0)),
         ("D;255", ("D", 255)),
         # Options a shell integration sends after the mark.
-        # Lillecarl/pymux#720.
+        # Lillecarl/pyterm#722.
         ("A;cl=m", ("A", None)),
         ("A;aid=7;k=s", ("A", None)),
         ("C;", ("C", None)),
@@ -310,7 +310,7 @@ def test_current_dir_updates_directory_and_keeps_host():
 
 
 def test_remote_host_names_the_user_and_the_host():
-    "Lillecarl/pymux#784."
+    "Lillecarl/pyterm#786."
     pymux, connections = make_pymux()
     pane = FakePane()
     pymux.outward.forward_osc(pane, "1337", "RemoteHost=carl@dynhetz")
@@ -479,12 +479,12 @@ def test_attention_with_bad_value_is_dropped():
 
 
 def test_a_simple_notification_records_hub_and_travels_on():
-    "urxvt's plain form, which foot, kitty and WezTerm read. Lillecarl/pymux#495."
+    "urxvt's plain form, which foot, kitty and WezTerm read. Lillecarl/pyterm#497."
     pymux, connections = make_pymux()
     pymux.outward.forward_osc(FakePane(pane_id=7), "777", "notify;Build;done; 3 warnings")
     (record,) = pymux.notification_center.notifications()
     assert (record.title, record.body, record.pane_id) == ("Build", "done; 3 warnings", 7)
-    # Spelled for iTerm2, which shows OSC 9. Lillecarl/pymux#497.
+    # Spelled for iTerm2, which shows OSC 9. Lillecarl/pyterm#499.
     for connection in connections:
         assert connection.written == [sequence("9", "Build: done; 3 warnings")]
 
@@ -500,7 +500,7 @@ def test_the_rest_of_777_stays_inside(param):
 
 
 def test_osc_9_is_a_notice_for_the_hub_and_the_clients():
-    "iTerm2's message. Lillecarl/pymux#787."
+    "iTerm2's message. Lillecarl/pyterm#789."
     pymux, connections = make_pymux()
     pymux.outward.forward_osc(FakePane(pane_id=7), "9", "Build done; 3 warnings")
     (record,) = pymux.notification_center.notifications()
@@ -519,7 +519,7 @@ def test_conemu_s_commands_under_osc_9_are_no_notice(param):
 
 
 # ----------------------------------------------------------------------
-# ConEmu's progress, OSC 9 ; 4. Lillecarl/pymux#788.
+# ConEmu's progress, OSC 9 ; 4. Lillecarl/pyterm#790.
 
 
 @pytest.mark.parametrize(
@@ -581,7 +581,7 @@ def test_copy_follows_clipboard_option(mode):
 
 
 def test_clear_scrollback_travels_on():
-    "The pane's screen clears its own history. Lillecarl/pymux#504."
+    "The pane's screen clears its own history. Lillecarl/pyterm#506."
     pymux, connections = make_pymux()
     pymux.outward.forward_osc(FakePane(), "1337", "ClearScrollback")
     for connection in connections:

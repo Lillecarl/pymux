@@ -32,7 +32,7 @@ def editor_keys(environ: Mapping[str, str] = os.environ) -> EditingKeys:
     **It is a substring of the name and not the start of it**, so
     `nvim` gives vi keys. That is the point of writing it that way.
 
-    Helix, named `hx` or `helix`, gives Helix keys. Lillecarl/pymux#749.
+    Helix, named `hx` or `helix`, gives Helix keys. Lillecarl/pyterm#751.
     """
     editor = environ.get("VISUAL")
     if editor is None:
@@ -76,7 +76,7 @@ def daemonize(stdin: str = "/dev/null", stdout: str = "/dev/null", stderr: str =
     # later. This daemon is the server, and every pane forks from it,
     # so the umask it keeps is the caller's -- the one the person
     # chose for the shells that follow. Nothing between here and the
-    # return needs a known umask. Lillecarl/pymux#398.
+    # return needs a known umask. Lillecarl/pyterm#400.
     os.chdir("/")
     os.setsid()
 
@@ -95,7 +95,7 @@ def daemonize(stdin: str = "/dev/null", stdout: str = "/dev/null", stderr: str =
             # belongs to the caller at this point -- the redirection is
             # below. So `new-session` answered with a traceback on
             # stderr, and any tool that reads stderr called it a failed
-            # command. libtmux does. Lillecarl/pymux#321.
+            # command. libtmux does. Lillecarl/pyterm#323.
             os._exit(0)
     except OSError as e:
         sys.stderr.write("fork #2 failed: (%d) %s\n" % (e.errno, e.strerror))

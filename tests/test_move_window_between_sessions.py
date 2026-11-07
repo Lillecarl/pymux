@@ -5,7 +5,7 @@ Moving a window from one session to another.
 only, and `link-window -t` the same: a window had no route between
 the sessions of one server. `-t` takes an optional session in front
 of the index now, and `-s` names the window, so both commands move
-across (`cmd-move-window.c`). Lillecarl/pymux#533.
+across (`cmd-move-window.c`). Lillecarl/pyterm#535.
 """
 
 from __future__ import annotations

@@ -21,7 +21,7 @@ def switch_column_width(pymux: Pymux, args: argparse.Namespace) -> None:
     The presets are a third, a half and two thirds of the window, which
     are niri's own. This is the strip's answer to `resize-pane`: a
     person picks between a few widths that fit together rather than
-    nudging a border. Lillecarl/pymux#198.
+    nudging a border. Lillecarl/pyterm#200.
 
     No key is bound to it. tmux has no equivalent command, so there is
     nothing to keep for muscle memory and nothing to collide with, and

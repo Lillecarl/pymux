@@ -9,7 +9,7 @@
  *
  * It is not a test of behaviour and cannot be: `tsc` reads types and runs
  * nothing. What it says is that every member a consumer reaches for exists
- * with the shape the declarations promise. Lillecarl/pymux#461.
+ * with the shape the declarations promise. Lillecarl/pyterm#463.
  */
 
 import type {

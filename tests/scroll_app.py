@@ -94,7 +94,7 @@ def document_line(number: int) -> str:
 
 #: What the viewer writes first. Fed without it, the bytes run on the
 #: main screen, where a region from the first row slides over the
-#: history and no reader hears of a scroll. Lillecarl/pymux#566.
+#: history and no reader hears of a scroll. Lillecarl/pyterm#568.
 ALTERNATE_SCREEN = "\x1b[?1049h"
 
 

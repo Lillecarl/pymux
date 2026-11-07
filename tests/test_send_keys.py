@@ -6,7 +6,7 @@ a state they cannot type out of, so it is the one command that has to
 work when nothing else does. It raised `AttributeError` and reset
 nothing: it called `reset` on prompt_toolkit's `Screen`, which has no
 such method, so the call after it never ran. Nothing tested it.
-Lillecarl/pymux#118.
+Lillecarl/pyterm#120.
 """
 
 from __future__ import annotations
@@ -103,7 +103,7 @@ async def test_keys_reach_program(pymux):
 #: never goes through the table that `send-keys` reads: ptterm hands the
 #: pane what the terminal sent, and the screen re-spells it for the
 #: modes the pane turned on. So the two roads to a pane have to end in
-#: the same bytes, and for 52 keys they did not. Lillecarl/pymux#119.
+#: the same bytes, and for 52 keys they did not. Lillecarl/pyterm#121.
 KEYS = [
     ("Up", csi(escape.CUU)),
     ("Down", csi(escape.CUD)),
@@ -169,8 +169,8 @@ async def test_key_sends_what_keyboard_sends(pymux, name, expected):
 #:
 #: **Each of these used to be sent as a different key, in silence.**
 #: ctrl+shift+a went as ctrl+a, super+a went as "a", and a person had
-#: no way to find out. Lillecarl/pymux#168 wrote the first trade down
-#: as intended; Carl asked for the opposite on Lillecarl/pymux#237, and
+#: no way to find out. Lillecarl/pyterm#170 wrote the first trade down
+#: as intended; Carl asked for the opposite on Lillecarl/pyterm#239, and
 #: he is right. If you meant ctrl+a, write ctrl+a.
 KEYS_A_LEGACY_PANE_CANNOT_READ = [
     ("C-S-a", "shift"),
@@ -253,9 +253,9 @@ async def test_arrow_is_application_form_for_pane_that_asked(pymux):
 #: `C-Down` and no other modified functional key, so ctrl worked on
 #: four keys and on none of the other twenty-two. And an argument that
 #: names no key is sent as the text it is, the way tmux does, so
-#: nothing failed and nothing said so. Lillecarl/pymux#234.
+#: nothing failed and nothing said so. Lillecarl/pyterm#236.
 #:
-#: This is the key Lillecarl/pymux#220 exists for: a keyboard with no
+#: This is the key Lillecarl/pyterm#222 exists for: a keyboard with no
 #: Home key cannot answer a program that asks for ctrl+Home.
 KEYS_A_KEYBOARD_LEAVES_OUT = [
     ("C-Home", "\x1b[1;5H"),
@@ -297,7 +297,7 @@ async def test_dash_l_sends_names_as_text(pymux):
 async def test_keys_reach_the_program_while_a_person_reads_its_history(pymux):
     """
     Copy mode reads a copy of the buffer and the program runs on, so
-    there is nothing to refuse. Lillecarl/pymux#470.
+    there is nothing to refuse. Lillecarl/pyterm#472.
     """
     pane = create_pane(pymux, "hello")
     pane.terminal.enter_copy_mode()

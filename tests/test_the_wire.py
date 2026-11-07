@@ -1,6 +1,6 @@
 """
 The wire turns from JSON to msgpack where both ends agree, one direction
-at a time, at a `wire` packet. Lillecarl/pymux#633.
+at a time, at a `wire` packet. Lillecarl/pyterm#635.
 """
 
 from __future__ import annotations
@@ -129,7 +129,7 @@ async def test_a_frame_compressed_in_a_thread_keeps_its_place_in_the_stream():
     """
     A packet past `COMPRESS_IN_A_THREAD` is compressed off the loop, and
     a small one written while it is goes into the zstd stream after it.
-    Lillecarl/pymux#632.
+    Lillecarl/pyterm#634.
     """
     server_socket, client_socket = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
     client_socket.setblocking(False)

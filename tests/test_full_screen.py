@@ -10,7 +10,7 @@ over them.
 not `set-option`, because a person watching on a phone drops the chrome
 while the person working keeps it. So every question here is asked of
 a client, under that client's own application, which is how a frame
-asks it. Lillecarl/pymux#471.
+asks it. Lillecarl/pyterm#473.
 
 The plane is the other half and it is shared: it keeps the rows the
 chrome of any watching client needs, and a full-screen client draws

@@ -1,13 +1,13 @@
 """
 What a person calls a terminal, rather than what pymux derived.
 
-Lillecarl/pymux#335 gave every client a derived name,
+Lillecarl/pyterm#337 gave every client a derived name,
 `dynhetz:/dev/pts/7`, which is what `-t` selects one by. This is the
 chosen one: `desk`, `phone`, `the big screen`.
 
 **tmux has no such thing.** Its `c->name` is set once at identify time
 from the tty path and nothing renames it (`server-client.c:2988`), so
-the shape here is pymux's own. Lillecarl/pymux#340.
+the shape here is pymux's own. Lillecarl/pyterm#342.
 """
 
 from __future__ import annotations
@@ -71,7 +71,7 @@ async def test_a_client_that_was_given_none_has_none():
 
 
 async def test_a_name_can_be_set_while_a_client_runs():
-    "The thing #340 asked for: rename the terminal you are sitting at."
+    "The thing #342 asked for: rename the terminal you are sitting at."
     async with over_connection() as session:
         state, _ = await session.attach("here", SIZE)
 
@@ -172,7 +172,7 @@ async def a_real_client(monkeypatch, config_file, chosen_name):
         finally:
             # Only once the cancelled client has stopped waiting on the
             # pty: a writer it still has registered fires on a closed fd
-            # and fails the test with EBADF. Lillecarl/pymux#716.
+            # and fails the test with EBADF. Lillecarl/pyterm#718.
             terminal.close()
             pymux.stop()
             for window in list(pymux.arrangement.windows):

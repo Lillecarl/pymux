@@ -26,12 +26,12 @@ it: `--fallback` files are tried in order, each by its own character
 map. Without one, the system's font takes fontconfig's answer for each
 character it lacks, and a caller's font draws the font's box. The
 person's terminal draws its own fallbacks on its own machine, and none
-of its fonts reach the server. Lillecarl/pymux#815.
+of its fonts reach the server. Lillecarl/pyterm#817.
 
 **Images are placed as a client would place them**: `graphics.
 pane_placements` answers each one's cells and crop, kitty's and
 sixel's alike, and a negative z-index goes under the text.
-Lillecarl/pymux#763.
+Lillecarl/pyterm#765.
 """
 
 from __future__ import annotations
@@ -224,7 +224,7 @@ class Pixels:
 def window_shown(column: int, row: int, columns: int, rows: int, frame: Pixels) -> Shown:
     """
     A window pane's frame over the pane's cells, where a client places
-    it: under every cell with a background of its own. Lillecarl/pymux#814.
+    it: under every cell with a background of its own. Lillecarl/pyterm#816.
     """
     return Shown(column, row, columns, rows, WINDOW_Z, frame, None)
 
@@ -323,7 +323,7 @@ def window_grid_of(
     """
     A window as its plan lays it out, with no client: each pane's visible
     rows at its rectangle, and the layout's border lines in the gaps.
-    `capture-window`. Lillecarl/pymux#818.
+    `capture-window`. Lillecarl/pyterm#820.
 
     `panes` pairs each shown pane's rectangle with its screen, or with a
     Wayland window pane's last frame, `None` while it has drawn none.
@@ -507,7 +507,7 @@ class _Pens:
 
         A cell of several characters goes to a font that has all of
         them, as a keycap does: the face has its digit and not U+20E3,
-        and drew a missing-glyph box beside it. Lillecarl/pymux#802.
+        and drew a missing-glyph box beside it. Lillecarl/pyterm#804.
         """
         codes = {ord(char) for char in glyph if char not in _SELECTORS} or {ord(glyph[0])}
         if not codes <= self.known:
@@ -550,7 +550,7 @@ def _squeeze(
     A glyph wider than its cells, scaled down to their width and centred
     in their height, as kitty fits one. Drawn at its own width it covered
     the next cell: an emoji in a cell of one column, a conjunct from a
-    fallback font. Lillecarl/pymux#803.
+    fallback font. Lillecarl/pyterm#805.
     """
     wide, room, height = sizes
     mask = Image.new("L", (wide, height))

@@ -2,7 +2,7 @@
 A pane, streamed to something that is not a terminal.
 
 **`protocol` is pure and takes no dependency.** It turns a screen into
-the frames of Lillecarl/pymux#461 and back, and it is the whole of the
+the frames of Lillecarl/pyterm#463 and back, and it is the whole of the
 design; a transport carries those frames and decides nothing. That is
 why the streaming command on pymux's own socket and the websocket server
 beside it are two thin things over one protocol rather than two

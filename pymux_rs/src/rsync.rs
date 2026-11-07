@@ -1,7 +1,7 @@
 //! `pymux.client.kitty_rsync._Blocks`: the blocks of a kitty rsync
 //! signature, and the rolling search for one of them in new bytes. The
 //! search answers what the Python answers, with the GIL released.
-//! Lillecarl/pymux#916.
+//! Lillecarl/pyterm#918.
 
 use std::collections::HashMap;
 
@@ -30,7 +30,7 @@ fn weak_hash(block: &[u8]) -> (u32, u32) {
 }
 
 /// `pymux.client.kitty_rsync._records`: the signature records of the
-/// blocks of `run`, numbered from `first`. Lillecarl/pymux#921.
+/// blocks of `run`, numbered from `first`. Lillecarl/pyterm#923.
 #[pyfunction]
 pub fn rsync_records<'py>(
     py: Python<'py>,

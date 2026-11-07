@@ -6,8 +6,8 @@ off the screen, and its cells say nothing about it: a pane whose
 program wrote nothing past the cut looks like a pane that ends there.
 So the cells nearest the cut edge are shaded, strongest at the edge and
 fading inward, on whichever side is cut. `cut-shade-width` and
-`cut-shade-strength` say how far and how much. Lillecarl/pymux#222,
-Lillecarl/pymux#616.
+`cut-shade-strength` say how far and how much. Lillecarl/pyterm#224,
+Lillecarl/pyterm#618.
 
 Carl: "the tint i asked for was not full-screen, just the column near
 the edge."

@@ -1,6 +1,6 @@
 """
 The browser a program on the server drives, started on the machine the
-person sits at. Lillecarl/pymux#653.
+person sits at. Lillecarl/pyterm#655.
 
 A Playwright or Puppeteer script, or an agent's browser tool, in a pane
 drives a browser over a remote protocol. That browser belongs on the

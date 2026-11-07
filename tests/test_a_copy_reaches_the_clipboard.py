@@ -10,7 +10,7 @@ whether it goes out.
 
 `ptterm/tests/test_copy_mode.py` judges the keys. This judges the wire:
 that a pane of pymux hands the ask over, that the payload survives the
-check, and that every client hears it. Lillecarl/pymux#376.
+check, and that every client hears it. Lillecarl/pyterm#378.
 """
 
 from __future__ import annotations
@@ -92,7 +92,7 @@ async def test_a_copy_reaches_the_terminal_of_the_client(pymux):
 async def test_a_copy_reaches_the_terminal_of_the_client_that_made_it(pymux):
     """
     Copy mode is a client's, and so is what it copies: a second person
-    on the session keeps their own clipboard. Lillecarl/pymux#470.
+    on the session keeps their own clipboard. Lillecarl/pyterm#472.
     """
     clients = {}
     for name in ("copying", "watching"):
@@ -139,7 +139,7 @@ async def test_a_client_that_only_watches_copies_into_a_buffer_of_its_own():
     """
     A watcher may read the history and copy from it, and writes nothing
     the others share: the paste buffer of the session stays as it was.
-    Lillecarl/pymux#470.
+    Lillecarl/pyterm#472.
     """
     async with create_session() as (mux, state):
         mux.clipboard.set_text("shared")
@@ -156,7 +156,7 @@ async def test_a_copy_goes_out_on_both_of_the_values_that_allow_it(pymux, mode):
     `set-clipboard` answers two questions, and tmux gives them
     different answers. A copy the person makes goes out on "external"
     and on "on"; a program in a pane is allowed on "on" alone.
-    Lillecarl/pymux#378.
+    Lillecarl/pyterm#380.
     """
     connection = listening(pymux)
     pymux.options.set_clipboard = mode

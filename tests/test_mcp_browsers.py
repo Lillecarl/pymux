@@ -1,7 +1,7 @@
 """
 pymux-mcp's browsers against a server that is really there: Chromium
 and qutebrowser headless as a job, and headful in a window pane.
-Lillecarl/pymux#822.
+Lillecarl/pyterm#824.
 
 Runs in `checks.pymux-browsers`, which puts both on the PATH.
 """

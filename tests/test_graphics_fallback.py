@@ -398,7 +398,7 @@ def test_new_crop_is_encoded_again(counted_encoder):
 
 
 # ----------------------------------------------------------------------
-# Encoding in a worker thread. Lillecarl/pymux#575.
+# Encoding in a worker thread. Lillecarl/pyterm#577.
 
 
 def make_spawning_client(blocks=False):

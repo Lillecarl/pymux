@@ -36,10 +36,10 @@ def test_a_blink_fixture_holds_its_window_past_its_whole_burst():
     harness's budget is the only thing that ends the wait. So a program
     that ends inside its own burst reads as a screenshot that timed
     out, which is what `bare.7` of `cursor-blink` did on a loaded
-    machine. Lillecarl/pymux#462.
+    machine. Lillecarl/pyterm#464.
 
     The burst starts on the fixture's fence, which the seat waits for
-    as long as it waits for a window. Lillecarl/pymux#588.
+    as long as it waits for a window. Lillecarl/pyterm#590.
     """
     burst = APPEAR_TIMEOUT + BLINK_FRAMES * (BLINK_GAP + A_SLOW_PICTURE)
 
@@ -54,6 +54,6 @@ def test_a_still_fixture_holds_its_window_past_all_three_waits():
     window, for the fence to reach the clipboard, and for the screen to
     settle. The hold covered two of them, so a picture whose first two
     waits both ran long lost its window while the settle was still
-    going. Lillecarl/pymux#462.
+    going. Lillecarl/pyterm#464.
     """
     assert HOLD >= APPEAR_TIMEOUT + APPEAR_TIMEOUT + SETTLE_TIMEOUT

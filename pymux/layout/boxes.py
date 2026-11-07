@@ -8,7 +8,7 @@ from __future__ import annotations
 #: How far a box floats from the top of the screen and from each
 #: side. The keys pop-up chose these, and the command palette takes
 #: the same ones because it is the same kind of box.
-#: Lillecarl/pymux#158.
+#: Lillecarl/pyterm#160.
 BOX_TOP = 5
 BOX_SIDE = 3
 

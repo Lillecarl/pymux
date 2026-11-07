@@ -4,7 +4,7 @@ Which pane is over this one, and which is under it.
 The same question as `test_pane_beside_this_one.py`, turned ninety
 degrees, and the same plan answers it. A stack is what a niri column
 holds, and a person in one cannot see what is out there any more than
-they could sideways. Lillecarl/pymux#211.
+they could sideways. Lillecarl/pyterm#213.
 
 The rule is the sideways rule, turned: the pane above is the one
 beyond our top edge that shares most of our width, and nearest wins

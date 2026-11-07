@@ -2,7 +2,7 @@
 The choosers of one client: the window chooser, a bar across the top,
 and the boxes that choose a buffer, an option, a notification or a
 job. What is being chosen lives on `ClientState`; this draws it and
-acts on the row it points at. Lillecarl/pymux#775.
+acts on the row it points at. Lillecarl/pyterm#777.
 """
 
 from __future__ import annotations
@@ -70,7 +70,7 @@ def option_command_of(name: str) -> str:
     `set-option`, a window option `set-window-option`, and a client
     option `set-client-option`; each scope has its own command, so a
     chooser that lists all three has to carry a name to the one that
-    takes it. Lillecarl/pymux#472.
+    takes it. Lillecarl/pyterm#474.
     """
     from pymux.options.options import ALL_CLIENT_OPTIONS, ALL_WINDOW_OPTIONS
 
@@ -101,14 +101,14 @@ class ChooserView:
         # The windows of the session, to choose from. Built once, like
         # the boxes of `LayoutManager`: a window built fresh each frame
         # is one the layout never focused.
-        # Lillecarl/pymux#295.
+        # Lillecarl/pyterm#297.
         self._chooser: Container | None = None
         self._chooser_rows: Window | None = None
         self._chooser_search: Container | None = None
 
         #: The window chooser is not the box: it is a bar across the
         #: top, over the window it is switching to.
-        #: Lillecarl/pymux#327.
+        #: Lillecarl/pyterm#329.
         self._bar: Container | None = None
         self._bar_rows: Window | None = None
         self._bar_search: Container | None = None
@@ -119,7 +119,7 @@ class ChooserView:
 
         The chooser lists them all, so a person picks a window without
         first having to name the session it is in. tmux's choose-tree
-        does the same thing with a tree. Lillecarl/pymux#323.
+        does the same thing with a tree. Lillecarl/pyterm#325.
         """
         return [window for session in self.pymux.sessions for window in session.arrangement.windows]
 
@@ -131,13 +131,13 @@ class ChooserView:
         at, the way tmux's tree opens on the current one. A template
         is the tmux `%%`: the command to run on the window the
         chooser points at, instead of switching to it.
-        Lillecarl/pymux#295.
+        Lillecarl/pyterm#297.
 
         **There is no picture of a window here.** Moving the point
         switches this client to the window it lands on, so what a
         person reads under the bar is that window itself, running, at
         full size. Escape puts the client back where it started.
-        Lillecarl/pymux#327.
+        Lillecarl/pyterm#329.
         """
         state = self.client_state
         windows = self.every_window()
@@ -167,14 +167,14 @@ class ChooserView:
         more than one session and they flow together -- with one the
         word is the same on every entry and says nothing, and with
         `chooser-session-lines` the line's label says it once.
-        Lillecarl/pymux#765. A star marks the window this client was
+        Lillecarl/pyterm#767. A star marks the window this client was
         on when the chooser opened, which is the one Escape goes back
         to. The window's marks come before the star, as in the status
         line, and the point clears them when it lands, as a visit does.
 
         The pane count is not here. The bar sits over the window
         itself, so a person counts the panes by looking at them.
-        Lillecarl/pymux#327.
+        Lillecarl/pyterm#329.
         """
         prefixed = len(self.pymux.sessions) > 1 and not self._chooser_grouped()
         going_back = self.client_state.chooser_return_to
@@ -205,11 +205,11 @@ class ChooserView:
         They flow like words: an entry that does not fit starts the
         next line. One wider than the whole bar takes a line of its own
         and the screen cuts it, which is what a long word does too.
-        Lillecarl/pymux#327.
+        Lillecarl/pyterm#329.
 
         With `chooser-session-lines` on and more than one session, each
         session also starts a line, so the sessions read as groups.
-        Lillecarl/pymux#531. The label column takes its width from
+        Lillecarl/pyterm#533. The label column takes its width from
         every line, so the entries flow in what is left.
         """
         lines: list[list[int]] = [[]]
@@ -246,7 +246,7 @@ class ChooserView:
     def _session_label(self, session: Session) -> str:
         """
         A session's name, and the marks its windows carry, so a line
-        says which session wants attention. Lillecarl/pymux#767.
+        says which session wants attention. Lillecarl/pyterm#769.
         """
         return session.name + marks_of(session.options, session.arrangement.windows)
 
@@ -256,7 +256,7 @@ class ChooserView:
 
         The first line of a session names it, and a line it wrapped
         onto stays blank, so the name is said once and the entries
-        still line up. Lillecarl/pymux#765.
+        still line up. Lillecarl/pyterm#767.
         """
         width = self._chooser_label_width()
         if not width:
@@ -307,7 +307,7 @@ class ChooserView:
         preview. It is the same call `select-window` makes, so
         everything a window has -- its panes, its size, its title
         bars -- is what a person sees while they choose.
-        Lillecarl/pymux#327.
+        Lillecarl/pyterm#329.
 
         `along` is the aim `step_line` keeps; every other move passes
         none and so forgets it.
@@ -361,17 +361,17 @@ class ChooserView:
         - `BUFFER`, the named buffers. Enter makes the chosen one the
           session's one buffer, which is what `paste-buffer` pastes --
           the thing tmux's choose-buffer marks current.
-          Lillecarl/pymux#304.
+          Lillecarl/pyterm#306.
         - `OPTIONS`, the options of every scope: what `customize-mode`
           is here. Enter asks for a value on the prompt, with the
           option named and what it holds as the default.
-          Lillecarl/pymux#297.
+          Lillecarl/pyterm#299.
         - `NOTIFICATIONS`, what the hub keeps, newest first. Enter
           takes this client to the pane one came from.
         - `JOB`, the jobs of this server, newest first. Enter shows the
           pointed job in this session's overlay, read-only; `o` opens
           it as a pane in a new window, and `t` runs its command again
-          in a new window. Lillecarl/pymux#528.
+          in a new window. Lillecarl/pyterm#530.
 
         Escape closes, and there is nothing to put back: a box
         previews nothing.
@@ -394,7 +394,7 @@ class ChooserView:
         """
         The rows the chooser lists. The search narrows them: a row
         stays when what was typed is in its name or in its index,
-        without case. Lillecarl/pymux#295.
+        without case. Lillecarl/pyterm#297.
         """
         text = self.client_state.choose_window_filter.text.lower()
         kind = self.client_state.chooser
@@ -463,7 +463,7 @@ class ChooserView:
         """
         Make the buffer the chooser points at the session's one
         buffer, which is what `paste-buffer` pastes. The chooser
-        closes. Lillecarl/pymux#304.
+        closes. Lillecarl/pyterm#306.
         """
         name = self.pointed()
         self.client_state.chooser = None
@@ -481,7 +481,7 @@ class ChooserView:
         there -- so Enter only stops the chooser from putting it back.
         A template is the one case that undoes the switch: the command
         is what the person asked for, and being moved as well is not.
-        Lillecarl/pymux#295. Lillecarl/pymux#327.
+        Lillecarl/pyterm#297. Lillecarl/pyterm#329.
         """
         window = self.pointed()
         if window is None:
@@ -505,7 +505,7 @@ class ChooserView:
         default answer. The command is the option's own scope's --
         `set-option`, `set-window-option` or `set-client-option` -- so
         a client option reaches the client this chooser is drawn on.
-        The chooser closes. Lillecarl/pymux#297. Lillecarl/pymux#472.
+        The chooser closes. Lillecarl/pyterm#299. Lillecarl/pyterm#474.
         """
         name = self.pointed()
         self.client_state.chooser = None
@@ -550,7 +550,7 @@ class ChooserView:
         """
         Show the pointed job in this session's overlay: the tail and
         the follow, read-only. The picker closes; Escape closes the
-        viewer, which never touches the job. Lillecarl/pymux#528.
+        viewer, which never touches the job. Lillecarl/pyterm#530.
         """
         job = self.pointed_job()
         self.client_state.chooser = None
@@ -562,7 +562,7 @@ class ChooserView:
         """
         Open the pointed job as a pane in a new window: a viewer,
         read-only, that follows the job. Closing the window never
-        touches the job. Lillecarl/pymux#528.
+        touches the job. Lillecarl/pyterm#530.
         """
         job = self.pointed_job()
         self.client_state.chooser = None
@@ -573,7 +573,7 @@ class ChooserView:
     def take_over_pointed_job(self) -> None:
         """
         Run the pointed job's command again, interactively, in a new
-        window. The recorded job is untouched. Lillecarl/pymux#528.
+        window. The recorded job is untouched. Lillecarl/pyterm#530.
         """
         job = self.pointed_job()
         self.client_state.chooser = None
@@ -614,7 +614,7 @@ class ChooserView:
         for the three of them, because they are one thing: the
         title, the rows and the search are shared, and only what the
         rows say and what taking a row does differ.
-        Lillecarl/pymux#295. Lillecarl/pymux#304. Lillecarl/pymux#297.
+        Lillecarl/pyterm#297. Lillecarl/pyterm#306. Lillecarl/pyterm#299.
 
         Built once, for the reason `CommandLine.window` gives.
         """
@@ -674,7 +674,7 @@ class ChooserView:
         Not a box, and nothing of the window is hidden by more of it
         than it needs: the windows flow across the bar and wrap, and
         what is under it is the window the bar points at, running.
-        Lillecarl/pymux#327.
+        Lillecarl/pyterm#329.
 
         Built once, for the reason `CommandLine.window` gives.
         """
@@ -750,7 +750,7 @@ class ChooserView:
         The rows of the box, by the kind that shows.
 
         The windows are not here: they flow across a bar of their own.
-        Lillecarl/pymux#327.
+        Lillecarl/pyterm#329.
         """
         match self.client_state.chooser:
             case Chooser.OPTIONS:
@@ -768,7 +768,7 @@ class ChooserView:
         window or client option says which scope it is, because the
         three scopes are set by three commands; a server option says
         so too, because it is one value for every session.
-        Lillecarl/pymux#297. Lillecarl/pymux#472.
+        Lillecarl/pyterm#299. Lillecarl/pyterm#474.
         """
         from pymux.options.options import ALL_CLIENT_OPTIONS, ALL_SERVER_OPTIONS, ALL_WINDOW_OPTIONS
 
@@ -806,7 +806,7 @@ class ChooserView:
         program and the directory its shell reported; a message says
         what it said, how often in a row, and what it came through.
         A row answers a click by jumping to its pane.
-        Lillecarl/pymux#768.
+        Lillecarl/pyterm#770.
         """
         from pymux.notify.hub import Heading, age, heading_text
 
@@ -846,7 +846,7 @@ class ChooserView:
     def _where_pane_is(self, pane_id: PaneId | None) -> str:
         """
         The directory the shell of that pane reported, with the home
-        directory as `~`, or nothing. Lillecarl/pymux#498.
+        directory as `~`, or nothing. Lillecarl/pyterm#500.
 
         **Only what the shell said**, not the process table that
         `#{pane_current_path}` falls back to: that is a system call per
@@ -866,7 +866,7 @@ class ChooserView:
         The named buffers, one row each: the name, and how much it
         holds. The row the chooser points at carries the gutter arrow
         and stands out, and a row answers a click the way a window's
-        row does. Lillecarl/pymux#304.
+        row does. Lillecarl/pyterm#306.
         """
         matches = self.chooser_matches()
         if not matches:
@@ -897,7 +897,7 @@ class ChooserView:
         Like words on a line: they sit side by side and wrap when the
         line is full. A row each was right in a box; a bar is one to
         three rows over the window a person is reading, and a row each
-        would cover it. Lillecarl/pymux#327.
+        would cover it. Lillecarl/pyterm#329.
 
         The entry the bar points at stands out, and a star marks the
         one Escape goes back to. An entry answers a click, the way a
@@ -941,7 +941,7 @@ class ChooserView:
                     if self.client_state.chooser is Chooser.WINDOW:
                         # Through `point_at`, so the click switches to the
                         # window before taking it -- the same path the keys
-                        # take. Lillecarl/pymux#327.
+                        # take. Lillecarl/pyterm#329.
                         self.point_at(row)
                     else:
                         self.client_state.choose_window_index = row

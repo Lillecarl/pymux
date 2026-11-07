@@ -1,6 +1,6 @@
 """
 Notifications as boxes inside pymux, for a terminal that shows none
-itself. Lillecarl/pymux#826.
+itself. Lillecarl/pyterm#828.
 """
 
 from __future__ import annotations

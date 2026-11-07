@@ -4,13 +4,13 @@ What the panes and the clients are told about each other's terminal.
 A pane learns the cell size, the keyboard and the colours of the
 clients that look at it; a client learns the pointer shape and the
 keyboard flags of the pane it looks at. Each `sync_` sends only when the
-answer changed since it last sent. Lillecarl/pymux#775.
+answer changed since it last sent. Lillecarl/pyterm#777.
 
 **A server that mirrors panes of this one is a viewer too.** It sends
 what its own clients' terminals say (`PeerTerminal`), and this server
 weighs that with its own clients, by the same rules, for the panes the
 peer mirrors. A mirrored pane here is told nothing: its owner settles
-its surroundings, and they arrive with its reads. Lillecarl/pymux#759.
+its surroundings, and they arrive with its reads. Lillecarl/pyterm#761.
 """
 
 from __future__ import annotations
@@ -134,7 +134,7 @@ class Terminals:
         One client's pointer moved, or left the window of its terminal.
         What it was over is told that it left, when it asked to be told,
         and the pointer takes the shape of what it is over now.
-        Lillecarl/pymux#899.
+        Lillecarl/pyterm#901.
         """
         client_state = self.pymux._client_states.get(client)
         if client_state is not None:
@@ -164,7 +164,7 @@ class Terminals:
         A line's resize shape while the client drags it or the pointer is
         over it, else the shape the pane asks for. The mouse handler
         under the pointer says which line, so a line under a menu has
-        none. Lillecarl/pymux#819.
+        none. Lillecarl/pyterm#821.
         """
         drag = client_state.border_drag
         if drag is not None:
@@ -186,7 +186,7 @@ class Terminals:
     def sync_progress(self) -> None:
         """
         Give every client the progress of the pane it looks at, as the
-        pointer's shape above. Lillecarl/pymux#788.
+        pointer's shape above. Lillecarl/pyterm#790.
         """
         try:
             for client, client_state in self.pymux._client_states.items():
@@ -216,7 +216,7 @@ class Terminals:
         return records
 
     def sync_program_status(self) -> None:
-        "Give every client's terminal the records of the panes. Lillecarl/pymux#927."
+        "Give every client's terminal the records of the panes. Lillecarl/pyterm#929."
         try:
             records = self.program_status()
             for client in self.pymux._client_states:
@@ -240,7 +240,7 @@ class Terminals:
         # **The temporary client of a socket command is not here.** It
         # never asked a terminal anything, so its report of nothing
         # would drag the mask of every real client down with it for as
-        # long as the command runs. Lillecarl/pymux#420.
+        # long as the command runs. Lillecarl/pyterm#422.
         masks = [
             client.replies.kitty_source_flags
             for client, client_state in self.pymux._client_states.items()
@@ -316,14 +316,14 @@ class Terminals:
         every other terminal stretches a picture drawn for that cell. The
         terminal in front of the person draws it pixel for pixel: a
         Wayland window drawn for a 7x16 cell was grainy and 1.4 times too
-        wide in a kitty with a 10x18 one. Lillecarl/pymux#753. Clients
+        wide in a kitty with a 10x18 one. Lillecarl/pyterm#755. Clients
         nobody typed in tie, and the first to attach wins.
 
         A client that never answered "CSI 16 t" is passed over rather
         than counted at its default, and a connection that runs one
         command and leaves is not a terminal anybody is looking at.
         With nobody to ask, the panes keep the size `pyte` assumes.
-        Lillecarl/pymux#369.
+        Lillecarl/pyterm#371.
 
         A peer that mirrors a pane of `session` watches it, and a peer
         is used when a person there types into a mirror.
@@ -388,7 +388,7 @@ class Terminals:
 
         `set-option extended-keys` calls this, because that option
         moves both halves at once: what a pane may ask for, and what
-        the terminal of a client is put into. Lillecarl/pymux#173.
+        the terminal of a client is put into. Lillecarl/pyterm#175.
         """
         self.sync_keyboard_source_flags()
         self.sync_kitty_flags()
@@ -422,7 +422,7 @@ class Terminals:
         latest client otherwise. Never raises: a pane that starts
         without either, or whose embedder knows no `set_color_base`,
         answers from the table `pyte` reports, as before.
-        Lillecarl/pymux#283.
+        Lillecarl/pyterm#285.
         """
         try:
             if _mirrored(pane):
@@ -435,7 +435,7 @@ class Terminals:
             # person used last, which is the rule the line below
             # already follows for a terminal's own colours, and the
             # one that decides where a browser opens.
-            # Lillecarl/pymux#223.
+            # Lillecarl/pyterm#225.
             painted = self.pymux.options_of_pane(pane).paint_screen
             base = theme_color_base(self.latest_theme()) if painted else self.latest_client_color_base()
             if base is None:
@@ -459,7 +459,7 @@ class Terminals:
         same rule that decides where a browser opens.
 
         Nothing attached, or a client that answered nothing, leaves
-        every pane on the table `pyte` reports. Lillecarl/pymux#283.
+        every pane on the table `pyte` reports. Lillecarl/pyterm#285.
         """
         for pane in list(self.pymux.panes_by_id.values()):
             self.tell_pane_about_colours(pane)
@@ -470,7 +470,7 @@ class Terminals:
         """
         Tell the portal whether the screen of the client used last is
         light or dark, for the programs in window panes.
-        Lillecarl/pymux#812.
+        Lillecarl/pyterm#814.
 
         The background decides: the theme's under `paint-screen`, drawn
         swapped under `swap-light-and-dark-colors`, and the terminal's own
@@ -504,7 +504,7 @@ class Terminals:
         the screen. A theme belongs to one client now, and a pane
         belongs to all of them, so this is the tie break; nothing
         attached falls back to the theme a new client starts on.
-        Lillecarl/pymux#223.
+        Lillecarl/pyterm#225.
         """
         peer = self._latest_peer()
         if peer is not None:
@@ -559,11 +559,11 @@ class Terminals:
         keys of both. A pane reads what it asked for all the same: the
         key data reaches it as the terminal wrote it, and
         `Screen.encode_key` writes it again in the encoding of that
-        pane. Lillecarl/pymux#164.
+        pane. Lillecarl/pyterm#166.
 
         `set-option extended-keys off` asks for nothing at all, and
         the client then writes "CSI = 0 ; 1 u" to put the terminal
-        back in the legacy encoding. Lillecarl/pymux#173.
+        back in the legacy encoding. Lillecarl/pyterm#175.
         """
         if self.pymux.options.extended_keys is ExtendedKeys.OFF:
             return 0

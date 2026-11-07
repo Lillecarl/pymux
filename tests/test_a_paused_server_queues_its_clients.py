@@ -5,7 +5,7 @@ An upgrade takes no client for about a second, from the pause to the
 new image's first accept, and every client comes back in that second.
 sshd connects without blocking, so a full queue refuses it and an SSH
 client hears "open failed". At a backlog of 0 the queue held one.
-Lillecarl/pymux#750.
+Lillecarl/pyterm#752.
 """
 
 from __future__ import annotations

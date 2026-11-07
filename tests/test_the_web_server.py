@@ -13,7 +13,7 @@ package, so it ships only if something puts it there -- a declaration for
 the files a person wrote, and a compiler for the files it emits; and the
 websocket library is an extra, so the failure to have it must say which
 extra rather than raising `ImportError` at somebody.
-Lillecarl/pymux#461.
+Lillecarl/pyterm#463.
 """
 
 from __future__ import annotations

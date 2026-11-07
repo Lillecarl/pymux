@@ -418,7 +418,7 @@ async def test_a_client_is_captured_by_its_name_or_the_one_used_last(fake):
 
 
 async def test_a_window_is_captured_by_its_id(fake):
-    "Lillecarl/pymux#818."
+    "Lillecarl/pyterm#820."
     server = fake([("drawn\n", "", 0), (base64.b64encode(b"\x89PNG").decode() + "\n", "", 0)])
     window = Window(Server(server.path), {"window_id": "@3"})
     assert await window.capture() == "drawn\n"
@@ -479,7 +479,7 @@ async def test_new_window_carries_its_name(fake):
     assert window.index == 2
     assert window.name == "build"
     # The session names itself, so the window lands in it and not in
-    # whichever session a client is on. Lillecarl/pymux#323.
+    # whichever session a client is on. Lillecarl/pyterm#325.
     assert server.asked[1].startswith("new-window -t work: -n build -P -F ")
 
 

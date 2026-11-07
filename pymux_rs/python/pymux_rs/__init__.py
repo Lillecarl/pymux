@@ -4,7 +4,7 @@ Rust kernels for pymux's image loops.
 Each is the Python function of the same name in `pymux/sixel.py` or
 `pymux/blocks.py`, byte for byte, and releases the GIL while it works. This package imports
 nothing of pymux, which depends on it: `pymux.graphics.kernels.install()` puts
-the kernels in place. Lillecarl/pymux#574.
+the kernels in place. Lillecarl/pyterm#576.
 """
 
 from __future__ import annotations
@@ -30,13 +30,13 @@ average_rgba = _native.average_rgba
 
 #: A window pane's VP9 stream, decoded on the client:
 #: `Vp9Decoder().decode(data, rects=None)` answers `(width, height,
-#: [(x, y, w, h, rgb)])`. Lillecarl/pymux#639.
+#: [(x, y, w, h, rgb)])`. Lillecarl/pyterm#641.
 Vp9Decoder = _native.Vp9Decoder
 
 #: `pymux.client.kitty_rsync._Blocks`: a signature's blocks, and the
-#: rolling search for one in new bytes. Lillecarl/pymux#916.
+#: rolling search for one in new bytes. Lillecarl/pyterm#918.
 RsyncBlocks = _native.RsyncBlocks
 
 #: `pymux.client.kitty_rsync._records`: a run of blocks' signature
-#: records. Lillecarl/pymux#921.
+#: records. Lillecarl/pyterm#923.
 rsync_records = _native.rsync_records

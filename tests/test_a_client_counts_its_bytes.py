@@ -5,7 +5,7 @@ The rules this judges: each end of a pipe counts what it sent and took
 in, as the wire carried it, so a compressed stream counts its zstd
 bytes; `#{client_bytes_down}` and `#{client_bytes_up}` read one client's
 counts; and a client that leaves keeps its bytes in the server's total.
-Lillecarl/pymux#677.
+Lillecarl/pyterm#679.
 """
 
 from __future__ import annotations
@@ -105,7 +105,7 @@ async def test_each_client_reads_its_own_counts():
 
 
 async def test_a_client_reads_its_rate_in_a_unit():
-    "The arithmetic is `test_a_rate.py`'s; this is the wiring. Lillecarl/pymux#678."
+    "The arithmetic is `test_a_rate.py`'s; this is the wiring. Lillecarl/pyterm#680."
     async with over_connection() as session:
         await session.attach("here", SIZE)
 

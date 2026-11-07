@@ -24,14 +24,14 @@ dependencies = [
     # override: the per-user runtime directory the platform prefers.
     # `sockets.py` is what reads it, and both sides of the wire import
     # that module -- the server to bind in the room, a caller to look
-    # in it. Lillecarl/pymux#421.
+    # in it. Lillecarl/pyterm#423.
     "platformdirs>=4.0.0",
     # How `streams.py` waits on the socket: the same floor pymux
     # holds, so the two never disagree about what anyio means.
     "anyio>=4.7.0",
     # The packets of an attached client, once both ends agree to it:
     # 26x faster than json across encode and decode, and no escapes.
-    # `wire.py`, Lillecarl/pymux#633.
+    # `wire.py`, Lillecarl/pyterm#635.
     "ormsgpack>=1.12.0",
 ]
 

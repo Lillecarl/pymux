@@ -6,10 +6,10 @@ field is a column, its annotation the type and `NOT NULL` unless it
 takes None, its default the column's, and `KEY` the primary key.
 `column` adds what an annotation cannot say. A load adds a table or a
 column the snapshot lacks, so an addition needs no step.
-Lillecarl/pymux#771.
+Lillecarl/pyterm#773.
 
 A scope's options declare their own columns, and `options_table` makes
-the row class from that declaration. Lillecarl/pymux#769.
+the row class from that declaration. Lillecarl/pyterm#771.
 """
 
 from __future__ import annotations
@@ -165,7 +165,7 @@ ServerOptionRow = options_table(ServerOptions, "ServerOptionRow", "server_option
 
 #: What every session reads unless it set its own, in one row.
 SessionDefaultRow = options_table(SessionOptions, "SessionDefaultRow", "session_defaults", "id", None, defaults=False)
-#: The values one session set itself. Lillecarl/pymux#756.
+#: The values one session set itself. Lillecarl/pyterm#758.
 SessionOptionRow = options_table(
     SessionOptions, "SessionOptionRow", "session_options", "session_id", "sessions(session_id)", defaults=True
 )
@@ -503,7 +503,7 @@ class NotificationRouteRow:
     reports: bool = False
     focuses: bool = True
     #: On the terminals and not seen in pymux yet, so a look at its pane
-    #: closes it there, across an upgrade too. Lillecarl/pymux#799.
+    #: closes it there, across an upgrade too. Lillecarl/pyterm#801.
     shown: bool = False
 
 
@@ -553,7 +553,7 @@ class JobRow:
     stderr_dropped: int
     pid: int | None
     #: A running job's master, or its stdout and stderr, as a JSON list:
-    #: the fds an upgrade's exec carries. Lillecarl/pymux#736.
+    #: the fds an upgrade's exec carries. Lillecarl/pyterm#738.
     fds: str | None
     #: Whether the server is its parent, so the next image can wait for it.
     parent: int | None
@@ -697,7 +697,7 @@ def _insert_of(kind: type[Row], replace: bool) -> tuple[str, tuple[str, ...]]:
     The statement that inserts a row of `kind`, and its columns in order.
     Built once per kind: a snapshot inserts thousands of rows on a big
     server, and building it per row was a third of a write.
-    Lillecarl/pymux#557.
+    Lillecarl/pyterm#559.
     """
     names = tuple(each.name for each in stored_fields(kind))
     statement = "INSERT %sINTO %s (%s) VALUES (%s)" % (
@@ -743,7 +743,7 @@ class ChangedRows:
     rows that differ from what it wrote last: a row whose key is gone is
     deleted, and a new or changed one inserted. An upgrade's snapshot
     writes twice, and the second time, in the pause, is this.
-    Lillecarl/pymux#557.
+    Lillecarl/pyterm#559.
 
     **A changed row is deleted and inserted, never replaced.**
     `notifications` and `notification_routes` hold a `position` that is

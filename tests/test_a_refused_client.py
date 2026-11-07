@@ -4,7 +4,7 @@ What a client reads when the server will not have it.
 `pymux integrated` holds the server and its one terminal in one
 process, so a second terminal cannot attach over the socket and the
 server says so: "This pymux runs in one terminal, and that terminal is
-taken." Lillecarl/pymux#159.
+taken." Lillecarl/pyterm#161.
 
 **The sentence has to reach the person.**
 `pymux.connection.attach.refuse_the_attach` awaits both writes before it
@@ -14,7 +14,7 @@ reader. That raised, so the person read "BrokenPipeError: [Errno 32]
 Broken pipe" instead -- on a loaded machine, where the close wins the
 race. It also took `check_second_terminal` down with it, and a red run
 of a check stays in the store until somebody deletes it by hand.
-Lillecarl/pymux#479.
+Lillecarl/pyterm#481.
 """
 
 from __future__ import annotations
@@ -76,7 +76,7 @@ def test_the_reason_is_still_there_to_read(refused):
 
 
 def test_the_code_to_leave_with_is_there_too(refused):
-    "A script has only the code to tell a refusal from a detach. #332."
+    "A script has only the code to tell a refusal from a detach. #334."
     refused.send_packet({"cmd": Packet.DETECT})
 
     codes = [json.loads(one.decode("utf-8")) for one in refused.socket.recv(4096).split(b"\0") if one]

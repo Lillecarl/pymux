@@ -43,11 +43,11 @@ def move_this_client(
     and the terminals they were in close. It says nothing about
     whether the others go -- tmux reads `-x` as `-d` with a harsher
     message (`if (dflag || xflag)`, `cmd-attach-session.c:123`), and so
-    does the caller. Lillecarl/pymux#347.
+    does the caller. Lillecarl/pyterm#349.
 
     Which clients those are is `Pymux.clients_on`, which the server
     reads for the same flag on the `start-gui` packet.
-    Lillecarl/pymux#349.
+    Lillecarl/pyterm#351.
     """
     session = find_session(pymux, target)
 

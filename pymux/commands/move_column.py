@@ -23,7 +23,7 @@ def move_column(pymux: Pymux, args: argparse.Namespace) -> None:
     without renegotiating a layout. Without it, getting two columns
     adjacent means closing one and opening it again in the right
     place, which is the renegotiation a strip exists to avoid.
-    Lillecarl/pymux#202.
+    Lillecarl/pyterm#204.
 
     **The whole column moves**, panes and width and all. Taking the
     focused pane out of a stack is a different move, and `break-pane`

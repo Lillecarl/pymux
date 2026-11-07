@@ -1,7 +1,7 @@
 """
 `run_session` over a real socket: the transport `pymux web` uses for a
 session, where `tests/test_a_session_on_a_pyte_screen.py` judges the
-screen with no transport at all. Lillecarl/pymux#481.
+screen with no transport at all. Lillecarl/pyterm#483.
 
 A socketpair and not a listener: the server end is the same
 `PosixSocketConnection` an accepted socket becomes, so the bytes are the

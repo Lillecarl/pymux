@@ -5,7 +5,7 @@ A cell check reads pymux's bytes, and a picture reads the terminal's
 pixels. Neither asks the terminal for its modes, and three faults came
 from there: iTerm2 left the alternate screen on a forwarded OSC 133;A,
 answered 4 for DECRQM 1016, and kept the click that focuses its window.
-Lillecarl/pymux#800.
+Lillecarl/pyterm#802.
 
 So this attaches a client in each terminal, with a pane that writes the
 OSCs pymux forwards, and asks the terminal for its modes twice through

@@ -1,6 +1,6 @@
 """
 A turn of the loop that holds it is logged, so a pane that stood still
-says whether the server was the one held. Lillecarl/pymux#936.
+says whether the server was the one held. Lillecarl/pyterm#938.
 """
 
 from __future__ import annotations

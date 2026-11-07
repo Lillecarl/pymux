@@ -6,7 +6,7 @@ asked that plan three neighbours and laid itself out again: about a
 millisecond of a 5.8 ms frame with eight panes. The plan of the last
 frame is kept when nothing moved, a plan keeps what it answered, and a
 bar that reads the same writes the cells it wrote before.
-Lillecarl/pymux#578.
+Lillecarl/pyterm#580.
 """
 
 from __future__ import annotations

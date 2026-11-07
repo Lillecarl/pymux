@@ -40,7 +40,7 @@ class KeyTableIs(Filter):
 
     The client's active table says so: `prefix` while the prefix key
     is up, a mode's table while that mode is on top of the client's
-    stack, and `root` otherwise. Lillecarl/pymux#394.
+    stack, and `root` otherwise. Lillecarl/pyterm#396.
     """
 
     def __init__(self, pymux: Pymux, table: str) -> None:
@@ -60,7 +60,7 @@ class ModeActive(Filter):
     When a mode's table sits on top of this client's stack.
 
     This is what masks the root table and the prefix for as long as
-    the mode lasts. Lillecarl/pymux#394.
+    the mode lasts. Lillecarl/pyterm#396.
     """
 
     def __init__(self, pymux: Pymux) -> None:
@@ -78,7 +78,7 @@ class ModeTakesPrefix(Filter):
     """
     When the mode on top of this client's stack takes the prefix key
     away from pymux, so the pane gets it. Passthrough is that mode.
-    Lillecarl/pymux#530.
+    Lillecarl/pyterm#532.
     """
 
     def __init__(self, pymux: Pymux) -> None:
@@ -154,4 +154,4 @@ class WaitsForPrompt(Filter):
 #
 # The keys of copy mode live with the copy buffer now, in
 # `ptterm.terminal.Terminal`. A filter here would have to ask that
-# widget anyway. Lillecarl/pymux#133.
+# widget anyway. Lillecarl/pyterm#135.

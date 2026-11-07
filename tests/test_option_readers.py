@@ -3,7 +3,7 @@
 read side of the option commands, with the wording of `set-option`
 without a value.
 
-The rules this judges, Lillecarl/pymux#298: a name says what that
+The rules this judges, Lillecarl/pyterm#300: a name says what that
 one holds, without one the scope lists itself one `name value` line
 per option sorted, the three commands keep their scopes apart
 (`Option.scope` says which), and `-g` on a window option reads what
@@ -45,7 +45,7 @@ async def test_mode_keys_reads_the_word_tmux_reads():
     """
     The mode is a bool inside and a word outside. tmux answers `vi`
     and `emacs`; `on` answers nothing, and the completion offers the
-    words the read-back would not say. Lillecarl/pymux#382.
+    words the read-back would not say. Lillecarl/pyterm#384.
     """
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -81,7 +81,7 @@ async def test_window_option_reads_active_window():
 
 
 async def test_base_index_reads_as_it_is_written():
-    "It is set and working, so it must not read as not set. Lillecarl/pymux#494."
+    "It is set and working, so it must not read as not set. Lillecarl/pyterm#496."
     async with create_session() as (pymux, state):
         with set_app(state.app):
             pymux.handle_command("set-option base-index 0")
@@ -91,7 +91,7 @@ async def test_base_index_reads_as_it_is_written():
 
 
 async def test_window_size_default_reads_as_it_is_written():
-    "Lillecarl/pymux#494."
+    "Lillecarl/pyterm#496."
     async with create_session() as (pymux, state):
         with set_app(state.app):
             pymux.handle_command("set-window-option -g window-size latest")
@@ -101,7 +101,7 @@ async def test_window_size_default_reads_as_it_is_written():
 
 
 async def test_window_size_reads_active_window():
-    "Lillecarl/pymux#494."
+    "Lillecarl/pyterm#496."
     async with create_session() as (pymux, state):
         with set_app(state.app):
             pymux.handle_command("set-window-option window-size largest")
@@ -115,7 +115,7 @@ def test_every_option_names_where_it_lives():
     An option that keeps its value in an attribute names it, or the
     read side answers "not set" for a value that is set. The prefix
     key is the one deliberate exception: it lives in the binding
-    manager. Lillecarl/pymux#494.
+    manager. Lillecarl/pyterm#496.
     """
     tables = (ALL_SERVER_OPTIONS, ALL_OPTIONS, ALL_WINDOW_OPTIONS, ALL_CLIENT_OPTIONS)
     for table in tables:
@@ -186,7 +186,7 @@ def test_no_name_is_in_two_tables():
 
 @pytest.mark.parametrize("flag", ["", "-s "])
 async def test_a_server_option_is_set_and_read_with_or_without_s(flag):
-    "tmux's `options_scope_from_name`: the name finds the table. Lillecarl/pymux#757."
+    "tmux's `options_scope_from_name`: the name finds the table. Lillecarl/pyterm#759."
     async with create_session() as (pymux, state):
         with set_app(state.app):
             pymux.handle_command("set-option %sset-clipboard on" % flag)

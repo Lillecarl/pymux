@@ -10,7 +10,7 @@ A title bar is a `Float` at `top=-1`. It hangs one row above the pane,
 in the row `_create_layout` reserves for it. A strip used to render
 onto a screen of its own, where the pane's origin is row zero, so the
 title bar landed on row minus one and was thrown away with that screen.
-Lillecarl/pymux#161, Lillecarl/pymux#198.
+Lillecarl/pyterm#163, Lillecarl/pyterm#200.
 
 These tests read the cells of the whole layout, which is the only place
 that difference exists.
@@ -163,7 +163,7 @@ async def test_lone_column_takes_half_window_and_no_more():
 
     **The column's share includes the border it owns**, so half of a 40
     column window is 19 cells of pane and the border at cell 19.
-    Lillecarl/pymux#206.
+    Lillecarl/pyterm#208.
     """
     rows = await drawn([*CHROME, "set-window-option strip on"])
     share = COLUMNS // 2
@@ -193,7 +193,7 @@ async def columns_of(pymux, how_many):
     A strip of this many columns, and its panes from left to right.
 
     They are collected as they are opened. `Window.panes` is in that
-    order as well now (Lillecarl/pymux#210), and a test that read the
+    order as well now (Lillecarl/pyterm#212), and a test that read the
     panes out of the arrangement would be asking the layout to confirm
     itself.
     """
@@ -218,14 +218,14 @@ async def test_strip_records_where_it_drew_columns_it_drew():
     last of them, so the first is off the left edge. **It is not
     recorded, because it is not drawn**: no part of its rectangle is in
     the view, and building the rows of a pane nobody can see costs more
-    than the cells it throws away. Lillecarl/pymux#224.
+    than the cells it throws away. Lillecarl/pyterm#226.
 
     That used to be the opposite. `select-pane -R` stepped one cell
     past the active pane's right edge and asked which pane was drawn
     there, so every column had to be recorded whether it was on the
     screen or not, and a position off the screen was still a position.
     The plan answers that question now, so nothing needs the position
-    of a pane that was never drawn. Lillecarl/pymux#217.
+    of a pane that was never drawn. Lillecarl/pyterm#219.
     """
     async with create_client(STRIP) as (pymux, draw):
         _, columns = await columns_of(pymux, 3)
@@ -245,7 +245,7 @@ async def test_strip_records_where_it_drew_columns_it_drew():
 
         # The leftmost one drawn starts one cell in, past the border of
         # the column before it, and the focused one ends on the screen.
-        # The last column's own border is past the edge (#617).
+        # The last column's own border is past the edge (#619).
         assert xs[0] == 1, xs
         assert xs[-1] + where[-1].width <= COLUMNS, xs
 

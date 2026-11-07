@@ -18,7 +18,7 @@ def load_buffer(pymux: Pymux, args: argparse.Namespace) -> None:
     Read a file into a buffer.
 
     `-b` names the buffer; without it the session's one buffer fills.
-    Lillecarl/pymux#303.
+    Lillecarl/pyterm#305.
     """
     filename = os.path.expanduser(args.filename)
     try:

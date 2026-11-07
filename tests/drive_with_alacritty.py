@@ -25,7 +25,7 @@ compared by `alacritty_terminal`.
 the first that is not libvterm's.** `checks.pymux-vterm` asks a
 question at a time in a protocol libvterm wrote. This one hands over a
 whole recording and reads one verdict. `tests/middleman.py` is the part
-they share, which is what makes a third one cheap. Lillecarl/pymux#49.
+they share, which is what makes a third one cheap. Lillecarl/pyterm#51.
 
 **Why it is worth having next to the panel.** `ptterm-panel` gives the
 same bytes to Alacritty and to ptterm and compares two screens, so it
@@ -76,7 +76,7 @@ and so do kitty and WezTerm; Alacritty, Ghostty, libvterm and xterm.js
 leave it where it stands. The whole grid of this test is one screen
 shifted ten rows, and nothing else differs: ptterm draws it cell for
 cell the way kitty and WezTerm do. Recorded and not fixed:
-`ptterm/tests/DEVIATIONS.md`, entry 17, and Lillecarl/pymux#34.
+`ptterm/tests/DEVIATIONS.md`, entry 17, and Lillecarl/pyterm#36.
 
 **A delete leaves the reverse video behind** (1 test:
 `delete_chars_reset`). Twelve cells at the end of one row. The shell
@@ -113,7 +113,7 @@ first came back as `4_alacritty`, `3_alacritty` and `2_alacritty`. The
 two with no id already matched, which is what said the counter was the
 only thing wrong. ptterm keeps the id now and pymux writes it, so the
 wire carries `id=42` twice and `id=hello` once, as the program did.
-Lillecarl/pymux#70.
+Lillecarl/pyterm#72.
 
 **The alternate screen forgot what it saved** (part of
 `saved_cursor_alt`). A program that takes the alternate screen, saves
@@ -140,7 +140,7 @@ how many rows the buffer held, prompt_toolkit read a document shorter
 than the window, and it scrolled back to the top rather than past the
 end. Four lines that had left the screen came back, and the whole
 picture sat four rows too low. The widget now reports what the screen
-occupies. Lillecarl/pymux#84.
+occupies. Lillecarl/pyterm#86.
 
 **A linefeed at the bottom of the screen brought a line in with no
 background** (1 test: `vim_large_window_scroll`). vim writes a line,
@@ -149,20 +149,20 @@ hold what the scroll left there. A scrolling region painted the line
 it brought in and a screen with no region did not, so the same
 linefeed painted or did not paint by whether a program had set a
 region. A pane claims `bce` and now holds the claim everywhere.
-Lillecarl/pymux#71.
+Lillecarl/pyterm#73.
 
 **A palette number above fifteen reached the wire as `#rrggbb`**
 (2 tests). A program that asks for colour 234 asks the terminal of the
 user to paint 234, and that terminal has a theme. ptterm answered out
 of the table of xterm instead, so 240 colours of the theme were gone.
-A number of the palette now travels as a number. Lillecarl/pymux#68.
+A number of the palette now travels as a number. Lillecarl/pyterm#70.
 
 **An erase carried the underline onto every blank it left** (3 tests).
 A shell left the underline on and ran `clear`, and two thousand blank
 cells came off our wire underlined. Five judges take the underline off
 an erased cell and only kitty keeps it, while the background is the
 other way round. `erase_style` keeps the background and reverse video
-now, and drops the line. Lillecarl/pymux#67.
+now, and drops the line. Lillecarl/pyterm#69.
 
 Three variables reach this file from `pymux/nix/checks.nix`.
 `PYMUX_ALACRITTY` is the directory of reference tests and

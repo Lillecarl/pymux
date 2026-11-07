@@ -24,7 +24,7 @@ def attach_session(pymux: Pymux, args: argparse.Namespace) -> None:
     does that and hangs up the process each of them was started by, so
     the terminal it was in closes rather than going back to a shell
     prompt. tmux spells both, and reads `-x` as `-d` with a harsher
-    message. Lillecarl/pymux#347.
+    message. Lillecarl/pyterm#349.
 
     `-r` makes this client one that only watches, and takes it out of
     the size of the plane at the same time: a person watching from a
@@ -32,7 +32,7 @@ def attach_session(pymux: Pymux, args: argparse.Namespace) -> None:
     **It only sets.** Attaching again without `-r` leaves a read-only
     client read-only, which is what tmux does
     (`cmd-attach-session.c:118` sets both flags and clears neither).
-    Lillecarl/pymux#467.
+    Lillecarl/pyterm#469.
 
     **A client that only watches may not run `-d` or `-x`.** tmux
     lets it: the loop at `cmd-attach-session.c:127` has no read-only

@@ -20,7 +20,7 @@ from pymux.keys.key_spelling import event_however_it_is_written
 
 #: The copy mode commands `send-keys -X` runs, by tmux's names, and
 #: whether each goes down. `-o` after one jumps to where a command's
-#: output starts instead of to a prompt. Lillecarl/pymux#500.
+#: output starts instead of to a prompt. Lillecarl/pyterm#502.
 PROMPT_JUMPS = {"previous-prompt": False, "next-prompt": True}
 
 
@@ -69,12 +69,12 @@ def send_keys(pymux: Pymux, args: argparse.Namespace) -> Coroutine[Any, Any, Non
     puts a pane back when a program has left it in a state a person
     cannot type out of, and asking for a key as well means sending one
     to a terminal that is being reset. tmux takes it on its own.
-    Lillecarl/pymux#118.
+    Lillecarl/pyterm#120.
 
     **`--wait-*` arms a `wait-pane` before the keys go out**, and the
     command answers when it holds. One round trip, and output that comes
     back faster than a second one could ask is not lost.
-    Lillecarl/pymux#388.
+    Lillecarl/pyterm#390.
     """
     if args.X:
         _copy_mode_command(pymux, args)
@@ -103,7 +103,7 @@ def _send(pane: Pane, args: argparse.Namespace) -> None:
         # There was a call to `pt_screen.reset()` before this one, and
         # prompt_toolkit's `Screen` has no such method, so `send-keys
         # -R` raised `AttributeError` and reset nothing.
-        # Lillecarl/pymux#118.
+        # Lillecarl/pyterm#120.
         terminal.screen.reset()
 
     keys = args.keys

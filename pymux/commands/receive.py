@@ -31,7 +31,7 @@ def receive(pymux: Pymux, args: argparse.Namespace):
     pass. Each file lands in the directory -d names, by default the
     one this command runs in, and never over a file that is there.
     The answer says where each one went, or why it did not.
-    Lillecarl/pymux#743.
+    Lillecarl/pyterm#745.
     """
     refuse_without_a_waiter(pymux, "wait")
     pane, files = _sender(pymux)
@@ -53,7 +53,7 @@ def _sender(pymux: Pymux) -> tuple[Pane, Sender]:
         raise CommandException("There is no pane to ask from.")
     client = pymux.outward.download_client(pane)
     # The person who used a mirror of this pane last sends, through
-    # the peer they attach to. Lillecarl/pymux#947.
+    # the peer they attach to. Lillecarl/pyterm#949.
     link = pymux.outward.peer_used_after(pane, client, Capability.FILES)
     if link is not None:
         return pane, link.files.sender(pane)
@@ -69,7 +69,7 @@ def list_person_files(pymux: Pymux, args: argparse.Namespace):
 
     One name a line, a directory's with `/` after it. The client answers inside a grant that `a` gave, and otherwise only
     with the names that lead into its `upload-paths`. It never asks the
-    person. Lillecarl/pymux#748.
+    person. Lillecarl/pyterm#750.
     """
     refuse_without_a_waiter(pymux, "wait")
     _pane, files = _sender(pymux)

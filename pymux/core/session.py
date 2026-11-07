@@ -3,7 +3,7 @@ A session: the windows somebody arranged, and the clients on them.
 
 One server holds many of these. tmux says the same about itself -- "all
 sessions are managed by a single server" -- and pymux held exactly one
-until Lillecarl/pymux#323.
+until Lillecarl/pyterm#325.
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ class OwnOptions(_Typed):
     every session that never set its own: tmux's `options_get` walks to
     the parent table the same way (`options.c`). `forget` drops an own
     value, which is what `-gg` does to every session.
-    Lillecarl/pymux#756.
+    Lillecarl/pyterm#758.
 
     The names are `SessionOptions`', each read through `_Default`.
     """
@@ -81,7 +81,7 @@ class _Default:
     with no call at all. Not `__getattr__` either: that runs after a
     lookup has failed and raised, and the status line reads dozens of
     options a frame -- 1099 instructions of a keystroke's render.
-    Lillecarl/pymux#770.
+    Lillecarl/pyterm#772.
     """
 
     __slots__ = ("name",)
@@ -124,7 +124,7 @@ class Session:
         "created": Keep.SAVED,
         "last_used": Keep.SAVED,
         # A snapshot refuses a mirrored pane, so no mirrored session
-        # reaches one yet. Lillecarl/pymux#759.
+        # reaches one yet. Lillecarl/pyterm#761.
         "remote": Keep.DROPPED,
     }
 
@@ -140,7 +140,7 @@ class Session:
 
         #: What `set-environment` without `-g` fills. A new pane of this
         #: session reads this over the global environment.
-        #: Lillecarl/pymux#270.
+        #: Lillecarl/pyterm#272.
         self.environment: dict[str, str | None] = {}
 
         #: What a caller said about this session, with `set-tag -s`.
@@ -150,7 +150,7 @@ class Session:
         #: screen over the layout, like the popup of tmux. It belongs
         #: to the session, so every client of this session sees the
         #: same one, and it takes the keyboard while it is open.
-        #: Lillecarl/pymux#324.
+        #: Lillecarl/pyterm#326.
         self.overlay_pane: Pane | None = None
         self.overlay_title = ""
         self.overlay_width: str | None = None
@@ -161,13 +161,13 @@ class Session:
         #: did: each window then keeps the size it had when somebody last
         #: watched it, or the clients gave it when it was made
         #: (`Window.unwatched_size`), and with no client, `DEFAULT_SIZE`.
-        #: Lillecarl/pymux#817.
+        #: Lillecarl/pyterm#819.
         #:
         #: **Not `window.manual_size`.** A manual size says a person
         #: means that size to stay, so a client that attaches keeps it
         #: and scrolls. This one gives way to the client, which is what
         #: `window-size` is for and what tmux does with the same flags.
-        #: Lillecarl/pymux#459.
+        #: Lillecarl/pyterm#461.
         self.default_size: Size | None = None
 
         self.created = time.time()
@@ -179,7 +179,7 @@ class Session:
 
         #: Where the session lives when another server owns it, or None
         #: for a session of this server. A mirrored session's windows
-        #: and panes are its owner's (`mirror.tree`). Lillecarl/pymux#759.
+        #: and panes are its owner's (`mirror.tree`). Lillecarl/pyterm#761.
         self.remote: RemoteSession | None = None
 
     def __repr__(self) -> str:

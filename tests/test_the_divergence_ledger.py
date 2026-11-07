@@ -6,7 +6,7 @@ deliberate difference from tmux: what tmux does, what pymux does, the
 test that pins it and the probe that proved it. The ledger's rule --
 `unlisted_divergences_are_bugs` -- needs bookkeeping to hold: every
 entry names a test that exists, and every `_product_divergence` test
-is in the ledger. Lillecarl/pymux#385.
+is in the ledger. Lillecarl/pyterm#387.
 """
 
 from __future__ import annotations

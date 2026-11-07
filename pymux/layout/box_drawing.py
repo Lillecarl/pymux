@@ -2,7 +2,7 @@
 Box drawing and block elements, U+2500 to U+259F, drawn as foot draws
 them: from the cell's own geometry, not from a font. A font's glyph
 need not reach the cell's edge, so a border or block art drawn from one
-breaks between cells. Lillecarl/pymux#777, Lillecarl/pymux#778.
+breaks between cells. Lillecarl/pyterm#779, Lillecarl/pyterm#780.
 
 `mask` answers one cell as an alpha mask, for `screenshot.draw` to fill
 with the foreground. The shapes and the rounding follow foot's

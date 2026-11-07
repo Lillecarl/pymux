@@ -5,7 +5,7 @@ The bar under a pane, which names what is above it and what is below.
 the bar over a pane. This one renders pymux's real layout as well,
 because three things have to agree or the rows drift: the padding
 between stacked panes, the row kept under the whole layout, and the
-float that draws the bar. Lillecarl/pymux#211.
+float that draws the bar. Lillecarl/pyterm#213.
 """
 
 from __future__ import annotations
@@ -143,7 +143,7 @@ async def test_pane_with_nothing_above_or_below_it_draws_no_bar():
     band under a pane that is not stacked at all.
 
     Carl, on a picture of it: "we only want that bar if the rectangle
-    is split". Lillecarl/pymux#219.
+    is split". Lillecarl/pyterm#221.
 
     The row is still there, because the window keeps one for the stack
     beside it. What is in it under this pane is the background.

@@ -12,7 +12,7 @@ from pymux.commands import CommandException, CommandParser, add_command
 
 def delete_buffer(pymux: Pymux, args: argparse.Namespace) -> None:
     """
-    Remove a named buffer. Lillecarl/pymux#303.
+    Remove a named buffer. Lillecarl/pyterm#305.
     """
     name = args.buffer_name
     if name not in pymux.named_buffers:

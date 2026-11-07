@@ -24,7 +24,7 @@ def compose_key(pymux: Pymux, args: argparse.Namespace) -> None:
     The box completes the key names, so a person reads the list rather
     than remembering the spelling. "ctrl+home" and "C-Home" both read,
     and so does a sequence: "escape a" is two presses.
-    Lillecarl/pymux#220.
+    Lillecarl/pyterm#222.
     """
     ask_person(
         pymux,

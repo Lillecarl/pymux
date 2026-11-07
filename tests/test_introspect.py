@@ -6,7 +6,7 @@ could ask it anything until `pymux/introspect.py`. These say that the
 answer holds the two things a person needs -- where the threads are, and
 what every asyncio task waits for -- and that a server takes the signal
 that answers when its loop is too wedged to read a command.
-Lillecarl/pymux#249.
+Lillecarl/pyterm#251.
 """
 
 from __future__ import annotations
@@ -144,7 +144,7 @@ async def test_command_writes_dump_and_says_where(create_server, tmp_path):
     # test`, so it runs in the context of the whole process rather
     # than in a task of its own: a list left here is a list every
     # later test writes its answers into, instead of to its client.
-    # Lillecarl/pymux#87.
+    # Lillecarl/pyterm#89.
     pymux.answer = Answer()
     try:
         with set_app(state.app):
@@ -222,7 +222,7 @@ async def test_frame_that_went_out_is_counted():
 
 
 async def test_a_frame_is_counted_for_its_client():
-    "What `#{client_fps}` reads. Lillecarl/pymux#596."
+    "What `#{client_fps}` reads. Lillecarl/pyterm#598."
     told = []
     stdout = SocketStdout(lambda packet: None, None, lambda: told.append(1))
 

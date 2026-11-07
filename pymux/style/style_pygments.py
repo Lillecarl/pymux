@@ -5,7 +5,7 @@ The themes of pygments, as pymux themes.
 forty-nine styles - dracula, nord, gruvbox, one-dark - and any
 package that follows the same interface can join them, which is how a
 theme of `catppuccin[pygments]` gets here without pymux carrying it.
-Lillecarl/pymux#194, Lillecarl/pymux#195.
+Lillecarl/pyterm#196, Lillecarl/pyterm#197.
 
 **A pygments style offers eight colours; pymux draws thirty.** It
 reliably gives a background, a foreground, a muted tone (`Comment`),
@@ -13,7 +13,7 @@ an accent or two (`Keyword`, `Name.Function`), a selection
 (`highlight_color`), and an error that is not always filled in: the
 authors of dracula left `Generic.Error` at the plain foreground, and a
 reader who trusted it would draw a pane that ended as if nothing had
-happened. #194 measured that gap across four styles.
+happened. #196 measured that gap across four styles.
 
 So the rest is derived, by three rules:
 
@@ -161,7 +161,7 @@ def _roles(style_cls: type[Style]) -> dict[str, str]:
 
         What the style left out is the conventional colour, which is
         what every terminal paints and what the theme's own roles
-        start from. Lillecarl/pymux#283.
+        start from. Lillecarl/pyterm#285.
         """
         for token in tokens:
             found = color(token)
@@ -207,7 +207,7 @@ def _roles(style_cls: type[Style]) -> dict[str, str]:
         "surface-raised": _blend(surface, text, 0.07),
         # The scheme's own background is the pane's: with
         # `paint-screen` on, a pygments scheme colours the whole
-        # screen, not only the bars. Lillecarl/pymux#273.
+        # screen, not only the bars. Lillecarl/pyterm#275.
         "pane": surface,
         "text": text,
         "text-bright": _readable(surface),

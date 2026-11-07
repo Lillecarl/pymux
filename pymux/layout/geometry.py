@@ -53,7 +53,7 @@ __all__ = [
 def pane_message(pymux: Pymux, window: window_tree.Window, pane: Pane) -> str:
     """
     What the pane's message row says, or nothing when it shows none.
-    Lillecarl/pymux#931.
+    Lillecarl/pyterm#933.
 
     **The same for every client.** With `pane-message-row take` the
     row is a row of the pane, and a pane has one pty and one size, so
@@ -85,7 +85,7 @@ def tell_pane_its_size(pymux: Pymux, window: window_tree.Window, pane: Pane, rec
     the screen acts on a size it already has. A pane that is *not*
     drawn -- scrolled out of the view, or behind another in a stack --
     hears them only here, and the program in it needs them: it writes
-    for the screen it thinks it has. Lillecarl/pymux#224.
+    for the screen it thinks it has. Lillecarl/pyterm#226.
     """
     taken = 1 if rect.height > 1 and message_row_is_taken(pymux, window, pane) else 0
     pane.terminal.set_size(rect.width, rect.height - taken)
@@ -97,19 +97,19 @@ def layout_of(pymux: Pymux, window: window_tree.Window) -> Divided | Strip | Zoo
 
     One object, and everything asks it: the container that draws, the
     title bars, and the key that moves the focus. That is the whole of
-    Lillecarl/pymux#217 -- "which pane is beside this one" had two
+    Lillecarl/pyterm#219 -- "which pane is beside this one" had two
     answers, one read off the last frame and one walked out of the
     tree, and they did not agree.
 
     A strip is not a sixth layout: every other one divides the window
     between the panes, and a strip gives each column a width of its own
-    and scrolls. Lillecarl/pymux#198.
+    and scrolls. Lillecarl/pyterm#200.
 
     **Zoom wraps whichever of them the window is in**, and that is why
     it is a wrapper. A branch that tests `window.zoom` before
     `window.options.strip` makes a zoomed strip not a strip: the row stops
     existing for that frame instead of being covered.
-    Lillecarl/pymux#215.
+    Lillecarl/pyterm#217.
 
     The gaps are passed as a callable, because the gap between two
     stacked panes is two rows when a bar is drawn under a pane and one
@@ -131,7 +131,7 @@ def bar_below_is_drawn(pymux: Pymux, window: window_tree.Window) -> bool:
     The bar under a pane names the pane above and the pane below it, so
     a window with no stack in it has nothing to put there and does not
     pay the row. A single pane and a plain row of panes look exactly as
-    they did. Lillecarl/pymux#211.
+    they did. Lillecarl/pyterm#213.
 
     **A zoomed window has no stack on the screen**, whatever its tree
     holds: one pane covers everything, and nothing is above or below
@@ -145,13 +145,13 @@ def bar_below_is_drawn(pymux: Pymux, window: window_tree.Window) -> bool:
     plane's: `_the_plane_keeps_a_bar_below`. A full-screen client
     sharing a stacked window draws nothing in those gaps rather than
     closing them up, because the gap is geometry and a pane has one
-    pty. Lillecarl/pymux#471.
+    pty. Lillecarl/pyterm#473.
     """
     return pymux.show_pane_status and not window.zoom and window.has_stack()
 
 
 def _the_plane_keeps_a_bar_below(pymux: Pymux, window: window_tree.Window) -> bool:
-    "The same rows, asked of every client watching. Lillecarl/pymux#471."
+    "The same rows, asked of every client watching. Lillecarl/pyterm#473."
     return pymux.planes.any_watcher_shows_pane_status(window) and not window.zoom and window.has_stack()
 
 
@@ -162,10 +162,10 @@ def gaps_of(pymux: Pymux, window: window_tree.Window) -> Gaps:
     One for the border a column owns, and two rows between stacked
     panes when a pane draws a bar below it and the pane under it draws
     one above. `_create_split` leaves the same rows for the same
-    reason. Lillecarl/pymux#211.
+    reason. Lillecarl/pyterm#213.
 
     **The plane's answer**, because a plan is one plan for every client
-    watching. Lillecarl/pymux#471.
+    watching. Lillecarl/pyterm#473.
     """
     return Gaps(
         between_columns=BORDER_WIDTH,
@@ -180,7 +180,7 @@ def room_for_panes(pymux: Pymux, window: window_tree.Window) -> Size:
     The rows the chrome takes come off first, because a plan holds
     panes and the chrome draws in the gaps between them: one row for
     the bar above the top pane, and one for the bar below the bottom
-    one where that is drawn. Lillecarl/pymux#217.
+    one where that is drawn. Lillecarl/pyterm#219.
 
     **This is the size a plan is measured for**, and it is the plane's
     and not a client's. A client smaller than this sees part of the
@@ -190,7 +190,7 @@ def room_for_panes(pymux: Pymux, window: window_tree.Window) -> Size:
     chrome, and never for the client asking: a full-screen client draws
     background where another one's titlebars go, rather than making a
     plan of its own and resizing everybody's programs.
-    Lillecarl/pymux#471.
+    Lillecarl/pyterm#473.
     """
     size = cast(Size, pymux.planes.size(window))
 
@@ -218,7 +218,7 @@ def plan_of(pymux: Pymux, window: window_tree.Window) -> Plan:
 
     **Measured fresh when there is no frame to read**, which is what
     makes a direction key work before anything is drawn. That is the
-    property slice 2 of Lillecarl/pymux#217 added, and it is held by
+    property slice 2 of Lillecarl/pyterm#219 added, and it is held by
     `test_key_moves_focus_before_anything_is_drawn`.
     """
     try:
@@ -255,7 +255,7 @@ def size_the_panes_of(pymux: Pymux, window: window_tree.Window) -> None:
     Every pane of every slot, shown or not, for the reason
     `PlanContainer` gives: a hidden pane that already has the size it
     will be shown at is revealed without a resize.
-    Lillecarl/pymux#459.
+    Lillecarl/pyterm#461.
     """
     plan = plan_of(pymux, window)
     for slot, rect in plan.rects.items():
@@ -271,7 +271,7 @@ def hidden_of_pane(pymux: Pymux, pane: Pane) -> Hidden | None:
     the program wrote**, and the cells give nothing away: a pane whose
     program wrote nothing past the cut looks exactly like a pane that
     ends there. So the cut edge is shaded, and this is the question.
-    Lillecarl/pymux#222, Lillecarl/pymux#616.
+    Lillecarl/pyterm#224, Lillecarl/pyterm#618.
 
     It reads the frame that is being drawn, where the view is, glide
     and all. Before the first frame, and for a pane of another window,
@@ -306,9 +306,9 @@ def cut_backdrop(pymux: Pymux) -> str | None:
 
     **Not always the theme's colour.** With `paint-screen` off the cell
     shows the terminal's own background, which the client asked its
-    terminal for (`OSC 11`, Lillecarl/pymux#223), so a shade picked
+    terminal for (`OSC 11`, Lillecarl/pyterm#225), so a shade picked
     against the theme's would lift one terminal and darken the next.
-    Lillecarl/pymux#352. With `paint-screen` on, the cell's own style
+    Lillecarl/pyterm#354. With `paint-screen` on, the cell's own style
     already names the theme's, and a terminal that answered nothing
     leaves the theme's as the best guess.
     """
@@ -415,7 +415,7 @@ def pane_beside(pymux: Pymux, window: window_tree.Window, pane: Pane, side: Side
     title bar cannot use that because it is drawn *during* a frame, so
     it walked the arrangement's tree instead. The tree named the top of
     a stack beside us; the frame named whichever pane the active one's
-    own row ran into. Lillecarl/pymux#217.
+    own row ran into. Lillecarl/pyterm#219.
 
     The plan answers, which is neither: it names the slot that shares
     most of our edge, and then the pane that slot shows.

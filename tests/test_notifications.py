@@ -129,7 +129,7 @@ def _hub_lines(state) -> list[str]:
 
 
 async def test_hub_lists_newest_first_under_their_window():
-    "Lillecarl/pymux#768: one heading for the window, its messages under it."
+    "Lillecarl/pyterm#770: one heading for the window, its messages under it."
     async with create_session() as (pymux, state):
         with set_app(state.app):
             pymux.handle_command("notify First One")
@@ -189,7 +189,7 @@ async def test_unread_follows_the_window_s_mark():
 
 
 async def test_a_row_says_where_its_pane_is():
-    "The directory the pane's shell reported, home as ~. Lillecarl/pymux#498."
+    "The directory the pane's shell reported, home as ~. Lillecarl/pyterm#500."
     async with create_session() as (pymux, state):
         with set_app(state.app):
             pane = pymux.arrangement.get_active_pane()
@@ -262,7 +262,7 @@ async def test_enter_from_hub_jumps_to_the_pane():
 
 
 # ----------------------------------------------------------------------
-# What was seen goes after a while. Lillecarl/pymux#780.
+# What was seen goes after a while. Lillecarl/pyterm#782.
 
 
 def test_the_sweep_marks_what_was_seen_and_forgets_it_later():
@@ -304,7 +304,7 @@ async def test_a_notification_is_seen_when_a_client_looks_at_its_window():
 
 
 # ----------------------------------------------------------------------
-# A click on a notification. Lillecarl/pymux#779.
+# A click on a notification. Lillecarl/pyterm#781.
 
 
 def test_a_notification_asks_for_the_click_once_and_keeps_its_actions():
@@ -373,7 +373,7 @@ async def test_a_click_on_a_notification_shows_its_pane():
         connection.replies.notification_osc = Osc.NOTIFICATION
         sent = []
         connection.forward_osc = sent.append
-        # Out of sight, so the notification goes out. Lillecarl/pymux#799.
+        # Out of sight, so the notification goes out. Lillecarl/pyterm#801.
         state.terminal_focused = False
         with set_app(state.app):
             first = pymux.current_session.arrangement.get_active_window()
@@ -404,7 +404,7 @@ async def test_the_option_keeps_the_client_where_it_is():
 
 
 async def test_steal_focus_shows_the_pane_when_the_session_allows_it():
-    "OSC 1337 ; StealFocus uses the same move. Lillecarl/pymux#785."
+    "OSC 1337 ; StealFocus uses the same move. Lillecarl/pyterm#787."
     async with create_session() as (pymux, state):
         with set_app(state.app):
             first = pymux.current_session.arrangement.get_active_window()
@@ -449,7 +449,7 @@ def test_the_query_answer_says_whether_the_terminal_closes():
     """
     `close` among its payload types, as kitty 0.49.2 answers on Carl's
     Mac. `c=1` says the terminal reports a close a person made, which is
-    another thing. Lillecarl/pymux#799.
+    another thing. Lillecarl/pyterm#801.
     """
     from pymux.connection.replies import TerminalReplies
 
@@ -478,7 +478,7 @@ def test_a_shown_notification_is_closed_once_when_its_pane_is_seen():
 
 
 async def test_a_look_at_the_window_closes_its_notification_on_the_terminal():
-    "Once a client whose terminal has the focus shows the window. Lillecarl/pymux#799."
+    "Once a client whose terminal has the focus shows the window. Lillecarl/pyterm#801."
     async with create_session() as (pymux, state):
         (connection,) = [each for each, value in pymux._client_states.items() if value is state]
         connection.replies.notification_closes = True
@@ -524,7 +524,7 @@ async def test_the_window_chooser_closes_only_what_was_chosen():
 async def test_a_window_in_sight_sends_no_notification_out():
     """
     The person sees the window already. A terminal without the focus
-    is no look, and gets it. Lillecarl/pymux#799.
+    is no look, and gets it. Lillecarl/pyterm#801.
     """
     async with create_session() as (pymux, state):
         (connection,) = [each for each, value in pymux._client_states.items() if value is state]

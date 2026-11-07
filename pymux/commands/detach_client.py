@@ -25,7 +25,7 @@ def _detach(pymux: Pymux, client_state: ClientState, hang_up: bool = False) -> N
 
     The connection and not the application: a client state that a
     listing found has both, and the connection is the thing that
-    closes. Lillecarl/pymux#335.
+    closes. Lillecarl/pyterm#337.
     """
     client_state.client.connection.detach_and_close(hang_up=hang_up)
 
@@ -42,17 +42,17 @@ def detach_client(pymux: Pymux, args: argparse.Namespace) -> None:
 
     `-t <client>` detaches the one client of that name, which
     `list-clients` prints first on every line.
-    Lillecarl/pymux#335.
+    Lillecarl/pyterm#337.
 
     `-P` hangs up the process each detached client was started by, so
     the terminal it was in closes. It is tmux's own letter for it, and
     the same message tmux's `attach-session -x` sends
-    (`cmd-detach-client.c:80`). Lillecarl/pymux#347.
+    (`cmd-detach-client.c:80`). Lillecarl/pyterm#349.
 
     **A client that only watches may detach itself and nobody else.**
     Leaving is the one thing such a person has to be able to do, and
     putting other people back at a shell prompt is not it.
-    Lillecarl/pymux#467.
+    Lillecarl/pyterm#469.
     """
     hang_up = args.hang_up
 
@@ -83,7 +83,7 @@ def detach_client(pymux: Pymux, args: argparse.Namespace) -> None:
         # pane's CLI runs under a temporary client, and that one is
         # nobody: keeping it would detach every terminal a person is
         # actually sitting at. `the_client_to_tell` is the rule pymux
-        # already has for this (Lillecarl/pymux#272) and the faithful
+        # already has for this (Lillecarl/pyterm#274) and the faithful
         # reading of tmux's target client, which for a command from a
         # pane is the client that owns the pane.
         here = pymux.the_client_to_tell()
@@ -97,7 +97,7 @@ def detach_client(pymux: Pymux, args: argparse.Namespace) -> None:
     # A command from a pane or another shell runs under a temporary
     # client, and detaching that one closes the command's own
     # connection before it is answered. tmux takes the best client
-    # there (`cmd_find_best_client`). Lillecarl/pymux#804.
+    # there (`cmd_find_best_client`). Lillecarl/pyterm#806.
     here = pymux.the_client_to_tell()
     if here is None:
         raise CommandException("no client to detach")
@@ -107,7 +107,7 @@ def detach_client(pymux: Pymux, args: argparse.Namespace) -> None:
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     # A client that only watches has to be able to leave, or the one
-    # key it needs is the one it cannot press. Lillecarl/pymux#467.
+    # key it needs is the one it cannot press. Lillecarl/pyterm#469.
     parser = add_command(subparsers, detach_client, read_only=True)
     parser.add_argument("-a", dest="all_but_this_one", action="store_true", help="Every client but this one.")
     parser.add_argument(

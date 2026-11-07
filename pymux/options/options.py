@@ -47,7 +47,7 @@ class Scope(StrEnum):
     what it tells the terminal it is. tmux's `options-table.c` marks
     the same names `OPTIONS_TABLE_SERVER`, and finds the table by the
     name, so `set-option` takes one with or without `-s`.
-    Lillecarl/pymux#757.
+    Lillecarl/pyterm#759.
 
     A session option belongs to the session. A window option belongs
     to one window, and `-g` says what a new one starts with.
@@ -56,7 +56,7 @@ class Scope(StrEnum):
     can know what its terminal is -- what colours it draws with, which
     way round they are -- so an answer kept on the server is one answer
     for two people who may be sitting at very different screens.
-    Lillecarl/pymux#223.
+    Lillecarl/pyterm#225.
     """
 
     SERVER = "server"
@@ -72,13 +72,13 @@ class Option(ABC):
 
     #: What this option belongs to. `show-options`,
     #: `show-window-options` and `show-client-options` split the tables
-    #: on this. Lillecarl/pymux#298, Lillecarl/pymux#223.
+    #: on this. Lillecarl/pyterm#300, Lillecarl/pyterm#225.
     scope: Scope = Scope.SESSION
 
     #: Where the value lives, on the object the option belongs to.
     #: An option that holds its state somewhere else -- the prefix
     #: key lives in the binding manager -- says None, and reads as
-    #: not set. Lillecarl/pymux#298.
+    #: not set. Lillecarl/pyterm#300.
     attribute_name: str | None = None
 
     def held_by(self, pymux: Pymux, target: Holder | None = None) -> Holder | Window | None:
@@ -91,7 +91,7 @@ class Option(ABC):
         option takes `the_client_to_tell()` -- the rule pymux already
         has for "which client does a command mean", because a command
         from a pane's CLI runs under a temporary client that is nobody.
-        Lillecarl/pymux#272.
+        Lillecarl/pyterm#274.
         """
         if target is not None:
             return target
@@ -102,7 +102,7 @@ class Option(ABC):
             # for a window it did not have and got an `IndexError` out
             # of `windows[0]`. That is not a `SetOptionError`, so it
             # left `source-file` and took the startup with it: pymux
-            # drew nothing at all. Lillecarl/pymux#199.
+            # drew nothing at all. Lillecarl/pyterm#201.
             if not pymux.arrangement.windows:
                 raise SetOptionError(
                     "There is no window yet. A window option belongs to one "
@@ -134,7 +134,7 @@ class Option(ABC):
         The on/off options hold booleans and a person writes on and
         off; everything else prints as it is. An option whose value
         does not say the whole story says the rest here -- `theme
-        nearest` names the theme it matched. Lillecarl/pymux#346.
+        nearest` names the theme it matched. Lillecarl/pyterm#348.
         """
         if isinstance(value, bool):
             return "on" if value else "off"
@@ -156,7 +156,7 @@ class Option(ABC):
 
         `set-window-option -g` reaches this, and only a window option
         has anything to say: a session option is already one value for
-        the whole session. Lillecarl/pymux#199.
+        the whole session. Lillecarl/pyterm#201.
         """
         raise SetOptionError("This option belongs to the session, so it is already global.")
 
@@ -173,7 +173,7 @@ class SetOptionError(Exception):
 class FieldOption(Option):
     """
     An option declared as a field of its scope's options, which say
-    everything this does. Lillecarl/pymux#769.
+    everything this does. Lillecarl/pyterm#771.
     """
 
     def __init__(self, declared: Declared, scope: Scope, held_as: str = "options") -> None:
@@ -255,7 +255,7 @@ class KeyPrefixOption(Option):
             pymux.key_bindings_manager.prefix_written = value
 
 
-#: What the process holds, once for every session. Lillecarl/pymux#757.
+#: What the process holds, once for every session. Lillecarl/pyterm#759.
 ALL_SERVER_OPTIONS = {name: FieldOption(declared, Scope.SERVER) for name, declared in ServerOptions.DECLARED.items()}
 
 
@@ -268,7 +268,7 @@ ALL_OPTIONS["prefix"] = KeyPrefixOption()
 
 #: What one attached terminal holds. A client announces the ones its
 #: own configuration file names when it attaches, and
-#: `set-client-option` changes one while it runs. Lillecarl/pymux#223.
+#: `set-client-option` changes one while it runs. Lillecarl/pyterm#225.
 ALL_CLIENT_OPTIONS = {name: FieldOption(declared, Scope.CLIENT) for name, declared in ClientOptions.DECLARED.items()}
 
 

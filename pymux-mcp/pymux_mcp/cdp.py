@@ -2,7 +2,7 @@
 The Chrome DevTools Protocol over one WebSocket: requests matched to
 their replies by id, and events to whoever listens for them.
 
-Ported from cdp-mcp. Lillecarl/pymux#822.
+Ported from cdp-mcp. Lillecarl/pyterm#824.
 """
 
 from __future__ import annotations

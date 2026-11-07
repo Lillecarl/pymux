@@ -128,11 +128,11 @@ def run() -> None:
     # falls back through COLORTERM and TERM. (See `pymux.style.colors`.) It
     # is answered where a depth is used, so that a detached command
     # pays neither the question nor the import of the answer.
-    # Lillecarl/pymux#392.
+    # Lillecarl/pyterm#394.
 
     # A machine is somewhere to attach to, never somewhere to listen.
     # `listen_on_socket` would try to bind a path called "ssh:" and
-    # fail somewhere further in. Lillecarl/pymux#90.
+    # fail somewhere further in. Lillecarl/pyterm#92.
     if is_ssh_url(socket_name) and mode in (Mode.INTEGRATED, Mode.START_SERVER):
         print("A server listens on this machine, so -S has to name a path here.")
         sys.exit(1)
@@ -192,7 +192,7 @@ def run() -> None:
             # reads it; it is there so that `pymux -S <socket> <command>`
             # and libpymux reach this server. A client that asks to attach
             # over it is refused: this server draws on the terminal it runs
-            # in. Lillecarl/pymux#159.
+            # in. Lillecarl/pyterm#161.
             if socket_name:
                 mux.serving.listen_on_socket(socket_name)
 
@@ -242,7 +242,7 @@ def run() -> None:
             # first. The client of `ssh://host` runs this over its exec
             # channel: the finding lives where the binding lives, so a
             # change in where servers bind cannot leave that client
-            # looking in the old place. Lillecarl/pymux#90.
+            # looking in the old place. Lillecarl/pyterm#92.
             from libpymux.sockets import servers_newest_first
 
             names = servers_newest_first()
@@ -254,7 +254,7 @@ def run() -> None:
         case Mode.DIAGNOSE:
             # One report of what this machine sees, for a paste into a
             # support conversation. Read-only, and light: the imports of
-            # the report are stdlib only. Lillecarl/pymux#391.
+            # the report are stdlib only. Lillecarl/pyterm#393.
             from pymux.diagnose import as_json, diagnose, human
 
             report = diagnose(socket_name=socket_name, config_file=filename)
@@ -263,7 +263,7 @@ def run() -> None:
         case Mode.RENICE:
             # Every server of this user, or the one `-S` names. Not the
             # one of `$PYMUX`: in a pane, "every" still means every.
-            # Lillecarl/pymux#673.
+            # Lillecarl/pyterm#675.
             from libpymux.sockets import servers_newest_first
 
             from pymux.niceness import DEFAULT_NICENESS, renice
@@ -350,7 +350,7 @@ def run() -> None:
                 # Attach or create, as bare `tmux` does: the newest
                 # server that answers, and a new one only when none
                 # does. Two servers by accident is never what a person
-                # who typed `pymux` twice meant. Lillecarl/pymux#417.
+                # who typed `pymux` twice meant. Lillecarl/pyterm#419.
                 for newest in list_clients():
                     attaching.attach(newest)
                 _start_and_attach(None, filename, attaching)
@@ -360,7 +360,7 @@ def run() -> None:
 
             elif is_ssh_url(socket_name):
                 # Starting a server on the far machine when none is
-                # there is Lillecarl/pymux#90's other half.
+                # there is Lillecarl/pyterm#92's other half.
                 attaching.attach(create_client(socket_name))
 
             else:
@@ -405,7 +405,7 @@ def _new_pymux(
 
     `pymux.core.main` arrives here and not from the top of the module: a
     detached command never builds one, and what it imports instead is
-    the whole cost this file was charged. Lillecarl/pymux#392.
+    the whole cost this file was charged. Lillecarl/pyterm#394.
 
     `size_with_no_client` is `(columns, rows)` or None. Two numbers and
     not a `Size`, because `Size` is the toolkit's and this module may not
@@ -469,7 +469,7 @@ def _web(socket_name: str | None, a: argparse.Namespace) -> int:
     **Loopback and a token, both.** A browser sends no credentials on a
     websocket upgrade, so on loopback an `Origin` check is the only guard
     and a page may simply omit the header. So every upgrade carries the
-    token printed here. Lillecarl/pymux#461.
+    token printed here. Lillecarl/pyterm#463.
     """
     import anyio
 
@@ -558,7 +558,7 @@ class Attaching:
     attaches one reads the same flags, `new-session` too.
 
     The colour depth is worked out at the attach and not here, because
-    a detached command must not import the toolkit. Lillecarl/pymux#392.
+    a detached command must not import the toolkit. Lillecarl/pyterm#394.
     """
 
     config_file: str | None = None
@@ -574,7 +574,7 @@ class Attaching:
         Attach `client` as asked, then end this process the way the
         attachment ended. The code it leaves with is the server's to name:
         a server that will not serve this client says so in an `exit`
-        packet. Lillecarl/pymux#332.
+        packet. Lillecarl/pyterm#334.
         """
         client.config_file = self.config_file
         client.chosen_name = self.chosen_name
@@ -582,7 +582,7 @@ class Attaching:
         client.read_only = self.read_only
         # `-x` is `-d` with a harsher message, which is how tmux reads
         # it: `if (dflag || xflag)` in `cmd-attach-session.c:123`.
-        # Lillecarl/pymux#347.
+        # Lillecarl/pyterm#349.
         client.attach(
             detach_other_clients=self.detach_others or self.hang_up_others,
             color_depth=_color_depth(self.ansi_colors_only, self.true_color),
@@ -598,7 +598,7 @@ def _leave(client: TerminalClient) -> NoReturn:
     terminal is back and before the process goes: the same order tmux
     holds (`client.c:410-416`), and for the same reason -- a signal
     sent while the alternate screen is up leaves the terminal as pymux
-    had it. Lillecarl/pymux#347.
+    had it. Lillecarl/pyterm#349.
     """
     client.hang_up_the_parent()
     sys.exit(client.exit_code)
@@ -656,7 +656,7 @@ def _flag_args(
     stderr, the invocation that starts the server. The same line
     against a server that is already running reaches argparse in
     `call_command_handler` and is refused there.
-    Lillecarl/pymux#458.
+    Lillecarl/pyterm#460.
 
     **The two tables have to hold what the command's own parser holds**,
     because a person writes one line and the route it takes is not
@@ -724,7 +724,7 @@ def _wait_for_server(socket_name: str, timeout: float = 5.0) -> bool:
     below would say no server forever: `pymux -S ssh://... kill-server`
     said "no server running" and stopped. There is nothing to wait for
     on this machine, and the client says soon enough whether the far
-    side answers. Lillecarl/pymux#90.
+    side answers. Lillecarl/pyterm#92.
     """
     if is_ssh_url(socket_name):
         return True
@@ -757,7 +757,7 @@ def _new_session(
     # person writes one line and does not choose the route it takes:
     # whether this invocation starts the server or reaches one decides
     # which parser reads it, and the two have to answer alike.
-    # Lillecarl/pymux#458.
+    # Lillecarl/pyterm#460.
     try:
         flags, values, positional = _flag_args(
             args[1:],
@@ -780,8 +780,8 @@ def _new_session(
     # leaves no server behind. The standing answer is tmux's, and
     # `pymux.core.session.DEFAULT_SIZE` is the same two numbers; it is not
     # imported here because that would import the server.
-    # Lillecarl/pymux#459. Neither flag names nothing, and the clients'
-    # `window-size` decides. Lillecarl/pymux#817.
+    # Lillecarl/pyterm#461. Neither flag names nothing, and the clients'
+    # `window-size` decides. Lillecarl/pyterm#819.
     try:
         size_with_no_client = (
             None if "x" not in values and "y" not in values else (_axis_of(values, "x", 80), _axis_of(values, "y", 24))

@@ -1,7 +1,7 @@
 """
 A snapshot holds every saved field, and loads back to the same tables.
 
-Lillecarl/pymux#399.
+Lillecarl/pyterm#401.
 """
 
 from __future__ import annotations
@@ -101,7 +101,7 @@ class _ExampleRow:
 
 
 def test_a_row_class_declares_its_table():
-    "Lillecarl/pymux#771."
+    "Lillecarl/pyterm#773."
     assert tables.create_table(_ExampleRow) == (
         "CREATE TABLE examples(\n"
         "  owner_id INTEGER NOT NULL REFERENCES owners(owner_id),\n"
@@ -440,7 +440,7 @@ async def _run_jobs(pymux) -> None:
         await jobs.supervise(job)
     jobs._forget(job)
     # These run past the snapshot: one on a terminal, one on pipes.
-    # Lillecarl/pymux#556.
+    # Lillecarl/pyterm#558.
     for pty in (True, False):
         running = jobs.submit("echo started; exec sleep 60", None, [("long", None)], dict(os.environ), pty)
         pymux.tasks.start_soon(jobs.supervise, running)
@@ -556,7 +556,7 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                 "new-window",
                 "unlink-window",
                 # A pane that views a finished job, and one that views a
-                # job running on, of other sizes. Lillecarl/pymux#715.
+                # job running on, of other sizes. Lillecarl/pyterm#717.
                 "new-window",
                 "view-job -k 2",
                 "split-window -v",
@@ -573,11 +573,11 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                     # A window is made on a later turn, and a screen that
                     # sat still for `settled` under load did not wait for
                     # it: `unlink-window` then took the strip instead.
-                    # Lillecarl/pymux#664.
+                    # Lillecarl/pyterm#666.
                     await once(lambda: _window_count(pymux) > windows, 10.0, "the new window never came")
                 elif command.startswith("split-window"):
                     # So is a pane: the strip had one column when the
-                    # test set the width of its second. Lillecarl/pymux#664.
+                    # test set the width of its second. Lillecarl/pyterm#666.
                     await once(lambda: _pane_count(pymux) > panes, 10.0, "the new pane never came")
                 elif command.startswith("view-job"):
                     viewed = int(command.split()[-1])
@@ -643,7 +643,7 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                 assert fresh.notifications._incoming == pymux.notifications._incoming
                 assert fresh.notifications._outgoing == pymux.notifications._outgoing
                 # A look after the upgrade still closes what is on the
-                # terminals. Lillecarl/pymux#799.
+                # terminals. Lillecarl/pyterm#801.
                 assert fresh.notifications._shown == pymux.notifications._shown
                 assert len(pymux.notifications._shown) == 2
                 assert {name: (c.woken, c.locked) for name, c in fresh.wait_channels.items()} == {
@@ -792,7 +792,7 @@ def _as_version_39(path) -> None:
 
 
 def test_a_version_39_snapshot_loads_its_client_options(pymux, tmp_path):
-    "39 kept them as columns of `clients`. Lillecarl/pymux#769."
+    "39 kept them as columns of `clients`. Lillecarl/pyterm#771."
     pymux.returning_clients["gone"] = {
         "session_id": pymux.sessions[0].session_id,
         "previous_session_id": None,
@@ -815,7 +815,7 @@ def test_a_version_39_snapshot_loads_its_client_options(pymux, tmp_path):
 
 
 async def test_a_column_this_build_declares_and_the_file_lacks_takes_its_default(pymux, tmp_path):
-    "A new option needs no step: the load adds its column. Lillecarl/pymux#769."
+    "A new option needs no step: the load adds its column. Lillecarl/pyterm#771."
     path = tmp_path / "older.sqlite"
     async with pymux.running():
         await pymux.panes.create_window("true")
@@ -833,7 +833,7 @@ async def test_a_column_this_build_declares_and_the_file_lacks_takes_its_default
 
 
 async def test_a_table_or_column_the_file_lacks_needs_no_step(pymux, tmp_path):
-    "Lillecarl/pymux#771."
+    "Lillecarl/pyterm#773."
     path = tmp_path / "older.sqlite"
     async with pymux.running():
         await pymux.panes.create_window("true")
@@ -868,7 +868,7 @@ def test_a_session_s_own_value_survives_and_the_rest_follow_the_default(pymux, t
 
 @pytest.mark.parametrize("pty", [True, False], ids=["on a terminal", "on pipes"])
 async def test_a_running_job_this_server_forked_is_carried_by_its_fds(pymux, tmp_path, pty):
-    "An exec keeps it a child of the server, on the fds the snapshot names. Lillecarl/pymux#736."
+    "An exec keeps it a child of the server, on the fds the snapshot names. Lillecarl/pyterm#738."
     async with pymux.running():
         job = pymux.jobs.submit("exec sleep 60", pty=pty)
         pymux.tasks.start_soon(pymux.jobs.supervise, job)
@@ -886,7 +886,7 @@ async def test_a_job_that_ends_between_two_writes_is_written_ended(pymux, tmp_pa
     """
     An upgrade writes once, checks the new build, and writes again in
     the pause. A job that ended in between still read as running, and
-    the new image adopted fds the exec no longer carried. Lillecarl/pymux#736.
+    the new image adopted fds the exec no longer carried. Lillecarl/pyterm#738.
     """
     async with pymux.running():
         go = tmp_path / "go"

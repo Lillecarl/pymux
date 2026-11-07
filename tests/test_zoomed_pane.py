@@ -5,7 +5,7 @@ Zoom: one pane fills the window, and the layout under it waits.
 else, so a zoomed window was not laid out at all -- the panes beside it
 stopped existing for that frame, and a zoomed strip lost its row, its
 scrolling and its column widths until a person unzoomed.
-Lillecarl/pymux#215.
+Lillecarl/pyterm#217.
 
 `Zoomed` is a layout that wraps the one the window has and shows one
 pane of it. What it wraps is untouched, which is what tmux does as

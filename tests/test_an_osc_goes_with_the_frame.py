@@ -8,13 +8,13 @@ of its own put the clipboard ahead of the frame that showed the copy,
 and `checks.pymux-pictures` photographed a pane that was still catching
 up because of it. The middleman's fence is the same marker, an OSC 99,
 so behind the frame its arrival is all a harness waits for.
-Lillecarl/pymux#579.
+Lillecarl/pyterm#581.
 
 tmux orders it the same way. A pane's clipboard goes through
 `screen_write_setselection` (`input.c:3414-3440`), so it is dispatched
 as `tty_cmd_setselection` among the drawing commands (`tty.c:2140`);
 only its popup case, which has no pane, writes straight to the
-terminal. Lillecarl/pymux#478.
+terminal. Lillecarl/pyterm#480.
 """
 
 from __future__ import annotations
@@ -92,7 +92,7 @@ def test_a_flush_that_is_not_a_frame_carries_nothing(wire):
     Graphics and terminal modes flush on their own, between frames. One
     of those flushes sent the vterm middleman's fence ahead of the frame
     that drew the payload, and libvterm read an empty screen.
-    Lillecarl/pymux#611.
+    Lillecarl/pyterm#613.
     """
     client, output, sent = wire
 
@@ -174,7 +174,7 @@ async def test_a_real_client_holds_it_through_a_flush_between_frames():
     The same, end to end: a pane draws and sends its fence, and before
     the frame comes the client's terminal is flushed for something
     else, as graphics do. The fence still comes behind the drawing.
-    Lillecarl/pymux#611.
+    Lillecarl/pyterm#613.
     """
     mux = Pymux()
     mux.options.test_mode = True
@@ -184,9 +184,9 @@ async def test_a_real_client_holds_it_through_a_flush_between_frames():
             connection = mux.connections[-1]
             (pane,) = mux.panes_by_id.values()
             # A notification of a window in sight stays inside.
-            # Lillecarl/pymux#799.
+            # Lillecarl/pyterm#801.
             connection.client.state.terminal_focused = False
-            # A kitty, so the fence goes as it came. Lillecarl/pymux#497.
+            # A kitty, so the fence goes as it came. Lillecarl/pyterm#499.
             connection.client.replies.answered_notification_query = True
 
             # The fence is a notification, and its box would cover the line.

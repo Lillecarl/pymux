@@ -1,6 +1,6 @@
 """
 Browsers that a program on the server drives, on the machine the person
-sits at. Lillecarl/pymux#653.
+sits at. Lillecarl/pyterm#655.
 
 `pymux-browser` in a pane asks for one with `launch-browser`, which goes
 to the client a person used last, asks there, and answers the port and
@@ -13,7 +13,7 @@ is the client's half.
 **Every launch is asked.** A browser that a script drives can read what
 its profile holds and go wherever it is sent, and the person whose
 screen it opens on says yes to that, each time. As with `open-url -c`,
-only a yes a person typed counts. Lillecarl/pymux#443.
+only a yes a person typed counts. Lillecarl/pyterm#445.
 """
 
 from __future__ import annotations

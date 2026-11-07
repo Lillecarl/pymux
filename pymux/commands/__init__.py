@@ -5,7 +5,7 @@ A module declares what its command takes with argparse in
 `register`, and runs as one function that takes the server and the
 parsed arguments. argparse parses with the tree; the shell completes
 through it with argcomplete, and the command bar of a client
-completes through the same tree in process. Lillecarl/pymux#307.
+completes through the same tree in process. Lillecarl/pyterm#309.
 """
 
 from __future__ import annotations
@@ -228,7 +228,7 @@ def not_past_this_client(pymux: Pymux, reaches_another: bool) -> None:
     (`cmd-detach-client.c:73-78`): its `attach-session -x` runs for a
     read-only client and hangs up everybody, which is the harder
     version of the thing the flag exists to stop.
-    Lillecarl/pymux#467.
+    Lillecarl/pyterm#469.
     """
     if not reaches_another:
         return
@@ -274,7 +274,7 @@ def add_command(
     is not the same: a command wrongly refused says so and a person
     runs it from a client of their own, and a command wrongly allowed
     types into somebody else's session. tmux marks five and no more.
-    Lillecarl/pymux#467.
+    Lillecarl/pyterm#469.
 
     `acts_on` marks a command that changes or reads a session's
     windows and panes, with the argparse dest of each target it takes.
@@ -283,7 +283,7 @@ def add_command(
     Empty is a command that takes no target and acts where its caller
     is. **None, the default, runs here whatever the session**: a
     command about this server, or about what one client looks at.
-    Lillecarl/pymux#759.
+    Lillecarl/pyterm#761.
     """
     if name is None:
         name = handler.__name__.replace("_", "-")
@@ -293,7 +293,7 @@ def add_command(
         aliases=list(aliases),
         help=described.partition("\n")[0],
         # The whole docstring, paragraphs kept, for `pymux <command>
-        # --help`. Lillecarl/pymux#845.
+        # --help`. Lillecarl/pyterm#847.
         description=described,
         formatter_class=argparse.RawDescriptionHelpFormatter,
         # `-h` is an option of `split-window`, and no command answers
@@ -355,7 +355,7 @@ def parser_tree():
     `_parse_known_args` keeps a `--` that Python 3.14 drops, and it
     never swaps back. A `bind-key x -- next-window` after any completion
     then bound the key `['x', '--']`. The completer builds a tree of its
-    own. Lillecarl/pymux#735.
+    own. Lillecarl/pyterm#737.
     """
     global _parser_tree
     if _parser_tree is None:
@@ -379,7 +379,7 @@ def handle_command(pymux: Pymux, input_string: str, targets: Mapping[str, str] |
     is done when it returns. A handler that has to wait -- for a
     program to exit, for a channel to be woken -- is a coroutine, and
     then this answers with one that finishes the whole line.
-    Lillecarl/pymux#87.
+    Lillecarl/pyterm#89.
     """
     input_string = input_string.strip()
     logger.debug("handle command: %s", input_string)
@@ -401,7 +401,7 @@ def handle_command(pymux: Pymux, input_string: str, targets: Mapping[str, str] |
             # `bind \; last-pane` on the key it binds: the bind would run
             # with no arguments and last-pane would move the focus, with
             # no message saying why.
-            # Lillecarl/pymux#313.
+            # Lillecarl/pyterm#315.
             first = ALIASES.get(parts[0], parts[0])
             no_semicolon_split = first in ("bind-key", "unbind-key")
             commands: list[list[str]] = [[]]

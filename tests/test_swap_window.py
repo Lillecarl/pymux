@@ -3,7 +3,7 @@
 indexes, and the window swapped into the active place takes the focus
 unless `-d` keeps it. tmux's move-window refuses an occupied index,
 which is every index a chooser can name; the swap is what its tree
-template does. Lillecarl/pymux#296.
+template does. Lillecarl/pyterm#298.
 """
 
 from __future__ import annotations

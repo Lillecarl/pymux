@@ -3,7 +3,7 @@ A pymux server, and what it holds, as objects.
 
 A server holds sessions, a session holds windows, a window holds panes.
 A pymux server holds as many sessions as a person makes
-(Lillecarl/pymux#323), so `await server.sessions()` is the list and
+(Lillecarl/pyterm#325), so `await server.sessions()` is the list and
 `await server.session()` is the first of them.
 
 Every object reads its fields from the server through a format string.
@@ -103,7 +103,7 @@ class Pane(PaneFields):
         images. And what pymux draws over the pane -- copy mode, the
         clock, a popup -- is not on the pane's own screen, so it is not
         here either; `in_mode` says when that is happening and `mode`
-        says which one. Lillecarl/pymux#452.
+        says which one. Lillecarl/pyterm#454.
         """
         return await self.server.run(operations.capture(self.id, start, end, html=True, compact=compact))
 
@@ -160,7 +160,7 @@ class Pane(PaneFields):
         The answer is the same revision back when the wait ran out, so a
         caller compares it with what it sent. `timeout` is how long to
         wait; the server has its own answer for how long, and it is
-        under a minute. Lillecarl/pymux#387.
+        under a minute. Lillecarl/pyterm#389.
         """
         return await self.server.run(operations.wait_for_change(self.id, since, timeout))
 
@@ -182,7 +182,7 @@ class Pane(PaneFields):
         waits on. `exit` waits for the program to end.
 
         `Waited.met` is False when the wait ran out, and `Waited.text`
-        is then the screen it ran out on. Lillecarl/pymux#388.
+        is then the screen it ran out on. Lillecarl/pyterm#390.
         """
         condition = operations.WaitFor(quiet, text, next_text, exit, timeout)
         return await self.server.run(operations.wait_until(self.id, condition))
@@ -192,7 +192,7 @@ class Pane(PaneFields):
         Send one key name, or one text with `literal`, and hold until
         `wait` holds. The wait is armed before the key goes out, so
         output that comes back at once is not lost; `wait_until` says
-        what each condition means. Lillecarl/pymux#388.
+        what each condition means. Lillecarl/pyterm#390.
         """
         return await self.server.run(operations.send_and_wait(self.id, word, literal, wait))
 
@@ -209,7 +209,7 @@ class Pane(PaneFields):
                     draw(frame)
 
         `writable` asks for a stream that takes input as well.
-        `libpymux.streams` says what a frame holds. Lillecarl/pymux#461.
+        `libpymux.streams` says what a frame holds. Lillecarl/pyterm#463.
         """
         return PaneStream(self.server.socket_path, self.id, writable=writable)
 
@@ -618,7 +618,7 @@ class Server:
         theme the terminal of a person is showing, and whatever the
         program in the pane set with "OSC 4". Without one it is the
         conventional palette, which is what one stylesheet for every
-        pane should be. Lillecarl/pymux#452.
+        pane should be. Lillecarl/pyterm#454.
         """
         return await self.run(operations.html_stylesheet(None if pane is None else pane.id))
 

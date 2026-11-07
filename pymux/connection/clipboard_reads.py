@@ -1,7 +1,7 @@
 """
 Reading the clipboard of a client's terminal with OSC 52: the query,
 and the answer cut out of the keys before the key parser sees it.
-Lillecarl/pymux#383.
+Lillecarl/pyterm#385.
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ class ClipboardReader:
 
         #: Whether this terminal answers a clipboard query: None until
         #: one is asked, False after one went unanswered, True once an
-        #: answer came, even a late one. Lillecarl/pymux#383.
+        #: answer came, even a late one. Lillecarl/pyterm#385.
         self.answers: bool | None = None
         #: The pastes waiting for an answer, oldest first: each one's
         #: event, and the list its text goes into.
@@ -77,7 +77,7 @@ class ClipboardReader:
         a copy, so it is answered after any copy queued before it.
 
         None when the terminal does not answer in time, has been seen not
-        to, or answered with nothing. Lillecarl/pymux#383.
+        to, or answered with nothing. Lillecarl/pyterm#385.
         """
         if self.answers is False or self.client.state is None or self.client.state.temporary:
             return None
@@ -117,13 +117,13 @@ class ClipboardReader:
         if self._asked:
             prefixes.append(_CLIPBOARD_REPLY)
         # kitty's clipboard answers whenever it likes: a paste event
-        # comes unasked. Lillecarl/pymux#893.
+        # comes unasked. Lillecarl/pyterm#895.
         if self.client.replies.kitty_clipboard:
             prefixes.append(_KITTY_CLIPBOARD_REPLY)
-        # kitty's drag and drop, once asked. Lillecarl/pymux#892.
+        # kitty's drag and drop, once asked. Lillecarl/pyterm#894.
         if self.client.pymux.drag_and_drop.is_asked(self.client):
             prefixes.append(_KITTY_DND_REPLY)
-        # kitty's file transfer, while a session runs. Lillecarl/pymux#912.
+        # kitty's file transfer, while a session runs. Lillecarl/pyterm#914.
         if self.client.pymux.kitty_transfers.listens(self.client.connection):
             prefixes.append(_FILE_TRANSFER_REPLY)
         if not prefixes and not self._partial:

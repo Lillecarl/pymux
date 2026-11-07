@@ -4,7 +4,7 @@
 Both take the same row, the same escapes and the same running style,
 and they have to agree on where they stopped, on what they queued by
 identity, and on what the walk left in the row: a defaultdict stores
-its default for a column it is asked about. Lillecarl/pymux#566.
+its default for a column it is asked about. Lillecarl/pyterm#568.
 """
 
 from __future__ import annotations

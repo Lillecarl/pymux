@@ -1,5 +1,5 @@
 """
-The focused pane's border. Lillecarl/pymux#401.
+The focused pane's border. Lillecarl/pyterm#403.
 
 `layout._PaneMark` draws the mark one cell outside the pane,
 so the cells it takes are shared: the row above, which is the pane's
@@ -94,7 +94,7 @@ async def test_the_mark_closes_at_the_foot_of_a_stacked_pane():
     A pane with an edge inside the window and a neighbour above has a
     column beside it and a bar row below, so all four corners are drawn
     and the two lower ones close the rectangle. They are the mark a
-    stack's bottom pane was missing. Lillecarl/pymux#401.
+    stack's bottom pane was missing. Lillecarl/pyterm#403.
     """
     async with create_client(["split-window -h", "split-window -h", "select-pane -L", "split-window"]) as (
         pymux,
@@ -124,7 +124,7 @@ async def test_the_mark_has_no_foot_at_the_windows_lower_edge():
     A full-height pane has no bar row below it: the next row is the
     status line, and the lower corners would be drawn on it. The sides
     and the top corners are still drawn, so the mark is a bracket and
-    not a stray character on the bar. Lillecarl/pymux#401.
+    not a stray character on the bar. Lillecarl/pyterm#403.
     """
     async with create_client(["split-window -h"]) as (pymux, state, draw):
         state.sync_focus()

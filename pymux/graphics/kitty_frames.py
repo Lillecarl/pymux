@@ -1,6 +1,6 @@
 """
 A window pane's frame as kitty graphics commands, encoded where the
-terminal is. Lillecarl/pymux#634.
+terminal is. Lillecarl/pyterm#636.
 
 The server sends raw RGB rectangles (`pysmithay.Compositor.frame_rects`),
 and whoever writes to the terminal turns them into commands: the whole
@@ -15,7 +15,7 @@ itself (`t=d`, `o=z`). Which one a terminal takes is asked once,
 with `SHM_PROBE`.
 
 A window pane in a codec (`window-codec`) comes as encoded frames, which
-`decoders` turns back into RGB rectangles here. Lillecarl/pymux#639.
+`decoders` turns back into RGB rectangles here. Lillecarl/pyterm#641.
 
 **The terminal gets RGBA**, though everything before it is RGB. kitty
 uploads an RGB image as `GL_RGB`, which Apple's GL converts on the CPU
@@ -198,7 +198,7 @@ class Pictures:
     command (`graphics.c`, `update_current_frame`). A Firefox frame is a
     strip per line of text, and on Carl's Mac about 250 strips a second
     were 250 uploads of a Retina-sized image: macOS converts each on the
-    CPU, and the GPU starved the whole desktop. Lillecarl/pymux#644.
+    CPU, and the GPU starved the whole desktop. Lillecarl/pyterm#646.
     """
 
     def __init__(self) -> None:

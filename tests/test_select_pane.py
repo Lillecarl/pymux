@@ -1,7 +1,7 @@
 """
 `select-pane -t` makes a pane the active one of the window that holds
 it. It set the pane on the window a person used last, which may hold
-neither it nor anything near it. Lillecarl/pymux#506.
+neither it nor anything near it. Lillecarl/pyterm#508.
 """
 
 from __future__ import annotations

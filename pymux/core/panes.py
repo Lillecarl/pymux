@@ -54,7 +54,7 @@ def _say_key_did_not_fit():
 
     **Once per key, not once per repeat.** The same shape
     `KittyVt100Parser._say_it_has_no_name` uses for a key pymux itself
-    cannot name, so the two failures read alike. Lillecarl/pymux#238.
+    cannot name, so the two failures read alike. Lillecarl/pyterm#240.
     """
     already_said: set[KeyEvent] = set()
 
@@ -81,7 +81,7 @@ class PaneMaker:
         self.pymux = pymux
         #: The session each pane `kill_pane` took out was in, until its
         #: program ends: by then no session holds it, and the end has to
-        #: know which one it may leave empty. Lillecarl/pymux#807.
+        #: know which one it may leave empty. Lillecarl/pyterm#809.
         self._killed_in: dict[PaneId, Session] = {}
         #: Programs sent SIGHUP whose SIGKILL may still be due. The
         #: grace task keeps each backend alive until the program ends.
@@ -137,7 +137,7 @@ class PaneMaker:
             # from: it answers the protocol queries for itself. ptterm
             # has already said so here, because it is the layer that
             # owns both the screen and the process
-            # (Lillecarl/pymux#125). What is left is what only pymux
+            # (Lillecarl/pyterm#127). What is left is what only pymux
             # knows.
             #
             # The name is one of those. `default-terminal` is an option
@@ -152,17 +152,17 @@ class PaneMaker:
             # scope lands first and the session's over it; a name
             # either unset takes itself out of the child's
             # environment, which is the one thing the child would
-            # otherwise inherit from the server. Lillecarl/pymux#270.
+            # otherwise inherit from the server. Lillecarl/pyterm#272.
             # Merged onto the copy and not onto os.environ, which still
             # holds what ptterm's edit above took out of the pane.
             # The sound names go first, so a `set-environment` of the
-            # same name wins. Lillecarl/pymux#657.
+            # same name wins. Lillecarl/pyterm#659.
             self.pymux.audio.pane_environment(environment)
             merged = pane_environment(self.pymux, environment)
             environment.clear()
             environment.update(merged)
             # What `kitten transfer --permissions-bypass` encrypts to.
-            # Lillecarl/pymux#917.
+            # Lillecarl/pyterm#919.
             environment["KITTY_PUBLIC_KEY"] = self.pymux.kitty_transfers.key.public
 
             # The shims, when they are on, reach the opener and the
@@ -195,7 +195,7 @@ class PaneMaker:
             # The size of the session this pane is going into, until a
             # client attaches. `new-session -x -y` is what names it, and
             # a pane no client ever renders keeps it for ever, which is
-            # what an automated caller works on. Lillecarl/pymux#459.
+            # what an automated caller works on. Lillecarl/pyterm#461.
             #
             # **The control and not the process.** `Process.set_size` tells
             # the pty and nothing else; `TerminalControl.set_size` tells the
@@ -206,7 +206,7 @@ class PaneMaker:
             #
             # It showed as `capture-pane -p` printing one character per line,
             # while `-J` read correctly because it joins wrapped rows back
-            # together. Lillecarl/pymux#321.
+            # together. Lillecarl/pyterm#323.
             size = self.pymux.planes.size_with_no_client(session, window)
             terminal_control.set_size(size.columns, size.rows)
             # A program starts watched, so that panes in detached
@@ -260,7 +260,7 @@ class PaneMaker:
         none is given, or one a snapshot's load adopted. `program` runs
         something with no pty instead: a job's tail. Building is
         synchronous, so a load builds every pane before anything runs.
-        Lillecarl/pymux#399.
+        Lillecarl/pyterm#401.
         """
 
         def done_callback():
@@ -319,7 +319,7 @@ class PaneMaker:
             A pane is shared and a keyboard is not, so this asks about
             the client the key came from and never about the pane. The
             answer is no for a client that attached with
-            `attach-session -r`. Lillecarl/pymux#467.
+            `attach-session -r`. Lillecarl/pyterm#469.
 
             **No client is yes.** A key with no client behind it comes
             from a test, which has nobody to refuse.
@@ -346,7 +346,7 @@ class PaneMaker:
             # What copy mode copied. The pane does not build the
             # sequence for it: the option that says whether it goes
             # out lives here, and so does the check every payload
-            # passes. Lillecarl/pymux#378.
+            # passes. Lillecarl/pyterm#380.
             copy_func=self.pymux.outward.copied_in_copy_mode,
             resize_func=resize,
             may_resize=may_resize,
@@ -378,7 +378,7 @@ class PaneMaker:
         # nothing about a widget: a dozen tests build one around a stub
         # that has no terminal control at all. `ptyhost` fires this after
         # every read from the program, whatever the bytes were.
-        # Lillecarl/pymux#387.
+        # Lillecarl/pyterm#389.
         def changed(_sender: object) -> None:
             pane.content_changed()
 
@@ -392,7 +392,7 @@ class PaneMaker:
             that had none; the arrangement follows here, or the next
             keypress syncs the layout focus straight back to the pane
             that is active. A pane in no window -- an overlay, or one
-            already gone -- stays as it is. Lillecarl/pymux#527.
+            already gone -- stays as it is. Lillecarl/pyterm#529.
             """
             found = self.pymux.place_of_pane_id(pane.pane_id)
             if found is None:
@@ -416,7 +416,7 @@ class PaneMaker:
         terminal_control.pointer_fraction = pointer_fraction
 
         def draws_extra_cursors() -> bool:
-            "Whether the client being drawn shows this pane's extra cursors as cells. Lillecarl/pymux#891."
+            "Whether the client being drawn shows this pane's extra cursors as cells. Lillecarl/pyterm#893."
             client = self.pymux.client_of(get_app())
             return client is None or not client.native_extra_cursors_of(pane)
 
@@ -448,7 +448,7 @@ class PaneMaker:
         A pane for a Wayland window that just opened, split off in the
         window that holds `beside`, or else beside the active pane of the
         session a person used last. None when there is no window to put
-        it in. Lillecarl/pymux#620.
+        it in. Lillecarl/pyterm#622.
         """
         found = None if beside is None else self.pymux.place_of_pane_id(beside.pane_id)
         if found is not None:
@@ -472,7 +472,7 @@ class PaneMaker:
         """
         A pane for a Wayland window, in the place of `old`, whose program
         is sent SIGHUP: `pymux wl` turns the pane it ran in into the
-        window. None when `old` is gone. Lillecarl/pymux#630.
+        window. None when `old` is gone. Lillecarl/pyterm#632.
 
         SIGHUP and not SIGKILL, so the shell writes the `pymux wl` line
         to its history on the way out.
@@ -603,7 +603,7 @@ class PaneMaker:
         and answer it.
 
         `index` says where it goes. Without one it takes the lowest
-        free index. Lillecarl/pymux#191.
+        free index. Lillecarl/pyterm#193.
 
         `session` says where the window goes. Without one it is the
         session of the client that asks. A window made for another

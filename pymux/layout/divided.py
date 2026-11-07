@@ -5,7 +5,7 @@ This is what pymux does unless a person asks for something else, and
 what every layout it had before the strip was. The window is a tree of
 splits, each split shares its rectangle out between its children by
 weight, and a gap between one child and the next is where the border
-goes. Lillecarl/pymux#217.
+goes. Lillecarl/pyterm#219.
 
 **It is a constraint, so it holds fractions and not cells.** A weight
 is a share of the whole, and `measure` derives the cells from it every
@@ -77,7 +77,7 @@ class Divided:
         Insertion order is reading order: the walk takes each split's
         children in the order they sit in, so the panes come out the
         way `Window.panes` lists them and a person reads them.
-        Lillecarl/pymux#210.
+        Lillecarl/pyterm#212.
 
         A border runs the whole way across the split that left its
         gap, so a border between two columns stops where the split

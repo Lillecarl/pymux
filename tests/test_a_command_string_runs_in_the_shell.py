@@ -1,7 +1,7 @@
 """
 What a pane runs, by tmux's rule: a command given as one string goes
 to `default-shell -c`, and a command given as several words runs as
-they stand. Lillecarl/pymux#933.
+they stand. Lillecarl/pyterm#935.
 """
 
 from __future__ import annotations

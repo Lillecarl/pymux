@@ -1,6 +1,6 @@
 """
 `set-option mode-keys helix`: Helix's keys in copy mode, through ptterm
-and ptkhx. Lillecarl/pymux#749.
+and ptkhx. Lillecarl/pyterm#751.
 
 `ptterm/tests/test_copy_mode_helix.py` judges the keys. This judges that
 the option reaches a pane, and that the prefix still comes first.

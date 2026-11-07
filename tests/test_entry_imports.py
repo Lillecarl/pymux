@@ -5,7 +5,7 @@ A detached command -- `send-keys`, `set-option`, `new-window` from a
 script or an agent -- pays the imports of `pymux.entry_points.run_pymux`
 before it reaches the socket. The toolkit and the ssh machinery are
 the attach path's to carry: they arrive when a mode draws or when an
-address names a machine, and never before. Lillecarl/pymux#392.
+address names a machine, and never before. Lillecarl/pyterm#394.
 
 The assertions read the modules of a fresh interpreter, because this
 one has already imported whatever the rest of the suite pulled in.
@@ -51,7 +51,7 @@ def test_a_command_client_imports_no_toolkit():
     """
     A command over the socket, a completion on Tab among them, draws
     nothing. Without deferimport, as the toolkit would load: anyio comes
-    with `libpymux`'s package and is lazy in the program. Lillecarl/pymux#589.
+    with `libpymux`'s package and is lazy in the program. Lillecarl/pyterm#591.
     """
     assert not [m for m in modules_after_import("import pymux.client.command;") if m.startswith("prompt_toolkit")], (
         "the command client imported the TUI stack: every detached command pays it"

@@ -3,7 +3,7 @@
  *
  * `?src=` names a file this server serves; without one the page asks for
  * a file off the disk, which a browser reads without sending anywhere.
- * Lillecarl/pymux#610.
+ * Lillecarl/pyterm#612.
  */
 
 import "./pymux-pane.js";

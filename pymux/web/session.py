@@ -6,7 +6,7 @@ is not on it: copy mode, the clock, a popup, a prompt, the status line.
 A client draws all of those, so this is a client -- the same `start-gui`
 a terminal's client sends -- and pyte stands where the terminal would.
 `PaneView` then sends that screen to a browser exactly as it sends a
-pane's. Lillecarl/pymux#481.
+pane's. Lillecarl/pyterm#483.
 
 **pyte is the outer terminal, in both directions.** pymux's client sets
 the keyboard modes it wants on its terminal, so a key a browser names is
@@ -59,7 +59,7 @@ SIZE = "size"
 LARGEST = 1000
 
 #: How long a sequence may stay open before the next bytes drop it, the
-#: same five seconds a pane uses. Lillecarl/pymux#485.
+#: same five seconds a pane uses. Lillecarl/pyterm#487.
 _GROUND_TIMEOUT = 5
 
 #: What a viewer is told when the client options set on its client
@@ -138,7 +138,7 @@ class SessionScreen:
         # The server reads the answers only after this packet, and this
         # screen answers as it is fed, so the packet goes first. Without
         # the queries the server never learns that this terminal draws
-        # images. Lillecarl/pymux#718.
+        # images. Lillecarl/pyterm#720.
         self._send({Field.CMD: Packet.DETECT})
         self._ground_timer.feed(DETECTION_QUERIES.decode("ascii"))
 
@@ -232,7 +232,7 @@ class SessionScreen:
                 return "this client only watches"
             # pymux's client asked this screen for mouse reports, as it
             # asks a terminal; a viewer of a client with the mouse off
-            # sends nothing. Lillecarl/pymux#950.
+            # sends nothing. Lillecarl/pyterm#952.
             report = mouse_report(self.screen, mouse)
             if report is not None:
                 self._send({Field.CMD: Packet.IN, Field.DATA: self.screen.encode_report(report)})

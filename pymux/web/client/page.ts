@@ -25,7 +25,7 @@ function needed<T>(found: T | null, what: string): T {
 const asked = new URLSearchParams(location.search);
 // `?session` shows the whole session as one client draws it, with the
 // status line and whatever pymux draws over the panes; `?pane=%1` shows
-// one pane's own screen. Lillecarl/pymux#481.
+// one pane's own screen. Lillecarl/pyterm#483.
 const session = asked.has("session");
 const pane = session ? "the session" : asked.get("pane");
 const token = asked.get("t");
@@ -36,7 +36,7 @@ const element = needed(document.querySelector("pymux-pane"), "pane");
 const about = needed(document.getElementById("about"), "caption");
 const fullscreen = needed(document.getElementById("fullscreen"), "full screen button");
 
-// The click is the gesture full screen needs. Lillecarl/pymux#951.
+// The click is the gesture full screen needs. Lillecarl/pyterm#953.
 fullscreen.addEventListener("click", () => {
   void element.fullscreen().catch((error: unknown) => say(`Full screen was refused: ${String(error)}`));
 });
@@ -92,7 +92,7 @@ if (!pane || !token) {
     element.setAttribute("fit", "");
     document.body.classList.add("session");
     // What the person set on this view's client, kept for the next one:
-    // each stream is a new client. Lillecarl/pymux#957.
+    // each stream is a new client. Lillecarl/pyterm#959.
     const kept = keptOptions();
     if (kept !== null) where.searchParams.set("options", kept);
     element.addEventListener("client-options", (event) => keepOptions(JSON.stringify(event.detail)));

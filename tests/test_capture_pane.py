@@ -7,7 +7,7 @@ into the line a program wrote. tmux spells the flag the same way.
 
 The two modes number their lines apart, and they have to: line -1 of
 the rows is the row above the screen, and line -1 of the lines is the
-line above the screen, which can be several rows. Lillecarl/pymux#135.
+line above the screen, which can be several rows. Lillecarl/pyterm#137.
 """
 
 from __future__ import annotations
@@ -52,7 +52,7 @@ def rows_of(text: str) -> list:
 
 
 async def test_capture_of_rows_holds_cut(pymux):
-    "And the rows below the line are the rest of the pane. #476."
+    "And the rows below the line are the rest of the pane. #478."
     create_pane(pymux, LONG)
     assert rows_of(capture(pymux)) == [
         "a line longer than t",
@@ -112,7 +112,7 @@ async def test_line_that_wrap_carried_onto_screen_is_whole(pymux):
 # times a second read up to `history-limit` rows a frame and nothing
 # said so. `-S -` is the spelling that still reaches the history, and
 # tmux reads the two apart the same way
-# (`cmd-capture-pane.c:294-306`). Lillecarl/pymux#457.
+# (`cmd-capture-pane.c:294-306`). Lillecarl/pyterm#459.
 
 #: More lines than the pane is tall, so some of them scroll off.
 SCROLLED = "".join("line %d\r\n" % number for number in range(9))
@@ -163,7 +163,7 @@ async def test_a_wrapped_line_of_the_history_is_not_in_the_default(pymux):
 # the count: it had to learn the height another way and pad, which is
 # the work a capture was meant to save. tmux writes a line for every
 # row of `hsize .. hsize + sy - 1` and trims none of them
-# (`cmd-capture-pane.c:311-325, 349`). Lillecarl/pymux#476.
+# (`cmd-capture-pane.c:311-325, 349`). Lillecarl/pyterm#478.
 
 
 async def test_a_capture_is_as_tall_as_the_pane(pymux):

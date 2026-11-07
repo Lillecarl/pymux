@@ -83,7 +83,7 @@ def pane_covers(screen: Screen) -> dict[Pane, tuple[Rect, ...]]:
     What this screen drew over each pane, in cells of the screen: every
     window it drew that overlaps the pane and is not one of the pane's
     own. A popup, a menu, the which-key box, the command line. An image
-    of the pane belongs under them. Lillecarl/pymux#816.
+    of the pane belongs under them. Lillecarl/pyterm#818.
 
     **Not by paint order.** prompt_toolkit records a window when it
     paints, but a pane can paint twice in one frame (a body drawn late
@@ -156,7 +156,7 @@ class LayoutManager:
         #: `Layout.find_all_controls` crossed on every key press for a
         #: box a person opens once an hour. Measured, with one pane and
         #: nothing open, the walk went from 135 containers to 106.
-        #: Lillecarl/pymux#366.
+        #: Lillecarl/pyterm#368.
         self.popup_dialog: Dialog | None = None
         self._popup_textarea: TextArea | None = None
 
@@ -171,7 +171,7 @@ class LayoutManager:
         #: controls it can find (`_CombinedRegistry._key_bindings`).
         #: A new control on every walk is a cache key nothing matches,
         #: so every key press rebuilt the whole binding table.
-        #: Lillecarl/pymux#233.
+        #: Lillecarl/pyterm#235.
         self._nothing_to_draw = Window()
 
         self.command_line = CommandLine(self)
@@ -215,7 +215,7 @@ class LayoutManager:
             self._status_rows_drawn = rows
             # A clock, a frame rate or a pane's write can wrap the
             # window list with no `Pymux.invalidate`, which is what
-            # tells an owner the room here. Lillecarl/pymux#954.
+            # tells an owner the room here. Lillecarl/pyterm#956.
             self.pymux.peers.sync_sight()
 
     @property
@@ -337,7 +337,7 @@ class LayoutManager:
         can hold anything. `clock-mode` draws a clock inside a pane.
         Nothing else on the screen changes unless something asks for a
         frame, so a caller that finds this the same as the last frame
-        drew has nothing to draw. Lillecarl/pymux#154.
+        drew has nothing to draw. Lillecarl/pyterm#156.
 
         The caller sets its own application first. A `#{...}` variable
         asks which window this client looks at.
@@ -347,7 +347,7 @@ class LayoutManager:
 
         **The panes are this client's window's, and no others.** A
         pane's write asks the other clients this question
-        (Lillecarl/pymux#224), so reading `#T` for every pane of every
+        (Lillecarl/pyterm#226), so reading `#T` for every pane of every
         window reads eight windows of titles each time any pane of a
         session of eight writes.
 
@@ -357,7 +357,7 @@ class LayoutManager:
         its flags, and `#T` if a person put it in that format -- is
         already in `parts`. What is left is the titlebars of the panes
         this client can see, and a `clock-mode` pane, and both of those
-        are in the window it looks at. Lillecarl/pymux#251.
+        are in the window it looks at. Lillecarl/pyterm#253.
         """
         pymux = self.pymux
         parts: list[str] = []
@@ -433,7 +433,7 @@ class LayoutManager:
         window's position the popup steps away from. A screen that
         has drawn no cursor for the window, and the frame before the
         first one, answer the top-left corner.
-        Lillecarl/pymux#29.
+        Lillecarl/pyterm#31.
         """
         app = self.client_state.app
         screen = app.renderer.last_rendered_screen
@@ -447,7 +447,7 @@ class LayoutManager:
         Whether the cursor sits in the quadrant the box would rather
         draw in. The half the status bar takes is part of the lower
         half; it is where a cursor below the middle sits either way.
-        Lillecarl/pymux#29.
+        Lillecarl/pyterm#31.
         """
         point = self.cursor_on_view()
         room = self.room_this_client_has
@@ -479,7 +479,7 @@ class LayoutManager:
             # line is where a person reads which window they are on,
             # and "kill-window #W?" is the moment they want it: the
             # question names something the window list is the context
-            # for. Lillecarl/pymux#339.
+            # for. Lillecarl/pyterm#341.
             # **No `right`.** A float given both sides is as wide as the
             # screen, and an opaque one paints that row even when its
             # content is empty: it erased a row of the pane under it,
@@ -499,7 +499,7 @@ class LayoutManager:
                 ),
             ),
             # The notification boxes, in the same corner as the keys
-            # below, for the same reason. Lillecarl/pymux#826.
+            # below, for the same reason. Lillecarl/pyterm#828.
             Float(
                 content=ConditionalContainer(
                     content=DynamicContainer(self.popups.box),
@@ -531,7 +531,7 @@ class LayoutManager:
         waits_for_confirmation = WaitsForConfirmation(self.pymux)
         palette = Condition(lambda: self.client_state.session.options.command_palette)
         # A prompt that knows its answers draws in a box, because the
-        # completions are what need the room. Lillecarl/pymux#220.
+        # completions are what need the room. Lillecarl/pyterm#222.
         asks_for_key = Condition(lambda: self.client_state.prompt_completer is not None)
         in_box = (has_focus(self.client_state.command_buffer) & palette) | (
             has_focus(self.client_state.prompt_buffer) & asks_for_key
@@ -549,7 +549,7 @@ class LayoutManager:
                     # sides are numbers fixed at build time, and the
                     # status line's height is not: anchored to the
                     # bottom of the body, they rise with it.
-                    # Lillecarl/pymux#723.
+                    # Lillecarl/pyterm#725.
                     FloatContainer(
                         Background(painted=Condition(lambda: self.client_state.session.options.paint_screen)),
                         floats=[
@@ -609,7 +609,7 @@ class LayoutManager:
                 ),
                 # That an error was logged, and where. It takes no focus
                 # and hides no cursor: a person typing in the pane under
-                # it keeps both. Lillecarl/pymux#241.
+                # it keeps both. Lillecarl/pyterm#243.
                 Float(
                     top=0,
                     right=0,
@@ -658,7 +658,7 @@ class LayoutManager:
                 # The ":" command line as a box in the middle, when the
                 # person asked for one. The same inset as the keys
                 # pop-up above, because it is the same kind of box.
-                # Lillecarl/pymux#158.
+                # Lillecarl/pyterm#160.
                 Float(
                     content=ConditionalContainer(
                         content=DynamicContainer(self.command_line.palette),
@@ -678,7 +678,7 @@ class LayoutManager:
                 # The prompt as a box, when the question knows its
                 # answers. The same inset as the two boxes above,
                 # because it is the same kind of box.
-                # Lillecarl/pymux#220.
+                # Lillecarl/pyterm#222.
                 Float(
                     content=ConditionalContainer(
                         content=DynamicContainer(self.command_line.key_box),
@@ -704,7 +704,7 @@ class LayoutManager:
                 # same kind of thing and neither can be switched to.
                 # It takes focus, which is what keeps the keys of the
                 # pane out of the way while it shows.
-                # Lillecarl/pymux#295. Lillecarl/pymux#304.
+                # Lillecarl/pyterm#297. Lillecarl/pyterm#306.
                 Float(
                     content=ConditionalContainer(
                         content=DynamicContainer(self.chooser._chooser_box),
@@ -719,7 +719,7 @@ class LayoutManager:
                 # The windows, to choose from: a bar across the top,
                 # over the window it has switched to. Not a box, and
                 # no inset: it covers as few rows of that window as
-                # the entries need. Lillecarl/pymux#327.
+                # the entries need. Lillecarl/pyterm#329.
                 Float(
                     content=ConditionalContainer(
                         content=DynamicContainer(self.chooser._window_bar),
@@ -733,7 +733,7 @@ class LayoutManager:
                 # The menu that `display-menu` opened. The same
                 # kind of box as the two choosers above, one at a
                 # time with them, and no bottom of its own: it takes
-                # the height of what is in it. Lillecarl/pymux#297.
+                # the height of what is in it. Lillecarl/pyterm#299.
                 Float(
                     content=ConditionalContainer(
                         content=DynamicContainer(self.menu.box),
@@ -755,7 +755,7 @@ class LayoutManager:
                 # build time. It takes no focus, so the key after the
                 # prefix reaches the bindings as it always did and the
                 # popup is gone by the time the frame for that key
-                # draws. Lillecarl/pymux#29.
+                # draws. Lillecarl/pyterm#31.
                 Float(
                     content=ConditionalContainer(
                         content=DynamicContainer(self.which_key.box),
@@ -766,7 +766,7 @@ class LayoutManager:
                     z_index=Z_INDEX.POPUP,
                 ),
                 # Notifications as boxes, where the keys above go and
-                # under them: away from the cursor. Lillecarl/pymux#826.
+                # under them: away from the cursor. Lillecarl/pyterm#828.
                 Float(
                     content=ConditionalContainer(
                         content=DynamicContainer(self.popups.box),
@@ -810,14 +810,14 @@ class DynamicBody(Container):
     def __init__(self, pymux: Pymux) -> None:
         self.pymux = pymux
         # Each client's `LayoutManager` makes its own, so everything
-        # here is that client's and needs no key. Lillecarl/pymux#712.
+        # here is that client's and needs no key. Lillecarl/pyterm#714.
 
         #: The arrangement's hash the body was built for, and the body.
         self._body: tuple[tuple[object, ...], Container] | None = None
 
         #: The container that draws the panes. It holds the plan of the
         #: frame it drew, and everything drawn inside that frame reads
-        #: it rather than measuring again. Lillecarl/pymux#217.
+        #: it rather than measuring again. Lillecarl/pyterm#219.
         self._panes: PlanContainer | None = None
 
         #: Where this client looks at each window's plane, by window.
@@ -909,7 +909,7 @@ class DynamicBody(Container):
         # and one container puts them there. Zoom included, which is a
         # layout that wraps another and shows one pane of it, so a
         # zoomed pane keeps the row its title bar hangs in and a zoomed
-        # strip is still a strip. Lillecarl/pymux#215.
+        # strip is still a strip. Lillecarl/pyterm#217.
         panes = _create_panes(self.pymux, window, self.view_of(window))
         self._panes = panes
 
@@ -924,7 +924,7 @@ class DynamicBody(Container):
                 panes,
                 # And the row the bottom pane hangs its bar below in.
                 # Only when there is a stack, because only then is
-                # there anything to name. Lillecarl/pymux#211.
+                # there anything to name. Lillecarl/pyterm#213.
                 ConditionalContainer(
                     content=Window(height=1),
                     filter=Condition(lambda: bar_below_is_drawn(self.pymux, window)),
@@ -976,7 +976,7 @@ def _create_panes(pymux: Pymux, window: window_tree.Window, view: View) -> PlanC
     plane that may be bigger than the screen -- and `PlanContainer`
     puts each pane's container at its rectangle, less the offset of the
     view. Nothing here divides anything, and there is one of these
-    whatever layout the window is in. Lillecarl/pymux#217.
+    whatever layout the window is in. Lillecarl/pyterm#219.
 
     **A pane knows nothing about borders**, and the layout draws them:
     Carl, "individual panes should not be aware of borders ... the
@@ -985,7 +985,7 @@ def _create_panes(pymux: Pymux, window: window_tree.Window, view: View) -> PlanC
     the window rather than being added on top of it, so a column takes
     the same room whatever the other columns do. Without that, two
     columns of half a window came to one cell more than the window,
-    every time. Lillecarl/pymux#206.
+    every time. Lillecarl/pyterm#208.
 
     **The view is given, not made here.** It belongs to the client and
     the window, and it outlives every container this builds, so a
@@ -1018,7 +1018,7 @@ def move_focus(pymux: Pymux, side: Side, start: Pane | None = None) -> None:
 
     **The plan says which pane that is**, in the same words as the
     title bar, so a key and a bar never name different panes, and the
-    key works before the first frame. Lillecarl/pymux#217.
+    key works before the first frame. Lillecarl/pyterm#219.
     """
     window = pymux._window_holding(start) if start is not None else pymux.arrangement.get_active_window()
     if window is None:

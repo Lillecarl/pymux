@@ -26,7 +26,7 @@ def respawn_pane(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None]:
     and its size; its id and its screen are new, because they belong
     to the program. A pane whose program ended is already out of the
     tree -- pymux does not keep dead panes on screen -- and there is
-    nothing to respawn. Lillecarl/pymux#306.
+    nothing to respawn. Lillecarl/pyterm#308.
     """
     pane = the_pane(pymux, args.target_pane)
 

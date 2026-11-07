@@ -2,7 +2,7 @@
 kitty's own drag and drop code (dnd.c, in-process, through its test
 hooks) against what pymux sends a terminal: kitty reads pymux's answers
 as the spec means them, and a remote drop that kitty serves from real
-files comes out whole in pymux's copy. Lillecarl/pymux#892.
+files comes out whole in pymux's copy. Lillecarl/pyterm#894.
 """
 
 from __future__ import annotations

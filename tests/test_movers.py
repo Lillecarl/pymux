@@ -5,7 +5,7 @@ Moving things between windows: `move-pane`, `join-pane`,
 A pane moves with `move_pane_to_window` on the arrangement; a window
 goes out of the order and back with the pen of unlinked windows.
 The harness starts with two windows of one pane, and the tests say
-which is which. Lillecarl/pymux#297.
+which is which. Lillecarl/pyterm#299.
 """
 
 from __future__ import annotations

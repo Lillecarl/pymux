@@ -1,6 +1,6 @@
 """
 The pymux client as the terminal of kitty's file transfer, for a
-terminal that is not kitty. Lillecarl/pymux#912.
+terminal that is not kitty. Lillecarl/pyterm#914.
 """
 
 from __future__ import annotations
@@ -388,7 +388,7 @@ async def test_kitten_transfer_sends_a_file_through_the_pymux_client(tmp_path, h
 
 @pytest.mark.skipif(not KITTEN, reason="needs the kitten: PYMUX_KITTEN")
 async def test_kitten_transfer_reads_a_file_through_the_pymux_client(tmp_path, home, config):
-    "Part by part: each waits for the server to say the pane took the last. Lillecarl/pymux#914."
+    "Part by part: each waits for the server to say the pane took the last. Lillecarl/pyterm#916."
     data = os.urandom(3 * READ_BYTES + 5)
     (home / "notes.txt").write_bytes(data)
     target = tmp_path / "got.txt"
@@ -431,7 +431,7 @@ async def test_kitten_transfer_reads_a_delta_through_the_pymux_client(tmp_path, 
 
 @pytest.mark.skipif(not KITTEN, reason="needs the kitten: PYMUX_KITTEN")
 async def test_kitten_transfer_with_the_bypass_password_asks_nothing(tmp_path, home, config):
-    "The kitten encrypts to the pane's KITTY_PUBLIC_KEY, the server's. Lillecarl/pymux#917."
+    "The kitten encrypts to the pane's KITTY_PUBLIC_KEY, the server's. Lillecarl/pyterm#919."
     config.write_text("set-client-option file-transfer-bypass sesame\n")
     source = tmp_path / "source.bin"
     source.write_bytes(DATA)

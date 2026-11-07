@@ -8,7 +8,7 @@ the same thing in its own words: `window_zoom` saves every pane's cell
 and the root of the tree, calls `layout_init` for a fresh one-pane
 layout, and `window_unzoom` puts the saved one back.
 
-The flag is what made Lillecarl/pymux#215. `_build_layout` tested
+The flag is what made Lillecarl/pyterm#217. `_build_layout` tested
 `window.zoom` before `window.options.strip`, so a zoomed strip was not a strip
 at all: the row, the scrolling and the column widths stopped existing
 for that frame rather than being covered by the pane on top of them. A
@@ -75,6 +75,6 @@ class Zoomed:
         There is one slot and it starts there, so there is nowhere
         else to go. A client too small to see all of a pane sized for
         a bigger one sees the top left of it, which is the rule every
-        layout follows. Lillecarl/pymux#218.
+        layout follows. Lillecarl/pyterm#220.
         """
         return Point(x=0, y=0)

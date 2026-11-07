@@ -6,7 +6,7 @@ says what the declaration gives.
 
 **Only a client can know these:** what colours its terminal draws with,
 and which way round they are. An answer kept on the server is one answer
-for two people who may sit at very different screens. Lillecarl/pymux#223.
+for two people who may sit at very different screens. Lillecarl/pyterm#225.
 """
 
 from __future__ import annotations
@@ -67,7 +67,7 @@ def _parse_theme(value: str) -> str:
 
 def _theme_chosen(pymux: Pymux, client: ClientState) -> None:
     # The colour base of every pane follows which theme owns the
-    # screen; `paint-screen` says whether one does. Lillecarl/pymux#283.
+    # screen; `paint-screen` says whether one does. Lillecarl/pyterm#285.
     pymux.terminals.sync_color_bases()
     pymux.invalidate(Woke.THEME_WAS_CHOSEN)
 
@@ -105,7 +105,7 @@ class ClientOptions(Options):
         doc=(
             'What a person calls this terminal: "desk", "phone". `detach-client -t` and `set-client-option -t` '
             "take it, and it is drawn over the name pymux derives. It lasts as long as the attachment. "
-            "Lillecarl/pymux#340."
+            "Lillecarl/pyterm#342."
         ),
     )
     theme: str = option(
@@ -113,7 +113,7 @@ class ClientOptions(Options):
         doc=(
             "The colour scheme this client draws with: one of pymux's, `pygments:<name>` or `base16:<name>`. "
             "`nearest` asks the terminal what colours it draws with and takes the known theme closest to the "
-            "answer. Lillecarl/pymux#194, Lillecarl/pymux#282, Lillecarl/pymux#346."
+            "answer. Lillecarl/pyterm#196, Lillecarl/pyterm#284, Lillecarl/pyterm#348."
         ),
         choices=theme_names,
         parse=_parse_theme,
@@ -129,30 +129,30 @@ class ClientOptions(Options):
         False,
         doc=(
             "One pane over every cell of this terminal, with nothing that pymux draws for itself. It hides "
-            "`status` and `pane-border-status` without changing them. Lillecarl/pymux#471."
+            "`status` and `pane-border-status` without changing them. Lillecarl/pyterm#473."
         ),
     )
     window_scroll: WindowScroll = option(
         WindowScroll.SMOOTH,
         doc=(
             'What a scroll does to a Wayland window: "smooth" for a trackpad, "notch" for a mouse wheel. '
-            "The terminal does not say which it has. Lillecarl/pymux#652."
+            "The terminal does not say which it has. Lillecarl/pyterm#654."
         ),
     )
     browser_program: str = option(
         "",
         doc="The browser a program on the server drives on this machine: empty for the first Chromium found. "
-        "Lillecarl/pymux#653.",
+        "Lillecarl/pyterm#655.",
     )
     browser_profile: str = option(
-        "", doc="The profile that browser runs with: empty for one pymux keeps. Lillecarl/pymux#653."
+        "", doc="The profile that browser runs with: empty for one pymux keeps. Lillecarl/pyterm#655."
     )
     frames_in_flight: int = option(
         5,
         doc=(
             "The most frames on their way to this terminal at once, over a link where its answer says what "
             "arrived. More lets an animation go faster than one frame a round trip; a key's frame waits "
-            "behind the ones ahead of it. 0 sets no limit. Lillecarl/pymux#259, Lillecarl/pymux#825."
+            "behind the ones ahead of it. 0 sets no limit. Lillecarl/pyterm#261, Lillecarl/pyterm#827."
         ),
         choices=[1, 2, 5, 10],
     )
@@ -161,13 +161,13 @@ class ClientOptions(Options):
         doc=(
             "The most bytes of frames on their way to this terminal at once. A frame always goes when none "
             "is, so a slow link still gets the newest screen and never a backlog. 0 sets no limit. "
-            "Lillecarl/pymux#825."
+            "Lillecarl/pyterm#827."
         ),
         choices=[1024, 4096, 16384, 65536],
     )
     audio: ClientAudio = option(
         ClientAudio.ON,
-        doc="Whether this machine plays the panes' sound and lends its microphone. Lillecarl/pymux#657.",
+        doc="Whether this machine plays the panes' sound and lends its microphone. Lillecarl/pyterm#659.",
         on_set=_audio_changed,
     )
     audio_rtt_multiplier: float = option(
@@ -180,14 +180,14 @@ class ClientOptions(Options):
     )
     audio_speaker_bitrate: int = option(
         128,
-        doc="What the sound costs the link towards this client, in kbit/s. Lillecarl/pymux#674.",
+        doc="What the sound costs the link towards this client, in kbit/s. Lillecarl/pyterm#676.",
         choices=[64, 128, 256],
         parse=_parse_bitrate,
         on_set=_audio_changed,
     )
     audio_microphone_bitrate: int = option(
         64,
-        doc="What the microphone costs the link from this client, in kbit/s. Lillecarl/pymux#674.",
+        doc="What the microphone costs the link from this client, in kbit/s. Lillecarl/pyterm#676.",
         choices=[24, 64, 128],
         parse=_parse_bitrate,
         on_set=_audio_changed,
@@ -197,17 +197,17 @@ class ClientOptions(Options):
         doc=(
             "Who saves a file a pane sends to the person: this terminal, or the pymux client on the "
             "person's machine. Also who answers kitty's file transfer, OSC 5113: this terminal, or "
-            "the pymux client, which asks the person. Lillecarl/pymux#743, Lillecarl/pymux#912."
+            "the pymux client, which asks the person. Lillecarl/pyterm#745, Lillecarl/pyterm#914."
         ),
     )
     notification_popups: NotificationPopups = option(
         NotificationPopups.AUTO,
         doc=(
             "Whether a notification shows as a box inside pymux: always, never, or with auto only when "
-            "this terminal does not show desktop notifications itself. Lillecarl/pymux#826."
+            "this terminal does not show desktop notifications itself. Lillecarl/pyterm#828."
         ),
     )
     notification_popup_seconds: float = option(
         5.0,
-        doc="How long a notification box stays on screen. Lillecarl/pymux#826.",
+        doc="How long a notification box stays on screen. Lillecarl/pyterm#828.",
     )

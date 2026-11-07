@@ -25,7 +25,7 @@ def is_ssh_url(name: str | None) -> bool:
 def create_client(socket_name: str) -> TerminalClient:
     # A machine, and not a path on this one. The import is here so that
     # a server never loads asyncssh: only a client that was given an
-    # `ssh://` address needs it. Lillecarl/pymux#90.
+    # `ssh://` address needs it. Lillecarl/pyterm#92.
     if is_ssh_url(socket_name):
         from .ssh import SshClient
 
@@ -39,7 +39,7 @@ def create_client(socket_name: str) -> TerminalClient:
 def command_client(socket_name: str) -> Client:
     """
     A client to run one command on, which draws nothing and so imports
-    nothing that draws. Lillecarl/pymux#589.
+    nothing that draws. Lillecarl/pyterm#591.
     """
     if is_ssh_url(socket_name):
         from .ssh import SshClient

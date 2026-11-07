@@ -4,7 +4,7 @@ Drawing a plan, and moving the view over it.
 `PlanContainer` puts each pane where the plan says, less the offset of
 the view. It is `ScrollableStrip` for two axes instead of one, and it
 is what makes the plan the truth rather than a second opinion about a
-frame somebody else draws. Lillecarl/pymux#217.
+frame somebody else draws. Lillecarl/pyterm#219.
 
 **The tests read the cells.** Every way this can be wrong -- an
 off-by-one in the offset, a pane drawn at the wrong place, a view that
@@ -353,7 +353,7 @@ def test_pane_with_no_part_of_it_in_view_is_not_drawn():
     """
     Building the rows of a pane nobody can see costs more than the
     cells it throws away, so it is not written at all.
-    Lillecarl/pymux#224.
+    Lillecarl/pyterm#226.
 
     A pane that is *partly* in the view is written whole and clipped,
     which is what the plane rests on, and the test above holds that.

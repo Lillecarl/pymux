@@ -57,7 +57,7 @@ def set_tag(pymux: Pymux, args: argparse.Namespace) -> None:
     the new value. With `-u` each word is a key, and it is taken off.
     A tag is the caller's own word about the thing, which `--tag` on
     `list-sessions`, `list-windows`, `list-panes` and `list-jobs`
-    finds again. Lillecarl/pymux#762.
+    finds again. Lillecarl/pyterm#764.
     """
     tags = tags_of(pymux, args)
     if args.u:

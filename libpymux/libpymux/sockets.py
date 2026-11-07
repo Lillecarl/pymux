@@ -35,7 +35,7 @@ def socket_directory() -> str:
     user, closed to everyone else, a real directory and not a symlink.
     A socket named in a flat /tmp is a socket any account can squat in
     front of the bind, and then an attach lands on the squatter.
-    Lillecarl/pymux#405.
+    Lillecarl/pyterm#407.
 
     The bases, in order: `$PYMUX_TMPDIR`, the override tmux spells
     `$TMUX_TMPDIR`; then the per-user runtime directory the platform
@@ -43,7 +43,7 @@ def socket_directory() -> str:
     `$XDG_RUNTIME_DIR` itself where that is the convention, and knows
     `/run/user/<uid>` for a login that never set it, the runtime
     directories of the BSDs, and the room macOS and Windows prefer
-    (Lillecarl/pymux#421). No app name is asked for, so the room keeps
+    (Lillecarl/pyterm#423). No app name is asked for, so the room keeps
     the name `pymux-<uid>` and this move changed no path a running
     server had bound; then what Python names the temp directory, which
     on macOS is the user's own `$TMPDIR`.
@@ -57,11 +57,11 @@ def socket_directory() -> str:
     bases = []
     value = os.environ.get("PYMUX_TMPDIR")
     # A relative base means another thing after `daemonize` moves
-    # the process to /. Lillecarl/pymux#322.
+    # the process to /. Lillecarl/pyterm#324.
     if value and os.path.isabs(value):
         bases.append(value)
     # Not at the top of the file: a detached command pays the import
-    # of nothing it does not use. Lillecarl/pymux#392.
+    # of nothing it does not use. Lillecarl/pyterm#394.
     from platformdirs import PlatformDirs
 
     # No app name: platformdirs appends one to the base when it is
@@ -119,14 +119,14 @@ def socket_paths() -> List[str]:
 
     The servers live in the per-UID room the server binds in, and one
     release also in the flat place they bound before it.
-    Lillecarl/pymux#405.
+    Lillecarl/pyterm#407.
 
     **A socket nobody answers on is not a server.** A server that is
     killed leaves its file behind, and a dead file is a socket by every
     test the filesystem has, so this offered it and a caller got an
     error from a name that had never been served. That costs a connect
     per candidate, on a path a person runs by typing `attach`.
-    Lillecarl/pymux#454.
+    Lillecarl/pyterm#456.
 
     `servers_newest_first` is the same sockets in the other order.
     """
@@ -149,7 +149,7 @@ def servers_newest_first() -> List[str]:
     **The order is the whole difference between this and
     `socket_paths`.** They globbed the same two patterns in two places
     and answered one question twice, and only one of them said whether
-    a name was really a socket. Lillecarl/pymux#451.
+    a name was really a socket. Lillecarl/pyterm#453.
     """
     return sorted(_every_server(), key=_started_at, reverse=True)
 
@@ -160,7 +160,7 @@ def _every_server() -> List[str]:
 
     The servers live in the per-UID room the server binds in, and one
     release also in the flat place they bound before it
-    (Lillecarl/pymux#405). The lock a bind takes the name under is in
+    (Lillecarl/pyterm#407). The lock a bind takes the name under is in
     the room as well and matches this glob, which is one of the two
     reasons a name here is asked what it is.
     """
@@ -197,7 +197,7 @@ def _is_socket(path: str) -> bool:
 #:
 #: Measured: with no timeout at all, a listener that accepts nothing
 #: parks the second probe for ever, and the suite's faulthandler cut it
-#: off at two minutes. Lillecarl/pymux#454.
+#: off at two minutes. Lillecarl/pyterm#456.
 ANSWER_TIMEOUT = 1.0
 
 
@@ -214,7 +214,7 @@ def nobody_answers(socket_name: str) -> bool:
 
     **It lives here and not with the bind**, because both sides need
     it: the server asks before it takes a name from a server that has
-    gone, and a caller asks before it offers one. Lillecarl/pymux#454.
+    gone, and a caller asks before it offers one. Lillecarl/pyterm#456.
     """
     probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     probe.settimeout(ANSWER_TIMEOUT)

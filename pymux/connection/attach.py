@@ -38,7 +38,7 @@ __all__ = ["CANNOT_ATTACH", "create_app", "detach_the_others", "refuse_the_attac
 #: attached over it would own half a session that the other half can
 #: end: `ctrl+b d` in the first terminal takes the process, and the
 #: second terminal loses the session whatever the first person meant.
-#: Lillecarl/pymux#159.
+#: Lillecarl/pyterm#161.
 CANNOT_ATTACH = (
     "This pymux runs in one terminal, and that terminal is taken.\r\n"
     "The socket is for commands: pymux -S <socket> <command>.\r\n"
@@ -63,7 +63,7 @@ def start_gui(connection: ServerConnection, packet: Message) -> None:
 
     detach_other_clients = bool(packet[Field.DETACH_OTHERS])
     # `attach -x`: the others leave, and the terminals they were
-    # in close. Lillecarl/pymux#347.
+    # in close. Lillecarl/pyterm#349.
     hang_up_others = bool(packet.get(Field.HANG_UP_OTHERS))
     forced = packet[Field.COLOR_DEPTH]
     term = packet[Field.TERM]
@@ -82,23 +82,23 @@ def start_gui(connection: ServerConnection, packet: Message) -> None:
 
     # Window frames as raw pixels, which the client encodes for
     # its own terminal. Only in msgpack, which carries bytes.
-    # Lillecarl/pymux#634.
+    # Lillecarl/pyterm#636.
     if packet.get(Field.FRAMES) and connection.encode is encode_msgpack:
         client.graphics.windows.send_frame = client.send_frame
         # And the codecs it decodes, for `window-codec`.
-        # Lillecarl/pymux#639.
+        # Lillecarl/pyterm#641.
         client.graphics.windows.codecs = frozenset(packet.get(Field.CODECS) or ())
         # A client that says when it wrote a frame gets the next
         # one after that: the socket draining says only that the
         # kernel took it, and over SSH megabytes of frames wait
         # in the buffers past it, with every key's echo behind
-        # them. Lillecarl/pymux#641.
+        # them. Lillecarl/pyterm#643.
         if packet.get(Field.SHOWS):
             client.graphics.windows.frame_room = client.pacing.frames_all_shown
 
     client.hostname = packet.get(Field.HOSTNAME, "")
     # Whether `forward-port` can reach this client at all. Only
-    # the SSH client says yes. Lillecarl/pymux#436.
+    # the SSH client says yes. Lillecarl/pyterm#438.
     client.can_forward = bool(packet.get(Field.FORWARDS))
     client.answers_forwards = bool(packet.get(Field.REPORTS))
     client.starts_browsers = bool(packet.get(Field.BROWSERS))
@@ -118,7 +118,7 @@ def start_gui(connection: ServerConnection, packet: Message) -> None:
     # `pymux attach -r`. The flag has to be on the client state
     # before the first key arrives. `attach-session -r` is the
     # same two lines for a client that is already here.
-    # Lillecarl/pymux#467.
+    # Lillecarl/pyterm#469.
     if packet.get(Field.READ_ONLY):
         client.state.read_only = True
         client.state.ignore_size = True
@@ -129,11 +129,11 @@ def start_gui(connection: ServerConnection, packet: Message) -> None:
     # What this client's own configuration file said about it.
     # Applied before the first frame, so nothing draws with a
     # theme the person did not choose and then change.
-    # Lillecarl/pymux#223.
+    # Lillecarl/pyterm#225.
     take_client_options(client, packet.get(Field.CLIENT_OPTIONS) or [])
 
     # After the options: what the client had set while it ran
-    # wins over what its file says. Lillecarl/pymux#409.
+    # wins over what its file says. Lillecarl/pyterm#411.
     welcome_back(connection.pymux, client.state, client.client_id)
     client.tell_options()
 
@@ -141,11 +141,11 @@ def start_gui(connection: ServerConnection, packet: Message) -> None:
     # follow a client: a display, an agent, a session bus.
     # `attach_client_to` does it for every later move between
     # sessions; this is the first attach, which does not go
-    # through it. Lillecarl/pymux#271.
+    # through it. Lillecarl/pyterm#273.
     take_environment_from(connection.pymux, client.state)
 
     # Sound, on this connection, for a client that plays it.
-    # Lillecarl/pymux#657.
+    # Lillecarl/pyterm#659.
     if packet.get(Field.AUDIO) and connection.encode is encode_msgpack and client.audio is None:
         connection.spawn(client.carry_audio())
 
@@ -157,11 +157,11 @@ def detach_the_others(client: ClientRole, hang_up: bool = False) -> None:
     """
     What `attach -d` means: take this session from whoever else
     holds it. `attach -x` is the same set of clients, told to hang
-    up as well as to leave. Lillecarl/pymux#347.
+    up as well as to leave. Lillecarl/pyterm#349.
 
     **The session, and not the server.** `Pymux.clients_on` holds
     that rule, for this and for `attach-session -d` alike.
-    Lillecarl/pymux#345, Lillecarl/pymux#349.
+    Lillecarl/pyterm#347, Lillecarl/pyterm#351.
 
     **This runs after `create_app`**, because until then this
     connection has no session to compare the others against.
@@ -179,7 +179,7 @@ def take_client_options(client: ClientRole, announced: list[Any]) -> None:
     their configuration gets their panes and a message saying what
     was wrong; refusing to attach would leave them with a terminal
     they cannot use and a file they may not be able to reach.
-    Lillecarl/pymux#223.
+    Lillecarl/pyterm#225.
     """
     for one in announced:
         try:
@@ -203,7 +203,7 @@ def take_client_options(client: ClientRole, announced: list[Any]) -> None:
 async def refuse_the_attach(connection: ServerConnection) -> None:
     """
     Tell this client that it cannot have the user interface, and
-    close the connection. Lillecarl/pymux#159.
+    close the connection. Lillecarl/pyterm#161.
 
     **The write is awaited, and `send_packet` does not wait.** That
     one spawns the write into the scope of this connection, and
@@ -213,7 +213,7 @@ async def refuse_the_attach(connection: ServerConnection) -> None:
     await connection.write_packet({Field.CMD: Packet.OUT, Field.DATA: CANNOT_ATTACH})
     # And a code to leave with. A client that attached reads this
     # too now, so a script hears the refusal rather than reading a
-    # zero and calling it attached. Lillecarl/pymux#332.
+    # zero and calling it attached. Lillecarl/pyterm#334.
     await connection.write_packet({Field.CMD: Packet.EXIT, Field.CODE: 1})
 
     logger.info("A client asked to attach to a server that serves one terminal.")
@@ -306,7 +306,7 @@ def create_app(
                     # restore it in the wrong order, and the last
                     # restore puts back an application that has
                     # already gone, with its whole layout behind
-                    # it. Lillecarl/pymux#231.
+                    # it. Lillecarl/pyterm#233.
                     handle_sigwinch=False,
                 )
             except anyio.get_cancelled_exc_class():

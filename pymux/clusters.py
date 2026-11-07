@@ -1,5 +1,5 @@
 """
-A grapheme cluster as the outer terminal draws it. Lillecarl/pymux#798.
+A grapheme cluster as the outer terminal draws it. Lillecarl/pyterm#800.
 
 A pane keeps a family emoji, a flag or a skin tone in one cell two
 columns wide, as Unicode says. Terminals disagree: WezTerm draws a flag
@@ -11,7 +11,7 @@ wcwidth carries what ucs-detect measured on each terminal, by name.
 XTVERSION gives the name: TERM cannot, as iTerm2 and WezTerm both send
 xterm-256color. Better still, the terminal is measured the way
 ucs-detect measures, by writing one cluster of each kind and reading
-the cursor back, and its answers outrank its table. Lillecarl/pymux#801.
+the cursor back, and its answers outrank its table. Lillecarl/pyterm#803.
 
 A cluster the terminal draws narrower is padded with blanks, and one it
 draws wider goes out as its first character.

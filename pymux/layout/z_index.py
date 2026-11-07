@@ -10,7 +10,7 @@ __all__ = ["Z_INDEX"]
 class Z_INDEX:
     #: The shade at a cut edge: after the pane's cells, which it reads,
     #: and under the bars and popups, which it must not shade.
-    #: Lillecarl/pymux#616.
+    #: Lillecarl/pyterm#618.
     CUT_SHADE = 1
     HIGHLIGHTED_BORDER = 2
     STATUS_BAR = 5
@@ -19,20 +19,20 @@ class Z_INDEX:
     #: A question sits where a message sits, so the two can meet: a
     #: command that said something and then asked. The question wins,
     #: because it is the one waiting on the person.
-    #: Lillecarl/pymux#339.
+    #: Lillecarl/pyterm#341.
     CONFIRMATION = 8
     WINDOW_TITLE_BAR = 9
     #: The mouse handlers of the lines between panes, over the bars a
     #: stacked pane draws on its line and under every popup. They draw
-    #: nothing. Lillecarl/pymux#772.
+    #: nothing. Lillecarl/pyterm#774.
     BORDER_LINE = 10
     #: Under every popup a person opened: a notification waits, and
-    #: what the person is doing does not. Lillecarl/pymux#826.
+    #: what the person is doing does not. Lillecarl/pyterm#828.
     NOTIFICATION_POPUP = 11
     POPUP = 12
     OVERLAY = 13
     #: Over everything a person works in, because it is about all of
-    #: it, and gone in seconds. Lillecarl/pymux#241.
+    #: it, and gone in seconds. Lillecarl/pyterm#243.
     ERROR_NOTICE = 14
 
     #: A clock and a pane number are drawn inside the pane they belong
@@ -48,5 +48,5 @@ class Z_INDEX:
     #: what the person is reading while the mode is up.
     URL_LABEL = 101
     #: Last, so its mouse handler is the one every cell keeps while a
-    #: line is dragged. It draws nothing. Lillecarl/pymux#772.
+    #: line is dragged. It draws nothing. Lillecarl/pyterm#774.
     DRAG_CAPTURE = 1000

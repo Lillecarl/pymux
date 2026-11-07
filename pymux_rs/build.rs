@@ -1,6 +1,6 @@
 //! Bindings to the libvpx decoder, generated from the headers of the
 //! libvpx this links: the struct layouts and the ABI version have to be
-//! that build's own. Lillecarl/pymux#639.
+//! that build's own. Lillecarl/pyterm#641.
 
 use std::env;
 use std::path::PathBuf;

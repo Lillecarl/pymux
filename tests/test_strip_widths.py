@@ -8,7 +8,7 @@ between a few widths that fit together instead of nudging a border
 until it looks right, which is what `resize-pane` still does for a
 divided layout.
 
-Lillecarl/pymux#198, and the fourth width is Lillecarl/pymux#215.
+Lillecarl/pyterm#200, and the fourth width is Lillecarl/pyterm#217.
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ def test_column_can_be_whole_window_without_leaving_strip():
     Carl asked how a person makes a column full width in a strip, and
     the answer was that they could not: the cycle stopped at two
     thirds, and `resize-pane -Z` leaves the row rather than widening a
-    column of it. Lillecarl/pymux#215.
+    column of it. Lillecarl/pyterm#217.
     """
     window = create_strip(2)
 

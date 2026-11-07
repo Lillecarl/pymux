@@ -4,7 +4,7 @@ A server that dies leaves what is needed to understand it.
 On 2026-10-22 a server died with an empty stack file and nothing in
 its log. Now a fatal signal writes every thread's stack, an exception
 that escapes a thread is logged, and a crash writes a report beside the
-log. Lillecarl/pymux#736.
+log. Lillecarl/pyterm#738.
 """
 
 from __future__ import annotations

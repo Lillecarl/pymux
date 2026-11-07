@@ -2,7 +2,7 @@
 What a pane runs, by tmux's rule. A command given as one string is
 shell syntax, and runs as `default-shell -c <string>`. A command given
 as several words is the program and its arguments, and runs as they
-stand. Lillecarl/pymux#933.
+stand. Lillecarl/pyterm#935.
 
 No server import here: the command line reads this before it knows
 whether it starts one.

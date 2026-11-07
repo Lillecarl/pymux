@@ -6,7 +6,7 @@ that changed since the frame before, and the cursor. **One frame is in
 flight at a time.** The link builds it when its writer reaches it, so
 it holds the page as it is then, and a change while it waits needs no
 second frame. A peer that cannot keep up gets fewer frames of newer
-pages, never a queue of old ones. Lillecarl/pymux#759.
+pages, never a queue of old ones. Lillecarl/pyterm#761.
 
 While the person at the peer is in copy mode, the frames show copy mode
 instead, which runs here (`MirrorCopy`).
@@ -137,7 +137,7 @@ class MirrorSource:
         # The program's OSC 4 entries, which the frames' cells only name
         # by number. The peer's own `allow-program-palette` decides
         # whether it draws them. An older peer ignores the field.
-        # Lillecarl/pymux#922.
+        # Lillecarl/pyterm#924.
         program_palette = self.control.screen.colors.program_palette()
         palette = () if program_palette is None else program_palette.entries
         if palette != self.palette:

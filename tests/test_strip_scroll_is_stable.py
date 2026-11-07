@@ -1,5 +1,5 @@
 """
-Where the view sits after the focus moves. Lillecarl/pymux#209.
+Where the view sits after the focus moves. Lillecarl/pyterm#211.
 
 Carl: "There's still an off-by-one error if you open 3 strips and move
 to the rightmost one and then back."
@@ -129,7 +129,7 @@ async def test_whole_walk_left_and_right_and_back():
     that landing on the middle column from the right moved nothing, and
     two 0s say the same coming from the left. Before, the view went
     40, 38, 0, 1, 40 -- two cells of peek measured against a pane one
-    cell narrower than its column. Lillecarl/pymux#209.
+    cell narrower than its column. Lillecarl/pyterm#211.
     """
     async with create_client(STRIP) as (pymux, state, draw):
         window, panes = await columns_of(pymux, 3)
@@ -142,7 +142,7 @@ async def test_whole_walk_left_and_right_and_back():
             walk.append(view(state))
 
         # 39 and not 40: the last column's border is not worth a scroll
-        # (#617).
+        # (#619).
         assert walk == [39, 39, 0, 0, 39, 39, 0], walk
         # And the focus really did travel, or the test says nothing.
         assert panes.index(window.active_pane) == 0
@@ -157,7 +157,7 @@ async def test_focus_inside_stack_still_finds_its_column():
     Walking the containers answers this for nothing. Reading the
     focused pane's write position got it right only because a pane's
     x-extent happens to equal its column's content, so it was never
-    tested and never owned. Lillecarl/pymux#209.
+    tested and never owned. Lillecarl/pyterm#211.
     """
     async with create_client(STRIP) as (pymux, state, draw):
         _window, panes = await columns_of(pymux, 3)
@@ -190,7 +190,7 @@ async def test_column_wider_than_view_still_starts_on_screen():
     inventing it.
 
     **The left edge is the one that is kept**, and it is kept whether
-    the column fits or not: Lillecarl/pymux#218. So this holds for a
+    the column fits or not: Lillecarl/pyterm#220. So this holds for a
     column wider than the whole view as well, and
     `test_column_wider_than_view_shows_left_edge`
     (`test_strip_plan.py`) reads the offset that says which end it
@@ -215,7 +215,7 @@ async def test_focused_column_is_wholly_on_screen():
     """
     Its border is its right edge, and the column is not on screen
     until that is -- unless it is the last column, whose border has
-    nothing past it to hint at (#617).
+    nothing past it to hint at (#619).
     """
     async with create_client(STRIP) as (pymux, state, draw):
         _window, panes = await columns_of(pymux, 3)

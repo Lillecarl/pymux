@@ -1,5 +1,5 @@
 """
-A message that does not fit on one row. Lillecarl/pymux#205.
+A message that does not fit on one row. Lillecarl/pyterm#207.
 
 `report_startup_errors` joins every failed line of a configuration file
 into one message, and each names the file and the line, so two of them
@@ -98,7 +98,7 @@ async def test_short_message_still_takes_one_row():
     **The toolbar's own height, not the cells.** Its rows past the
     message are blank, and the second one fell on a row no pane covers:
     a toolbar two rows high changed the same characters as one.
-    Lillecarl/pymux#586.
+    Lillecarl/pyterm#588.
     """
     async with create_client(commands=NO_CLOCK, columns=40) as (pymux, draw):
         state = pymux.get_client_state()

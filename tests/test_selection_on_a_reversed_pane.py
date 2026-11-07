@@ -1,7 +1,7 @@
 """
 A selection has to be visible on a pane that reversed its screen.
 
-Lillecarl/pymux#96 gave the copy window the reverse video of the pane,
+Lillecarl/pyterm#98 gave the copy window the reverse video of the pane,
 which revealed this. prompt_toolkit marks a selection by reversing it
 (`styles/defaults.py` carries `("selected", "reverse")`), and
 `reverse` **sets** rather than toggles (`styles/style.py:231`). So on
@@ -16,7 +16,7 @@ is the screen: selected text reads as normal against a reversed pane.
 `Terminal._copy_style` puts `class:reversed-pane` on the copy window
 and `pymux/style/style.py` turns the reverse back off for a selected cell.
 
-Lillecarl/pymux#99.
+Lillecarl/pyterm#101.
 """
 
 from __future__ import annotations

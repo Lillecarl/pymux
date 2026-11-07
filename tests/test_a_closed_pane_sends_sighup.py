@@ -56,7 +56,7 @@ async def test_kill_pane_lets_the_program_run_its_sighup_trap(tmp_path):
 
 
 async def test_kill_server_lets_every_program_run_its_sighup_trap(tmp_path):
-    "And then stops. Lillecarl/pymux#679."
+    "And then stops. Lillecarl/pyterm#681."
     command, ready, handled = _trapping(tmp_path)
     async with in_this_process(Pymux(startup_command="sleep 30")) as session:
         pymux = session.pymux

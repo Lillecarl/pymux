@@ -1,6 +1,6 @@
 """
 `record-client` records what pymux drew on one client's terminal.
-Lillecarl/pymux#612.
+Lillecarl/pyterm#614.
 """
 
 from __future__ import annotations

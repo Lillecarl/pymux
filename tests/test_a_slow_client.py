@@ -1,7 +1,7 @@
 """
 What a client's socket holds for it: one packet goes through whatever
 its size, a client that stops reading is still let go, and `drained`
-says when the terminal has taken everything. Lillecarl/pymux#418, #629.
+says when the terminal has taken everything. Lillecarl/pyterm#420, #631.
 """
 
 from __future__ import annotations

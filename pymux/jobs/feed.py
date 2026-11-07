@@ -54,7 +54,7 @@ class JobFeed:
 
     An upgrade carries the job and the size, in `pane_viewers`, and the
     new server's viewer replays the tail again: what the screen showed
-    is the job's, so nothing else needs to cross. Lillecarl/pymux#715.
+    is the job's, so nothing else needs to cross. Lillecarl/pyterm#717.
     """
 
     #: `feed_output` feeds what it is given at once, so nothing waits.

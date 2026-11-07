@@ -1,5 +1,5 @@
 """
-Everything a client's terminal said, kept and shown. Lillecarl/pymux#725.
+Everything a client's terminal said, kept and shown. Lillecarl/pyterm#727.
 
 A terminal nobody documents -- a phone's -- could only be guessed at:
 pymux asked a dozen questions, acted on a few answers and dropped the
