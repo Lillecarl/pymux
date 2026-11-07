@@ -275,11 +275,19 @@ def settle(state, stages):
     A budget on the cold path would also be a budget that a person
     pays once a session and never again, which is not what this file
     is for.
+
+    **Twice, because a render's once-only work lands on the next key.**
+    The first render imports jinja2 for the default templates, and that
+    import registers 14 classes with ABCs (`abc.get_cache_token()` goes
+    from 18 to 32), which empties every ABC's cache, so the press after it
+    asks `isinstance(x, Awaitable)` from the start: 621 instructions, on
+    the first terminal only. Lillecarl/pymux#960.
     """
     with set_app(state.app):
-        for name in ORDER:
-            if name in stages:
-                stages[name]()
+        for _ in range(2):
+            for name in ORDER:
+                if name in stages:
+                    stages[name]()
 
 
 def where_instructions_are(work, most=WHERE):
