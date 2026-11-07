@@ -168,7 +168,7 @@ async def test_a_viewer_of_the_session_is_a_client_of_it(pymux):
                     while not rows.get("9", "").strip():
                         frame = json.loads(await socket.recv())
                         for number, runs in frame.get("rows", {}).items():
-                            rows[number] = "".join(text for _style, text in runs)
+                            rows[number] = "".join(text for _style, text, _cells in runs)
 
             tasks.cancel_scope.cancel()
         pymux.stop()

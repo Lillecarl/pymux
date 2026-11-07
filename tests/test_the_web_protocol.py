@@ -37,7 +37,7 @@ def feed(screen, text: str) -> None:
 
 def drawn(frame) -> dict:
     "The text of each row a frame holds, by row number."
-    return {number: "".join(text for _style, text in runs) for number, runs in frame["rows"].items()}
+    return {number: "".join(text for _style, text, _cells in runs) for number, runs in frame["rows"].items()}
 
 
 # ----------------------------------------------------------------------
@@ -155,7 +155,7 @@ def test_a_spelling_is_sent_once_and_numbered():
     view = PaneView()
 
     frame = view.frame(screen, 1)
-    numbers = [style for style, _text in frame["rows"]["0"]]
+    numbers = [style for style, _text, _cells in frame["rows"]["0"]]
     entry = frame["styles"][str(numbers[0])]
 
     # A class of the stylesheet the client already has, and not the
@@ -172,7 +172,7 @@ def test_a_spelling_with_a_value_in_it_still_carries_the_value():
     view = PaneView()
 
     frame = view.frame(screen, 1)
-    numbers = [style for style, _text in frame["rows"]["0"]]
+    numbers = [style for style, _text, _cells in frame["rows"]["0"]]
     entry = frame["styles"][str(numbers[0])]
 
     assert entry["s"] == "color:#1eaa5a"
@@ -184,13 +184,13 @@ def test_a_spelling_already_sent_is_only_a_number():
     feed(screen, "\x1b[1mbold\x1b[0m")
     view = PaneView()
     first = view.frame(screen, 1)
-    was = next(style for style, _text in first["rows"]["0"])
+    was = next(style for style, _text, _cells in first["rows"]["0"])
 
     feed(screen, "\x1b[2;1H\x1b[1mmore\x1b[0m")
     second = view.frame(screen, 2)
 
     assert "styles" not in second
-    assert next(style for style, _text in second["rows"]["1"]) == was
+    assert next(style for style, _text, _cells in second["rows"]["1"]) == was
 
 
 def test_plain_cells_need_no_entry():
@@ -201,7 +201,7 @@ def test_plain_cells_need_no_entry():
     frame = view.frame(screen, 1)
 
     assert "styles" not in frame
-    assert [style for style, _text in frame["rows"]["0"]] == [PLAIN_STYLE]
+    assert [style for style, _text, _cells in frame["rows"]["0"]] == [PLAIN_STYLE]
 
 
 def test_two_appearances_that_spell_alike_share_a_number():
@@ -218,7 +218,7 @@ def test_two_appearances_that_spell_alike_share_a_number():
     view = PaneView()
 
     frame = view.frame(screen, 1)
-    numbers = {style for style, _text in frame["rows"]["0"]} - {PLAIN_STYLE}
+    numbers = {style for style, _text, _cells in frame["rows"]["0"]} - {PLAIN_STYLE}
 
     assert len(numbers) == 1
     assert len(frame["styles"]) == 1

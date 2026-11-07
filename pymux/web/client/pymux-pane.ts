@@ -40,8 +40,11 @@ import { retryAfter } from "./retry.js";
 // ----------------------------------------------------------------------
 // The protocol, as a consumer reads it.
 
-/** One run of a row: the number of a way of drawing, and its characters. */
-export type Run = [style: number, text: string];
+/**
+ * One run of a row: the number of a way of drawing, its characters, and
+ * the columns they cover. A wide character covers two.
+ */
+export type Run = [style: number, text: string, cells: number];
 
 /** What a style number means, sent once and referenced by number after. */
 export interface StyleEntry {
@@ -192,8 +195,8 @@ const SCREEN = "pyte-screen";
 /** What a run's class name is built from: `pyte-s7` for style 7. */
 const STYLE_CLASS = "pyte-s";
 
-/** The style number that needs no declarations at all. */
-const PLAIN = 0;
+/** What a run's width class is built from: `pyte-c3` for three cells. */
+const CELLS_CLASS = "pyte-c";
 
 /**
  * The element's own rules.
@@ -254,6 +257,16 @@ const OWN_RULES = `
   pointer-events: none;
 }
 .images canvas { position: absolute; }
+/* Every run is a box exactly its cells wide (a pyte-c rule), so a glyph
+   from a fallback font, wider or narrower than a cell, moves nothing
+   after it. In flowing text one bent the border between two panes.
+   The height holds the row too: a taller fallback glyph no longer
+   grows it. Lillecarl/pymux#948. */
+.row > * {
+  display: inline-block;
+  vertical-align: top;
+  height: 1.2em;
+}
 /* What a cell measures, for "fit". Absolute, so it adds no row. */
 .probe {
   position: absolute;
@@ -346,6 +359,8 @@ export class PymuxPane extends HTMLElement {
   #images: HTMLDivElement;
   #bitmaps = new Map<string, Promise<ImageBitmap | null>>();
   #styles = new Map<string, StyleEntry>();
+  /** The run widths `#cellsClass` has a rule for. */
+  #cellWidths = new Set<number>();
   #rows: HTMLDivElement[] = [];
   #socket: WebSocket | null = null;
   #ownsSocket = false;
@@ -712,6 +727,7 @@ export class PymuxPane extends HTMLElement {
     this.#rows = [];
     for (let index = 0; index < size.rows; index += 1) {
       const row = document.createElement("div");
+      row.className = "row";
       this.#rows.push(row);
       this.#screen.append(row);
     }
@@ -723,21 +739,28 @@ export class PymuxPane extends HTMLElement {
     this.#screen.append(this.#cursor, this.#images);
   }
 
+  /**
+   * The class that pins a run to `cells` columns, its rule inserted the
+   * first time a run that wide arrives. A number from the wire, so the
+   * rule cannot carry anything a program wrote.
+   */
+  #cellsClass(cells: number): string {
+    const count = Math.max(1, Math.floor(Number(cells)) || 1);
+    const name = `${CELLS_CLASS}${count}`;
+    if (!this.#cellWidths.has(count)) {
+      this.#cellWidths.add(count);
+      this.#styleSheet.insertRule(`.${name} { width: ${count}ch; }`, this.#styleSheet.cssRules.length);
+    }
+    return name;
+  }
+
   #drawRow(number: number, runs: Run[]): void {
     const row = this.#rows[number];
     if (!row) return;
     row.textContent = "";
 
-    for (const [style, text] of runs) {
+    for (const [style, text, cells] of runs) {
       const entry = this.#styles.get(String(style));
-      if (style === PLAIN && !entry) {
-        // **`textContent` and never markup.** A program in the pane
-        // writes every character of this, so building a string and
-        // assigning `innerHTML` is where a `<script>` a program wrote
-        // would become one.
-        row.append(document.createTextNode(text));
-        continue;
-      }
       let piece: HTMLAnchorElement | HTMLSpanElement;
       if (entry && entry.h) {
         const link = document.createElement("a");
@@ -748,12 +771,15 @@ export class PymuxPane extends HTMLElement {
       } else {
         piece = document.createElement("span");
       }
-      // The rule this element built for the declarations, and the rules
-      // the server's own stylesheet already holds.
-      const names: string[] = [];
+      // The rule this element built for the declarations, the rules the
+      // server's own stylesheet already holds, and the width of its cells.
+      const names: string[] = [this.#cellsClass(cells)];
       if (entry && entry.s) names.push(`${STYLE_CLASS}${style}`);
       if (entry && entry.c) names.push(entry.c);
-      if (names.length) piece.className = names.join(" ");
+      piece.className = names.join(" ");
+      // **`textContent` and never markup.** A program in the pane writes
+      // every character of this, so building a string and assigning
+      // `innerHTML` is where a `<script>` a program wrote would become one.
       piece.textContent = text;
       row.append(piece);
     }

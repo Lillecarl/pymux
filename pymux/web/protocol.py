@@ -41,7 +41,7 @@ import functools
 from typing import TYPE_CHECKING, Any, NamedTuple
 
 import anyio
-from pyte.html import CSS, href_of, runs_of_row, style_of, theme_css
+from pyte.html import CSS, href_of, measured_runs_of_row, style_of, theme_css
 from pyte.images import PixelFormat
 from pyte.png import encode_png
 
@@ -244,18 +244,20 @@ class PaneView:
         styles: dict[str, dict[str, str]],
     ) -> list[Any]:
         """
-        One row as `[[style, text], ...]`, filling `styles` on the way.
+        One row as `[[style, text, cells], ...]`, filling `styles` on the
+        way. `cells` is the columns the run covers, which a client pins
+        it to (`measured_runs_of_row`).
 
-        An absent row is an empty list. `runs_of_row` is what decides
-        where a row stops and what a blank is worth, and it is the same
-        function the markup uses, so a browser and a document agree.
+        An absent row is an empty list. `pyte.html` decides where a row
+        stops and what a blank is worth, for the markup too, so a browser
+        and a document agree.
         """
         if row is None:
             return []
 
         answer: list[Any] = []
-        for appearance, text in runs_of_row(row, columns, reverse_video):
-            answer.append([self._style_number(appearance, reverse_video, styles), text])
+        for appearance, text, cells in measured_runs_of_row(row, columns, reverse_video):
+            answer.append([self._style_number(appearance, reverse_video, styles), text, cells])
         return answer
 
     def _style_number(self, appearance: Appearance, reverse_video: bool, styles: dict[str, dict[str, str]]) -> int:

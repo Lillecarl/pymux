@@ -26,7 +26,7 @@ async def test_the_web_replay_ends_on_what_the_client_showed(pymux, tmp_path, mo
         if frame.get("whole"):
             rows = {}
         for number, runs in frame["rows"].items():
-            rows[int(number)] = "".join(text for _style, text in runs)
+            rows[int(number)] = "".join(text for _style, text, _cells in runs)
     drawn = [rows.get(number, "").rstrip() for number in range(len(shown))]
     assert drawn == [row.rstrip() for row in shown]
 

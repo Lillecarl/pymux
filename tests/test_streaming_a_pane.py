@@ -122,7 +122,7 @@ def ended(pane):
 
 
 def text_of(frame) -> dict:
-    return {number: "".join(text for _style, text in runs) for number, runs in frame["rows"].items()}
+    return {number: "".join(text for _style, text, _cells in runs) for number, runs in frame["rows"].items()}
 
 
 # ----------------------------------------------------------------------

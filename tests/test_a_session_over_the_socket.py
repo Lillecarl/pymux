@@ -54,7 +54,7 @@ class Viewer:
         if "size" in frame:
             self.size = frame["size"]
         for number, runs in frame.get("rows", {}).items():
-            self.rows[int(number)] = "".join(text for _style, text in runs)
+            self.rows[int(number)] = "".join(text for _style, text, _cells in runs)
 
     def text(self) -> str:
         return "\n".join(self.rows[number] for number in sorted(self.rows))

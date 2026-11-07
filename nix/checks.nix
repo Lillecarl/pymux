@@ -783,7 +783,8 @@ in
 
   # pymux-mcp's browsers against a real server: Chromium, qutebrowser
   # and Firefox headless as a job, and headful in a window pane.
-  # Lillecarl/pymux#822.
+  # Lillecarl/pymux#822. And `pymux web`'s page in Chromium, for where
+  # a glyph lands. Lillecarl/pymux#948.
   browsers =
     runInSandbox
       {
@@ -803,7 +804,7 @@ in
         ${waylandTestEnv}/bin/python -m pytest -q -p no:cacheprovider \
           -o faulthandler_timeout=120 \
           ${lib.optionalString (browsersTests != "") "-k ${lib.escapeShellArg browsersTests}"} \
-          tests/test_mcp_browsers.py
+          tests/test_mcp_browsers.py tests/test_the_web_page_in_a_browser.py
       '';
 
   # Sound between panes and a client, through a real PipeWire and a
