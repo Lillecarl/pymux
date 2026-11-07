@@ -16,12 +16,22 @@ from __future__ import annotations
 import base64
 
 import pytest
+from pyte.mouse import NO_MODIFIERS, MouseAction, MouseBits, MouseButton, MouseInput
 from pyte.png import decode_png
 from pyte.screen import Screen
 from pyte.sequences.strings import apc
 from pyte.streams import Stream
 
-from pymux.web.protocol import FRAME, PLAIN_STYLE, WELCOME, PaneView, base64_png, encode_unsent, typed_of
+from pymux.web.protocol import (
+    FRAME,
+    PLAIN_STYLE,
+    WELCOME,
+    PaneView,
+    base64_png,
+    encode_unsent,
+    mouse_of,
+    typed_of,
+)
 
 LINES = 5
 COLUMNS = 20
@@ -514,3 +524,34 @@ def test_empty_composed_text_is_allowed():
     sent it should not get an error for being honest.
     """
     assert typed_of({"type": "text", "text": ""}).text == ""
+
+
+def test_a_mouse_message_is_what_the_mouse_did_at_a_cell():
+    "Lillecarl/pymux#950."
+    assert mouse_of(
+        {
+            "type": "mouse",
+            "action": "press",
+            "column": 3,
+            "row": 1,
+            "button": "right",
+            "modifiers": ["shift", "control"],
+        }
+    ) == MouseInput(MouseAction.PRESS, 3, 1, MouseButton.RIGHT, MouseBits.SHIFT | MouseBits.CONTROL)
+    wheel = mouse_of({"type": "mouse", "action": "wheel-up", "column": 0, "row": 0, "button": "none"})
+    assert (wheel.action, wheel.button, wheel.modifiers) == (MouseAction.WHEEL_UP, MouseButton.NONE, NO_MODIFIERS)
+
+
+@pytest.mark.parametrize(
+    ("message", "reason"),
+    [
+        ({"action": "hover", "column": 0, "row": 0}, "an action of"),
+        ({"action": "press", "column": -1, "row": 0}, "a column and a row"),
+        ({"action": "press", "column": "1", "row": 0}, "a column and a row"),
+        ({"action": "press", "column": 0, "row": 0, "button": "fourth"}, "a mouse button"),
+        ({"action": "press", "column": 0, "row": 0, "modifiers": ["meta"]}, "mouse modifiers"),
+    ],
+)
+def test_a_mouse_message_a_viewer_got_wrong_is_refused_by_name(message, reason):
+    with pytest.raises(ValueError, match=reason):
+        mouse_of({"type": "mouse", **message})

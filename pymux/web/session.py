@@ -32,13 +32,14 @@ from typing import Any
 import anyio
 from libpymux.protocol import Field, Packet
 from pyte.keys.unhearable import Unhearable
+from pyte.mouse import mouse_report
 from pyte.screen import Screen
 from pyte.streams import GroundTimer, Stream
 
 from pymux.client.terminal import DETECTION_QUERIES
 from pymux.keys.key_spelling import event_however_it_is_written
 from pymux.log import logger
-from pymux.web.protocol import PaneView, Typed, encode_unsent, typed_of
+from pymux.web.protocol import MOUSE, PaneView, Typed, encode_unsent, mouse_of, typed_of
 
 __all__ = ["SessionScreen", "run_session"]
 
@@ -171,6 +172,21 @@ class SessionScreen:
             ):
                 return "a size message needs rows and columns from 1 to %d" % LARGEST
             self.resize(rows, columns)
+            return None
+
+        if message.get("type") == MOUSE:
+            try:
+                mouse = mouse_of(message)
+            except ValueError as refused:
+                return str(refused)
+            if self.read_only:
+                return "this client only watches"
+            # pymux's client asked this screen for mouse reports, as it
+            # asks a terminal; a viewer of a client with the mouse off
+            # sends nothing. Lillecarl/pymux#950.
+            report = mouse_report(self.screen, mouse)
+            if report is not None:
+                self._send({Field.CMD: Packet.IN, Field.DATA: self.screen.encode_report(report)})
             return None
 
         try:

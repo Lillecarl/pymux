@@ -43,6 +43,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 import anyio
 from pyte.html import CSS, href_of, measured_runs_of_row, style_of, theme_css
 from pyte.images import PixelFormat
+from pyte.mouse import NO_MODIFIERS, MouseAction, MouseBits, MouseButton, MouseInput
 from pyte.png import encode_png
 
 from pymux.graphics import graphics, placements, sixel
@@ -56,12 +57,14 @@ if TYPE_CHECKING:
 
 __all__ = [
     "FRAME",
+    "MOUSE",
     "PLAIN_STYLE",
     "WELCOME",
     "PaneView",
     "Typed",
     "base64_png",
     "encode_unsent",
+    "mouse_of",
     "typed_of",
 ]
 
@@ -467,3 +470,59 @@ def typed_of(message: dict[str, Any]) -> Typed:
             raise ValueError("a paste message needs a text string")
         return Typed(text, named=False, bracketed=True)
     raise ValueError("%r is not something a client may say" % (kind,))
+
+
+#: What a viewer says the mouse did. Lillecarl/pymux#950.
+MOUSE = "mouse"
+
+_MOUSE_ACTIONS = {
+    "press": MouseAction.PRESS,
+    "release": MouseAction.RELEASE,
+    "move": MouseAction.MOVE,
+    "wheel-up": MouseAction.WHEEL_UP,
+    "wheel-down": MouseAction.WHEEL_DOWN,
+}
+_MOUSE_BUTTONS = {
+    "left": MouseButton.LEFT,
+    "middle": MouseButton.MIDDLE,
+    "right": MouseButton.RIGHT,
+    "none": MouseButton.NONE,
+}
+_MOUSE_MODIFIERS = {"shift": MouseBits.SHIFT, "alt": MouseBits.ALT, "control": MouseBits.CONTROL}
+
+#: The furthest cell a mouse message may name, either way.
+_FURTHEST_CELL = 10_000
+
+
+def mouse_of(message: dict[str, Any]) -> MouseInput:
+    """
+    What a viewer's `mouse` message says the mouse did, at a cell counted
+    from zero.
+
+    **A viewer never sends a report's bytes**, for the reason it never
+    spells a key: the program's mouse modes live on the server, and a
+    report spelled in the browser would be wrong the moment one changed.
+
+    Raises `ValueError` with the reason.
+    """
+    action = _MOUSE_ACTIONS.get(message.get("action"))  # type: ignore[arg-type]
+    if action is None:
+        raise ValueError("a mouse message needs an action of %s" % ", ".join(_MOUSE_ACTIONS))
+    column, row = message.get("column"), message.get("row")
+    if (
+        not isinstance(column, int)
+        or not isinstance(row, int)
+        or not 0 <= column < _FURTHEST_CELL
+        or not 0 <= row < _FURTHEST_CELL
+    ):
+        raise ValueError("a mouse message needs a column and a row from 0 to %d" % (_FURTHEST_CELL - 1))
+    button = _MOUSE_BUTTONS.get(message.get("button", "left"))  # type: ignore[arg-type]
+    if button is None:
+        raise ValueError("a mouse button is one of %s" % ", ".join(_MOUSE_BUTTONS))
+    named = message.get("modifiers", [])
+    if not isinstance(named, list) or any(name not in _MOUSE_MODIFIERS for name in named):
+        raise ValueError("mouse modifiers are a list of %s" % ", ".join(_MOUSE_MODIFIERS))
+    modifiers = NO_MODIFIERS
+    for name in named:
+        modifiers |= _MOUSE_MODIFIERS[name]
+    return MouseInput(action, column, row, button, modifiers)

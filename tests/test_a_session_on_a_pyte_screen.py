@@ -200,6 +200,40 @@ async def test_copy_mode_is_drawn(pymux):
         await shows(session, COPY_POSITION)
 
 
+async def test_a_click_selects_the_pane_under_it(pymux):
+    "A browser's click is this terminal's mouse report. Lillecarl/pymux#950."
+    async with pymux.running(), attached(pymux) as session:
+        await shows(session, "$")
+        said(session, type="input", keys="C-b %")
+        window = pymux.arrangement.get_active_window()
+        await once(lambda: len(window.panes) == 2, 10.0, "the window never split")
+        left, right = window.panes
+        assert window.active_pane is right
+
+        for action in ("press", "release"):
+            said(session, type="mouse", action=action, column=2, row=2, button="left", modifiers=[])
+        await once(lambda: window.active_pane is left, 10.0, "the click selected nothing")
+
+
+async def test_the_wheel_scrolls_into_copy_mode(pymux):
+    "Lillecarl/pymux#949."
+    async with pymux.running(), attached(pymux) as session:
+        await shows(session, "$")
+        said(session, type="text", text="seq 100")
+        said(session, type="input", keys="Enter")
+        await shows(session, "100")
+
+        said(session, type="mouse", action="wheel-up", column=5, row=3, button="none", modifiers=[])
+        await shows(session, COPY_POSITION)
+
+
+async def test_a_watching_client_refuses_the_mouse(pymux):
+    async with pymux.running(), attached(pymux, read_only=True) as session:
+        await shows(session, "$")
+        refused = session.take(json.dumps({"type": "mouse", "action": "press", "column": 0, "row": 0}))
+        assert refused == "this client only watches"
+
+
 async def test_a_frame_carries_what_it_drew(pymux):
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")

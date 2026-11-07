@@ -168,11 +168,36 @@ export interface SizeMessage {
   columns: number;
 }
 
+/**
+ * What the mouse did at a cell of the screen, counted from zero. The
+ * server spells it the way the program, or the pymux client, asked for:
+ * a viewer never sends a mouse report's bytes. Lillecarl/pymux#950.
+ */
+export interface MouseMessage {
+  type: "mouse";
+  action: "press" | "release" | "move" | "wheel-up" | "wheel-down";
+  column: number;
+  row: number;
+  button: "left" | "middle" | "right" | "none";
+  modifiers: ("shift" | "alt" | "control")[];
+}
+
 export type ViewerMessage =
   | InputMessage
   | TextMessage
   | PasteMessage
-  | SizeMessage;
+  | SizeMessage
+  | MouseMessage;
+
+/** A browser's `MouseEvent.button`, as the mouse message names it. */
+const BUTTONS: MouseMessage["button"][] = ["left", "middle", "right"];
+
+/**
+ * How far a wheel moves, in pixels, before it counts as one step. A
+ * trackpad sends many small events; a step for each one scrolled a
+ * screen at a flick.
+ */
+const WHEEL_STEP_PIXELS = 40;
 
 export interface ClosedDetail {
   code: number;
@@ -439,6 +464,15 @@ export class PymuxPane extends HTMLElement {
       // either.
       event.preventDefault();
       this.#keyboard.focus();
+      this.#sendMouse(event, "press", BUTTONS[event.button]);
+    });
+    this.#screen.addEventListener("mousemove", (event) =>
+      this.#sendMouse(event, "move", this.#pressed ? BUTTONS[this.#heldButton(event)] : "none"),
+    );
+    this.#screen.addEventListener("wheel", (event) => this.#onWheel(event), { passive: false });
+    // A right click is the program's or pymux's menu, not the browser's.
+    this.#screen.addEventListener("contextmenu", (event) => {
+      if (this.#writable) event.preventDefault();
     });
     this.#keyboard.addEventListener("keydown", (event) =>
       this.#onKeyDown(event),
@@ -466,29 +500,109 @@ export class PymuxPane extends HTMLElement {
     const src = this.getAttribute("src");
     if (src && !this.#socket) this.#open(src);
     this.#observer.observe(this);
+    window.addEventListener("mouseup", this.#onMouseUp);
   }
 
   disconnectedCallback(): void {
     this.#observer.disconnect();
+    window.removeEventListener("mouseup", this.#onMouseUp);
     this.close();
   }
 
+  // -- the mouse ------------------------------------------------------
+
+  /** On the window, so a drag that leaves the element still ends. */
+  #onMouseUp = (event: MouseEvent): void => {
+    if (this.#pressed) this.#sendMouse(event, "release", BUTTONS[event.button] ?? "left");
+  };
+
+  /** A button went down on the screen and has not come up. */
+  #pressed = false;
+  /** The cell of the last move sent, so a move inside it sends nothing. */
+  #movedTo = "";
+  /** Wheel pixels not yet a whole step. */
+  #wheelPixels = 0;
+
+  /** The button a move holds, from `MouseEvent.buttons`: left, right, middle. */
+  #heldButton(event: MouseEvent): number {
+    if (event.buttons & 1) return 0;
+    if (event.buttons & 4) return 1;
+    if (event.buttons & 2) return 2;
+    return 0;
+  }
+
+  #sendMouse(
+    event: MouseEvent,
+    action: MouseMessage["action"],
+    button: MouseMessage["button"] | undefined,
+  ): void {
+    if (action === "press") this.#pressed = true;
+    if (action === "release") this.#pressed = false;
+    if (!this.#writable || button === undefined) return;
+    const cell = this.#cellAt(event);
+    if (!cell) return;
+    if (action === "move") {
+      const here = `${cell.column},${cell.row}`;
+      if (here === this.#movedTo) return;
+      this.#movedTo = here;
+    }
+    const modifiers: MouseMessage["modifiers"] = [];
+    if (event.shiftKey) modifiers.push("shift");
+    if (event.altKey) modifiers.push("alt");
+    if (event.ctrlKey) modifiers.push("control");
+    this.send({ type: "mouse", action, button, modifiers, ...cell });
+  }
+
+  #onWheel(event: WheelEvent): void {
+    if (!this.#writable) return;
+    event.preventDefault();
+    const size = this.#cellSize();
+    const pixels =
+      event.deltaMode === WheelEvent.DOM_DELTA_LINE && size
+        ? event.deltaY * size.height
+        : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+          ? event.deltaY * this.clientHeight
+          : event.deltaY;
+    this.#wheelPixels += pixels;
+    while (Math.abs(this.#wheelPixels) >= WHEEL_STEP_PIXELS) {
+      const down = this.#wheelPixels > 0;
+      this.#wheelPixels -= down ? WHEEL_STEP_PIXELS : -WHEEL_STEP_PIXELS;
+      this.#sendMouse(event, down ? "wheel-down" : "wheel-up", "none");
+    }
+  }
+
+  /** The cell under the pointer, or null off the screen. */
+  #cellAt(event: MouseEvent): { column: number; row: number } | null {
+    const size = this.#cellSize();
+    if (!size) return null;
+    const box = this.#screen.getBoundingClientRect();
+    const column = Math.floor((event.clientX - box.left) / size.width);
+    const row = Math.floor((event.clientY - box.top) / size.height);
+    if (column < 0 || row < 0 || row >= this.#rows.length) return null;
+    return { column, row };
+  }
+
   /**
-   * The cells the box holds, measured with the glyph and the line height
-   * the screen is drawn with, so the count agrees with the cursor's
-   * `1ch` and `1.2em`.
+   * One cell, measured with the glyph and the line height the screen is
+   * drawn with, so it agrees with the cursor's `1ch` and `1.2em`.
    */
-  #cellsThatFit(): Size | null {
+  #cellSize(): { width: number; height: number } | null {
     const probe = document.createElement("span");
     probe.textContent = "0".repeat(10);
     probe.className = "probe";
     this.#screen.append(probe);
     const glyph = probe.getBoundingClientRect();
     probe.remove();
+    if (!glyph.height || !glyph.width) return null;
+    return { width: glyph.width / 10, height: glyph.height };
+  }
 
-    const lineHeight = glyph.height;
-    const cellWidth = glyph.width / 10;
-    if (!lineHeight || !cellWidth) return null;
+  /** The cells the box holds. */
+  #cellsThatFit(): Size | null {
+    const cell = this.#cellSize();
+    if (!cell) return null;
+    const lineHeight = cell.height;
+    const cellWidth = cell.width;
     // The screen is a block, so its width is the host's content box. The
     // host's own height holds its padding as well, which a page may set.
     const host = getComputedStyle(this);

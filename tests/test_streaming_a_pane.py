@@ -384,6 +384,29 @@ async def test_a_paste_is_bracketed_when_the_program_asked(pymux):
         pymux.stop()
 
 
+async def test_a_click_reaches_a_program_that_asked_for_the_mouse(pymux):
+    "Spelled by the pane, in the modes the program set. Lillecarl/pymux#950."
+    pane = the_pane(pymux)
+    written = []
+    pane.process.write_input = written.append
+    arrives(pane, "\x1b[?1000h\x1b[?1006h")
+
+    async with pymux.running():
+        server_end, client_end = connect_in_memory()
+        ServerConnection(pymux, server_end)
+        ask(client_end, pane, writable=True)
+        await frames_of(client_end, 2)
+
+        for action in ("press", "release"):
+            message = {"type": "mouse", "action": action, "column": 4, "row": 1, "button": "left", "modifiers": []}
+            client_end.write_nowait(encode_json({"cmd": "stream-in", "data": json.dumps(message)}))
+        await anyio.sleep(0.05)
+
+        assert written == ["\x1b[<0;5;2M", "\x1b[<0;5;2m"], written
+
+        pymux.stop()
+
+
 async def test_a_read_only_stream_refuses_input(pymux):
     """
     It protects nothing against whoever holds the socket, which can

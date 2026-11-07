@@ -24,7 +24,7 @@ import anyio
 from pymux.commands import CommandException
 from pymux.commands.common import send_key
 from pymux.keys.key_spelling import event_however_it_is_written
-from pymux.web.protocol import PaneView, Typed, encode_unsent, typed_of
+from pymux.web.protocol import MOUSE, PaneView, Typed, encode_unsent, mouse_of, typed_of
 
 if TYPE_CHECKING:
     from ptterm import Terminal
@@ -139,6 +139,19 @@ class PaneStream:
             return "that is not JSON"
         if not isinstance(message, dict):
             return "a message is an object"
+
+        if message.get("type") == MOUSE:
+            try:
+                mouse = mouse_of(message)
+            except ValueError as refused:
+                return str(refused)
+            if not self.writable:
+                return "this stream does not take input"
+            # The program's report when it asked for one, arrows for a
+            # wheel on the alternate screen, else nothing: a pane stream
+            # has no client to open copy mode in. Lillecarl/pymux#950.
+            self.terminal.terminal_control.use_mouse(mouse)
+            return None
 
         try:
             typed = typed_of(message)
