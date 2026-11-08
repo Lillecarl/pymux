@@ -50,9 +50,11 @@ from pymux.enums import (
 )
 from pymux.jobs.feed import JobFeed
 from pymux.jobs.pipes import JobPipes
+from pymux.keys.actions import Origin, started_by
 from pymux.notify.notifications import Urgency
 from pymux.options import tables
 from pymux.options.client_options import ClientOptions
+from pymux.options.server_options import ServerOptions
 from pymux.options.session_options import SessionOptions
 from pymux.options.tables import ClientOptionRow
 from pymux.query import ask
@@ -294,6 +296,9 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     pymux.options.job_ttl = 60
     pymux.options.action_log_limit = 10
     pymux.options.default_terminal = "screen"
+    pymux.set_by_hand["options"].update(
+        {"set_clipboard", "forward_mode", "job_ttl", "action_log_limit", "default_terminal"}
+    )
 
     client_state.previous_session = second
     (elsewhere,) = second.arrangement.windows
@@ -864,6 +869,38 @@ def test_a_session_s_own_value_survives_and_the_rest_follow_the_default(pymux, t
     loaded.session_defaults.status_right = "later"
     assert second.options.status_right == "later"
     assert first.options.status_right == "mine"
+
+
+def _configure(mux: Pymux, *lines: str) -> None:
+    with started_by(Origin.CONFIG):
+        for line in lines:
+            mux.handle_command(line)
+
+
+def test_an_upgrade_takes_the_new_file_and_keeps_what_a_person_set(pymux, tmp_path):
+    "Lillecarl/pyterm#969."
+    _configure(
+        pymux,
+        "set-option -g status-right old",
+        "set-option -g status-left old",
+        "set-option -g default-terminal old",
+        "set-option -g job-ttl 10",
+    )
+    pymux.handle_command("set-option -g status-left mine")
+    pymux.handle_command("set-option -g job-ttl 20")
+    pymux.handle_command("set-option -u -g job-ttl")
+    path = tmp_path / "upgrade.sqlite"
+    save(pymux, path)
+
+    loaded = Pymux()
+    _configure(loaded, "set-option -g status-right new", "set-option -g status-left new", "set-option -g job-ttl 30")
+    load(loaded, path)
+
+    assert loaded.session_defaults.status_right == "new"
+    assert loaded.session_defaults.status_left == "mine"
+    assert loaded.options.default_terminal == ServerOptions().default_terminal
+    assert loaded.options.job_ttl == 30
+    assert loaded.set_by_hand == {"options": set(), "session_defaults": {"status_left"}}
 
 
 @pytest.mark.parametrize("pty", [True, False], ids=["on a terminal", "on pipes"])

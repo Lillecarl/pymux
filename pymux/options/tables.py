@@ -218,6 +218,16 @@ class CounterRow:
 
 
 @dataclass(frozen=True, slots=True)
+class SetByHandRow:
+    "A field of `server_options` or `session_defaults` a person set: `Pymux.set_by_hand`."
+
+    TABLE: ClassVar[str] = "set_by_hand"
+    KEY: ClassVar[tuple[str, ...]] = ("holder", "attribute")
+    holder: str
+    attribute: str
+
+
+@dataclass(frozen=True, slots=True)
 class GlobalEnvironmentRow:
     TABLE: ClassVar[str] = "global_environment"
     KEY: ClassVar[tuple[str, ...]] = ("name",)
@@ -632,6 +642,7 @@ ROWS = (
     CounterRow,
     ServerOptionRow,
     SessionDefaultRow,
+    SetByHandRow,
     GlobalEnvironmentRow,
     SessionRow,
     SessionEnvironmentRow,

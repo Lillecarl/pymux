@@ -11,8 +11,7 @@ if TYPE_CHECKING:
 
 from pymux.commands import CommandException, CommandParser, Target, add_command, add_target
 from pymux.commands.common import answer, option_as_written, session_of_target
-from pymux.keys.actions import Origin, started_by_now
-from pymux.options.options import Option, Scope, SetOptionError
+from pymux.options.options import Option, Scope, SetOptionError, a_file_speaks
 
 #: Which command sets an option of each scope.
 _COMMAND_FOR = {
@@ -58,7 +57,7 @@ def session_holder(pymux: Pymux, args: argparse.Namespace) -> OwnOptions | Pymux
     if getattr(args, "g", 0):
         return pymux
     wanted = getattr(args, "target_session", None)
-    if wanted is None and (pymux.sourcing is not None or started_by_now() is Origin.CONFIG):
+    if wanted is None and a_file_speaks(pymux):
         return pymux
     return session_of_target(pymux, wanted).options
 
@@ -111,7 +110,9 @@ def set_option(
         what a new window starts with; with -g, or on a server or client
         option, pymux's own default comes back. tmux's `-u`, and the only
         way back to a default that changes between versions.
-        Lillecarl/pyterm#964.
+        Lillecarl/pyterm#964. A server value or a default that a person
+        set follows the configuration file again from the next upgrade.
+        Lillecarl/pyterm#969.
 
     With no value, tmux prints what the option holds, and pymux does
     the same. Without it the command line was write-only: a person

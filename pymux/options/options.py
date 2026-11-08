@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, override
 
 from ..core.session import OwnOptions
 from ..core.window_tree import Window
+from ..keys.actions import Origin, started_by_now
 from ..keys.key_mappings import PYMUX_TO_PROMPT_TOOLKIT_KEYS
 from ..keys.key_spelling import DEFAULT_PREFIX, key_however_it_is_written
 from .client_options import ClientOptions
@@ -37,7 +38,17 @@ __all__ = [
     "Option",
     "Scope",
     "SetOptionError",
+    "a_file_speaks",
 ]
+
+
+def a_file_speaks(pymux: Pymux) -> bool:
+    """
+    Whether a configuration file is setting what is set now, and not a
+    person. A hook's command counts as a person's: it runs while the
+    server does, and no file says it again.
+    """
+    return pymux.sourcing is not None or started_by_now() is Origin.CONFIG
 
 
 class Scope(StrEnum):
@@ -232,7 +243,22 @@ class FieldOption(Option):
         parsed = self._parse(value)
         owner = self.held_by(pymux, target)
         setattr(self._options_of(owner), self.declared.attribute, parsed)
+        self._note_who_set(pymux, owner, by_hand=not a_file_speaks(pymux))
         self._changed(pymux, owner)
+
+    def _note_who_set(self, pymux: Pymux, owner: Holder | Window | None, *, by_hand: bool) -> None:
+        """
+        Only the server's values can come from the file. One that a
+        person set survives an upgrade, and every other one follows the
+        file the new server reads. Lillecarl/pyterm#969.
+        """
+        if owner is not pymux:
+            return
+        marked = pymux.set_by_hand[self.held_as]
+        if by_hand:
+            marked.add(self.declared.attribute)
+        else:
+            marked.discard(self.declared.attribute)
 
     def _changed(self, pymux: Pymux, owner: Holder | Window | None) -> None:
         if self.declared.on_set is not None:
@@ -274,6 +300,7 @@ class FieldOption(Option):
             setattr(options, attribute, copy.deepcopy(fallback))
         else:
             setattr(options, attribute, copy.deepcopy(self.declared.default))
+        self._note_who_set(pymux, owner, by_hand=False)
         self._changed(pymux, owner)
 
 

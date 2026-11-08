@@ -169,6 +169,7 @@ class Pymux:
         "shims": Keep.REBUILT,
         "options": Keep.SAVED,
         "session_defaults": Keep.SAVED,
+        "set_by_hand": Keep.SAVED,
         "terminals": Keep.REBUILT,
         "outward": Keep.REBUILT,
         "rich_clipboard": Keep.REBUILT,
@@ -222,6 +223,9 @@ class Pymux:
         #: What every session reads unless it set its own. Lillecarl/pyterm#758.
         self.session_defaults = SessionOptions()
         self.session_defaults.owner = self
+        #: The fields of `options` and of `session_defaults` that a person
+        #: set and no configuration file did. Lillecarl/pyterm#969.
+        self.set_by_hand: dict[str, set[str]] = {"options": set(), "session_defaults": set()}
         # `--log-level` told the logger before this server existed.
         self.options.hold("log_level", log.level())
 

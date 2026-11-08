@@ -63,6 +63,7 @@ from ...options.tables import (
     SessionOptionRow,
     SessionRow,
     SessionTagRow,
+    SetByHandRow,
     SplitRow,
     SplitWeightRow,
     ViewerRow,
@@ -366,12 +367,20 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
 
     counters = {row.name: row.value for row in select(db, CounterRow)}
 
-    for row in select(db, ServerOptionRow):
-        for attribute, value in loaded_options(ServerOptions, row).items():
-            setattr(pymux.options, attribute, value)
-    for row in select(db, SessionDefaultRow):
-        for attribute, value in loaded_options(SessionOptions, row).items():
-            setattr(pymux.session_defaults, attribute, value)
+    # Only what a person set: the configuration file the new server
+    # read says the rest, and it may have changed. Lillecarl/pyterm#969.
+    by_hand: dict[str, set[str]] = {holder: set() for holder in pymux.set_by_hand}
+    for mark in select(db, SetByHandRow):
+        by_hand[mark.holder].add(mark.attribute)
+    for kind, scope, holder in (
+        (ServerOptionRow, ServerOptions, "options"),
+        (SessionDefaultRow, SessionOptions, "session_defaults"),
+    ):
+        for row in select(db, kind):
+            for attribute, value in loaded_options(scope, row).items():
+                if attribute in by_hand[holder]:
+                    setattr(getattr(pymux, holder), attribute, value)
+    pymux.set_by_hand = by_hand
     pymux.global_environment = {row.name: row.value for row in select(db, GlobalEnvironmentRow)}
 
     panes: dict[int | None, Pane] = {}
