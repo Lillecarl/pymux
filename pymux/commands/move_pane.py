@@ -25,10 +25,15 @@ def move_pane(pymux: Pymux, args: argparse.Namespace) -> None:
     pane = the_pane(pymux, args.s)
     window = the_window(pymux, args.t)
 
-    if pymux._window_holding(pane) is window:
+    holder = pymux._window_holding(pane)
+    if holder is window:
         return
 
-    pymux.arrangement.move_pane_to_window(pane, window, vsplit=args.h)
+    # The session that holds the pane, which need not be the caller's:
+    # an arrangement takes a pane out only of its own windows.
+    src = pymux.session_of_window(holder) if holder is not None else None
+    arrangement = src.arrangement if src is not None else pymux.arrangement
+    arrangement.move_pane_to_window(pane, window, vsplit=args.h)
     if not args.d:
         pymux.arrangement.set_active_window(window)
 

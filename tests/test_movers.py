@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 
+import anyio
 import pytest
 from prompt_toolkit.application.current import set_app
 from run_commands import run_as
@@ -90,3 +91,21 @@ async def test_last_window_refuses_to_unlink():
             await run_as(pymux, state, "unlink-window")  # Two windows: the first goes.
             with pytest.raises(CommandException):
                 unlink_window(pymux, argparse.Namespace(target_window=None))
+
+
+async def test_a_pane_from_a_session_the_client_is_not_on_leaves_its_window():
+    "An arrangement takes a pane out only of its own windows: the pane stayed in both."
+    with anyio.fail_after(10):
+        async with create_session() as (pymux, state):
+            home = state.session
+            await run_as(pymux, state, "new-session -d -s work 'sleep 30'")
+            (source,) = pymux.get_session("work").arrangement.windows
+            await run_as(pymux, state, "split-window -v -t @%d 'sleep 30'" % source.window_id)
+            pane = source.panes[1]
+            with set_app(state.app):
+                destination = home.arrangement.get_active_window()
+
+            await run_as(pymux, state, "move-pane -d -s %%%d -t @%d" % (pane.pane_id, destination.window_id))
+
+            assert pane not in source.panes
+            assert pane in destination.panes
