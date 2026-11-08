@@ -414,7 +414,7 @@ class Arrangement:
         # Sort windows by index.
         self.windows = sorted(self.windows, key=lambda w: w.index)
 
-    def move_pane_to_window(self, pane: Pane, window: Window, vsplit: bool = False) -> None:
+    def move_pane_to_window(self, pane: Pane, window: Window, vsplit: bool = False, select: bool = True) -> None:
         """
         Take a pane out of the window that holds it, and add it to
         another one, beside or above the pane that is focused there.
@@ -422,7 +422,7 @@ class Arrangement:
         program ends leaves it. Lillecarl/pyterm#299.
         """
         self.remove_pane(pane)
-        window.add_pane(pane, vsplit=vsplit)
+        window.add_pane(pane, vsplit=vsplit, select=select)
 
     def unlink_window(self, window: Window) -> None:
         """

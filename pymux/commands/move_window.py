@@ -5,10 +5,11 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pymux.core.main import Pymux
+    from pymux.core.window_tree import Window
 
 
 from pymux.commands import CommandException, CommandParser, Role, Target, add_command, add_target
-from pymux.commands.common import session_part, the_window
+from pymux.commands.common import follow, session_part, the_window
 from pymux.ids import WindowIndex
 
 
@@ -46,7 +47,17 @@ def move_window(pymux: Pymux, args: argparse.Namespace) -> None:
     or `-b` the index is that session's active window, as in tmux.
     `--session work` says the same with the session apart, and then
     `-t` is the bare index there.
+
+    Without `-d` the client that asked goes with the window, to its new
+    session if it changed one. Lillecarl/pyterm#972.
     """
+    window = _move(pymux, args)
+    if not args.d:
+        follow(pymux, window)
+
+
+def _move(pymux: Pymux, args: argparse.Namespace) -> Window:
+    "Move the window; answer with it."
     window = the_window(pymux, args.src_window)
 
     src = pymux.session_of_window(window)
@@ -71,7 +82,7 @@ def move_window(pymux: Pymux, args: argparse.Namespace) -> None:
         if not (args.after or args.before) or active is None:
             if dst is not src:
                 src.arrangement.move_window_to(window, arrangement)
-            return
+            return window
         new_index = active.index
     else:
         try:
@@ -85,7 +96,7 @@ def move_window(pymux: Pymux, args: argparse.Namespace) -> None:
     occupant = arrangement.get_window_by_index(new_index)
 
     if occupant is window:
-        return  # Already there. Nothing to make room for.
+        return window  # Already there. Nothing to make room for.
 
     if args.kill and occupant is not None:
         # The panes and not the window: a window is gone when its last
@@ -105,6 +116,7 @@ def move_window(pymux: Pymux, args: argparse.Namespace) -> None:
         arrangement.move_window(window, new_index)
     else:
         src.arrangement.move_window_to(window, arrangement, new_index)
+    return window
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
@@ -142,3 +154,4 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser.add_argument(
         "-k", dest="kill", action="store_true", help="Kill whatever is at that index, and take its place."
     )
+    parser.add_argument("-d", dest="d", action="store_true", help="Stay where you are; do not go with the window.")

@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from pymux.options.options import Holder
 
 
-from prompt_toolkit.application.current import get_app
+from prompt_toolkit.application.current import get_app, set_app
 from prompt_toolkit.completion import Completer
 from prompt_toolkit.document import Document
 from prompt_toolkit.key_binding.vi_state import InputMode
@@ -95,6 +95,22 @@ def find_window(pymux: Pymux, target: str | None) -> Window | None:
         return None
 
     return window_in(session, target)
+
+
+def follow(pymux: Pymux, window: Window) -> None:
+    """
+    Take the client that asked to `window`, in whichever session holds
+    it: what a move does without `-d`. tmux selects the window in its
+    session and leaves the client on its own; pymux brings the client
+    along. Lillecarl/pyterm#972.
+    """
+    session = pymux.session_of_window(window)
+    client_state = pymux.the_client_to_tell()
+    if session is None or client_state is None:
+        return
+    pymux.attach_client_to(client_state, session)
+    with set_app(client_state.app):
+        session.arrangement.set_active_window(window)
 
 
 def the_window(pymux: Pymux, target: str | None) -> Window:

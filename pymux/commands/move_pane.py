@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import CommandParser, Role, Target, add_command, add_target
-from pymux.commands.common import the_pane, the_window
+from pymux.commands.common import follow, the_pane, the_window
 
 
 def move_pane(pymux: Pymux, args: argparse.Namespace) -> None:
@@ -18,9 +18,12 @@ def move_pane(pymux: Pymux, args: argparse.Namespace) -> None:
     -s names the pane; the active one is the default. -t names the
     window the pane goes to; the active one is the default, and a
     window that holds the pane already answers nothing, the way
-    tmux's does. -h lays the panes side by side and -v stacks them;
-    -d leaves the focus where it was. A window the pane leaves empty
-    is gone. Lillecarl/pyterm#299.
+    tmux's does. -h lays the panes side by side and -v stacks them.
+    A window the pane leaves empty is gone. Lillecarl/pyterm#299.
+
+    Without -d the pane is the active one where it lands, and the
+    client that asked goes there, to another session too. -d leaves
+    the focus where it was. Lillecarl/pyterm#972.
     """
     pane = the_pane(pymux, args.s)
     window = the_window(pymux, args.t)
@@ -33,9 +36,9 @@ def move_pane(pymux: Pymux, args: argparse.Namespace) -> None:
     # an arrangement takes a pane out only of its own windows.
     src = pymux.session_of_window(holder) if holder is not None else None
     arrangement = src.arrangement if src is not None else pymux.arrangement
-    arrangement.move_pane_to_window(pane, window, vsplit=args.h)
+    arrangement.move_pane_to_window(pane, window, vsplit=args.h, select=not args.d)
     if not args.d:
-        pymux.arrangement.set_active_window(window)
+        follow(pymux, window)
 
 
 def add_arguments(parser: argparse.ArgumentParser):

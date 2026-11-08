@@ -93,13 +93,66 @@ async def test_last_window_refuses_to_unlink():
                 unlink_window(pymux, argparse.Namespace(target_window=None))
 
 
+# ----------------------------------------------------------------------
+# A move takes the client along, unless -d. Lillecarl/pyterm#972.
+
+
+async def _with_work(pymux, state):
+    "A second session, `work`, with one window. The client stays where it was."
+    home = state.session
+    await run_as(pymux, state, "new-session -d -s work 'sleep 30'")
+    work = pymux.get_session("work")
+    assert state.session is home
+    return home, work
+
+
+@pytest.mark.parametrize("stay", [False, True], ids=["follows", "-d stays"])
+async def test_a_window_moved_to_another_session_takes_the_client_along(stay):
+    with anyio.fail_after(10):
+        async with create_session() as (pymux, state):
+            home, work = await _with_work(pymux, state)
+            with set_app(state.app):
+                moving = home.arrangement.get_active_window()
+            flag = "-d " if stay else ""
+
+            await run_as(pymux, state, "move-window %s-s @%d -t work:" % (flag, moving.window_id))
+
+            assert pymux.session_of_window(moving) is work
+            assert state.session is (home if stay else work)
+            if not stay:
+                with set_app(state.app):
+                    assert work.arrangement.get_active_window() is moving
+
+
+@pytest.mark.parametrize("stay", [False, True], ids=["follows", "-d stays"])
+async def test_a_pane_moved_to_another_session_leaves_its_window_and_takes_the_client_along(stay):
+    with anyio.fail_after(10):
+        async with create_session() as (pymux, state):
+            home, work = await _with_work(pymux, state)
+            with set_app(state.app):
+                await run_as(pymux, state, "split-window -v 'sleep 30'")
+                source = home.arrangement.get_active_window()
+            pane = source.panes[1]
+            (destination,) = work.arrangement.windows
+            flag = "-d " if stay else ""
+
+            await run_as(pymux, state, "move-pane %s-s %%%d -t @%d" % (flag, pane.pane_id, destination.window_id))
+
+            assert pane not in source.panes
+            assert pane in destination.panes
+            assert (destination.active_pane is pane) is not stay
+            assert state.session is (home if stay else work)
+            if not stay:
+                with set_app(state.app):
+                    assert work.arrangement.get_active_window() is destination
+
+
 async def test_a_pane_from_a_session_the_client_is_not_on_leaves_its_window():
     "An arrangement takes a pane out only of its own windows: the pane stayed in both."
     with anyio.fail_after(10):
         async with create_session() as (pymux, state):
-            home = state.session
-            await run_as(pymux, state, "new-session -d -s work 'sleep 30'")
-            (source,) = pymux.get_session("work").arrangement.windows
+            home, work = await _with_work(pymux, state)
+            (source,) = work.arrangement.windows
             await run_as(pymux, state, "split-window -v -t @%d 'sleep 30'" % source.window_id)
             pane = source.panes[1]
             with set_app(state.app):
