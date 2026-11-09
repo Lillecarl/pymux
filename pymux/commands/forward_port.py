@@ -137,7 +137,7 @@ def _through_link(pymux: Pymux, peer: Peer, forward: Forward, confirmed: bool) -
 
 def confirm_through(peer: Peer, forward: Forward) -> str:
     "The command a yes runs, to make `forward` through the link to `peer`."
-    return shlex.join(["forward-port", "-c", "-p", peer.address, *forward.typed()])
+    return shlex.join(["forward-port", "-c", "-p", peer.address, *forward.spell().split()])
 
 
 def answered(pymux: Pymux, said: Coroutine[Any, Any, str]) -> Awaitable[None]:

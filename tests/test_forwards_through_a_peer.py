@@ -71,7 +71,10 @@ async def test_a_program_there_asks_the_person_here_and_the_yes_forwards_socks(t
             assert "The person there confirms it." in said.stdout
 
             await until(lambda: client.confirm_command is not None, "the person here is asked")
-            assert "asks: Forward -R 127.0.0.1:* as SOCKS, connecting from this machine?" in client.confirm_text
+            assert (
+                "asks: Forward -R 127.0.0.1:0 (any free port) as SOCKS, connecting from this machine?"
+                in client.confirm_text
+            )
             assert not owners_forwards(owner), "nothing is forwarded before the yes"
 
             await run_as(peer, client, client.answer())

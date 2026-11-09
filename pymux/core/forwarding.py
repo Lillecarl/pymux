@@ -126,21 +126,12 @@ class Forward(NamedTuple):
             return "%s %s" % (self.flag, self.listen)
         return "%s %s:%s" % (self.flag, self.listen, self.dest)
 
-    def typed(self) -> list[str]:
-        "The `forward-port` words that ask for this forward again: `spell` writes any port as `*`, which no parse reads."
-        spec = "%s:%d" % (self.listen_host, self.listen_port)
-        if not self.socks:
-            spec = "%s:%s:%d" % (spec, self.dest_host, self.dest_port)
-        return [self.flag, spec]
-
 
 #: What a SOCKS forward shows where a destination goes.
 SOCKS: Final = "socks"
 
 
 def _address(host: str, port: int) -> str:
-    if port == ANY_PORT:
-        return "%s:*" % (host,)
     return "%s:%d" % (host, port)
 
 
@@ -183,7 +174,8 @@ def question(forward: Forward) -> str:
     may not happen. Lillecarl/pyterm#446.
     """
     caveat = " -- %s" % (MAY_NARROW,) if the_far_side_may_narrow(forward) else ""
-    return "Forward %s%s%s? (y/n)" % (forward.spell(), _what_socks_reaches(forward), caveat)
+    anywhere = " (any free port)" if forward.listen_port == ANY_PORT else ""
+    return "Forward %s%s%s%s? (y/n)" % (forward.spell(), anywhere, _what_socks_reaches(forward), caveat)
 
 
 def _what_socks_reaches(forward: Forward) -> str:
