@@ -24,14 +24,15 @@ def unforward_port(pymux: Pymux, args: argparse.Namespace) -> None:
     The client stops wanting it as well as closing it, so a later
     reconnect does not bring it back. Lillecarl/pyterm#438.
     """
-    if args.local and args.remote:
-        raise CommandException("Give -L or -R, not both.")
+    given = [spec for spec in (args.local, args.remote, args.socks) if spec]
+    if len(given) > 1:
+        raise CommandException("Give one of -L, -R and -D.")
+    if not given:
+        raise CommandException("Give a forward to stop: -L, -R or -D [host:]port.")
+    (spec,) = given
 
-    spec = args.local or args.remote
-    if not spec:
-        raise CommandException("Give a forward to stop: -L or -R [host:]port.")
-
-    direction = Direction.LOCAL if args.local else Direction.REMOTE
+    # `-D` listens where `-L` does, and the listening end is the name.
+    direction = Direction.REMOTE if args.remote else Direction.LOCAL
 
     try:
         listen_host, listen_port = parse_listen(spec)
@@ -66,4 +67,10 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
         dest="remote",
         metavar="[host:]port",
         help="A forward that listens on the server's machine.",
+    )
+    parser.add_argument(
+        "-D",
+        dest="socks",
+        metavar="[host:]port",
+        help="A SOCKS forward that listens on this machine.",
     )

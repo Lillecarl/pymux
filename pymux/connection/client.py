@@ -91,6 +91,7 @@ class ClientRole:
         "_program_status_sent": Keep.REBUILT,
         "can_forward": Keep.REBUILT,
         "answers_forwards": Keep.REBUILT,
+        "answers_socks": Keep.REBUILT,
         "_next_forwards": Keep.DROPPED,
         "starts_browsers": Keep.REBUILT,
         "saves_files": Keep.REBUILT,
@@ -184,6 +185,10 @@ class ClientRole:
         #: Whether it sends its table again when asked, and what the
         #: next table that arrives sets. Lillecarl/pyterm#489.
         self.answers_forwards = False
+        #: Whether it opens a forward with no destination as SOCKS. One
+        #: older than that opens a forward to an empty host and says it
+        #: worked. Lillecarl/pyterm#974.
+        self.answers_socks = False
         self._next_forwards: anyio.Event | None = None
         #: Whether this client starts browsers. Lillecarl/pyterm#655.
         self.starts_browsers = False

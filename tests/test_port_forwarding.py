@@ -27,18 +27,21 @@ from test_ssh_client import create_ssh_server, live_servers
 from pymux.answer import Answer
 from pymux.client import ssh_requests
 from pymux.client.forwards import Forwards
+from pymux.client.socks import Reply
 from pymux.client.ssh import SshClient
 from pymux.client.ssh_requests import forward_asked, open_asked, reap_forwards
 from pymux.commands import list_forwards as list_forwards_command
 from pymux.core.forwarding import (
     ANY_PORT,
     LOOPBACK,
+    SOCKS,
     BadForward,
     Direction,
     Forward,
     loopback_port,
     parse_forward,
     parse_listen,
+    parse_socks,
     the_far_side_may_narrow,
     with_port,
 )
@@ -2047,3 +2050,153 @@ async def test_the_listing_says_so_when_there_is_nothing():
         said = "\n".join(await _listed(session, "list-forwards"))
 
     assert "No client is forwarding" in said, said
+
+
+# ----------------------------------------------------------------------
+# SOCKS: a forward with no destination. Lillecarl/pyterm#974.
+
+
+def test_a_remote_forward_with_no_destination_is_socks():
+    "`-R 1080` is openssh's reverse SOCKS proxy, and spells itself back that way."
+    forward = parse_forward(Direction.REMOTE, "1080")
+
+    assert forward.socks
+    assert (forward.listen_host, forward.listen_port) == (LOOPBACK, 1080)
+    assert forward.spell() == "-R localhost:1080"
+    assert parse_forward(Direction.REMOTE, "0.0.0.0:1080").listen_host == "0.0.0.0"
+
+
+def test_a_local_socks_forward_is_dash_d():
+    forward = parse_socks(Direction.LOCAL, "1080")
+
+    assert forward.socks
+    assert forward.flag == "-D"
+    assert forward.spell() == "-D localhost:1080"
+    assert forward.dest == SOCKS
+    assert not parse_forward(Direction.LOCAL, "1080:localhost:3000").socks
+
+
+async def _socks5_to(port: int, host: str, dest_port: int) -> tuple[anyio.abc.SocketStream, int]:
+    """
+    A SOCKS5 client: connect to the proxy on `port`, ask for `host` and
+    `dest_port` by name, and answer the stream and the reply code.
+    """
+    stream = await anyio.connect_tcp("127.0.0.1", port)
+    await stream.send(b"\x05\x01\x00")
+    assert await _exactly(stream, 2) == b"\x05\x00", "The proxy took no authentication."
+    name = host.encode()
+    await stream.send(b"\x05\x01\x00\x03" + bytes([len(name)]) + name + dest_port.to_bytes(2, "big"))
+    reply = await _exactly(stream, 10)
+    assert reply[0] == 5
+    return stream, reply[1]
+
+
+async def _exactly(stream: anyio.abc.SocketStream, count: int) -> bytes:
+    got = b""
+    while len(got) < count:
+        got += await stream.receive(count - len(got))
+    return got
+
+
+@pytest.mark.parametrize("direction", [Direction.REMOTE, Direction.LOCAL], ids=["-R", "-D"])
+async def test_a_socks_forward_carries_bytes_to_where_each_connection_asks(direction):
+    """
+    The client asks for the echo by name, through the proxy. The upper
+    case answer says the bytes went to the echo and back: `-R` reaches
+    it from this side of the link, `-D` from the sshd's.
+    """
+    with anyio.fail_after(10):
+        async with echoing() as echo_port, ssh_connection() as connection:
+            forwards = Forwards()
+            opened = await forwards.add(connection, parse_socks(direction, "127.0.0.1:0"))
+
+            assert opened.error == ""
+            assert opened.port != ANY_PORT
+
+            stream, reply = await _socks5_to(opened.port, "localhost", echo_port)
+            async with stream:
+                assert reply == 0
+                await stream.send(b"hello")
+                assert await _exactly(stream, 5) == b"HELLO"
+
+            forwards.close()
+
+
+async def test_a_remote_socks_forward_says_when_the_destination_refuses():
+    "A port nothing listens on is a SOCKS refusal, and the link carries on."
+    with anyio.fail_after(10):
+        async with ssh_connection() as connection:
+            forwards = Forwards()
+            opened = await forwards.add(connection, parse_socks(Direction.REMOTE, "127.0.0.1:0"))
+
+            stream, reply = await _socks5_to(opened.port, "127.0.0.1", _free_port())
+            await stream.aclose()
+
+            assert reply == Reply.CONNECTION_REFUSED
+            forwards.close()
+
+
+async def test_a_remote_socks_forward_refuses_a_command_it_does_not_carry():
+    "BIND (2) is not CONNECT, and the answer says so rather than hanging."
+    with anyio.fail_after(10):
+        async with ssh_connection() as connection:
+            forwards = Forwards()
+            opened = await forwards.add(connection, parse_socks(Direction.REMOTE, "127.0.0.1:0"))
+
+            async with await anyio.connect_tcp("127.0.0.1", opened.port) as stream:
+                await stream.send(b"\x05\x01\x00")
+                await _exactly(stream, 2)
+                await stream.send(b"\x05\x02\x00\x01\x7f\x00\x00\x01\x00\x50")
+                reply = await _exactly(stream, 10)
+
+            assert reply[1] == Reply.COMMAND_NOT_SUPPORTED
+            forwards.close()
+
+
+async def test_the_client_says_socks_when_asked_for_a_forward_with_no_destination():
+    "`forward-port -R 1080` crosses with an empty destination to a client that said it reads one."
+    seen = []
+
+    async with over_connection(read_packet=seen.append) as session:
+        await session.attach("the client", SIZE)
+        client = session.pymux.clients[0].client
+        client.can_forward = client.answers_socks = True
+
+        with as_the_person(session):
+            session.pymux.handle_command("forward-port -R 1080")
+
+        asked = await once(lambda: _forward_requests(seen), 2.0, "The client was never asked to forward.")
+
+    assert asked[0]["direction"] == "remote"
+    assert (asked[0]["listen_port"], asked[0]["dest_host"]) == (1080, "")
+
+
+async def test_a_client_older_than_socks_is_never_asked_for_it():
+    """
+    An older client opens a forward to an empty host and reports that
+    it worked. So the server refuses before asking, and says what to
+    upgrade.
+    """
+    seen = []
+
+    async with over_connection(read_packet=seen.append) as session:
+        await session.attach("the client", SIZE)
+        session.pymux.clients[0].client.can_forward = True
+
+        with as_the_person(session):
+            said = await _errors_of(session, "forward-port -D 1080")
+
+    assert any("older than SOCKS" in line for line in said), said
+    assert _forward_requests(seen) == []
+
+
+async def test_the_question_says_where_a_socks_proxy_connects_from():
+    "A pane's request is confirmed, and a SOCKS exit reaches all this machine reaches."
+    async with over_connection() as session:
+        await session.attach("the client", SIZE)
+        client = session.pymux.clients[0].client
+        client.can_forward = client.answers_socks = True
+
+        session.pymux.handle_command("forward-port -R 1080")
+
+        assert _questions(session) == ["Forward -R localhost:1080 as SOCKS, connecting from this machine? (y/n)"]

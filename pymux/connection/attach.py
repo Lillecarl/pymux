@@ -101,6 +101,7 @@ def start_gui(connection: ServerConnection, packet: Message) -> None:
     # the SSH client says yes. Lillecarl/pyterm#438.
     client.can_forward = bool(packet.get(Field.FORWARDS))
     client.answers_forwards = bool(packet.get(Field.REPORTS))
+    client.answers_socks = bool(packet.get(Field.SOCKS))
     client.starts_browsers = bool(packet.get(Field.BROWSERS))
     client.saves_files = bool(packet.get(Field.SAVES_FILES))
     client.sends_files = bool(packet.get(Field.SENDS_FILES))

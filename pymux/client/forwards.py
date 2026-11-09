@@ -26,6 +26,7 @@ from pymux.core.forwarding import ANY_PORT, LOOPBACK_NAMES, Direction, Forward
 
 if TYPE_CHECKING:
     import asyncio
+    from collections.abc import Awaitable, Callable
 
     from asyncssh import SSHClientConnection, SSHListener
     from asyncssh.forward import SSHForwarderCoro
@@ -421,7 +422,20 @@ class Forwards:
         A remote forward gets none of this: `forward_remote_port` takes
         no factory, the far sshd owns the listener, and a remote
         forward is never one pymux opened for itself.
+
+        A SOCKS forward is counted by neither arm: a person makes one,
+        and a person's forward is never reaped. Lillecarl/pyterm#974.
         """
+        if forward.socks:
+            if forward.direction is Direction.REMOTE:
+                from .socks import answer
+
+                def socks_for(_orig_host: str, _orig_port: int) -> Callable[..., Awaitable[None]]:
+                    return answer
+
+                return await connection.start_server(socks_for, forward.listen_host, forward.listen_port)
+            return await connection.forward_socks(forward.listen_host, forward.listen_port)
+
         if forward.direction is Direction.REMOTE:
             return await connection.forward_remote_port(
                 forward.listen_host,

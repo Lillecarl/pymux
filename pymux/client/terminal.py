@@ -408,6 +408,7 @@ class TerminalClient(Client):
                 # Lillecarl/pyterm#438.
                 Field.FORWARDS: self.can_forward,
                 Field.REPORTS: self.can_forward,
+                Field.SOCKS: self.can_forward,
                 Field.BROWSERS: True,
                 Field.SAVES_FILES: True,
                 Field.SENDS_FILES: True,

@@ -555,6 +555,9 @@ class Field(StrEnum):
     FORWARDS = "forwards"
     #: In `start-gui`: this client answers `report-forwards`.
     REPORTS = "reports"
+    #: In `start-gui`: a forward with no destination is SOCKS to this
+    #: client, not a forward to an empty host. Lillecarl/pyterm#974.
+    SOCKS = "socks"
     PINGS = "pings"
     ENVIRONMENT = "environment"
     #: The directory a detached command is sent from. A job without

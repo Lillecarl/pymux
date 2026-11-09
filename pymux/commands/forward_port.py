@@ -11,7 +11,15 @@ if TYPE_CHECKING:
 from libpymux.protocol import Field, Packet
 
 from pymux.commands import CommandException, CommandParser, add_command
-from pymux.core.forwarding import MAY_NARROW, BadForward, Direction, parse_forward, the_far_side_may_narrow
+from pymux.core.forwarding import (
+    MAY_NARROW,
+    BadForward,
+    Direction,
+    Forward,
+    parse_forward,
+    parse_socks,
+    the_far_side_may_narrow,
+)
 from pymux.enums import ForwardMode
 
 
@@ -28,6 +36,12 @@ def forward_port(pymux: Pymux, args: argparse.Namespace) -> None:
     The spelling is openssh's, so `-L 8080:localhost:3000` means here.
     A listening port of 0 takes any free one and the message says which.
 
+    A SOCKS proxy names no destination, as in openssh. `-R 1080`
+    listens on the server's machine and connects from the person's:
+    a browser on a server that websites block goes out from the
+    laptop's address. `-D 1080` is the other way round.
+    Lillecarl/pyterm#974.
+
     **The server forwards nothing itself.** It holds no SSH connection;
     the client does. So this asks the client, and the client answers
     with what it is forwarding. Lillecarl/pyterm#438.
@@ -36,17 +50,18 @@ def forward_port(pymux: Pymux, args: argparse.Namespace) -> None:
     binds off loopback, and one a program in a pane asked for, are
     confirmed whatever the option says. Lillecarl/pyterm#442.
     """
-    if args.local and args.remote:
-        raise CommandException("Give -L or -R, not both.")
-
-    spec = args.local or args.remote
-    if not spec:
-        raise CommandException("Give a forward: -L or -R [host:]port:host:port.")
-
-    direction = Direction.LOCAL if args.local else Direction.REMOTE
+    given = [spec for spec in (args.local, args.remote, args.socks) if spec]
+    if len(given) > 1:
+        raise CommandException("Give one of -L, -R and -D.")
+    if not given:
+        raise CommandException("Give a forward: -L or -R [host:]port:host:port, or -R or -D [host:]port.")
+    (spec,) = given
 
     try:
-        forward = parse_forward(direction, spec)
+        if args.socks:
+            forward = parse_socks(Direction.LOCAL, spec)
+        else:
+            forward = parse_forward(Direction.LOCAL if args.local else Direction.REMOTE, spec)
     except BadForward as error:
         raise CommandException(str(error)) from None
 
@@ -54,6 +69,12 @@ def forward_port(pymux: Pymux, args: argparse.Namespace) -> None:
         raise CommandException("forward-mode is off, so pymux forwards nothing.")
 
     asker = pymux.forward_requests.client()
+
+    if forward.socks and not asker.client_state.client.answers_socks:
+        raise CommandException(
+            "%s runs a pymux older than SOCKS forwards. Upgrade the pymux it attaches with."
+            % (asker.client_state.client.connection.name,)
+        )
 
     # **`-c` counts only from a person.** It is the answer to a
     # question, and a question is answered at a keyboard. A pane that
@@ -73,8 +94,8 @@ def forward_port(pymux: Pymux, args: argparse.Namespace) -> None:
         # something that may not happen. Lillecarl/pyterm#446.
         caveat = " -- %s" % (MAY_NARROW,) if the_far_side_may_narrow(forward) else ""
         asker.client_state.ask(
-            "Forward %s%s? (y/n)" % (forward.spell(), caveat),
-            "forward-port -c %s %s" % (direction.flag, shlex.quote(spec)),
+            "Forward %s%s%s? (y/n)" % (forward.spell(), _what_socks_reaches(forward), caveat),
+            "forward-port -c %s %s" % (forward.flag, shlex.quote(spec)),
         )
         return
 
@@ -91,6 +112,19 @@ def forward_port(pymux: Pymux, args: argparse.Namespace) -> None:
     )
 
 
+def _what_socks_reaches(forward: Forward) -> str:
+    """
+    What a SOCKS proxy is worth saying in the question: it reaches
+    everything the machine it connects from reaches, that machine's own
+    loopback too, as openssh's does.
+    """
+    if not forward.socks:
+        return ""
+    if forward.direction is Direction.REMOTE:
+        return " as SOCKS, connecting from this machine"
+    return " as SOCKS, connecting from the server's machine"
+
+
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, forward_port)
     parser.add_argument(
@@ -102,8 +136,14 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser.add_argument(
         "-R",
         dest="remote",
-        metavar="[host:]port:host:port",
-        help="Listen on the server's machine and reach a service on this one.",
+        metavar="[host:]port[:host:port]",
+        help="Listen on the server's machine and reach a service on this one; with no destination, SOCKS that connects from this one.",
+    )
+    parser.add_argument(
+        "-D",
+        dest="socks",
+        metavar="[host:]port",
+        help="Listen on this machine as SOCKS, and connect from the server's machine.",
     )
     parser.add_argument(
         "-c",

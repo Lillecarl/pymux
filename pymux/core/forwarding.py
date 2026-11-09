@@ -21,12 +21,14 @@ __all__ = [
     "LOOPBACK_NAMES",
     "MAY_NARROW",
     "SCHEME_PORTS",
+    "SOCKS",
     "BadForward",
     "Direction",
     "Forward",
     "loopback_port",
     "parse_forward",
     "parse_listen",
+    "parse_socks",
     "the_far_side_may_narrow",
     "with_port",
 ]
@@ -80,6 +82,11 @@ class Forward(NamedTuple):
     Both ends are named from the machine that holds them. For `LOCAL`
     the listener is on the client's machine and the destination is
     resolved by the far sshd; for `REMOTE` it is the other way round.
+
+    A forward with no destination is a SOCKS proxy: each connection
+    names its own, and the side across from the listener connects to
+    it. `ssh -D` is the `LOCAL` one and `ssh -R port` the `REMOTE` one.
+    Lillecarl/pyterm#974.
     """
 
     direction: Direction
@@ -94,13 +101,33 @@ class Forward(NamedTuple):
         return _address(self.listen_host, self.listen_port)
 
     @property
+    def socks(self) -> bool:
+        "Whether each connection names its own destination."
+        return not self.dest_host
+
+    @property
     def dest(self) -> str:
         "The destination end, as a person would type it."
+        if self.socks:
+            return SOCKS
         return _address(self.dest_host, self.dest_port)
+
+    @property
+    def flag(self) -> str:
+        "The letter a person types for this forward."
+        if self.socks and self.direction is Direction.LOCAL:
+            return "-D"
+        return self.direction.flag
 
     def spell(self) -> str:
         "The whole forward, in the spelling that would make it again."
-        return "%s %s:%s" % (self.direction.flag, self.listen, self.dest)
+        if self.socks:
+            return "%s %s" % (self.flag, self.listen)
+        return "%s %s:%s" % (self.flag, self.listen, self.dest)
+
+
+#: What a SOCKS forward shows where a destination goes.
+SOCKS: Final = "socks"
 
 
 def _address(host: str, port: int) -> str:
@@ -146,8 +173,14 @@ def parse_forward(direction: Direction, spec: str) -> Forward:
     spelling names no listening address, and a four part one does. A
     listening port of 0 asks for any free port, which is worth having
     here because the client answers with the number it was given.
+
+    A remote forward with no destination is a SOCKS proxy, as in
+    openssh 7.6 and later: `-R 1080`.
     """
     parts = spec.split(":")
+
+    if len(parts) <= 2 and direction is Direction.REMOTE:
+        return parse_socks(direction, spec)
 
     if len(parts) == 3:
         listen_host, listen_port, dest_host, dest_port = (LOOPBACK, *parts)
@@ -166,6 +199,12 @@ def parse_forward(direction: Direction, spec: str) -> Forward:
         dest_host=dest_host,
         dest_port=_port(dest_port, spec),
     )
+
+
+def parse_socks(direction: Direction, spec: str) -> Forward:
+    "Read a SOCKS forward, `[listen_host:]listen_port`, which `-D` takes."
+    listen_host, listen_port = parse_listen(spec)
+    return Forward(direction, listen_host, listen_port, "", ANY_PORT)
 
 
 def parse_listen(spec: str) -> tuple[str, int]:
