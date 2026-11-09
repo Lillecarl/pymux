@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import random
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -39,8 +40,9 @@ type Json = dict[str, Any]
 Seconds = Annotated[float, Field(ge=0, description="How long to wait, in seconds.")]
 JobId = Annotated[int, Field(description="The job's id, as `job.run` and `job.list` answer it.")]
 
-#: Seconds between the text and the Return of a `no_paste` send.
-NO_PASTE_DELAY: Final = 0.5
+#: The shortest and the longest pause, in seconds, between the text
+#: and the Return of a `no_paste` send. Each send picks its own.
+NO_PASTE_DELAY: Final = (0.25, 0.5)
 
 #: The longest edge of a PNG, in pixels: what Claude reads without
 #: scaling it down, which costs tokens and blurs it both.
@@ -385,7 +387,7 @@ async def send(
     for index, (word, literal) in enumerate(words):
         last = index == len(words) - 1
         if last and enter and no_paste:
-            await anyio.sleep(NO_PASTE_DELAY)
+            await anyio.sleep(random.uniform(*NO_PASTE_DELAY))
         if last and wait is not None:
             waited = await target.send_and_wait(word, wait.condition(), literal=literal)
             return {"met": waited.met, "text": waited.text}
@@ -394,6 +396,25 @@ async def send(
         else:
             await target.send_key(word)
     return None
+
+
+@operation("pane.sendline")
+async def sendline(
+    server: Server,
+    pane: Annotated[str, Field(description="The pane's id: `%5`.")],
+    text: Annotated[str, Field(description="Typed as it stands.")],
+    wait: Annotated[
+        SendWait | None,
+        Field(description="Hold after the Return until this holds, armed before the Return goes out."),
+    ] = None,
+) -> Json | None:
+    """
+    Type a line into a pane and press Return a moment later.
+
+    For a prompt that tells a paste by its speed, as an AI agent's does:
+    `pane.send` with `enter` and `no_paste`.
+    """
+    return await send(server, pane, text, enter=True, no_paste=True, wait=wait)
 
 
 @operation("pane.wait")

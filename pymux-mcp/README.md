@@ -28,7 +28,7 @@ ids that the other operations take.
 ## The operations
 
 `tree`, `sql`, `command`, `session.new`, `window.new`, `window.split`,
-`window.capture`, `pane.capture`, `pane.send`, `pane.wait`, `pane.kill`,
+`window.capture`, `pane.capture`, `pane.send`, `pane.sendline`, `pane.wait`, `pane.kill`,
 `client.capture`, `job.run`, `job.tail`, `job.list`, `job.output` and
 `job.kill`.
 

@@ -120,19 +120,32 @@ class RecordingServer:
         return await drive(operation, ask)
 
 
+def _pauses_recorded(monkeypatch, events):
+    async def sleep(seconds):
+        shortest, longest = pymux_mcp.api.NO_PASTE_DELAY
+        assert shortest <= seconds <= longest
+        events.append("pause")
+
+    monkeypatch.setattr(pymux_mcp.api.anyio, "sleep", sleep)
+
+
 @pytest.mark.parametrize("no_paste", [False, True])
 async def test_no_paste_sends_return_apart_from_the_text(monkeypatch, no_paste):
     events = []
-
-    async def sleep(seconds):
-        events.append("sleep %g" % seconds)
-
-    monkeypatch.setattr(pymux_mcp.api.anyio, "sleep", sleep)
+    _pauses_recorded(monkeypatch, events)
     await OPERATIONS.call(
         RecordingServer(events), "pane.send", {"pane": "%5", "text": "hi", "enter": True, "no_paste": no_paste}
     )
-    pause = ["sleep %g" % pymux_mcp.api.NO_PASTE_DELAY] if no_paste else []
+    pause = ["pause"] if no_paste else []
     assert events == ["send-keys -t %5 -l hi", *pause, "send-keys -t %5 Enter"]
+
+
+async def test_sendline_pauses_before_the_return(monkeypatch):
+    "An AI agent's prompt reads a Return in the paste burst as a newline, so the line goes unsent."
+    events = []
+    _pauses_recorded(monkeypatch, events)
+    await OPERATIONS.call(RecordingServer(events), "pane.sendline", {"pane": "%5", "text": "hi"})
+    assert events == ["send-keys -t %5 -l hi", "pause", "send-keys -t %5 Enter"]
 
 
 async def test_a_send_with_a_wait_arms_it_on_the_last_key():

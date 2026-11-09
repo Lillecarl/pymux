@@ -26,6 +26,7 @@ name a thing for later without keeping its id.
 | --- | --- |
 | make a place | `window.new`, or `window.split` beside the person's work |
 | type | `pane.send`: text, then named keys, then Return when asked |
+| type a line to an AI agent | `pane.sendline`: the text, a pause, then Return, so the agent submits it |
 | wait | `pane.wait_until` a condition; `pane.wait` for any change |
 | read | `pane.capture`; `start`/`end` reach the history |
 | end | `pane.kill` |
