@@ -70,7 +70,7 @@ from . import bridge, qutebridge
 from .cdp import CDPError, Connection, Page, connected
 from .rdp import RDPError
 
-__all__ = ["Browser", "Kind", "Seat", "close", "collect", "find", "open_browser", "sweep", "tab"]
+__all__ = ["Browser", "Kind", "Seat", "close", "collect", "find", "open_browser", "sweep", "tab", "through_client"]
 
 #: The tag a browser's job or pane carries, with the browser's name.
 NAME_TAG: Final = "browser"
@@ -340,12 +340,14 @@ async def open_browser(
     profile_name: str | None = None,
     extensions: Sequence[str] = (),
     kind: Kind = Kind.CHROMIUM,
+    proxy: str | None = None,
 ) -> Browser:
     """
     Start a browser of `kind` in `seat`, and answer it once it listens:
     in a split of `window` when one is named, on the kept profile
-    `profile_name` when one is named, and with the unpacked `extensions`
-    loaded.
+    `profile_name` when one is named, with the unpacked `extensions`
+    loaded, and through the SOCKS5 `proxy` (`host:port`) when one is
+    named.
     """
     if extensions and kind is not Kind.CHROMIUM:
         raise ValueError("only Chromium loads extensions at the start")
@@ -382,11 +384,11 @@ async def open_browser(
     holder: Job | Window | Pane
     try:
         if kind is Kind.CHROMIUM:
-            command = _chromium(program(kind, executable), seat, profile, extensions, arguments)
+            command = _chromium(program(kind, executable), seat, profile, extensions, arguments, proxy)
         elif kind is Kind.QUTEBROWSER:
-            command = _qutebrowser(program(kind, executable), seat, profile, port or 0, arguments)
+            command = _qutebrowser(program(kind, executable), seat, profile, port or 0, arguments, proxy)
         else:
-            command = _gecko(program(kind, executable), seat, profile, arguments)
+            command = _gecko(program(kind, executable), seat, profile, arguments, proxy)
         if seat is not Seat.PANE:
             holder = await server.run_job(shlex.join(command), tags=tags)
         elif window is None:
@@ -402,7 +404,12 @@ async def open_browser(
 
 
 def _chromium(
-    executable: str, seat: Seat, profile: Path, extensions: Sequence[str], arguments: Sequence[str]
+    executable: str,
+    seat: Seat,
+    profile: Path,
+    extensions: Sequence[str],
+    arguments: Sequence[str],
+    proxy: str | None = None,
 ) -> list[str]:
     placed = {Seat.HEADLESS: ["--headless=new"], Seat.PANE: ["--ozone-platform=wayland"], Seat.DESKTOP: []}
     return [
@@ -414,16 +421,27 @@ def _chromium(
         *CALM,
         *EXTENSIBLE,
         *(["--load-extension=%s" % (",".join(extensions),)] if extensions else []),
+        *_proxy_switches(proxy),
         *arguments,
         BLANK,
     ]
+
+
+def _proxy_switches(proxy: str | None) -> list[str]:
+    """
+    Chromium's switch for a SOCKS5 proxy. Chromium sends a SOCKS5 proxy
+    the host name, so the far side resolves it too.
+    """
+    return [] if proxy is None else ["--proxy-server=socks5://%s" % (proxy,)]
 
 
 #: The config.py pymux hands a qutebrowser it starts, in its profile.
 QUTEBROWSER_CONFIG: Final = "pymux-config.py"
 
 
-def _qutebrowser(executable: str, seat: Seat, profile: Path, port: int, arguments: Sequence[str]) -> list[str]:
+def _qutebrowser(
+    executable: str, seat: Seat, profile: Path, port: int, arguments: Sequence[str], proxy: str | None = None
+) -> list[str]:
     "Chromium's switches reach QtWebEngine through `--qt-flag`."
     platform = ["env", "QT_QPA_PLATFORM=%s" % (QT_PLATFORM[seat],)] if seat in QT_PLATFORM else []
     config = profile / QUTEBROWSER_CONFIG
@@ -436,6 +454,8 @@ def _qutebrowser(executable: str, seat: Seat, profile: Path, port: int, argument
         "_own = _os.path.join(str(config.configdir), 'config.py')\n"
         "if _os.path.exists(_own):\n"
         "    config.source(_own)\n"
+        # After the person's own, which may name a proxy of its own.
+        + ("" if proxy is None else "c.content.proxy = %r\n" % ("socks5://%s/" % (proxy,),))
     )
     return [
         *platform,
@@ -484,15 +504,14 @@ GECKO_PREFERENCES: Final = {
 GECKO_ENVIRONMENT: Final = {"MOZ_DISABLE_UPDATE_PROCESSING": "1"}
 
 
-def _gecko(executable: str, seat: Seat, profile: Path, arguments: Sequence[str]) -> list[str]:
+def _gecko(executable: str, seat: Seat, profile: Path, arguments: Sequence[str], proxy: str | None = None) -> list[str]:
     """
     Firefox or Glide on `profile`, its debugger on a socket. pymux owns the
     profile's user.js, and writes it again at each start.
     """
+    preferences = {**GECKO_PREFERENCES, **_gecko_proxy(proxy)}
     (profile / "user.js").write_text(
-        "".join(
-            "user_pref(%s, %s);\n" % (json.dumps(key), json.dumps(value)) for key, value in GECKO_PREFERENCES.items()
-        )
+        "".join("user_pref(%s, %s);\n" % (json.dumps(key), json.dumps(value)) for key, value in preferences.items())
     )
     environment = {**GECKO_ENVIRONMENT, **({"MOZ_ENABLE_WAYLAND": "1"} if seat is Seat.PANE else {})}
     return [
@@ -508,6 +527,61 @@ def _gecko(executable: str, seat: Seat, profile: Path, arguments: Sequence[str])
         *arguments,
         BLANK,
     ]
+
+
+def _gecko_proxy(proxy: str | None) -> dict[str, object]:
+    "Firefox's preferences for a SOCKS5 proxy that resolves the names it is sent."
+    if proxy is None:
+        return {}
+    host, _, port = proxy.rpartition(":")
+    return {
+        "network.proxy.type": 1,
+        "network.proxy.socks": host,
+        "network.proxy.socks_port": int(port),
+        "network.proxy.socks_version": 5,
+        "network.proxy.socks_remote_dns": True,
+    }
+
+
+#: How long a person has to answer the question a new SOCKS forward
+#: asks, in seconds. They may be looking at another screen.
+CONFIRM_WAIT: Final = 120.0
+
+#: The SOCKS forwards a client holds that listen on this machine and
+#: connect from the client's.
+SOCKS_FORWARDS: Final = "SELECT listening, error FROM forwards WHERE direction = 'remote' AND dest = 'socks'"
+
+
+async def through_client(server: Server) -> str:
+    """
+    A SOCKS5 proxy on this machine that connects from the machine of the
+    person attached over SSH, as `host:port`: one already forwarded, or
+    a new one, which the person confirms. It stays until they take it
+    away, so the next browser asks nothing. Lillecarl/pyterm#975.
+    """
+    found = await _a_socks_forward(server)
+    if found is not None:
+        return found
+    await server.cmd(["forward-port", "-R", "127.0.0.1:0"])
+    try:
+        with anyio.fail_after(CONFIRM_WAIT):
+            while (found := await _a_socks_forward(server)) is None:
+                await anyio.sleep(0.25)
+    except TimeoutError:
+        errors = [row["error"] for row in await server.sql(SOCKS_FORWARDS) if row["error"]]
+        raise RuntimeError(
+            "no SOCKS forward from the attached client: %s"
+            % ("; ".join(errors) if errors else "the person did not confirm it within %gs" % (CONFIRM_WAIT,))
+        ) from None
+    return found
+
+
+async def _a_socks_forward(server: Server) -> str | None:
+    for row in await server.sql(SOCKS_FORWARDS):
+        host, _, port = row["listening"].rpartition(":")
+        if not row["error"] and port not in ("", "0"):
+            return "%s:%s" % (host, port)
+    return None
 
 
 def _free_port() -> int:

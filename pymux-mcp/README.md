@@ -128,6 +128,15 @@ browser at a time can have a profile open.
 `translate_blocked_languages`, in a settings tab opened in the
 background and closed after.
 
+`via: "client"` sends a browser's traffic out from the machine of the
+person attached over `ssh://`, for a site that blocks the server's
+address. pymux-mcp asks that client for `forward-port -R 127.0.0.1:0`,
+a SOCKS forward. The person confirms it once, and it stays until
+`unforward-port`, so the next browser uses it and asks nothing. Each
+kind resolves names at the far side too: Chromium's `--proxy-server`,
+qutebrowser's `content.proxy`, and Firefox's `network.proxy.socks_remote_dns`.
+Lillecarl/pyterm#975.
+
 A browser lives across calls until `browser.close`, or until it was
 unused for its `idle` seconds, half an hour unless `browser.open` says
 otherwise. A browser operation is use, and so is a key or the mouse at a

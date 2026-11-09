@@ -705,6 +705,15 @@ async def open_browser(
         float,
         Field(ge=0, description="Close it after this many seconds unused by you or a person; 0 keeps it."),
     ] = browser.DEFAULT_IDLE,
+    via: Annotated[
+        Literal["client"] | None,
+        Field(
+            description=(
+                "`client`: go out from the machine of the person attached over SSH, through a SOCKS forward"
+                " they confirm once; for a site that blocks this server's address. Left out, go out from here."
+            )
+        ),
+    ] = None,
     timeout: Seconds = 30.0,
 ) -> Json:
     """
@@ -729,6 +738,7 @@ async def open_browser(
         profile_name=profile,
         extensions=extensions or (),
         kind=kind,
+        proxy=await browser.through_client(server) if via == "client" else None,
     )
     if url == browser.BLANK:
         return opened.json()

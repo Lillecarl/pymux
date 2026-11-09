@@ -70,6 +70,10 @@ Glide, after they type `:pymux_bridge on`.
 A browser closes after `idle` seconds unused (half an hour by default).
 `browser.close` it when done. `profile` keeps logins between browsers.
 
+A site that blocks the server's address: `via: "client"` goes out from the
+machine of the person attached over SSH, through a SOCKS forward. The first
+one asks the person to confirm it; it stays, so later browsers ask nothing.
+
 ## Everything else
 
 `command` runs any pymux command line. `sql` answers a read-only question

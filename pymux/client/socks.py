@@ -22,6 +22,7 @@ from enum import IntEnum
 from typing import TYPE_CHECKING, Final
 
 import anyio
+from anyio import connect_tcp
 
 if TYPE_CHECKING:
     from anyio.abc import SocketStream
@@ -77,7 +78,7 @@ async def answer(reader: SSHReader[bytes], writer: SSHWriter[bytes]) -> None:
 
         try:
             with anyio.fail_after(CONNECT_DEADLINE):
-                stream = await anyio.connect_tcp(host, port)
+                stream = await connect_tcp(host, port)
         except TimeoutError:
             _reply(writer, Reply.HOST_UNREACHABLE)
             return

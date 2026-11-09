@@ -60,6 +60,11 @@ class ForwardRequests:
         Then the one attached client is the answer, and two of them is
         a question this cannot answer for the person.
         Lillecarl/pyterm#438.
+
+        **Only clients that can forward count.** A person on the
+        server's own machine, or on a phone that runs `pymux attach`
+        there, is attached and forwards nothing, so beside one SSH
+        client they leave nothing to choose. Lillecarl/pyterm#975.
         """
         if self.pymux.a_person_asked():
             return self._can_it_forward(Asker(self.pymux.get_client_state(), in_person=True))
@@ -67,6 +72,7 @@ class ForwardRequests:
         attached = self.pymux.clients
         if not attached:
             raise CommandException("Nobody is attached, so there is nothing to forward through.")
+        attached = [one for one in attached if one.client.can_forward] or attached
         if len(attached) > 1:
             raise CommandException("Several clients are attached. Run this from the one that should forward.")
         # A temporary client is what a command that arrived

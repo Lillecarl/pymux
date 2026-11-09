@@ -2200,3 +2200,40 @@ async def test_the_question_says_where_a_socks_proxy_connects_from():
         session.pymux.handle_command("forward-port -R 1080")
 
         assert _questions(session) == ["Forward -R localhost:1080 as SOCKS, connecting from this machine? (y/n)"]
+
+
+async def test_a_program_asks_the_one_client_that_can_forward_among_several():
+    """
+    A phone running `pymux attach` on the server's machine forwards
+    nothing, so beside one SSH client it leaves nothing to choose.
+    Lillecarl/pyterm#975.
+    """
+    with anyio.fail_after(10):
+        async with over_connection() as session:
+            await session.attach("on the server", SIZE)
+            await session.attach("over ssh", SIZE)
+            over_ssh = session.pymux.clients[1]
+            over_ssh.client.can_forward = over_ssh.client.answers_socks = True
+
+            session.pymux.handle_command("forward-port -R 1080")
+
+            assert session.pymux.clients[0].confirmations == []
+            assert [text for text, _ in over_ssh.confirmations] == [
+                "Forward -R localhost:1080 as SOCKS, connecting from this machine? (y/n)"
+            ]
+
+
+async def test_the_forwards_table_says_why_one_is_not_open():
+    "pymux-mcp reads a failed SOCKS forward's reason there, rather than waiting it out."
+    from pymux.query import ask
+
+    with anyio.fail_after(10):
+        async with over_connection() as session:
+            await session.attach("the client", SIZE)
+            session.pymux.clients[0].client.forwards = [
+                {"direction": "remote", "listen_host": "127.0.0.1", "port": 0, "dest": SOCKS, "error": "in use"}
+            ]
+
+            answer = await ask(session.pymux, "SELECT listening, error FROM forwards WHERE dest = 'socks'", {}, 10, 5.0)
+
+    assert answer.rows == [("127.0.0.1:0", "in use")]

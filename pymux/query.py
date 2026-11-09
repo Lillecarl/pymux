@@ -226,6 +226,8 @@ class ForwardView:
     direction: str
     listening: str
     dest: str
+    #: Why it is not open; empty while it is.
+    error: str
 
 
 class Answer(NamedTuple):
@@ -313,6 +315,7 @@ def _forwards(pymux: Pymux) -> Iterator[ForwardView]:
                 # shows and so what a person can name. Lillecarl/pyterm#443.
                 "%s:%s" % (one.get("listen_host", ""), one.get("port", "")),
                 one.get("dest", ""),
+                one.get("error", ""),
             )
 
 

@@ -19,11 +19,13 @@ import struct
 import subprocess
 import sys
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import anyio
 import psutil
 import pytest
+from anyio.abc import SocketAttribute
 from libpymux import Server
 
 pytest.importorskip("pysmithay")
@@ -709,3 +711,90 @@ async def test_a_person_at_the_window_keeps_the_browser(server, monkeypatch):
 def test_every_browser_operation_answers_json_an_agent_can_read():
     for name in ("browser.open", "browser.goto", "browser.snapshot", "browser.click", "browser.close"):
         assert json.dumps(OPERATIONS[name].schema())
+
+
+# ----------------------------------------------------------------------
+# A browser through the SOCKS proxy a client forwards. Lillecarl/pyterm#975.
+
+#: A host name nothing on this machine resolves. Only the far side of
+#: the proxy knows it, so a page from it loads only through the proxy,
+#: and only from a browser that sent the proxy the name.
+FAR_SIDE = "far-side.test"
+
+
+@pytest.mark.parametrize("kind", KINDS)
+async def test_a_browser_through_socks_loads_what_only_the_far_side_resolves(server, monkeypatch, kind):
+    """
+    The proxy is pymux's own SOCKS answer, the one a client runs for
+    `forward-port -R 1080`, so each kind is judged against the reader
+    it meets in use.
+    """
+    import asyncio
+
+    from pymux.client import socks
+
+    reached = []
+
+    async def the_far_side(host: str, port: int):
+        reached.append(host)
+        return await anyio.connect_tcp("127.0.0.1", page_port)
+
+    monkeypatch.setattr(socks, "connect_tcp", the_far_side)
+
+    with anyio.fail_after(60):
+        async with _a_page_server() as page_port:
+            # asyncio's streams, because the answer reads asyncssh's,
+            # which have their shape.
+            proxy = await asyncio.start_server(socks.answer, "127.0.0.1", 0)
+            try:
+                address = "127.0.0.1:%d" % (proxy.sockets[0].getsockname()[1],)
+                await browser.open_browser(
+                    server,
+                    "far",
+                    browser.Seat.HEADLESS,
+                    None,
+                    None,
+                    arguments(kind),
+                    kind=browser.Kind(kind),
+                    proxy=address,
+                )
+                try:
+                    await call(server, "browser.goto", name="far", url="http://%s/" % (FAR_SIDE,), timeout=30)
+                    title = await call(server, "browser.evaluate", name="far", expression="document.title")
+                finally:
+                    await call(server, "browser.close", name="far")
+            finally:
+                proxy.close()
+
+    assert title == "far side"
+    assert FAR_SIDE in reached, reached
+
+
+@asynccontextmanager
+async def _a_page_server():
+    "An HTTP server on loopback whose every page is titled `far side`."
+
+    async def handle(stream) -> None:
+        async with stream:
+            try:
+                request = b""
+                while b"\r\n\r\n" not in request:
+                    request += await stream.receive()
+                body = b"<title>far side</title>"
+                await stream.send(
+                    b"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: %d\r\n"
+                    b"Connection: close\r\n\r\n%s" % (len(body), body)
+                )
+            except anyio.EndOfStream, anyio.BrokenResourceError:
+                pass
+
+    listener = await anyio.create_tcp_listener(local_host="127.0.0.1")
+    try:
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(listener.serve, handle)
+            try:
+                yield listener.extra(SocketAttribute.local_address)[1]
+            finally:
+                tasks.cancel_scope.cancel()
+    finally:
+        await listener.aclose()
