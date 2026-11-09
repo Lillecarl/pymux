@@ -41,17 +41,20 @@ from pyte.sequences.kitty_clipboard import strict_b64decode
 from pyte.sequences.kitty_dnd import DndPacket, Malformed
 
 from ..client.defaults import is_ssh_url
+from ..client.forwards import Forwards
 from ..client.reconnect import link_ended_notice, link_notice, why
 from ..client.relink import Relink, Restarting, Wait
+from ..client.ssh_requests import added, forward_in, forwards_packet, removed
 from ..commands import CommandException
 from ..connection.log_asks import LogAsks, log_answer
+from ..core.forwarding import question
 from ..enums import Clipboard, Woke
 from ..graphics.kitty_frames import decoders
 from ..log import logger
 from ..options.tables import PeerCopyRow, PeerPlaceRow
 from ..wayland.window_pane import WindowWidget
 from .copying import place_of
-from .dial import abort, dial, dial_beside
+from .dial import abort, dial, dial_beside, ssh_connection_of
 from .files import Relays
 from .program import HOLD_FOR_FRESH, RemoteProgram
 from .tree import MirrorTree
@@ -60,11 +63,13 @@ from .tunnel import Tunnels
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from asyncssh import SSHClientConnection
     from prompt_toolkit.data_structures import Size
     from pyte.keys.events import KeyProfile
     from pyte.mouse import MouseInput
 
     from ..connection.client_state import ClientState
+    from ..core.forwarding import Forward
     from ..core.main import Pymux
     from ..core.pane import Pane
     from ..core.session import Session
@@ -375,6 +380,8 @@ class Peer:
         "log_asks": Keep.DROPPED,
         "relays": Keep.DROPPED,
         "_tasks": Keep.DROPPED,
+        # The listeners end with this process; `browser.open` asks again.
+        "forwards": Keep.REBUILT,
     }
 
     def __init__(self, pymux: Pymux, address: str, **connect_with: Any) -> None:
@@ -418,6 +425,10 @@ class Peer:
         self.log_asks = LogAsks(self.send)
         #: The owner's `pymux receive` requests that a client here answers. Lillecarl/pyterm#949.
         self.relays = Relays(pymux, self.send)
+        #: The ports the owner asked this side to forward, on the SSH
+        #: connection of the link, as an SSH client holds its own.
+        #: Lillecarl/pyterm#976.
+        self.forwards = Forwards()
         #: The scope of the link while it is up.
         self._tasks: anyio.abc.TaskGroup | None = None
         #: The link while it is gone, as an SSH client's (`relink`). A
@@ -517,17 +528,25 @@ class Peer:
         "Start a new link from what this side holds."
         # Zstd only across a network, as a client offers it.
         offer = [MSGPACK_ZSTD, MSGPACK] if is_ssh_url(self.address) else [MSGPACK]
+        named = self._named()
         self.send(
             {
                 Field.CMD: Packet.PEER,
                 Field.WIRE: offer,
                 Field.VERSION: PEER_VERSION,
                 Field.OLDEST: OLDEST_PEER_VERSION,
-                Field.CAPABILITIES: capabilities_named(),
+                Field.CAPABILITIES: named,
                 Field.SERVER: socket.gethostname().partition(".")[0],
             }
         )
         self.told.replay()
+
+    def _named(self) -> list[str]:
+        "What this side names under `capabilities`: a unix socket carries no forward."
+        named = capabilities_named()
+        if is_ssh_url(self.address):
+            return named
+        return [name for name in named if name != Capability.FORWARDS]
 
     # -- what a mirror asks --------------------------------------------
 
@@ -730,6 +749,8 @@ class Peer:
                         refused = self._refusal(packet)
                         if refused is not None:
                             break
+                        if self.accepted and self.can(Capability.FORWARDS):
+                            tasks.start_soon(self._forwards_back, stream)
                 if refused is not None:
                     self.error = refused
                     logger.warning("The link to %s cannot work: %s", self.address, refused)
@@ -797,7 +818,9 @@ class Peer:
         self.accepted = True
         theirs = packet.get(Field.VERSION)
         self.version = min(PEER_VERSION, theirs if isinstance(theirs, int) else 0)
-        self.capabilities = capabilities_in_common(self.version, packet.get(Field.CAPABILITIES))
+        self.capabilities = capabilities_in_common(self.version, packet.get(Field.CAPABILITIES)) & frozenset(
+            Capability(name) for name in self._named()
+        )
         return None
 
     def can(self, capability: Capability) -> bool:
@@ -836,6 +859,9 @@ class Peer:
                 logger.exception("The sessions of %s could not be mirrored.", self.address)
             return
         pane_id = packet.get(Field.PANE_ID)
+        if packet.get(Field.CMD) == Packet.FORWARD:
+            self._forward_asked(packet)
+            return
         if packet.get(Field.CMD) == Packet.MIRROR_OSC:
             pane = self.tree.panes.get(pane_id) if isinstance(pane_id, int) else None
             if pane is not None:
@@ -934,6 +960,70 @@ class Peer:
             # One mirror that cannot take what it was sent must not end
             # the link for the others.
             logger.exception("Mirror of pane %s on %s failed a packet.", pane_id, self.address)
+
+    # -- forwards through the link --------------------------------------
+
+    async def forward(self, forward: Forward) -> str:
+        "Open `forward` on the SSH connection of the link, tell the owner, and say what happened."
+        said = await added(self.forwards, self._ssh_connection(), forward)
+        self.send(forwards_packet(self.forwards, said))
+        return said
+
+    async def unforward(self, packet: Message) -> str:
+        "Close the forward a `forward` packet with `remove` names, tell the owner, and say what happened."
+        said = removed(self.forwards, packet)
+        self.send(forwards_packet(self.forwards, said))
+        return said
+
+    def _ssh_connection(self) -> SSHClientConnection:
+        if self.stream is None:
+            raise CommandException("The link to %s is down." % (self.address,))
+        connection = ssh_connection_of(self.stream)
+        if connection is None:
+            raise CommandException("The link to %s is no SSH connection, so it forwards nothing." % (self.address,))
+        return connection
+
+    async def _forwards_back(self, stream: anyio.abc.ByteStream) -> None:
+        "Open what was forwarded on the link's new connection, and tell the owner, which keeps no copy across a link."
+        connection = ssh_connection_of(stream)
+        if connection is None:
+            return
+        said = await self.forwards.reopen(connection)
+        if said:
+            self.tree.pymux.show_message("%s: %s" % (self.server or self.address, said))
+        self.send(forwards_packet(self.forwards, said))
+
+    def _forward_asked(self, packet: Message) -> None:
+        """
+        The owner asks for a forward, as a server asks an SSH client.
+
+        **A new one is always asked of a person here.** Nobody here
+        chose it: a program on the owner did, or a person there whose
+        client cannot forward. So it goes to the client that shows the
+        owner's pane that asked, or the one a person used last, and a
+        yes runs `forward-port -p` here. Lillecarl/pyterm#442.
+        """
+        if packet.get(Field.REMOVE):
+            if self._tasks is not None:
+                self._tasks.start_soon(self.unforward, packet)
+            return
+        pymux = self.tree.pymux
+        forward = forward_in(packet)
+        pane_id = packet.get(Field.PANE_ID)
+        pane = self.tree.panes.get(pane_id) if isinstance(pane_id, int) else None
+        asking = (pymux.outward.download_client(pane) if pane is not None else None) or pymux.latest_client()
+        if asking is None:
+            logger.info("Nobody here confirms the forward %s that %s asked for.", forward.spell(), self.address)
+            self.send(forwards_packet(self.forwards, "Nobody is attached to confirm %s." % (forward.spell(),)))
+            return
+        # Here and not at the top: the commands reach this module.
+        from ..commands.forward_port import confirm_through
+
+        asking.ask(
+            "%s asks: %s" % (self.server or self.address, question(forward)),
+            confirm_through(self, forward),
+        )
+        pymux.invalidate(Woke.FORWARDS_CHANGED)
 
     def _lender_used_last(self, pane: Pane) -> PeerLink | None:
         "The server that mirrors `pane` from here, when a person there used it after every client here."

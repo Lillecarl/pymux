@@ -16,7 +16,7 @@ import base64
 import socket
 from collections import deque
 from pathlib import Path
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import anyio
 from libpymux.protocol import (
@@ -107,6 +107,8 @@ class PeerLink:
         "host": Keep.DROPPED,
         "log_asks": Keep.DROPPED,
         "files": Keep.DROPPED,
+        # The peer reports its table again on the next link.
+        "forwards": Keep.DROPPED,
     }
 
     def __init__(
@@ -124,6 +126,9 @@ class PeerLink:
         self.log_asks = LogAsks(self.queue)
         #: The `pymux receive` requests that wait for the peer's client. Lillecarl/pyterm#949.
         self.files = LinkFiles(self.queue)
+        #: What the peer forwards for this server, as it last reported
+        #: (`Capability.FORWARDS`). Lillecarl/pyterm#976.
+        self.forwards: list[dict[str, Any]] = []
         #: The version of the link both sides speak (`peer_version`).
         self.version = version
         #: What both sides named, or what `version` implies when the
@@ -464,6 +469,24 @@ class PeerLink:
             logger.warning("Dropped a mirrored clipboard image that is not base64.")
             return
         self.connection.pymux.wayland.hold_image(image)
+
+    @property
+    def forwards_id(self) -> str:
+        "What the `forwards` table names this peer by, where a client is named by its id."
+        return "peer:%s" % (self.host,)
+
+    @_PACKETS.handles(Packet.FORWARDS)
+    def _on_forwards(self, packet: Message) -> None:
+        """
+        What the peer forwards for this server, after it changed or the
+        link came back: a copy, as a client's is. Lillecarl/pyterm#976.
+        """
+        reported = packet.get(Field.DATA)
+        self.forwards = reported if isinstance(reported, list) else []
+        said = packet.get(Field.MESSAGE)
+        if said:
+            logger.info("The peer on %s: %s", self.host or "a machine", said)
+        self.connection.pymux.invalidate(Woke.FORWARDS_CHANGED)
 
     @_PACKETS.handles(Packet.RECORDING)
     def _on_recording(self, packet: Message) -> None:

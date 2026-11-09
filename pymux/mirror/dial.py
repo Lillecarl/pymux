@@ -18,7 +18,7 @@ from ..client.ssh import CLOSE_SECONDS, open_socket, ssh_target
 if TYPE_CHECKING:
     from asyncssh import SSHClientConnection, SSHReader, SSHWriter
 
-__all__ = ["abort", "dial", "dial_beside"]
+__all__ = ["abort", "dial", "dial_beside", "ssh_connection_of"]
 
 
 async def dial(address: str, connect_timeout: float | None = None, **connect_with: Any) -> anyio.abc.ByteStream:
@@ -46,6 +46,11 @@ async def dial_beside(address: str, stream: anyio.abc.ByteStream) -> anyio.abc.B
     return await anyio.connect_unix(address)
 
 
+def ssh_connection_of(stream: anyio.abc.ByteStream) -> SSHClientConnection | None:
+    "The SSH connection `stream` lives on, for a forward through it; None on a unix socket."
+    return stream.connection if isinstance(stream, _SshStream) else None
+
+
 def abort(stream: anyio.abc.ByteStream) -> None:
     "End a stream `dial` opened at once, so its reader sees it end: for a link that died while this machine slept."
     if isinstance(stream, _SshStream):
@@ -66,7 +71,7 @@ class _SshStream(anyio.abc.ByteStream):
         path: str,
         owns_connection: bool,
     ) -> None:
-        self._connection = connection
+        self.connection = connection
         self._reader = reader
         self._writer = writer
         self._path = path
@@ -75,14 +80,14 @@ class _SshStream(anyio.abc.ByteStream):
     async def beside(self) -> _SshStream:
         "Another channel to the same socket, which leaves the connection open when it closes."
         try:
-            reader, writer = await self._connection.open_unix_connection(self._path)
+            reader, writer = await self.connection.open_unix_connection(self._path)
         except OSError as error:
             raise anyio.BrokenResourceError from error
-        return _SshStream(self._connection, reader, writer, self._path, owns_connection=False)
+        return _SshStream(self.connection, reader, writer, self._path, owns_connection=False)
 
     def abort(self) -> None:
         "Drop the connection without the goodbye a dead link would never carry."
-        self._connection.abort()
+        self.connection.abort()
 
     async def receive(self, max_bytes: int = READ_SIZE) -> bytes:
         try:
@@ -108,8 +113,8 @@ class _SshStream(anyio.abc.ByteStream):
         if not self._owns_connection:
             self._writer.close()
             return
-        self._connection.close()
+        self.connection.close()
         # Bounded as the client bounds its own close: a link that died
         # while this machine slept must not hold the redial.
         with contextlib.suppress(Exception), anyio.move_on_after(CLOSE_SECONDS):
-            await self._connection.wait_closed()
+            await self.connection.wait_closed()

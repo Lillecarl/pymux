@@ -36,6 +36,7 @@ from prompt_toolkit.document import Document
 
 from pymux.commands import CommandException, CommandParser, Target, build_parser_tree, parser_tree, target_of
 from pymux.commands.aliases import ALIASES
+from pymux.core.forward_requests import ThroughPeer
 from pymux.core.forwarding import Direction
 from pymux.keys.key_spelling import key_completions
 from pymux.query import register, tables_of
@@ -146,10 +147,11 @@ def _send_keys_names(questions: Questions, prefix: str, parsed_args: argparse.Na
 def _forward_listenings(direction: Direction, questions: Questions, **_) -> dict[str, str]:
     "The listening ends `unforward-port` can name, of the client it forwards for."
     try:
-        client = questions.pymux.forward_requests.client().client_state.client
+        asker = questions.pymux.forward_requests.client()
     except CommandException, ValueError:
         return {}
-    return questions.ask("complete-forward", client=client.client_id or "", direction=direction.value)
+    holder = asker.link.forwards_id if isinstance(asker, ThroughPeer) else asker.client_state.client.client_id or ""
+    return questions.ask("complete-forward", client=holder, direction=direction.value)
 
 
 #: How long one completion question may run. It runs on the loop, and a

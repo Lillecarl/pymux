@@ -128,6 +128,11 @@ class Capability(StrEnum):
     #: `mirror-list-files`. The peer's client answers, and the peer
     #: passes each answer back. Lillecarl/pyterm#949.
     FILES = "files"
+    #: The owner asks a peer for a port forward, as a server asks an SSH
+    #: client (`forward`), and the peer answers with its table
+    #: (`forwards`). A peer names it only over SSH: a link on a unix
+    #: socket has no connection to forward through. Lillecarl/pyterm#976.
+    FORWARDS = "forwards"
 
 
 #: The version each capability came with, while each was a version. A

@@ -131,7 +131,9 @@ background and closed after.
 `via: "client"` sends a browser's traffic out from the machine of the
 person attached over `ssh://`, for a site that blocks the server's
 address. pymux-mcp asks that client for `forward-port -R 127.0.0.1:0`,
-a SOCKS forward. The person confirms it once, and it stays until
+a SOCKS forward. A person who mirrors the server from a pymux server of
+their own (`connect ssh://...`) is asked through that server instead
+(Lillecarl/pyterm#976). The person confirms it once, and it stays until
 `unforward-port`, so the next browser uses it and asks nothing. Each
 kind resolves names at the far side too: Chromium's `--proxy-server`,
 qutebrowser's `content.proxy`, and Firefox's `network.proxy.socks_remote_dns`.

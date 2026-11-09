@@ -1,19 +1,21 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Awaitable
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pymux.core.main import Pymux
 
 
-from libpymux.protocol import Field, Packet
+from libpymux.protocol import Field, Message, Packet
 
 from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands.forward_port import answered, peer_named
 from pymux.core.forwarding import BadForward, Direction, parse_listen
 
 
-def unforward_port(pymux: Pymux, args: argparse.Namespace) -> None:
+def unforward_port(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None] | None:
     """
     Stop forwarding a port.
 
@@ -39,19 +41,20 @@ def unforward_port(pymux: Pymux, args: argparse.Namespace) -> None:
     except BadForward as error:
         raise CommandException(str(error)) from None
 
+    packet: Message = {
+        Field.CMD: Packet.FORWARD,
+        Field.REMOVE: True,
+        Field.DIRECTION: str(direction),
+        Field.LISTEN_HOST: listen_host,
+        Field.LISTEN_PORT: listen_port,
+    }
+    if args.peer is not None:
+        return answered(pymux, peer_named(pymux, args.peer).unforward(packet))
     # No question here, whatever `forward-mode` says. Taking a forward
     # away only ever removes something, so the reason to confirm one
     # does not apply. Lillecarl/pyterm#442.
-    pymux.forward_requests.send(
-        pymux.forward_requests.client().client_state,
-        {
-            Field.CMD: Packet.FORWARD,
-            Field.REMOVE: True,
-            Field.DIRECTION: str(direction),
-            Field.LISTEN_HOST: listen_host,
-            Field.LISTEN_PORT: listen_port,
-        },
-    )
+    pymux.forward_requests.send(pymux.forward_requests.client(), packet)
+    return None
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
@@ -73,4 +76,10 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
         dest="socks",
         metavar="[host:]port",
         help="A SOCKS forward that listens on this machine.",
+    )
+    parser.add_argument(
+        "-p",
+        dest="peer",
+        metavar="address",
+        help="A forward this server makes through its link to that server, as `connect` named it.",
     )

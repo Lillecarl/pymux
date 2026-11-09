@@ -23,14 +23,19 @@ from pymux.core.forwarding import MAY_NARROW, Direction, Forward, the_far_side_m
 if TYPE_CHECKING:
     from asyncssh import SSHClientConnection
 
+    from .forwards import Forwards
     from .ssh import SshClient
 
 __all__ = [
     "REAP_POLL",
+    "added",
     "browser_asked",
     "forward_asked",
+    "forward_in",
+    "forwards_packet",
     "open_asked",
     "reap_forwards",
+    "removed",
     "report_forwards",
 ]
 
@@ -53,32 +58,42 @@ async def forward_asked(client: SshClient, connection: SSHClientConnection, pack
     `list-forwards` wants the set anyway. Lillecarl/pyterm#263.
     """
     if packet.get(Field.REMOVE):
-        where = (
-            Direction(packet[Field.DIRECTION]),
-            packet[Field.LISTEN_HOST],
-            packet[Field.LISTEN_PORT],
-        )
-        gone = client.forwards.remove(where)
+        said = removed(client.forwards, packet)
+    else:
+        said = await added(client.forwards, connection, forward_in(packet))
+    report_forwards(client, said)
 
-        if gone is None:
-            said = "Nothing was forwarding %s:%s." % (
-                packet[Field.LISTEN_HOST],
-                packet[Field.LISTEN_PORT],
-            )
-        else:
-            said = "Stopped forwarding %s." % (gone.spell(),)
 
-        report_forwards(client, said)
-        return
-
-    forward = Forward(
+def forward_in(packet: Message) -> Forward:
+    "The forward a `forward` packet asks for."
+    return Forward(
         direction=Direction(packet[Field.DIRECTION]),
         listen_host=packet[Field.LISTEN_HOST],
         listen_port=packet[Field.LISTEN_PORT],
         dest_host=packet[Field.DEST_HOST],
         dest_port=packet[Field.DEST_PORT],
     )
-    opened = await client.forwards.add(connection, forward)
+
+
+def removed(forwards: Forwards, packet: Message) -> str:
+    "Stop the forward a `forward` packet with `remove` names, and say what happened."
+    where = (
+        Direction(packet[Field.DIRECTION]),
+        packet[Field.LISTEN_HOST],
+        packet[Field.LISTEN_PORT],
+    )
+    gone = forwards.remove(where)
+    if gone is None:
+        return "Nothing was forwarding %s:%s." % (
+            packet[Field.LISTEN_HOST],
+            packet[Field.LISTEN_PORT],
+        )
+    return "Stopped forwarding %s." % (gone.spell(),)
+
+
+async def added(forwards: Forwards, connection: SSHClientConnection, forward: Forward) -> str:
+    "Open `forward` on `connection`, and say what happened."
+    opened = await forwards.add(connection, forward)
 
     if opened.error:
         said = "Cannot forward %s: %s" % (forward.spell(), opened.error)
@@ -103,8 +118,7 @@ async def forward_asked(client: SshClient, connection: SSHClientConnection, pack
             forward.listen_host,
             MAY_NARROW,
         )
-
-    report_forwards(client, said)
+    return said
 
 
 async def open_asked(client: SshClient, connection: SSHClientConnection, packet: Message) -> None:
@@ -190,10 +204,9 @@ def report_forwards(client: SshClient, message: str = "") -> None:
     connection, so it cannot know whether a listener is really open.
     `list-forwards` reads the copy.
     """
-    client.send_packet(
-        {
-            Field.CMD: Packet.FORWARDS,
-            Field.DATA: client.forwards.report(),
-            Field.MESSAGE: message,
-        }
-    )
+    client.send_packet(forwards_packet(client.forwards, message))
+
+
+def forwards_packet(forwards: Forwards, message: str = "") -> Message:
+    "The whole table, as the server reads it (`forwards`)."
+    return {Field.CMD: Packet.FORWARDS, Field.DATA: forwards.report(), Field.MESSAGE: message}

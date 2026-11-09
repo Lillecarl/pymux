@@ -3,13 +3,17 @@ Who a port forward is asked of, and whether it needs a yes first. The
 server holds no SSH connection: a client does, so a forward is a
 request to the client, the way `open-url` is. `forwarding.py` holds the
 table a client reports back. Lillecarl/pyterm#438, Lillecarl/pyterm#442.
+
+A person who reaches this server through a peer server of theirs
+(`connect`) holds the SSH connection in that server, so the request
+goes along the peer link, and the peer asks them. Lillecarl/pyterm#976.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, NamedTuple
 
-from libpymux.protocol import Message
+from libpymux.protocol import Capability, Message
 
 from ..commands import CommandException
 from ..enums import ForwardMode
@@ -17,10 +21,11 @@ from .forwarding import LOOPBACK_NAMES
 
 if TYPE_CHECKING:
     from ..connection.client_state import ClientState
+    from ..mirror.link import PeerLink
     from .forwarding import Forward
     from .main import Pymux
 
-__all__ = ["Asker", "ForwardRequests"]
+__all__ = ["Asker", "ForwardRequests", "ThroughPeer"]
 
 
 class Asker(NamedTuple):
@@ -38,13 +43,23 @@ class Asker(NamedTuple):
     in_person: bool
 
 
+class ThroughPeer(NamedTuple):
+    """
+    The peer link a forward is asked of: the peer holds the SSH
+    connection, and the person attached to it confirms each forward
+    there, since nobody here chose it.
+    """
+
+    link: PeerLink
+
+
 class ForwardRequests:
     "Sends the forwards a person asks for to the client that can make them."
 
     def __init__(self, pymux: Pymux) -> None:
         self.pymux = pymux
 
-    def client(self) -> Asker:
+    def client(self) -> Asker | ThroughPeer:
         """
         The client that a forward is asked of, and who asked.
 
@@ -65,14 +80,27 @@ class ForwardRequests:
         server's own machine, or on a phone that runs `pymux attach`
         there, is attached and forwards nothing, so beside one SSH
         client they leave nothing to choose. Lillecarl/pyterm#975.
+
+        **A peer link counts when no client can forward.** Then the one
+        peer whose link crossed SSH is the answer, and two is a question
+        for the person again. Lillecarl/pyterm#976.
         """
         if self.pymux.a_person_asked():
             return self._can_it_forward(Asker(self.pymux.get_client_state(), in_person=True))
 
         attached = self.pymux.clients
+        forwarding = [one for one in attached if one.client.can_forward]
+        if not forwarding:
+            links = [link for link in self.pymux.peer_links() if link.can(Capability.FORWARDS)]
+            if len(links) > 1:
+                raise CommandException(
+                    "Several peer servers link over SSH. Run this from a client attached to the one that should forward."
+                )
+            if links:
+                return ThroughPeer(links[0])
         if not attached:
             raise CommandException("Nobody is attached, so there is nothing to forward through.")
-        attached = [one for one in attached if one.client.can_forward] or attached
+        attached = forwarding or attached
         if len(attached) > 1:
             raise CommandException("Several clients are attached. Run this from the one that should forward.")
         # A temporary client is what a command that arrived
@@ -117,9 +145,9 @@ class ForwardRequests:
 
         return not in_person or forward.listen_host not in LOOPBACK_NAMES
 
-    def send(self, client_state: ClientState, packet: Message) -> None:
+    def send(self, asker: Asker | ThroughPeer, packet: Message) -> None:
         """
-        Ask a client to open or close a forward.
+        Ask a client or a peer to open or close a forward.
 
         **The server never forwards anything itself.** It holds no SSH
         connection: the client does, and it is the machine the person
@@ -129,4 +157,7 @@ class ForwardRequests:
         `client` has already refused a client that cannot
         forward at all. Lillecarl/pyterm#438.
         """
-        client_state.client.connection.send_packet(packet)
+        if isinstance(asker, ThroughPeer):
+            asker.link.queue(packet)
+            return
+        asker.client_state.client.connection.send_packet(packet)

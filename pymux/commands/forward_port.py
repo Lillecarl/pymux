@@ -2,28 +2,31 @@ from __future__ import annotations
 
 import argparse
 import shlex
-from typing import TYPE_CHECKING
+from collections.abc import Awaitable, Coroutine
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from pymux.core.main import Pymux
+    from pymux.mirror.peer import Peer
 
 
-from libpymux.protocol import Field, Packet
+from libpymux.protocol import Field, Message, Packet
 
-from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands import CommandException, CommandParser, add_command, this_client
+from pymux.commands.common import answer, find_pane
+from pymux.core.forward_requests import ThroughPeer
 from pymux.core.forwarding import (
-    MAY_NARROW,
     BadForward,
     Direction,
     Forward,
     parse_forward,
     parse_socks,
-    the_far_side_may_narrow,
+    question,
 )
 from pymux.enums import ForwardMode
 
 
-def forward_port(pymux: Pymux, args: argparse.Namespace) -> None:
+def forward_port(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None] | None:
     """
     Forward a port through the SSH connection of this client.
 
@@ -45,6 +48,12 @@ def forward_port(pymux: Pymux, args: argparse.Namespace) -> None:
     **The server forwards nothing itself.** It holds no SSH connection;
     the client does. So this asks the client, and the client answers
     with what it is forwarding. Lillecarl/pyterm#438.
+
+    **A person who reaches the server through a server of their own**
+    (`connect`) holds the SSH connection there. Then the request goes
+    along the peer link, and that server asks them. There, `-p address`
+    forwards through the link to the server `connect` named, with `-R`
+    listening on that server's machine. Lillecarl/pyterm#976.
 
     `forward-mode` says whether it is confirmed first. A forward that
     binds off loopback, and one a program in a pane asked for, are
@@ -68,7 +77,23 @@ def forward_port(pymux: Pymux, args: argparse.Namespace) -> None:
     if pymux.options.forward_mode == ForwardMode.OFF:
         raise CommandException("forward-mode is off, so pymux forwards nothing.")
 
+    if args.peer is not None:
+        return _through_link(pymux, peer_named(pymux, args.peer), forward, args.confirmed)
+
     asker = pymux.forward_requests.client()
+    packet = _packet(forward)
+
+    if isinstance(asker, ThroughPeer):
+        # The peer asks the person attached there: nobody here chose it.
+        caller = find_pane(pymux, None)
+        if caller is not None:
+            packet[Field.PANE_ID] = int(caller.pane_id)
+        pymux.forward_requests.send(asker, packet)
+        answer(
+            pymux,
+            "Asked %s to forward %s. The person there confirms it." % (asker.link.host or "the peer", forward.spell()),
+        )
+        return None
 
     if forward.socks and not asker.client_state.client.answers_socks:
         raise CommandException(
@@ -83,46 +108,67 @@ def forward_port(pymux: Pymux, args: argparse.Namespace) -> None:
     confirmed = args.confirmed and asker.in_person
 
     if not confirmed and pymux.forward_requests.needs_asking(forward, asker.in_person):
-        # The question names both ends. "Forward a port?" is not enough
-        # to answer safely: what matters is where it listens and what it
-        # reaches. A yes runs this same command with -c, so it is asked
-        # once. Lillecarl/pyterm#442.
-        #
-        # **And it says where the answer is not ours to give.** The one
-        # bind worth confirming is the one openssh may quietly narrow,
-        # so a question that did not say so would be asking about
-        # something that may not happen. Lillecarl/pyterm#446.
-        caveat = " -- %s" % (MAY_NARROW,) if the_far_side_may_narrow(forward) else ""
-        asker.client_state.ask(
-            "Forward %s%s%s? (y/n)" % (forward.spell(), _what_socks_reaches(forward), caveat),
-            "forward-port -c %s %s" % (forward.flag, shlex.quote(spec)),
-        )
-        return
+        # A yes runs this same command with -c, so it is asked once.
+        asker.client_state.ask(question(forward), "forward-port -c %s %s" % (forward.flag, shlex.quote(spec)))
+        return None
 
-    pymux.forward_requests.send(
-        asker.client_state,
-        {
-            Field.CMD: Packet.FORWARD,
-            Field.DIRECTION: str(forward.direction),
-            Field.LISTEN_HOST: forward.listen_host,
-            Field.LISTEN_PORT: forward.listen_port,
-            Field.DEST_HOST: forward.dest_host,
-            Field.DEST_PORT: forward.dest_port,
-        },
-    )
+    pymux.forward_requests.send(asker, packet)
+    return None
 
 
-def _what_socks_reaches(forward: Forward) -> str:
+def peer_named(pymux: Pymux, address: str) -> Peer:
+    "The peer `connect` linked at `address`."
+    peer = pymux.peers.by_address.get(address)
+    if peer is None:
+        raise CommandException("This server has no link to %s." % (address,))
+    return peer
+
+
+def _through_link(pymux: Pymux, peer: Peer, forward: Forward, confirmed: bool) -> Awaitable[None] | None:
+    in_person = pymux.a_person_asked()
+    if not (confirmed and in_person) and pymux.forward_requests.needs_asking(forward, in_person):
+        asking = this_client(pymux) or pymux.latest_client()
+        if asking is None:
+            raise CommandException("Nobody is attached to confirm the forward.")
+        asking.ask(question(forward), confirm_through(peer, forward))
+        return None
+    return answered(pymux, peer.forward(forward))
+
+
+def confirm_through(peer: Peer, forward: Forward) -> str:
+    "The command a yes runs, to make `forward` through the link to `peer`."
+    return shlex.join(["forward-port", "-c", "-p", peer.address, *forward.typed()])
+
+
+def answered(pymux: Pymux, said: Coroutine[Any, Any, str]) -> Awaitable[None]:
     """
-    What a SOCKS proxy is worth saying in the question: it reaches
-    everything the machine it connects from reaches, that machine's own
-    loopback too, as openssh's does.
+    Run `said` and show what it says to whoever ran this command. The
+    asker and the client are read now: the coroutine runs later, when
+    another command may be current.
     """
-    if not forward.socks:
-        return ""
-    if forward.direction is Direction.REMOTE:
-        return " as SOCKS, connecting from this machine"
-    return " as SOCKS, connecting from the server's machine"
+    asker, client = pymux.answer, this_client(pymux)
+
+    async def run() -> None:
+        text = await said
+        if asker is not None:
+            asker.output.append(text)
+        elif client is not None:
+            client.message = text
+        else:
+            pymux.show_message(text)
+
+    return run()
+
+
+def _packet(forward: Forward) -> Message:
+    return {
+        Field.CMD: Packet.FORWARD,
+        Field.DIRECTION: str(forward.direction),
+        Field.LISTEN_HOST: forward.listen_host,
+        Field.LISTEN_PORT: forward.listen_port,
+        Field.DEST_HOST: forward.dest_host,
+        Field.DEST_PORT: forward.dest_port,
+    }
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
@@ -150,4 +196,10 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
         dest="confirmed",
         action="store_true",
         help="Forward without asking again.",
+    )
+    parser.add_argument(
+        "-p",
+        dest="peer",
+        metavar="address",
+        help="Forward through this server's link to that server, as `connect` named it.",
     )

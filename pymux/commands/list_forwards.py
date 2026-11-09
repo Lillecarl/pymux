@@ -59,9 +59,12 @@ async def _list_fresh(pymux: Pymux, asked: list[ClientRole]) -> None:
 
 def _list(pymux: Pymux) -> None:
     lines: list[str] = []
+    held = [(client.client.connection.name, client.client.forwards) for client in pymux.clients]
+    # A peer's copy is what it last reported: it is not asked afresh. Lillecarl/pyterm#976.
+    held += [("peer %s" % (link.host,), link.forwards) for link in pymux.peer_links()]
 
-    for client in pymux.clients:
-        for one in client.client.forwards:
+    for name, forwards in held:
+        for one in forwards:
             notes = []
             if one.get("ours"):
                 notes.append("pymux")
@@ -74,7 +77,7 @@ def _list(pymux: Pymux) -> None:
             lines.append(
                 "%s: %s -> %s%s"
                 % (
-                    client.client.connection.name,
+                    name,
                     _listen(one),
                     one.get("dest", ""),
                     " (%s)" % (", ".join(notes),) if notes else "",

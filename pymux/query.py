@@ -306,10 +306,13 @@ def _key_names(pymux: Pymux) -> Iterator[KeyNameView]:
 
 
 def _forwards(pymux: Pymux) -> Iterator[ForwardView]:
-    for client in pymux._client_states:
-        for one in client.forwards:
+    held = [(client.client_id or "", client.forwards) for client in pymux._client_states]
+    # A peer that forwards for this server is named where a client is. Lillecarl/pyterm#976.
+    held += [(link.forwards_id, link.forwards) for link in pymux.peer_links()]
+    for holder, forwards in held:
+        for one in forwards:
             yield ForwardView(
-                client.client_id or "",
+                holder,
                 one.get("direction", ""),
                 # The port really bound, which is what `list-forwards`
                 # shows and so what a person can name. Lillecarl/pyterm#443.

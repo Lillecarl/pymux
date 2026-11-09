@@ -29,6 +29,7 @@ __all__ = [
     "parse_forward",
     "parse_listen",
     "parse_socks",
+    "question",
     "the_far_side_may_narrow",
     "with_port",
 ]
@@ -125,6 +126,13 @@ class Forward(NamedTuple):
             return "%s %s" % (self.flag, self.listen)
         return "%s %s:%s" % (self.flag, self.listen, self.dest)
 
+    def typed(self) -> list[str]:
+        "The `forward-port` words that ask for this forward again: `spell` writes any port as `*`, which no parse reads."
+        spec = "%s:%d" % (self.listen_host, self.listen_port)
+        if not self.socks:
+            spec = "%s:%s:%d" % (spec, self.dest_host, self.dest_port)
+        return [self.flag, spec]
+
 
 #: What a SOCKS forward shows where a destination goes.
 SOCKS: Final = "socks"
@@ -159,6 +167,36 @@ def the_far_side_may_narrow(forward: Forward) -> bool:
 #: the person is the only one who can find out whether this server is
 #: configured for it.
 MAY_NARROW = "the server may bind it on loopback only"
+
+
+def question(forward: Forward) -> str:
+    """
+    What a person is asked before `forward` is made.
+
+    **It names both ends.** "Forward a port?" is not enough to answer
+    safely: what matters is where it listens and what it reaches.
+    Lillecarl/pyterm#442.
+
+    **And it says where the answer is not ours to give.** The one bind
+    worth confirming is the one openssh may quietly narrow, so a
+    question that did not say so would be asking about something that
+    may not happen. Lillecarl/pyterm#446.
+    """
+    caveat = " -- %s" % (MAY_NARROW,) if the_far_side_may_narrow(forward) else ""
+    return "Forward %s%s%s? (y/n)" % (forward.spell(), _what_socks_reaches(forward), caveat)
+
+
+def _what_socks_reaches(forward: Forward) -> str:
+    """
+    What a SOCKS proxy is worth saying in the question: it reaches
+    everything the machine it connects from reaches, that machine's own
+    loopback too, as openssh's does.
+    """
+    if not forward.socks:
+        return ""
+    if forward.direction is Direction.REMOTE:
+        return " as SOCKS, connecting from this machine"
+    return " as SOCKS, connecting from the server's machine"
 
 
 class BadForward(ValueError):
