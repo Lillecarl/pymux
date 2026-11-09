@@ -125,15 +125,18 @@ async def test_a_forward_comes_back_with_the_link(two_servers, tmp_path):
             await until(lambda: owners_forwards(owner), "the forward is made")
             first = owners_forwards(owner)[0]["port"]
 
+            (link,) = owner.peer_links()
             abort(here.stream)
             here.dial_now()
             await until(
-                lambda: [one["port"] for one in owners_forwards(owner)] not in ([], [first]),
+                lambda: [one for new in owner.peer_links() if new is not link for one in new.forwards],
                 "the forward is open again on the new link",
                 seen=lambda: owners_forwards(owner),
             )
             (again,) = owners_forwards(owner)
             assert not again["error"], again
+            # On the port it had: whatever holds the number keeps working. Lillecarl/pyterm#978.
+            assert again["port"] == first
 
 
 async def test_the_forwards_table_names_the_peer(two_servers, tmp_path):

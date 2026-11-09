@@ -454,6 +454,36 @@ async def test_a_forward_comes_back_on_a_new_openssh_connection(sshd):
         tasks.cancel_scope.cancel()
 
 
+async def test_a_remote_forward_on_any_port_keeps_its_number_on_a_new_openssh_connection(sshd):
+    """
+    sshd binds a remote forward, so the port it had is free only once
+    sshd let the old connection go. A server upgrade closes that one
+    before it dials the next. Lillecarl/pyterm#978.
+    """
+    async with _bounded() as tasks:
+        echo = await _echoing(tasks)
+        forwards = Forwards()
+        wanted = Forward(Direction.REMOTE, "127.0.0.1", ANY_PORT, "127.0.0.1", echo.port)
+
+        async with _connect_to(sshd) as first:
+            was = await forwards.add(first, wanted)
+            assert was.error == "", was.error
+            forwards.close()
+
+        async with _connect_to(sshd) as second:
+            moved = await forwards.reopen(second)
+            again = forwards.opened()[0]
+
+            assert again.error == "", again.error
+            assert again.port == was.port, moved
+            assert await _spoken_through(again.port) == b"HELLO"
+
+            forwards.close()
+
+        await echo.quiet()
+        tasks.cancel_scope.cancel()
+
+
 async def test_openssh_narrows_a_remote_forward_rather_than_refusing_it(sshd):
     """
     **It binds loopback and reports success.** A person who asked for

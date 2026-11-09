@@ -1408,6 +1408,87 @@ async def test_connecting_again_brings_the_forwards_back():
                 again.close()
 
 
+def _socks_or(direction: Direction, echo_port: int) -> Forward:
+    return Forward(direction, "127.0.0.1", ANY_PORT, "127.0.0.1", echo_port)
+
+
+@pytest.mark.parametrize(
+    "make",
+    [
+        lambda echo: _socks_or(Direction.LOCAL, echo),
+        lambda echo: _socks_or(Direction.REMOTE, echo),
+        lambda echo: parse_socks(Direction.REMOTE, "127.0.0.1:0"),
+    ],
+    ids=["-L", "-R", "-R socks"],
+)
+async def test_a_forward_on_any_port_keeps_its_number_across_a_reconnect(make):
+    """
+    A server upgrade is a new SSH connection. A browser started with the
+    proxy's port, or a CDP client, still points at the number it was
+    given, so the forward asks for that one again. Lillecarl/pyterm#978.
+    """
+    import tempfile
+
+    where = Path(tempfile.mkdtemp())
+    socket_path = str(where / "pymux.sock")
+
+    with anyio.fail_after(10):
+        async with echoing() as echo_port, live_servers(socket_path) as (_pymux, port, client_key):
+            client = SshClient(
+                "ssh://127.0.0.1:%d%s" % (port, socket_path),
+                known_hosts=None,
+                client_keys=[client_key],
+                username="anybody",
+            )
+            connection, _reader = await client.connect()
+            was = await client.forwards.add(connection, make(echo_port))
+            assert was.error == "" and was.port != ANY_PORT, was
+            connection.close()
+            await connection.wait_closed()
+
+            again, _reader = await client.connect()
+            try:
+                back = client.forwards.opened()[0]
+                assert back.error == "", back.error
+                assert back.port == was.port
+                assert client._forwards_moved == ""
+            finally:
+                again.close()
+
+
+async def test_a_forward_whose_number_was_taken_meanwhile_takes_another():
+    "Somebody bound the port while the link was down: any free port does, and the person is told it moved."
+    import tempfile
+
+    where = Path(tempfile.mkdtemp())
+    socket_path = str(where / "pymux.sock")
+
+    with anyio.fail_after(10):
+        async with echoing() as echo_port, live_servers(socket_path) as (_pymux, port, client_key):
+            client = SshClient(
+                "ssh://127.0.0.1:%d%s" % (port, socket_path),
+                known_hosts=None,
+                client_keys=[client_key],
+                username="anybody",
+            )
+            connection, _reader = await client.connect()
+            was = await client.forwards.add(connection, _socks_or(Direction.LOCAL, echo_port))
+            connection.close()
+            await connection.wait_closed()
+            client.forwards.close()
+
+            async with await anyio.create_tcp_listener(local_host="127.0.0.1", local_port=was.port):
+                again, _reader = await client.connect()
+                try:
+                    back = client.forwards.opened()[0]
+                    assert back.error == "", back.error
+                    assert back.port not in (ANY_PORT, was.port)
+                    assert "is now on %d" % (back.port,) in client._forwards_moved
+                    assert await _spoken_through(back.port) == b"HELLO"
+                finally:
+                    again.close()
+
+
 # ----------------------------------------------------------------------
 # The commands, and what they ask of a client.
 

@@ -340,8 +340,8 @@ class Forwards:
 
         for wanted in list(self._wanted.values()):
             forward = wanted.forward
-            opened = await self._open_one(connection, wanted)
             where = _where(forward)
+            opened = await self._open_one(connection, wanted, was.get(where))
 
             if opened.error:
                 lost.append("%s (%s)" % (forward.spell(), opened.error))
@@ -357,7 +357,19 @@ class Forwards:
             if part
         )
 
-    async def _open_one(self, connection: SSHClientConnection, wanted: Wanted) -> Opened:
+    async def _open_one(self, connection: SSHClientConnection, wanted: Wanted, had: int | None = None) -> Opened:
+        """
+        Open one wanted forward. `had` is the port it was bound to before
+        the link went.
+
+        **A forward on any free port asks for the one it had first.** A
+        reconnect is a new SSH connection, and any free port is a new
+        number each time, so whatever was pointed at the old one -- a
+        browser's proxy, a CDP client -- would point at nothing after
+        every server upgrade. The old connection closed before this one
+        dialled, so its port is free unless somebody took it meanwhile,
+        and then any free port does again. Lillecarl/pyterm#978.
+        """
         forward = wanted.forward
         where = _where(forward)
 
@@ -371,6 +383,8 @@ class Forwards:
         tries = [forward]
         if wanted.may_move and forward.listen_port != ANY_PORT:
             tries.append(forward._replace(listen_port=ANY_PORT))
+        if forward.listen_port == ANY_PORT and had:
+            tries.insert(0, forward._replace(listen_port=had))
 
         error = ""
 
