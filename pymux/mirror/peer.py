@@ -106,6 +106,13 @@ def _clipboard_write_of(packet: Message) -> ClipboardWrite | None:
     )
 
 
+def _alone(error: Exception) -> Exception:
+    "The one failure a task group wraps, so that whether to dial again and what the person reads are about it."
+    while isinstance(error, ExceptionGroup) and len(error.exceptions) == 1:
+        error = error.exceptions[0]
+    return error
+
+
 class Peers:
     "This server's links to other servers, one per address."
 
@@ -757,7 +764,7 @@ class Peer:
                     self.tree.pymux.show_message("%s: %s" % (self.address, refused))
                 tasks.cancel_scope.cancel()
         except Exception as error:
-            lost = error
+            lost = _alone(error)
             logger.exception("The link to %s failed.", self.address)
         finally:
             self.connected = False

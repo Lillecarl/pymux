@@ -60,6 +60,13 @@ def abort(stream: anyio.abc.ByteStream) -> None:
         stream.extra(anyio.abc.SocketAttribute.raw_socket).shutdown(socket.SHUT_RDWR)
 
 
+def _gone() -> tuple[type[Exception], ...]:
+    "What a channel raises when its connection went away: a missed keepalive is `ConnectionLost`, no `OSError`."
+    import asyncssh
+
+    return (OSError, asyncssh.ConnectionLost)
+
+
 class _SshStream(anyio.abc.ByteStream):
     "One SSH channel to a unix socket, and the connection it lives on."
 
@@ -92,7 +99,7 @@ class _SshStream(anyio.abc.ByteStream):
     async def receive(self, max_bytes: int = READ_SIZE) -> bytes:
         try:
             data = await self._reader.read(max_bytes)
-        except OSError as error:
+        except _gone() as error:
             raise anyio.BrokenResourceError from error
         if not data:
             raise anyio.EndOfStream
@@ -102,7 +109,7 @@ class _SshStream(anyio.abc.ByteStream):
         try:
             self._writer.write(item)
             await self._writer.drain()
-        except OSError as error:
+        except _gone() as error:
             raise anyio.BrokenResourceError from error
 
     async def send_eof(self) -> None:
