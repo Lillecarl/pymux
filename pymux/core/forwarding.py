@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 from typing import Final, NamedTuple
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import parse_qsl, urlparse, urlunparse
 
 __all__ = [
     "ANY_PORT",
@@ -25,6 +25,8 @@ __all__ = [
     "BadForward",
     "Direction",
     "Forward",
+    "Loopback",
+    "loopback_of",
     "loopback_port",
     "parse_forward",
     "parse_listen",
@@ -300,6 +302,41 @@ def loopback_port(url: str) -> tuple[str, int] | None:
         return None
 
     return host, port
+
+
+class Loopback(NamedTuple):
+    "A loopback address a URL leads to, and whether a forward for it may listen on another port."
+
+    host: str
+    port: int
+    #: False for an address in the query: the program checks that the
+    #: redirect it gets back names its own port, and a moved port
+    #: cannot be written back into a URL it chose.
+    movable: bool
+
+
+def loopback_of(url: str) -> Loopback | None:
+    """
+    The loopback address this URL leads to: its own, or the first query
+    value that is itself a loopback URL, or `None`.
+
+    The second is a CLI's sign-in: `aws login`, `gcloud auth login` and
+    `az login` open a page elsewhere whose `redirect_uri` is a listener
+    of the CLI on this machine. The page lives on the internet, and the
+    redirect at its end needs the port.
+    """
+    own = loopback_port(url)
+    if own is not None:
+        return Loopback(*own, movable=True)
+    try:
+        query = urlparse(url).query
+    except ValueError:
+        return None
+    for _, value in parse_qsl(query):
+        found = loopback_port(value)
+        if found is not None:
+            return Loopback(*found, movable=False)
+    return None
 
 
 def with_port(url: str, port: int) -> str:

@@ -13,6 +13,7 @@ only checked "something came back" would pass on it.
 
 from __future__ import annotations
 
+import shlex
 from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
 
@@ -38,6 +39,8 @@ from pymux.core.forwarding import (
     BadForward,
     Direction,
     Forward,
+    Loopback,
+    loopback_of,
     loopback_port,
     parse_forward,
     parse_listen,
@@ -143,6 +146,31 @@ def test_only_a_loopback_url_names_a_port_to_forward(url, expected):
     ordinary web address needs none.
     """
     assert loopback_port(url) == expected
+
+
+AWS_LOGIN = (
+    "https://eu-north-1.signin.aws.amazon.com/v1/authorize?response_type=code&state=1bd30cea"
+    "&redirect_uri=http%3A%2F%2F127.0.0.1%3A46747%2Foauth%2Fcallback&code_challenge=saX3hW4"
+)
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("http://localhost:3000/", Loopback("localhost", 3000, movable=True)),
+        # `aws login`: the page is AWS's, the redirect at its end is the CLI's.
+        (AWS_LOGIN, Loopback("127.0.0.1", 46747, movable=False)),
+        ("https://accounts.example.com/o?redirect_uri=http://localhost:8085/", Loopback("localhost", 8085, False)),
+        # The URL's own loopback address comes first.
+        ("http://localhost:3000/?next=http://localhost:4000/", Loopback("localhost", 3000, True)),
+        ("https://example.com/?next=https://example.org/", None),
+        ("https://example.com/?host=localhost&port=8080", None),
+        ("https://example.com/", None),
+    ],
+)
+def test_a_loopback_url_in_the_query_names_a_port_that_stays(url, expected):
+    "A sign-in page elsewhere whose redirect comes back to a CLI's listener here."
+    assert loopback_of(url) == expected
 
 
 def test_a_url_moves_to_the_port_that_was_free():
@@ -1235,6 +1263,38 @@ async def test_the_client_keeps_the_url_when_its_port_was_free():
         client.forwards.close()
 
 
+async def test_the_client_never_moves_a_port_from_the_query():
+    """
+    The CLI checks that the redirect names its own port, and the port
+    sits in a URL the client cannot rewrite. A taken port is an error,
+    not another port, and the page opens unchanged.
+    """
+    sent = []
+
+    async with echoing() as echo_port, ssh_connection() as connection:
+        url = "https://signin.example.com/?redirect_uri=http%%3A%%2F%%2F127.0.0.1%%3A%d%%2Fcb" % (echo_port,)
+        client = SshClient("ssh://127.0.0.1/tmp/nowhere.sock")
+        client.send_packet = sent.append
+
+        with _browser(client) as opened:
+            await open_asked(
+                client,
+                connection,
+                {
+                    "cmd": "open",
+                    "data": url,
+                    "forward": {"host": "127.0.0.1", "port": echo_port, "idle": 600, "fixed": True},
+                },
+            )
+
+        assert opened == [url]
+        (row,) = sent[0]["data"]
+        assert row["port"] == echo_port and row["error"], row
+        assert "but not 127.0.0.1:%d" % (echo_port,) in sent[0]["message"], sent[0]["message"]
+
+        client.forwards.close()
+
+
 async def test_the_client_moves_the_url_when_its_port_was_taken():
     """
     The echo here is both the service on the far side and the thing
@@ -1801,7 +1861,18 @@ async def test_a_loopback_url_carries_its_port():
         packet = await _opened(session, seen)
 
     assert packet["data"] == LOOPBACK_URL
-    assert packet["forward"] == {"host": "localhost", "port": 3000, "idle": 600}
+    assert packet["forward"] == {"host": "localhost", "port": 3000, "idle": 600, "fixed": False}
+
+
+async def test_a_sign_in_url_carries_the_port_of_its_redirect():
+    "`aws login` prints a page of AWS's, and the port is the CLI's, in `redirect_uri`."
+    seen = []
+
+    async with over_connection(read_packet=seen.append) as session:
+        packet = await _opened(session, seen, url=shlex.quote(AWS_LOGIN))
+
+    assert packet["data"] == AWS_LOGIN
+    assert packet["forward"] == {"host": "127.0.0.1", "port": 46747, "idle": 600, "fixed": True}
 
 
 async def test_an_ordinary_url_carries_nothing():

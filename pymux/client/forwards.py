@@ -57,11 +57,19 @@ class Wanted(NamedTuple):
 
     forward: Forward
     idle: float | None = None
+    #: A port from a URL's query, which the URL cannot be rewritten to
+    #: leave: see `forwarding.Loopback.movable`.
+    fixed: bool = False
+
+    @property
+    def ours(self) -> bool:
+        "Whether pymux opened it for a URL, rather than a person asking."
+        return self.idle is not None
 
     @property
     def may_move(self) -> bool:
         "Whether another port will do when the one asked for is taken."
-        return self.idle is not None
+        return self.ours and not self.fixed
 
 
 class Opened(NamedTuple):
@@ -160,6 +168,7 @@ class Forwards:
         connection: SSHClientConnection,
         forward: Forward,
         idle: float | None = None,
+        fixed: bool = False,
     ) -> Opened:
         """
         Want this forward, and open it now.
@@ -174,10 +183,10 @@ class Forwards:
         nobody asked it. Lillecarl/pyterm#439.
         """
         where = _where(forward)
-        wanted = Wanted(forward, idle)
+        wanted = Wanted(forward, idle, fixed)
         standing = self._wanted.get(where)
 
-        if wanted.may_move and standing is not None:
+        if wanted.ours and standing is not None:
             if standing.forward != forward:
                 return Opened(
                     forward,

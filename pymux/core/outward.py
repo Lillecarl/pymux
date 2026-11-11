@@ -43,7 +43,7 @@ from ..notify.osc import (
     simple_notification_of,
 )
 from ..wayland.window_pane import WindowScreen
-from .forwarding import loopback_port
+from .forwarding import loopback_of
 
 if TYPE_CHECKING:
     from ..connection.client_state import ClientState
@@ -127,7 +127,7 @@ class Outward:
         confirmed = confirmed and self.pymux.a_person_asked()
 
         program = pane.process if pane is not None else None
-        if isinstance(program, RemoteProgram) and loopback_port(url) is not None:
+        if isinstance(program, RemoteProgram) and loopback_of(url) is not None:
             assert self.pymux.tasks is not None
             self.pymux.tasks.start_soon(self._open_through, program, url, confirmed)
             return
@@ -209,12 +209,16 @@ class Outward:
             # around that.
             return None
 
-        found = loopback_port(url)
+        found = loopback_of(url)
         if found is None:
             return None
 
-        host, port = found
-        return {"host": host, "port": port, "idle": options.open_url_forward_idle}
+        return {
+            "host": found.host,
+            "port": found.port,
+            "idle": options.open_url_forward_idle,
+            "fixed": not found.movable,
+        }
 
     def who_acts(self, pane: Pane, param: str) -> tuple[bool, list[PeerLink]]:
         """

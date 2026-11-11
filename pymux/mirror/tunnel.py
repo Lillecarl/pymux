@@ -26,7 +26,7 @@ from libpymux.wire import MSGPACK, PacketReader, encode_json, encode_msgpack
 from pyte.keep import Keep
 
 from ..commands import CommandException
-from ..core.forwarding import loopback_port, with_port
+from ..core.forwarding import loopback_of, with_port
 from ..ids import PaneId
 from ..log import logger
 from .dial import dial_beside
@@ -221,16 +221,18 @@ class Tunnels:
         the machine `program` runs on. The program's own port when it is
         free here, or one that already leads there.
         """
-        found = loopback_port(url)
+        found = loopback_of(url)
         assert found is not None
-        host, port = found
+        host, port = found.host, found.port
         peer, pane_id = program.peer, program.pane_id
         for here, listening in self.listening.items():
-            if listening.goes_to(peer, pane_id, port):
+            if listening.goes_to(peer, pane_id, port) and (found.movable or here == port):
                 return url if here == port else with_port(url, here)
         try:
             listener = await anyio.create_tcp_listener(local_host=host, local_port=port)
         except OSError:
+            if not found.movable:
+                raise
             # Any free port, on one address: "localhost" names two, and
             # each would get a port of its own.
             listener = await anyio.create_tcp_listener(

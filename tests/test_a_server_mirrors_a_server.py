@@ -1732,6 +1732,31 @@ async def test_a_loopback_url_keeps_its_port_when_it_is_free_here(two_servers):
     assert list(peer.peers.tunnels.listening) == [port]
 
 
+async def test_a_sign_in_url_there_listens_here_on_the_port_of_its_redirect(two_servers):
+    "`aws login` in a mirrored pane: the redirect's port is the CLI's, so the tunnel listens on that one."
+    owner, peer, client = two_servers
+    there, here = await shown_here(owner, peer, client)
+    probe = await anyio.create_tcp_listener(local_host="127.0.0.1", local_port=0)
+    port = probe.extra(anyio.abc.SocketAttribute.local_port)
+    await probe.aclose()
+    url = "https://signin.example.com/?redirect_uri=http%%3A%%2F%%2F127.0.0.1%%3A%d%%2Fcb" % (port,)
+
+    assert await peer.peers.tunnels.opened(here.process, url, 60) == url
+    assert list(peer.peers.tunnels.listening) == [port]
+
+
+async def test_a_sign_in_url_whose_port_is_taken_here_does_not_move(two_servers):
+    "The page cannot be rewritten to another port, so a taken one is an error."
+    owner, peer, client = two_servers
+    there, here = await shown_here(owner, peer, client)
+    async with await anyio.create_tcp_listener(local_host="127.0.0.1", local_port=0) as holder:
+        port = holder.extra(anyio.abc.SocketAttribute.local_port)
+        url = "https://signin.example.com/?redirect_uri=http%%3A%%2F%%2F127.0.0.1%%3A%d%%2Fcb" % (port,)
+        with pytest.raises(OSError):
+            await peer.peers.tunnels.opened(here.process, url, 60)
+    assert not peer.peers.tunnels.listening
+
+
 @pytest.mark.parametrize("used_last", ["here", "there"])
 async def test_a_url_of_a_mirrored_pane_opens_once_where_a_person_was_last(two_servers, monkeypatch, used_last):
     "A person at both servers gets the URL once, on the terminal they used last. Lillecarl/pyterm#856."

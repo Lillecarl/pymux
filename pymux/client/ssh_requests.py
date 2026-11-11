@@ -142,6 +142,7 @@ async def open_asked(client: SshClient, connection: SSHClientConnection, packet:
         connection,
         Forward(Direction.LOCAL, host, port, host, port),
         idle=asked["idle"],
+        fixed=asked.get("fixed", False),
     )
 
     if opened.error:

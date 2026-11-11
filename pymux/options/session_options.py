@@ -113,7 +113,9 @@ class SessionOptions(Options):
         True,
         doc=(
             "Bring the port with a loopback URL: localhost on the browser of the machine at the "
-            "keyboard means a service on that machine, which is the wrong one. Lillecarl/pyterm#439."
+            "keyboard means a service on that machine, which is the wrong one. A loopback URL in the "
+            "query counts too, on its own port: the `redirect_uri` of `aws login` and other CLI "
+            "sign-ins. Lillecarl/pyterm#439."
         ),
     )
     open_url_forward_idle: int = option(
