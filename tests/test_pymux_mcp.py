@@ -129,6 +129,40 @@ def _pauses_recorded(monkeypatch, events):
     monkeypatch.setattr(pymux_mcp.api.anyio, "sleep", sleep)
 
 
+class CommandRecorder:
+    "A server that keeps each command line and the pane it came from."
+
+    socket_path = "/run/pymux/default"
+
+    def __init__(self):
+        self.asked = []
+
+    async def cmd(self, command, pane_id=None, check=True):
+        self.asked.append((command, pane_id))
+        return CommandResult("", "", 0)
+
+
+@pytest.mark.parametrize(
+    ("enclosing", "pane"),
+    [
+        ("/run/pymux/default,7", "%7"),
+        # The agent's pane is on another server, so it is nobody's here.
+        ("/run/pymux/other,7", None),
+        ("", None),
+    ],
+)
+async def test_command_runs_from_the_agents_own_pane(monkeypatch, enclosing, pane):
+    """
+    As `pymux <command>` typed in that pane: `open-url` from an agent whose
+    person sees the server only through a peer opens at that peer, and not
+    "Nobody is attached".
+    """
+    monkeypatch.setenv("PYMUX", enclosing)
+    server = CommandRecorder()
+    await OPERATIONS.call(server, "command", {"command": "open-url https://example.com/"})
+    assert server.asked == [("open-url https://example.com/", pane)]
+
+
 @pytest.mark.parametrize("no_paste", [False, True])
 async def test_no_paste_sends_return_apart_from_the_text(monkeypatch, no_paste):
     events = []

@@ -99,6 +99,14 @@ def job_json(job: Job) -> Json:
 # -- what there is ---------------------------------------------------------
 
 
+def _here(server: Server) -> str | None:
+    "The pane the agent runs in, when it is one of this server's."
+    enclosing = Server.enclosing()
+    if enclosing is None or enclosing[0].socket_path != server.socket_path:
+        return None
+    return enclosing[1].id
+
+
 @operation("tree")
 async def tree(server: Server) -> list[Json]:
     """
@@ -109,8 +117,7 @@ async def tree(server: Server) -> list[Json]:
     in, when it runs in one of this server's. `tags` are what `tag.set`
     put on each.
     """
-    enclosing = Server.enclosing()
-    here = enclosing[1].id if enclosing is not None and enclosing[0].socket_path == server.socket_path else None
+    here = _here(server)
     tags = await server.tags()
     by_window: dict[str, list[Json]] = {}
     for pane in await server.panes():
@@ -145,13 +152,14 @@ async def sql(server: Server, query: str, params: dict[str, str | int | float] |
 @operation("command")
 async def command(server: Server, command: str) -> Json:
     """
-    Run any pymux command line, as `pymux <command>` would.
+    Run any pymux command line, as `pymux <command>` typed in the agent's
+    own pane would: `open-url` opens where the person is, peer or here.
 
     For what no other operation covers: `rename-window -t @1 logs`,
     `display-message -p '#{pane_current_path}'`. Answers what it wrote
     and its exit code, and never raises on a non-zero one.
     """
-    result = await server.cmd(command, check=False)
+    result = await server.cmd(command, pane_id=_here(server), check=False)
     return {"stdout": result.stdout, "stderr": result.stderr, "exit_code": result.exit_code}
 
 
