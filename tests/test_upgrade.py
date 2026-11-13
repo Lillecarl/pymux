@@ -153,10 +153,15 @@ def _inheritable(pid: int) -> list[str]:
     for fd in os.listdir("/proc/%d/fd" % pid):
         if int(fd) <= 2:
             continue
-        with open("/proc/%d/fdinfo/%s" % (pid, fd)) as info:
-            flags = next(int(line.split()[1], 8) for line in info if line.startswith("flags:"))
-        if not flags & os.O_CLOEXEC:
-            found.append("%s -> %s" % (fd, os.readlink("/proc/%d/fd/%s" % (pid, fd))))
+        # The server runs while this reads: an fd it closed after the
+        # listing is not one an exec would carry.
+        try:
+            with open("/proc/%d/fdinfo/%s" % (pid, fd)) as info:
+                flags = next(int(line.split()[1], 8) for line in info if line.startswith("flags:"))
+            if not flags & os.O_CLOEXEC:
+                found.append("%s -> %s" % (fd, os.readlink("/proc/%d/fd/%s" % (pid, fd))))
+        except FileNotFoundError:
+            continue
     return found
 
 
