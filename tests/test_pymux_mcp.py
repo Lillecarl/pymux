@@ -18,7 +18,7 @@ import pytest
 from libpymux import Server
 from libpymux.connection import CommandResult
 from libpymux.operations import drive
-from mcp.shared.memory import create_connected_server_and_client_session
+from mcp import Client
 from mcp.types import ImageContent
 from pymux_mcp.api import OPERATIONS, Png
 from pymux_mcp.openapi import document
@@ -219,28 +219,28 @@ def test_text_is_answered_as_it_is_and_the_rest_as_json():
 def test_a_picture_is_answered_as_an_image():
     image = render(Png(b"\x89PNG"))
     assert isinstance(image, ImageContent)
-    assert (image.mimeType, base64.b64decode(image.data)) == ("image/png", b"\x89PNG")
+    assert (image.mime_type, base64.b64decode(image.data)) == ("image/png", b"\x89PNG")
 
 
 async def test_two_tools_over_mcp(tmp_path):
     async def server_for():
         return await _nowhere(tmp_path)
 
-    async with create_connected_server_and_client_session(build(server_for)) as client:
+    async with Client(build(server_for)) as client:
         tools = await client.list_tools()
         assert sorted(tool.name for tool in tools.tools) == ["pymux", "pymux_describe"]
 
         listing = await client.call_tool("pymux_describe", {})
-        assert not listing.isError
+        assert not listing.is_error
         assert "pane.capture: " in listing.content[0].text
 
         one = await client.call_tool("pymux_describe", {"op": "pane.wait"})
         assert json.loads(one.content[0].text)["arguments"]["required"] == ["pane", "timeout"]
 
         refused = await client.call_tool("pymux", {"op": "pane.wait", "args": {"pane": "%1"}})
-        assert refused.isError
+        assert refused.is_error
         assert "timeout" in refused.content[0].text
 
         gone = await client.call_tool("pymux", {"op": "tree"})
-        assert gone.isError
+        assert gone.is_error
         assert "no pymux server" in gone.content[0].text

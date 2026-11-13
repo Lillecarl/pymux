@@ -18,8 +18,8 @@ from typing import Any
 
 import anyio
 from libpymux import CommandError, Server, ServerNotRunning
-from mcp.server.fastmcp import FastMCP
-from mcp.server.fastmcp.exceptions import ToolError
+from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ImageContent, TextContent
 
 from . import browser
@@ -46,7 +46,7 @@ def render(result: Any) -> str | ImageContent | list[ImageContent | TextContent]
     if isinstance(result, str):
         return result
     if isinstance(result, Png):
-        image = ImageContent(type="image", data=base64.b64encode(result.data).decode("ascii"), mimeType="image/png")
+        image = ImageContent(type="image", data=base64.b64encode(result.data).decode("ascii"), mime_type="image/png")
         return [image, TextContent(type="text", text=result.caption)] if result.caption else image
     if result is None:
         return "ok"
@@ -63,7 +63,7 @@ def describe(op: str | None = None) -> str:
     return json.dumps({"op": op, "description": found.description, "arguments": found.schema()})
 
 
-def build(server_for: Callable[[], Awaitable[Server]]) -> FastMCP:
+def build(server_for: Callable[[], Awaitable[Server]]) -> MCPServer:
     """
     The MCP server, asking `server_for` which pymux server each call
     acts on. It asks every call, so a pymux server that restarted is
@@ -71,7 +71,7 @@ def build(server_for: Callable[[], Awaitable[Server]]) -> FastMCP:
     """
 
     @asynccontextmanager
-    async def collecting(_app: FastMCP) -> AsyncIterator[None]:
+    async def collecting(_app: MCPServer) -> AsyncIterator[None]:
         "The collector of idle browsers, for as long as this serves."
         async with anyio.create_task_group() as tasks:
             tasks.start_soon(browser.collect, server_for)
@@ -81,7 +81,7 @@ def build(server_for: Callable[[], Awaitable[Server]]) -> FastMCP:
                 tasks.cancel_scope.cancel()
 
     # At INFO the SDK writes a line to stderr for every request.
-    mcp = FastMCP("pymux", instructions=INSTRUCTIONS, log_level="WARNING", lifespan=collecting)
+    mcp = MCPServer("pymux", instructions=INSTRUCTIONS, log_level="WARNING", lifespan=collecting)
 
     async def pymux(
         op: str, args: dict[str, Any] | None = None

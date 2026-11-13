@@ -19,7 +19,7 @@ dependencies = [
     "libpymux",
     "anyio>=4.7.0",
     # The protocol, and the stdio transport a harness starts it on.
-    "mcp>=1.20.0",
+    "mcp>=2.0.0",
     # Each operation's arguments become a model: it checks what an agent
     # sent, and its JSON Schema is what `pymux_describe` answers and what
     # the OpenAPI document is built from.

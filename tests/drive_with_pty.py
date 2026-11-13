@@ -2910,18 +2910,18 @@ def check_pymux_mcp(tmp):
 
     import anyio
     from libpymux import Server
-    from mcp.shared.memory import create_connected_server_and_client_session
+    from mcp import Client
     from pymux_mcp.server import build
 
     async def drive(server):
         async def server_for():
             return server
 
-        async with create_connected_server_and_client_session(build(server_for)) as client:
+        async with Client(build(server_for)) as client:
 
             async def ask(op, **args):
                 answer = await client.call_tool("pymux", {"op": op, "args": args})
-                assert not answer.isError, (op, args, answer.content[0].text)
+                assert not answer.is_error, (op, args, answer.content[0].text)
                 return answer.content[0].text
 
             (session,) = json.loads(await ask("tree"))
@@ -2951,10 +2951,10 @@ def check_pymux_mcp(tmp):
             # bundled one is the backup.
             shot = {"pane": cat["id"], "format": "png", "cell": [9, 18]}
             drawn = await client.call_tool("pymux", {"op": "pane.capture", "args": shot})
-            assert not drawn.isError, drawn.content[0]
+            assert not drawn.is_error, drawn.content[0]
             (image,) = drawn.content
             png = base64.b64decode(image.data)
-            assert image.mimeType == "image/png" and png.startswith(b"\x89PNG"), image.mimeType
+            assert image.mime_type == "image/png" and png.startswith(b"\x89PNG"), image.mime_type
             assert struct.unpack(">II", png[16:24]) == (cat["width"] * 9, cat["height"] * 18), png[16:24]
 
             # The whole of what the attached terminal is shown.
@@ -2962,7 +2962,7 @@ def check_pymux_mcp(tmp):
             assert len(shown.splitlines()) == 24 and "READY" in shown, shown
             whole_args = {"format": "png", "cell": [9, 18]}
             whole = await client.call_tool("pymux", {"op": "client.capture", "args": whole_args})
-            assert not whole.isError, whole.content[0]
+            assert not whole.is_error, whole.content[0]
             png = base64.b64decode(whole.content[0].data)
             assert struct.unpack(">II", png[16:24]) == (80 * 9, 24 * 18), png[16:24]
 
@@ -2999,7 +2999,7 @@ def check_pymux_mcp(tmp):
             assert raw["exit_code"] == 0 and raw["stdout"].strip() == terminal.session_name, raw
 
             refused = await client.call_tool("pymux", {"op": "job.tail", "args": {"job": 999999, "timeout": 0}})
-            assert refused.isError and "no job" in refused.content[0].text, refused
+            assert refused.is_error and "no job" in refused.content[0].text, refused
 
     terminal = Terminal(tmp, "kitty")
     try:
