@@ -16,7 +16,7 @@ from pyte.program_status import parse_report
 from run_commands import answered
 from session import create_session
 
-from pymux import commands
+from pymux import commands, plugins
 from pymux.core.main import Pymux
 from pymux.ids import PaneId
 from pymux.mirror.program import RemoteProgram
@@ -183,6 +183,62 @@ async def test_a_plugin_runs_a_command_through_its_host(tmp_path, monkeypatch):
 
     assert (asks.answer.stdout, asks.answer.exit_code) == ("asks_over_the_socket: running\n", 0)
     assert (from_the_pane.stdout, from_the_pane.exit_code) == ("%%%d\n" % pane.pane_id, 0)
+
+
+#: Hears, and mounts a command: one module does both.
+RECORDS_AND_GREETS = (
+    RECORDER
+    + """
+from pymux.commands import add_command
+from pymux.commands.common import answer
+
+
+def installed_greeting(pymux, args):
+    "Say hello."
+    answer(pymux, "hello")
+
+
+def register(subparsers):
+    add_command(subparsers, installed_greeting, read_only=True)
+"""
+)
+
+
+def _installed(tmp_path, monkeypatch, distribution: str, entries: dict[str, str]) -> None:
+    "A distribution as an installer leaves it: modules, and a dist-info naming them in the group."
+    site = tmp_path / "site-packages"
+    info = site / ("%s-1.0.dist-info" % distribution)
+    info.mkdir(parents=True)
+    (info / "METADATA").write_text("Metadata-Version: 2.1\nName: %s\nVersion: 1.0\n" % distribution)
+    lines = []
+    for name, text in entries.items():
+        module = "%s_%s" % (distribution, name)
+        (site / ("%s.py" % module)).write_text(text)
+        lines.append("%s = %s" % (name, module))
+    (info / "entry_points.txt").write_text("[%s]\n%s\n" % (plugins.GROUP, "\n".join(lines)))
+    monkeypatch.syspath_prepend(str(site))
+
+
+async def test_an_installed_distribution_brings_a_plugin(tmp_path, monkeypatch):
+    "The route of a plugin with dependencies of its own. Lillecarl/pyterm#983."
+    _home(tmp_path, monkeypatch, installed_clash=RAISES_WHEN_MADE)
+    _installed(
+        tmp_path,
+        monkeypatch,
+        "pymux_test_dist",
+        {"installed_records": RECORDS_AND_GREETS, "installed_clash": RECORDER},
+    )
+    with anyio.fail_after(DEADLINE):
+        async with create_session() as (pymux, state):
+            recorder = await _plugin(pymux, "installed_records")
+            await _until(lambda: pymux.plugins.slots["installed_clash"].state is PluginState.FAILED)
+            pymux.notification_center.add("heard")
+            await _until(lambda: len(_notified(recorder)) == 1)
+            greeting = (await answered(pymux, state, "installed-greeting")).output
+
+    assert greeting == ["hello"]
+    # The person's file comes first, so the distribution's of that name never loads.
+    assert pymux.plugins.slots["installed_clash"].error == "RuntimeError: this plugin cannot start"
 
 
 def test_only_the_events_a_plugin_hears_are_queued_for_it():

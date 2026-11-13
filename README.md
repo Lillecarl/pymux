@@ -90,6 +90,14 @@ end, a bell, a pane's end, and the activity and silence marks. Its
 `host` runs pymux commands and reaches the server. A plugin that raises
 stops alone, and `show-plugins` says why.
 
+A plugin with dependencies of its own ships as a Python distribution
+instead. It names its module in the entry-point group `pymux.plugins`,
+and the module has the same shape: commands, an event plugin, or both.
+With Nix, `pymux.withPlugins (ps: [ ... ])` puts it in pymux's
+environment, and so does `programs.pymux.plugins` in the home-manager
+module. A file in a plugin directory wins over an entry point of the
+same name.
+
 `$XDG_CONFIG_HOME/pymux/terminals.py` tells pymux about a terminal it
 does not know: what to send it that no query can find out, such as
 kitty's Unicode placeholders, a progress bar or a notification. It

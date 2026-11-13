@@ -12,13 +12,19 @@ completes it. Lillecarl/pyterm#531.
 A module may name an event plugin too, as `plugin`, and the server
 runs it: `pymux.plugin_api` says how. Lillecarl/pyterm#982.
 
-A person's plugin with the name of one shipped here is not loaded:
-the first directory wins.
+An installed distribution adds a module through the entry-point group
+`pymux.plugins`: the entry point's name is the plugin's, and its value
+names the module. That is how a plugin with dependencies of its own
+ships without making them pymux's. Lillecarl/pyterm#983.
+
+A plugin with the name of one found before it is not loaded: this
+directory, then the person's, then the entry points.
 """
 
 from __future__ import annotations
 
 import argparse
+import importlib.metadata
 import importlib.util
 import pkgutil
 import sys
@@ -31,6 +37,9 @@ from pymux.log import logger
 
 if TYPE_CHECKING:
     from pymux.commands import CommandParser
+
+#: The entry-point group an installed plugin names its module in.
+GROUP = "pymux.plugins"
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser], environ: Mapping[str, str] | None = None) -> None:
@@ -67,13 +76,30 @@ def modules(environ: Mapping[str, str] | None = None) -> Iterator[tuple[str, Mod
     A module may hold commands (`register`), an event plugin (`plugin`,
     which `pymux.plugin_api` says), or both.
     """
+    # `iter_modules` already yields a name once, from the first directory.
+    seen: set[str] = set()
     for plugin in pkgutil.iter_modules([*__path__, plugin_dir(environ)]):
+        seen.add(plugin.name)
         try:
             module = _module(plugin)
         except Exception:
             logger.exception("pymux: the plugin %s failed to load", plugin.name)
             continue
         yield plugin.name, module
+
+    for entry in importlib.metadata.entry_points(group=GROUP):
+        if entry.name in seen:
+            logger.warning("pymux: the plugin %s of %s is not loaded: another has its name", entry.name, entry.value)
+            continue
+        seen.add(entry.name)
+        try:
+            module = entry.load()
+            if not isinstance(module, ModuleType):
+                raise TypeError("the entry point %s names %r and not a module" % (entry.value, module))
+        except Exception:
+            logger.exception("pymux: the plugin %s failed to load", entry.name)
+            continue
+        yield entry.name, module
 
 
 def _unmount(subparsers: argparse._SubParsersAction[CommandParser], names: set[str]) -> None:
