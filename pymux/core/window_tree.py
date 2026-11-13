@@ -18,6 +18,7 @@ from ptterm import Terminal
 from pyte.grid import GridWriter
 from pyte.keep import Keep
 
+from ..enums import WindowMark
 from ..ids import PaneId, PaneIndex, WindowId, WindowIndex
 from ..options.window_options import WindowOptions
 
@@ -364,10 +365,10 @@ class Window:
         if self._active_pane is not None:
             self._active_pane.bell = False
 
-    def check_output(self, watched: bool, now: float) -> bool:
+    def check_output(self, watched: bool, now: float) -> WindowMark | None:
         """
         Raise the activity or silence mark from what the panes show
-        since the last check. True when a mark went up.
+        since the last check. Returns the mark that went up.
 
         Polled, and not raised from the read of each pane: a read is
         the hottest path pymux has, and a revision count costs nothing
@@ -392,15 +393,15 @@ class Window:
             self._silence_armed = True
             if self.options.monitor_activity and not watched and not self.activity:
                 self.activity = True
-                return True
-            return False
+                return WindowMark.ACTIVITY
+            return None
         quiet = self.options.monitor_silence
         if self._silence_armed and quiet and now - self._quiet_since >= quiet:
             self._silence_armed = False
             if not watched and not self.silence:
                 self.silence = True
-                return True
-        return False
+                return WindowMark.SILENCE
+        return None
 
     def _damaged(self) -> bool:
         """

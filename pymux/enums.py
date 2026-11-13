@@ -11,6 +11,7 @@ __all__ = [
     "FileTransfer",
     "PaneBrowser",
     "WindowCodec",
+    "WindowMark",
     "WindowScroll",
     "WindowSize",
     "Woke",
@@ -174,6 +175,13 @@ class NotificationPopups(StrEnum):
     AUTO = "auto"
     ON = "on"
     OFF = "off"
+
+
+class WindowMark(StrEnum):
+    "A mark the output check raises on a window nobody looks at. Lillecarl/pyterm#769."
+
+    ACTIVITY = "activity"
+    SILENCE = "silence"
 
 
 class WindowScroll(StrEnum):

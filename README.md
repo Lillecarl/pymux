@@ -82,6 +82,14 @@ function that takes the server and the parsed arguments, and a
 `register(subparsers)` that calls `add_command` for it. A plugin that
 fails to load is logged and left out.
 
+The same file can hold an event plugin. It sets `plugin` to a subclass
+of `pymux.plugin_api.Plugin`, and the server runs one of each in a task
+of its own. The plugin overrides the `on_` methods of the events it
+wants: a notification, a program's OSC 7501 report, a shell command's
+end, a bell, a pane's end, and the activity and silence marks. Its
+`host` runs pymux commands and reaches the server. A plugin that raises
+stops alone, and `show-plugins` says why.
+
 `$XDG_CONFIG_HOME/pymux/terminals.py` tells pymux about a terminal it
 does not know: what to send it that no query can find out, such as
 kitty's Unicode placeholders, a progress bar or a notification. It

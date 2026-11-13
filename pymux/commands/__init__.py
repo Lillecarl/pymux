@@ -160,6 +160,7 @@ MODULES = [
     "unlink_window",
     "set_hook",
     "show_hooks",
+    "show_plugins",
     "lock_client",
     "lock_session",
     "lock_server",

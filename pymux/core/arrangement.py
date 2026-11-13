@@ -17,6 +17,7 @@ from weakref import WeakKeyDictionary
 from prompt_toolkit.application import Application, DummyApplication, get_app, get_app_or_none, set_app
 from pyte.keep import Keep
 
+from ..enums import WindowMark
 from ..ids import PaneId, WindowIndex
 from ..options.session_options import SessionOptions
 from .pane import Pane
@@ -215,11 +216,13 @@ class Arrangement:
         window.notified = True
         return True
 
-    def check_output(self, apps: Iterable[Application[Any]], now: float) -> bool:
-        "`Window.check_output` for every window. True when a mark went up."
-        raised = False
+    def check_output(self, apps: Iterable[Application[Any]], now: float) -> list[tuple[Window, WindowMark]]:
+        "`Window.check_output` for every window: each window whose mark went up, and the mark."
+        raised = []
         for window in self.windows:
-            raised |= window.check_output(self.watched(window, apps), now)
+            mark = window.check_output(self.watched(window, apps), now)
+            if mark is not None:
+                raised.append((window, mark))
         return raised
 
     def set_active_window_from_pane_id(self, pane_id: PaneId) -> None:

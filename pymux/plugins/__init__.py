@@ -9,6 +9,9 @@ commands of pymux, so a plugin command runs from a key binding, the
 command bar, a configuration file and the socket, and the shell
 completes it. Lillecarl/pyterm#531.
 
+A module may name an event plugin too, as `plugin`, and the server
+runs it: `pymux.plugin_api` says how. Lillecarl/pyterm#982.
+
 A person's plugin with the name of one shipped here is not loaded:
 the first directory wins.
 """
@@ -19,7 +22,7 @@ import argparse
 import importlib.util
 import pkgutil
 import sys
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from types import ModuleType
 from typing import TYPE_CHECKING
 
@@ -43,14 +46,34 @@ def register(subparsers: argparse._SubParsersAction[CommandParser], environ: Map
     """
     from pymux.commands import refuse_undeclared_targets
 
-    for plugin in pkgutil.iter_modules([*__path__, plugin_dir(environ)]):
+    for name, module in modules(environ):
+        mount = getattr(module, "register", None)
+        if mount is None:
+            continue
         before = set(subparsers.choices)
         try:
-            _module(plugin).register(subparsers)
+            mount(subparsers)
             refuse_undeclared_targets({name: p for name, p in subparsers.choices.items() if name not in before})
         except Exception:
             _unmount(subparsers, set(subparsers.choices) - before)
+            logger.exception("pymux: the plugin %s failed to load", name)
+
+
+def modules(environ: Mapping[str, str] | None = None) -> Iterator[tuple[str, ModuleType]]:
+    """
+    Every plugin module, by name, imported once per process. A module
+    that does not import is logged and left out.
+
+    A module may hold commands (`register`), an event plugin (`plugin`,
+    which `pymux.plugin_api` says), or both.
+    """
+    for plugin in pkgutil.iter_modules([*__path__, plugin_dir(environ)]):
+        try:
+            module = _module(plugin)
+        except Exception:
             logger.exception("pymux: the plugin %s failed to load", plugin.name)
+            continue
+        yield plugin.name, module
 
 
 def _unmount(subparsers: argparse._SubParsersAction[CommandParser], names: set[str]) -> None:

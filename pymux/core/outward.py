@@ -18,6 +18,7 @@ from prompt_toolkit.application.current import get_app_or_none
 from prompt_toolkit.clipboard import ClipboardData
 from pyte.osc import CLEAR_SCROLLBACK, Osc
 from pyte.page import RowMark
+from pyte.program_status import parse_report
 
 from ..downloads import FILE_KEYS, DownloadRefused, FinishedDownload, file_packets, route_of, sequences_of
 from ..enums import Clipboard, FileTransfer, ForwardMode, OpenUrlMode, OpenUrlTarget, Woke
@@ -42,6 +43,7 @@ from ..notify.osc import (
     shell_integration_of,
     simple_notification_of,
 )
+from ..plugin_api.events import CommandFinished, ProgramReported
 from ..wayland.window_pane import WindowScreen
 from .forwarding import loopback_of
 
@@ -315,6 +317,9 @@ class Outward:
                 # terminal is given every pane's. Lillecarl/pyterm#929.
                 self.pymux.terminals.sync_program_status()
                 self.pymux.invalidate(Woke.PANE_PROGRAM_STATUS)
+                report = parse_report(param)
+                if report is not None:
+                    self.pymux.plugins.emit(ProgramReported(pane.pane_id, report), pane)
                 return
 
             if code == Osc.SHELL_INTEGRATION:
@@ -453,6 +458,7 @@ class Outward:
         if letter == "D":
             pane.command_zone = None
             pane.last_exit_status = status
+            self.pymux.plugins.emit(CommandFinished(pane.pane_id, status), pane)
         else:
             pane.command_zone = letter
         # The rows copy mode jumps between, as tmux's `input_osc_133`

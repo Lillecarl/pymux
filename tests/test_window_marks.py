@@ -16,6 +16,7 @@ from pymux.core.arrangement import Arrangement
 from pymux.core.main import Pymux
 from pymux.core.pane import Pane
 from pymux.core.window_tree import Window
+from pymux.enums import WindowMark
 from pymux.format import marks_of, window_marks
 
 SYMBOLS = SimpleNamespace(activity_symbol="#", bell_symbol="!", silence_symbol="~", notification_symbol="?")
@@ -50,7 +51,7 @@ def test_output_nobody_saw_marks_the_window_once():
     arrangement.check_output([], 0.0)
 
     pane.content_changed()
-    assert arrangement.check_output([], 1.0)
+    assert arrangement.check_output([], 1.0) == [(window, WindowMark.ACTIVITY)]
     assert window.activity
     pane.content_changed()
     assert not arrangement.check_output([], 2.0), "a raised mark is not news"
@@ -148,7 +149,7 @@ def test_a_quiet_spell_after_output_marks_silence_once():
     pane.content_changed()
     arrangement.check_output([], 11.0)
     assert not arrangement.check_output([], 15.0)
-    assert arrangement.check_output([], 16.0)
+    assert arrangement.check_output([], 16.0) == [(window, WindowMark.SILENCE)]
     assert window.silence
     assert not arrangement.check_output([], 30.0)
 

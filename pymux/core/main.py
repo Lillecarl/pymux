@@ -46,6 +46,7 @@ from ..notify.notifier import Notifier
 from ..options.options import ALL_CLIENT_OPTIONS, ALL_OPTIONS, ALL_SERVER_OPTIONS, ALL_WINDOW_OPTIONS, Scope
 from ..options.server_options import ServerOptions
 from ..options.session_options import SessionOptions
+from ..plugin_api.runner import Plugins
 from ..rc import STARTUP_COMMANDS
 from ..shims import Shims
 from ..terminals import Terminals
@@ -143,6 +144,8 @@ class Pymux:
         "named_buffers": Keep.SAVED,
         "prompt_history": Keep.SAVED,
         "hooks": Keep.SAVED,
+        # Each plugin starts again in `running`, in the new process.
+        "plugins": Keep.DROPPED,
         "wait_channels": Keep.SAVED,
         "message_log": Keep.SAVED,
         "notifications": Keep.SAVED,
@@ -350,6 +353,7 @@ class Pymux:
         self.jobs = JobTable()
 
         self.hooks = Hooks()
+        self.plugins = Plugins(self)
 
         # The file and the line that `source-file` is reading now, so
         # that a failure can say which line it was.
@@ -682,6 +686,7 @@ class Pymux:
             tasks.start_soon(self.portal.keep)
             tasks.start_soon(self.audio.keep)
             tasks.start_soon(self.drag_and_drop.prune_drops)
+            tasks.start_soon(self.plugins.keep)
             if self.listener is not None:
                 self.serving.serve_listener()
             try:

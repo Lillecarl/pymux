@@ -26,6 +26,7 @@ from ..keys.actions import Kind, Origin, note, note_keys, started_by
 from ..keys.key_spelling import why_pane_cannot_read
 from ..log import logger
 from ..pane_command import PaneCommand, argv_of
+from ..plugin_api.events import BellRang, PaneEnded
 from ..wayland.window_pane import WindowWidget, is_window_pane
 from .environment import pane_environment
 from .pane import Pane
@@ -280,10 +281,12 @@ class PaneMaker:
                 self.take_ended_pane(pane)
 
             self.pymux.terminals.sync_program_status()
+            self.pymux.plugins.emit(PaneEnded(pane.pane_id), pane)
             self.pymux.invalidate(Woke.PANE_ENDED)
 
         def bell():
             "Sound bell on all clients, and flag it where nobody saw it."
+            self.pymux.plugins.emit(BellRang(pane.pane_id), pane)
             place = self.pymux._place_of(pane)
             if (self.pymux.session_defaults if place is None else place[0].options).bell:
                 for c in self.pymux.apps:
@@ -518,6 +521,7 @@ class PaneMaker:
     def window_pane_ended(self, pane: Pane) -> None:
         "The window of a window pane closed. A window leaves nothing to remain on exit."
         self.take_ended_pane(pane)
+        self.pymux.plugins.emit(PaneEnded(pane.pane_id), pane)
         self.pymux.invalidate(Woke.PANE_ENDED)
 
     def close_window_panes(self) -> None:

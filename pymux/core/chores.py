@@ -15,9 +15,10 @@ from typing import TYPE_CHECKING, TextIO
 import anyio
 import anyio.abc
 
-from ..enums import Woke
+from ..enums import WindowMark, Woke
 from ..jobs.table import JOB_SWEEP_EVERY
 from ..log import logger
+from ..plugin_api.events import WindowActive, WindowSilent
 
 if TYPE_CHECKING:
     from ..notify.notifications import Notification
@@ -73,7 +74,12 @@ async def watch_window_output(pymux: Pymux) -> None:
         try:
             raised = False
             for session in pymux.sessions:
-                raised |= session.arrangement.check_output(pymux.apps, now)
+                for window, mark in session.arrangement.check_output(pymux.apps, now):
+                    raised = True
+                    # A mirrored window's plugins are its owner's, as `Plugins.emit` says.
+                    if session.remote is None:
+                        event = WindowActive if mark is WindowMark.ACTIVITY else WindowSilent
+                        pymux.plugins.emit(event(window.window_id))
             if raised:
                 pymux.invalidate(Woke.WINDOW_MARKED)
         except Exception:

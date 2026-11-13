@@ -14,6 +14,7 @@ from pyte.osc import Osc
 
 from ..enums import Chooser, NotificationPopups, Woke
 from ..ids import PaneId
+from ..plugin_api.events import Notified
 from .notifications import Notification, NotificationSource, close_of, osc99_of
 from .osc import build_osc, message, simple_notification
 
@@ -45,6 +46,8 @@ class Notifier:
 
     def notified(self, record: Notification) -> None:
         "Mark the window a notification came from, and tell each client. Lillecarl/pyterm#769."
+        pane = None if record.pane_id is None else self.pymux.panes_by_id.get(record.pane_id)
+        self.pymux.plugins.emit(Notified(record), pane)
         self._pop_up(record)
         self._emit(record)
         found = self.pymux.place_of_pane_id(record.pane_id)
