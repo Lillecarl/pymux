@@ -70,9 +70,7 @@ class Requests:
                 raise CommandException("can't find pane: %s" % (target,))
             terminal = terminal_of(pane)
         except CommandException as refused:
-            await self.connection.write_packet({Field.CMD: Packet.ERR, Field.DATA: "%s\n" % (refused.message,)})
-            await self.connection.write_packet({Field.CMD: Packet.EXIT, Field.CODE: 1})
-            self.connection.close_connection()
+            await self._refuse("%s\n" % (refused.message,))
             return
 
         async def send(frame: dict[str, Any]) -> None:
@@ -87,6 +85,11 @@ class Requests:
             self.stream = None
             self.connection.close_connection()
 
+    async def _refuse(self, message: str) -> None:
+        await self.connection.write_packet({Field.CMD: Packet.ERR, Field.DATA: message})
+        await self.connection.write_packet({Field.CMD: Packet.EXIT, Field.CODE: 1})
+        self.connection.close_connection()
+
     async def run(self, packet: dict[str, Any]) -> None:
         """
         Execute a run command from the client.
@@ -98,7 +101,12 @@ class Requests:
             # under a temporary client, on the window that holds the pane it
             # was typed in, which goes again once the command answered.
             pane_id = packet.get(Field.PANE_ID)
-            pane = self.connection.pymux.panes_by_id.get(PaneId(int(pane_id))) if pane_id is not None else None
+            try:
+                pane = self.connection.pymux.panes_by_id.get(PaneId(int(pane_id))) if pane_id is not None else None
+            except ValueError:
+                # An exception here ends the connection's task with no answer, and the client waits forever.
+                await self._refuse("pymux: not a pane number: %r\n" % (pane_id,))
+                return
 
             # The session of the pane the command was typed in. Without
             # it the fake client lands on the session a person looked at
