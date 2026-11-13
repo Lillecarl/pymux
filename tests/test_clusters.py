@@ -19,8 +19,8 @@ def test_a_terminal_that_draws_a_cluster_two_wide_gets_it_as_it_is():
 
 
 def test_a_cluster_drawn_narrower_is_padded_to_its_cell():
-    "WezTerm draws a flag one column wide."
-    assert fitted("a" + FLAG + "b", "wezterm") == "a" + FLAG + " b"
+    "A terminal that drew the flag one column wide. No wcwidth table has one since 0.9.2."
+    assert fitted("a" + FLAG + "b", Drawn(flag=1)) == "a" + FLAG + " b"
 
 
 def test_a_cluster_drawn_wider_goes_out_as_its_first_character():
@@ -30,7 +30,7 @@ def test_a_cluster_drawn_wider_goes_out_as_its_first_character():
 
 def test_a_title_keeps_its_cluster():
     title = "\x1b]0;" + FLAG + "\x07"
-    assert fitted(title + FLAG, "wezterm") == title + FLAG + " "
+    assert fitted(title + FLAG, Drawn(flag=1)) == title + FLAG + " "
 
 
 def test_a_frame_without_a_joiner_is_not_read():
