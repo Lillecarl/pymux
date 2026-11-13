@@ -174,11 +174,15 @@ async def test_a_plugin_runs_a_command_through_its_host(tmp_path, monkeypatch):
     pymux = Pymux()
     pymux.serving.listen_on_socket(str(tmp_path / "socket"))
     with anyio.fail_after(DEADLINE):
-        async with create_session(pymux):
+        async with create_session(pymux) as (pymux, state):
             asks = await _plugin(pymux, "asks_over_the_socket")
             await _until(lambda: asks.answer is not None)
+            pane = pymux.arrangement.get_active_pane_for(state.app)
+            # The wire takes the pane's number; libpymux names it `%N`.
+            from_the_pane = await asks.host.command("display-message -p '#{pane_id}'", pane.pane_id)
 
     assert (asks.answer.stdout, asks.answer.exit_code) == ("asks_over_the_socket: running\n", 0)
+    assert (from_the_pane.stdout, from_the_pane.exit_code) == ("%%%d\n" % pane.pane_id, 0)
 
 
 def test_only_the_events_a_plugin_hears_are_queued_for_it():

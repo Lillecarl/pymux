@@ -559,10 +559,13 @@ class Server:
         Run one pymux command and read what it says.
 
         This is the way out of the object model: anything the command
-        line can do, this can do.
+        line can do, this can do. `pane_id` is a `Pane.id`, `%7`: the
+        command runs as typed in that pane.
         """
+        # The wire takes the number alone, as `$PYMUX` carries it.
+        number = None if pane_id is None else pane_id.removeprefix("%")
         return await self.connection.run(
-            command, pane_id=pane_id, check=check, environment=self.environment, cwd=self.cwd
+            command, pane_id=number, check=check, environment=self.environment, cwd=self.cwd
         )
 
     async def run[T](self, operation: Operation[T]) -> T:
