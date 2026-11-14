@@ -49,9 +49,9 @@ from ..pipes.base import BrokenPipeError
 from ..style.style import DEFAULT_THEME
 from ..terminals import PeerTerminal
 from ..wayland.window_pane import WindowWidget
+from .clipboard_asks import ClipboardAsks
 from .copying import place_of
 from .files import LinkFiles
-from .clipboard_asks import ClipboardAsks
 from .plugin_messages import PluginAsks, plugin_answer
 from .source import MirrorSource
 from .tree import Tree, tree_of

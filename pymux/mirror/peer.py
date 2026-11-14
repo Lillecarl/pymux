@@ -53,10 +53,10 @@ from ..graphics.kitty_frames import decoders
 from ..log import logger
 from ..options.tables import PeerCopyRow, PeerPlaceRow
 from ..wayland.window_pane import WindowWidget
+from .clipboard_asks import clipboard_answer
 from .copying import place_of
 from .dial import abort, dial, dial_beside, ssh_connection_of
 from .files import Relays
-from .clipboard_asks import clipboard_answer
 from .plugin_messages import PluginAsks, plugin_answer
 from .program import HOLD_FOR_FRESH, RemoteProgram
 from .tree import MirrorTree
