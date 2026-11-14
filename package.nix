@@ -150,6 +150,15 @@ let
               "$out/share/skills/pymux/pymux/SKILL.md"
             install -Dm444 ${./skills/pymux-jobs/SKILL.md} \
               "$out/share/skills/pymux/pymux-jobs/SKILL.md"
+            # The Claude Code mod that mirrors a pane, where runix-agent
+            # looks for a package's plugins. Its tests stay behind, and so
+            # do the editor types Claude Code writes into a loaded mod.
+            plugin="$out/share/claude-code/plugins/pymux-panes"
+            mkdir -p "$(dirname "$plugin")"
+            cp -r ${./claude/pymux-panes} "$plugin"
+            chmod -R u+w "$plugin"
+            find "$plugin" -name '*.test.ts' -delete
+            rm -rf "$plugin/.claude-plugin/types" "$plugin/tsconfig.json"
             scdoc < ${./man/pymux.1.scd} > pymux.1
             installManPage pymux.1
             install -Dm644 ${base16-schemes-json}/base16-schemes.json \

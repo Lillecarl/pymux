@@ -1,0 +1,8 @@
+{
+  "name": "pymux-panes",
+  "version": "0.1.0",
+  "description": "Mirrors a pymux pane live, in colour, in a Claude Code pane",
+  "license": "BSD-3-Clause",
+  "homepage": "https://github.com/Lillecarl/pymux",
+  "types": "./types/index.d.ts"
+}
