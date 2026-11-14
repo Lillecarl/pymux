@@ -133,6 +133,10 @@ class Capability(StrEnum):
     #: (`forwards`). A peer names it only over SSH: a link on a unix
     #: socket has no connection to forward through. Lillecarl/pyterm#976.
     FORWARDS = "forwards"
+    #: A plugin asks the plugin of the same name at the other end of the
+    #: link, as `plugin-ask`, and the answer comes back as
+    #: `plugin-answer`. Lillecarl/pyterm#988.
+    PLUGIN_MESSAGES = "plugin-messages"
 
 
 #: The version each capability came with, while each was a version. A
@@ -519,6 +523,12 @@ class Packet(StrEnum):
     MIRROR_LIST_FILES = "mirror-list-files"
     PEER_UPLOAD = "peer-upload"
     PEER_FILES_LISTED = "peer-files-listed"
+    # Either side of a peer link: one plugin's message for the plugin of
+    # the same `name` at the other end, under `request` and `data`. The
+    # answer is `plugin-answer`, with `data` or `error`. pymux never reads
+    # `data`. Lillecarl/pyterm#988.
+    PLUGIN_ASK = "plugin-ask"
+    PLUGIN_ANSWER = "plugin-answer"
 
 
 class Field(StrEnum):

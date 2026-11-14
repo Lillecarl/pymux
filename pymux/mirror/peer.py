@@ -56,6 +56,7 @@ from ..wayland.window_pane import WindowWidget
 from .copying import place_of
 from .dial import abort, dial, dial_beside, ssh_connection_of
 from .files import Relays
+from .plugin_messages import PluginAsks, plugin_answer
 from .program import HOLD_FOR_FRESH, RemoteProgram
 from .tree import MirrorTree
 from .tunnel import Tunnels
@@ -385,6 +386,7 @@ class Peer:
         "relink": Keep.DROPPED,
         "_waiting": Keep.DROPPED,
         "log_asks": Keep.DROPPED,
+        "plugin_asks": Keep.DROPPED,
         "relays": Keep.DROPPED,
         "_tasks": Keep.DROPPED,
         # The listeners end with this process; `browser.open` asks again.
@@ -430,6 +432,8 @@ class Peer:
         self._waiting = _PaneWaiting(self)
         #: The `show-log -p` requests that wait for the owner. Lillecarl/pyterm#936.
         self.log_asks = LogAsks(self.send)
+        #: The plugin messages that wait for the owner. Lillecarl/pyterm#988.
+        self.plugin_asks = PluginAsks(self.send)
         #: The owner's `pymux receive` requests that a client here answers. Lillecarl/pyterm#949.
         self.relays = Relays(pymux, self.send)
         #: The ports the owner asked this side to forward, on the SSH
@@ -771,6 +775,7 @@ class Peer:
             self.stream = None
             self._tasks = None
             self.log_asks.gone()
+            self.plugin_asks.gone()
             self.relays.gone()
             self._send.close()
             self.tree.pymux.drag_and_drop.cut_off(
@@ -794,6 +799,9 @@ class Peer:
 
     async def _answer_log(self, packet: Message) -> None:
         self.send(await anyio.to_thread.run_sync(log_answer, packet))
+
+    async def _answer_plugin(self, packet: Message) -> None:
+        self.send(await plugin_answer(self.tree.pymux, packet, self.address, dialled=True))
 
     def _refusal(self, packet: Message) -> str | None:
         """
@@ -844,6 +852,13 @@ class Peer:
             return
         if packet.get(Field.CMD) == Packet.LOG:
             self.log_asks.answered(packet)
+            return
+        if packet.get(Field.CMD) == Packet.PLUGIN_ASK:
+            if self._tasks is not None:
+                self._tasks.start_soon(self._answer_plugin, packet)
+            return
+        if packet.get(Field.CMD) == Packet.PLUGIN_ANSWER:
+            self.plugin_asks.answered(packet)
             return
         if packet.get(Field.CMD) == Packet.RESTARTING:
             self.restart = (

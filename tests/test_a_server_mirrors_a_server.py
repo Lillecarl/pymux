@@ -172,8 +172,11 @@ def test_a_side_that_names_nothing_has_what_its_version_reached():
     "A build from before names, which has every capability its version had. Lillecarl/pyterm#961."
     assert capabilities_in_common(4, None) == {Capability.IMAGES_BY_HASH, Capability.PINGS, Capability.WINDOWS}
     assert capabilities_in_common(1, None) == frozenset()
-    # Forwards came after names, so no version implies them. Lillecarl/pyterm#976.
-    assert capabilities_in_common(13, None) == frozenset(Capability) - {Capability.FORWARDS}
+    # These came after names, so no version implies them. Lillecarl/pyterm#976, Lillecarl/pyterm#988.
+    assert capabilities_in_common(13, None) == frozenset(Capability) - {
+        Capability.FORWARDS,
+        Capability.PLUGIN_MESSAGES,
+    }
     assert capabilities_in_common(13, ["files", "a-name-nobody-knows"]) == {Capability.FILES}
 
 

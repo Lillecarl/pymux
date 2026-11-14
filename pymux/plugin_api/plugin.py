@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING, Any
 from libpymux import CommandResult, Server
 
 from ..log import logger
+from ..mirror.plugin_messages import PeerMessage, PeerUnanswered, reachable
 
 if TYPE_CHECKING:
     import anyio.abc
@@ -96,6 +97,36 @@ class Host:
     def pane(self, pane_id: PaneId) -> Pane | None:
         return self.pymux.panes_by_id.get(pane_id)
 
+    def peers(self) -> list[str]:
+        """
+        The linked servers `ask_peer` reaches, by name: each server that
+        dialled in, by its host, the one a person used last first; then
+        each address this server dialled.
+        """
+        return [name for name, _ in reachable(self.pymux)]
+
+    async def ask_peer(self, peer: str, data: object, timeout: float) -> object:
+        """
+        Send `data` to the plugin of this plugin's name on the linked
+        server `peer`, and wait up to `timeout` seconds for its answer.
+        Both are JSON. Raises `PeerUnanswered` saying why there is none:
+        no such link, no such plugin there, the plugin raised, the link
+        went, or the time ran out. Lillecarl/pyterm#988.
+        """
+        found = [asks for name, asks in reachable(self.pymux) if name == peer]
+        if not found:
+            linked = self.peers()
+            raise PeerUnanswered(
+                "no linked server %s takes plugin messages%s"
+                % (peer, "; linked: %s" % (", ".join(linked),) if linked else "")
+            )
+        if len(found) > 1:
+            raise PeerUnanswered("%d linked servers answer to %s" % (len(found), peer))
+        try:
+            return await found[0].ask(self.name, data, timeout)
+        except PeerUnanswered as why:
+            raise PeerUnanswered("%s: %s" % (peer, why)) from None
+
 
 class Plugin:
     "An event plugin. Every method is a no-op until a subclass gives it a body."
@@ -126,3 +157,16 @@ class Plugin:
 
     async def on_window_silent(self, event: WindowSilent) -> None:
         pass
+
+    async def on_peer_message(self, message: PeerMessage) -> object:
+        """
+        The answer, as JSON, to a message from the plugin of the same name
+        on a linked server (`Host.ask_peer`). Each message runs in a task
+        of its own and holds no event. An exception goes back to the asker
+        as the reason, and the plugin runs on. A plugin that leaves this
+        out takes no messages.
+
+        `message.peer` names the asker. Check it before acting: every
+        server linked to this one can send a message.
+        """
+        raise NotImplementedError

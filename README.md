@@ -90,6 +90,12 @@ end, a bell, a pane's end, and the activity and silence marks. Its
 `host` runs pymux commands and reaches the server. A plugin that raises
 stops alone, and `show-plugins` says why.
 
+An event plugin can ask the plugin of the same name on a linked server.
+`host.peers()` names the linked servers, and `host.ask_peer(peer, data,
+timeout)` sends JSON and waits for the answer. The other plugin answers
+in `on_peer_message`, which gets the data and the name of the server
+that asked. No command sends such a message, so only plugins can.
+
 A plugin with dependencies of its own ships as a Python distribution
 instead. It names its module in the entry-point group `pymux.plugins`,
 and the module has the same shape: commands, an event plugin, or both.

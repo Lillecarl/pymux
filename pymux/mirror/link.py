@@ -51,6 +51,7 @@ from ..terminals import PeerTerminal
 from ..wayland.window_pane import WindowWidget
 from .copying import place_of
 from .files import LinkFiles
+from .plugin_messages import PluginAsks, plugin_answer
 from .source import MirrorSource
 from .tree import Tree, tree_of
 from .window_source import MirrorWindowSource
@@ -106,6 +107,7 @@ class PeerLink:
         "_program_status_sent": Keep.DROPPED,
         "host": Keep.DROPPED,
         "log_asks": Keep.DROPPED,
+        "plugin_asks": Keep.DROPPED,
         "files": Keep.DROPPED,
         # The peer reports its table again on the next link.
         "forwards": Keep.DROPPED,
@@ -124,6 +126,8 @@ class PeerLink:
         self.host = host
         #: The `show-log -p` requests that wait for the peer. Lillecarl/pyterm#936.
         self.log_asks = LogAsks(self.queue)
+        #: The plugin messages that wait for the peer. Lillecarl/pyterm#988.
+        self.plugin_asks = PluginAsks(self.queue)
         #: The `pymux receive` requests that wait for the peer's client. Lillecarl/pyterm#949.
         self.files = LinkFiles(self.queue)
         #: What the peer forwards for this server, as it last reported
@@ -409,6 +413,7 @@ class PeerLink:
         self._ready.set()
         self._sized({})
         self.log_asks.gone()
+        self.plugin_asks.gone()
         self.files.gone()
         self.connection.pymux.drag_and_drop.link_gone(self)
         if viewed:
@@ -451,6 +456,17 @@ class PeerLink:
     @_PACKETS.handles(Packet.LOG)
     def _on_log(self, packet: Message) -> None:
         self.log_asks.answered(packet)
+
+    @_PACKETS.handles(Packet.PLUGIN_ASK)
+    def _on_plugin_ask(self, packet: Message) -> None:
+        async def reply() -> None:
+            self.queue(await plugin_answer(self.connection.pymux, packet, self.host, dialled=False))
+
+        self.connection.spawn(reply())
+
+    @_PACKETS.handles(Packet.PLUGIN_ANSWER)
+    def _on_plugin_answer(self, packet: Message) -> None:
+        self.plugin_asks.answered(packet)
 
     @_PACKETS.handles(Packet.PEER_UPLOAD)
     def _on_upload(self, packet: Message) -> None:

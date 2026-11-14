@@ -6,6 +6,7 @@ names its plugin. Lillecarl/pyterm#982.
 
 from __future__ import annotations
 
+from ..mirror.plugin_messages import PeerMessage, PeerUnanswered
 from .events import (
     EVENTS,
     BellRang,
@@ -28,6 +29,8 @@ __all__ = [
     "NoSocket",
     "Notified",
     "PaneEnded",
+    "PeerMessage",
+    "PeerUnanswered",
     "Plugin",
     "ProgramReported",
     "WindowActive",

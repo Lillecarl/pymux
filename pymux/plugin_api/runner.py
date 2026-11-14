@@ -19,6 +19,7 @@ import anyio
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 
 from ..log import logger
+from ..mirror.plugin_messages import PeerMessage, PeerUnanswered
 from ..mirror.program import RemoteProgram
 from .events import EVENTS, Event
 from .plugin import Host, Plugin
@@ -132,6 +133,22 @@ class Plugins:
                 slot.state = PluginState.STOPPED
             send.close()
             receive.close()
+
+    async def peer_message(self, name: str, message: PeerMessage) -> object:
+        """
+        What the plugin `name` answers to a message from a linked server.
+        It runs beside the plugin's events and not in their queue, since
+        an answer may wait minutes for a person. Raises `PeerUnanswered`
+        when no plugin here takes it.
+        """
+        slot = self.slots.get(name)
+        if slot is None or slot.plugin is None:
+            raise PeerUnanswered("it runs no plugin %s" % (name,))
+        if slot.state is not PluginState.RUNNING:
+            raise PeerUnanswered("its plugin %s is %s" % (name, slot.state))
+        if type(slot.plugin).on_peer_message is Plugin.on_peer_message:
+            raise PeerUnanswered("its plugin %s takes no messages" % (name,))
+        return await slot.plugin.on_peer_message(message)
 
     @staticmethod
     async def _deliver(slot: Slot) -> None:
