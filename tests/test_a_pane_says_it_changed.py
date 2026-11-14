@@ -39,6 +39,9 @@ LINES = 5
 @pytest.fixture
 async def pymux():
     mux = Pymux()
+    # The program ends at once, and a pane that does not remain on exit
+    # is gone: no `-t %N` reaches it.
+    mux.session_defaults.remain_on_exit = True
     async with mux.running():
         await mux.panes.create_window("%s -c pass" % (sys.executable,))
         try:

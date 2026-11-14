@@ -147,6 +147,21 @@ def window_in(session: Session, target: str) -> Window | None:
     return None
 
 
+def live_pane(pymux: Pymux, pane_id: PaneId) -> Pane | None:
+    """
+    The pane with this id, unless it is gone: its program ended and no
+    session holds it any more.
+
+    `panes_by_id` holds panes weakly, and keeps one for as long as
+    anything refers to it. Without this, `%N` reached a killed pane and
+    `capture-pane` answered with its last screen and exit 0.
+    """
+    pane = pymux.panes_by_id.get(pane_id)
+    if pane is not None and pymux.session_holding(pane) is None and pane.process.is_terminated:
+        return None
+    return pane
+
+
 def pane_of_asking_client(pymux: Pymux) -> Pane | None:
     """
     The pane a socket command arrived from, or None.
@@ -167,7 +182,7 @@ def pane_of_asking_client(pymux: Pymux) -> Pane | None:
     pane_id = asking.caller_pane_id
     if pane_id is None:
         return None
-    return pymux.panes_by_id.get(pane_id)
+    return live_pane(pymux, pane_id)
 
 
 def _sent_from_nowhere(pymux: Pymux) -> bool:
@@ -210,7 +225,7 @@ def find_pane(pymux: Pymux, target: str | None) -> Pane | None:
     if target.startswith("%"):
         pane_id = target[1:]
         if pane_id.isdigit():
-            return pymux.panes_by_id.get(PaneId(int(pane_id)))
+            return live_pane(pymux, PaneId(int(pane_id)))
         return None
 
     session, target = session_part(pymux, target)
