@@ -5,14 +5,17 @@ modifiers held around it. Lillecarl/pyterm#622.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, cast
 
 from prompt_toolkit.keys import Keys
 from pyte.keys.parse import parse_key_data
 
-from pymux.wayland.window_pane import WindowWidget, evdev_of, evdev_of_event
+from pymux.wayland.window_pane import WindowControl, WindowWidget, evdev_of, evdev_of_event
 
 if TYPE_CHECKING:
+    from prompt_toolkit.key_binding.key_processor import KeyPressEvent
+
     from pymux.core.main import Pymux
     from pymux.wayland.window_pane import WindowHost
 
@@ -77,9 +80,13 @@ def test_a_release_or_a_key_no_keyboard_types_presses_nothing():
 class _Wayland:
     def __init__(self) -> None:
         self.pressed: list[tuple[tuple[int, ...], int]] = []
+        self.pasted: list[str] = []
 
     def press(self, _toplevel, modifiers, code, _time) -> None:
         self.pressed.append((modifiers, code))
+
+    def paste(self, _toplevel, text) -> None:
+        self.pasted.append(text)
 
 
 def test_a_window_presses_the_keys_of_a_sequence():
@@ -87,3 +94,15 @@ def test_a_window_presses_the_keys_of_a_sequence():
     widget = WindowWidget(cast("WindowHost", wayland), 1, cast("Pymux", None))
     widget.press_data("\x1b[61;5u\x1b[61;5:3u\x1b[45;5u")
     assert wayland.pressed == [((CTRL,), 13), ((CTRL,), 12)]
+
+
+def test_a_terminal_paste_is_a_paste_and_no_key():
+    "A bracketed paste is no key a keyboard types, and went nowhere."
+    wayland = _Wayland()
+    widget = WindowWidget(cast("WindowHost", wayland), 1, cast("Pymux", None))
+    # Keys.Any matches too; the key processor calls the binding added last.
+    binding = WindowControl(widget).get_key_bindings().get_bindings_for_keys((Keys.BracketedPaste,))[-1]
+    binding.handler(cast("KeyPressEvent", SimpleNamespace(data="two\nlines")))
+    widget.paste("")
+    assert wayland.pasted == ["two\nlines"]
+    assert wayland.pressed == []

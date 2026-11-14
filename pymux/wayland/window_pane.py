@@ -56,6 +56,7 @@ class WindowHost(Protocol):
     def close(self, toplevel: int) -> None: ...
     def press(self, toplevel: int, modifiers: tuple[int, ...], code: int, time: int) -> None: ...
     def type_text(self, toplevel: int, text: str) -> bool: ...
+    def paste(self, toplevel: int, text: str) -> None: ...
     def pointer(self, toplevel: int, position: Point, button: int | None, pressed: bool, time: int) -> None: ...
     def scroll(self, toplevel: int, position: Point, steps: int, time: int) -> None: ...
     def pointer_leave(self, toplevel: int, time: int) -> None: ...
@@ -304,6 +305,10 @@ class WindowControl(UIControl):
             for press in event.key_sequence:
                 self.widget.press(press.key if press.key != Keys.Any else press.data)
 
+        @bindings.add(Keys.BracketedPaste, filter=Condition(self.widget.takes_keys))
+        def _paste(event: KeyPressEvent) -> None:
+            self.widget.paste(event.data)
+
         return bindings
 
     @override
@@ -438,6 +443,11 @@ class WindowWidget:
             return
         modifiers, code = found
         self.host.press(self.toplevel, modifiers, code, now())
+
+    def paste(self, text: str) -> None:
+        "What the person's terminal pasted: the window's clipboard holds it, and the window gets Ctrl+V."
+        if text:
+            self.host.paste(self.toplevel, text)
 
     def press_data(self, data: str) -> None:
         "The keys in a sequence the terminal sent, which pymux has no name for."

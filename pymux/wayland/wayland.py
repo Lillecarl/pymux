@@ -43,6 +43,7 @@ import anyio.abc
 from libpymux.protocol import Capability, Field, Packet
 from prompt_toolkit.application.current import get_app
 from prompt_toolkit.clipboard import ClipboardData
+from prompt_toolkit.keys import Keys
 
 from pymux.enums import Clipboard, WindowScroll, Woke
 from pymux.graphics.window_frames import FrameRects, VideoFrame, WindowView
@@ -50,7 +51,7 @@ from pymux.ids import PaneId
 from pymux.mirror.program import RemoteProgram
 from pymux.niceness import as_a_person_runs
 from pymux.wayland.wayland_scale import DEFAULT_WAYLAND_SCALE, resolve_scale
-from pymux.wayland.window_pane import WindowWidget, now
+from pymux.wayland.window_pane import WindowWidget, evdev_of, now
 
 if TYPE_CHECKING:
     from prompt_toolkit.data_structures import Point
@@ -195,6 +196,9 @@ class WaylandServer:
         #: The image the person's machine held at their last Ctrl-V, which
         #: the clipboard offers as `IMAGE_TYPE`. Lillecarl/pyterm#958.
         self.image: bytes | None = None
+        #: What the person's terminal last pasted into a window, which the
+        #: clipboard offers until a pane copies.
+        self.pasted: str | None = None
         #: Each open window, by the compositor's id, and the pane showing it.
         self.panes: dict[int, Pane] = {}
         #: The same windows' widgets, which the events update.
@@ -516,6 +520,21 @@ class WaylandServer:
             for modifier in reversed(modifiers):
                 compositor.key(modifier, False, time)
 
+    def paste(self, toplevel: int, text: str) -> None:
+        """
+        A terminal's paste into a window: the clipboard offers `text`, and
+        the window gets Ctrl+V, the paste key of a GUI program. A terminal
+        in the window pastes on Ctrl+Shift+V instead, and gets ^V.
+        """
+        compositor = self.compositor
+        if compositor is None:
+            return
+        self.pasted = text
+        _hold(compositor, "clipboard", self.image is not None)
+        found = evdev_of(Keys.ControlV)
+        if found is not None:
+            self.press(toplevel, *found, now())
+
     def type_text(self, toplevel: int, text: str) -> bool:
         """
         Text no key of the keymap types, given to the window as text:
@@ -706,8 +725,9 @@ class WaylandServer:
         text = data.decode("utf-8", "replace")
         self.copied[target] = text
         if target == "clipboard":
-            # A copy here is newer than the image a Ctrl-V brought.
+            # A copy here is newer than the image a Ctrl-V brought, and than a paste.
             self.image = None
+            self.pasted = None
         if self.pymux.options.set_clipboard is not Clipboard.ON or not text:
             return
         if target == "clipboard":
@@ -755,6 +775,9 @@ class WaylandServer:
         "A pane pasted what the compositor holds: find it, and write it."
         if mime_type == IMAGE_TYPE and target == "clipboard" and self.image is not None:
             await _write_all(fd, self.image)
+            return
+        if target == "clipboard" and self.pasted is not None:
+            await _write_all(fd, self.pasted.encode("utf-8"))
             return
         if self.pymux.options.set_clipboard is Clipboard.ON:
             text = await self._read_the_terminal(target)

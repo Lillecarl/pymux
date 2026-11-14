@@ -243,6 +243,10 @@ class RemoteWindow:
         self._input({"kind": "text", "text": text})
         return True
 
+    def paste(self, toplevel: int, text: str) -> None:
+        "The owner's compositor offers it, and the window gets Ctrl+V there."
+        self._input({"kind": "paste", "text": text})
+
     def _at(self, position: Point) -> dict[str, float]:
         "Where the pointer is, in cells, with where in its cell the client being handled said."
         client = self.peer.tree.pymux.client_of(get_app())

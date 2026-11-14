@@ -149,6 +149,16 @@ async def test_keys_and_the_pointer_there_reach_the_window(tmp_path):
         assert "button 272 1" in logged(log)
 
 
+async def test_a_paste_there_reaches_the_owners_clipboard_and_window(tmp_path):
+    "The owner's compositor offers what the terminal there pasted, and the window gets Ctrl+V."
+    async with mirrored_window(tmp_path, WindowCodec.LOSSLESS) as (owner, _peer, _client, _there, here, log):
+        await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
+        here.terminal.paste("pasted there")
+        await once(lambda: owner.wayland.pasted == "pasted there", 10.0, "the paste never reached the owner")
+        await once(lambda: "key 47 1" in logged(log), 10.0, lambda: "no Ctrl+V arrived: %s" % logged(log)[-8:])
+        assert "key 29 1" in logged(log)
+
+
 async def test_the_owner_stops_sending_when_nobody_there_looks(tmp_path):
     "The client there leaves for its own session: the window pauses, and catches up on its return."
     async with mirrored_window(tmp_path, WindowCodec.LOSSLESS) as (owner, peer, client, there, here, _log):
