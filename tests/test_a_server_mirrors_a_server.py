@@ -261,6 +261,20 @@ async def test_a_copy_in_a_pane_there_reaches_the_clipboard_here(two_servers):
     )
 
 
+async def test_a_copy_that_names_no_pane_there_reaches_the_person_here(two_servers):
+    "A pane's wl-copy there, with nobody attached there: the person who looks through this peer gets it."
+    owner, peer, client = two_servers
+    owner.options.set_clipboard = Clipboard.ON
+    peer.options.set_clipboard = Clipboard.ON
+    await shown_here(owner, peer, client)
+    owner.outward.write_user_clipboard("wl-copied there")
+    await until(
+        lambda: peer.clipboard.get_data().text == "wl-copied there",
+        "the copy reaches the paste buffer here",
+        lambda: peer.clipboard.get_data().text,
+    )
+
+
 async def test_a_kitty_copy_in_a_pane_there_reaches_the_paste_buffer_here_whole(two_servers):
     "Every MIME type of an OSC 5522 write, not only its text. Lillecarl/pyterm#904."
     owner, peer, client = two_servers

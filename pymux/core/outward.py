@@ -726,6 +726,11 @@ class Outward:
             clients = list(self.pymux._client_states) if client is None else [client.client]
             for one in clients:
                 one.forward_osc(sequence)
+            if client is None and selection == "c":
+                # A person who reaches this server through a peer's pymux
+                # is no client here: a pane's wl-copy reached nobody.
+                for link in self.pymux.peer_links():
+                    link.person_copied(text)
             # The copy travels with the next frame, so there has to be
             # one. Copy mode's key press draws anyway; a pane's wl-copy
             # draws nothing, and its copy would wait for some other

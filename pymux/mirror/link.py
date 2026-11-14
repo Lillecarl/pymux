@@ -697,6 +697,14 @@ class PeerLink:
         else:
             source.copy(at=at)
 
+    def person_copied(self, text: str) -> None:
+        """
+        Send a copy that names no pane, such as a pane's wl-copy, to the
+        peer's person, when the peer mirrors panes of this server.
+        """
+        if self.watching or self.sources:
+            self.queue({Field.CMD: Packet.MIRROR_COPIED, Field.DATA: text})
+
     def copied(self, app: object, text: str) -> bool:
         "Send what a person copied to the peer, when `app` is the copy mode of one of its mirrors (`Outward.copied_in_copy_mode`)."
         for source in self.sources.values():
