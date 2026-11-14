@@ -368,10 +368,11 @@ async def test_an_extension_loads_at_launch_and_into_a_running_browser(server, t
         loaded = await call(
             server, "browser.extension", name="probe", directory=an_extension(tmp_path / "second", "second")
         )
+        # Chromium's own component extensions run workers too, so a count can reach two first.
+        loaded_worker = "chrome-extension://%s/worker.js" % (loaded["id"],)
         with anyio.fail_after(20):
-            while len(await workers(server)) < 2:
+            while loaded_worker not in await workers(server):
                 await anyio.sleep(0.1)
-        assert "chrome-extension://%s/worker.js" % (loaded["id"],) in await workers(server)
         with pytest.raises(ValueError, match="not an unpacked extension"):
             await call(server, "browser.extension", name="probe", directory=str(tmp_path))
     finally:
