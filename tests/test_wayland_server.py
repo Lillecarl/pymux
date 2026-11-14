@@ -224,6 +224,55 @@ async def test_a_paste_reads_the_desktop_clipboard(tmp_path):
         assert await paste(mux) == (0, "copied on the desktop")
 
 
+#: A pane that lives through the test, for the peer to look at.
+STAYS = "%s -c 'import time; time.sleep(60)'" % (sys.executable,)
+
+
+@asynccontextmanager
+async def looked_at_from_a_peer(tmp_path, terminal: ClipboardTerminal, peer_mode: Clipboard):
+    "An owner under `set-clipboard on`, which nobody attaches to, and a peer whose client at `terminal` looks at it."
+    owner = Pymux()
+    owner.options.test_mode = True
+    owner.options.set_clipboard = Clipboard.ON
+    owner.serving.listen_on_socket(str(tmp_path / "owner.sock"))
+    async with attached(tmp_path, terminal, peer_mode) as peer, owner.running():
+        try:
+            owner.startup_command = STAYS
+            await owner.startup()
+            await once(lambda: owner.wayland.display, 10.0, "the owner's compositor never started")
+            peer.handle_command("connect %s" % (owner.socket_name,))
+            remote = await once(
+                lambda: [session for session in peer.sessions if session.remote is not None], 10.0, "no session came"
+            )
+            peer.attach_client_to(terminal.state, remote[0])
+            peer.invalidate()
+            await once(lambda: any(link.sources for link in owner.peer_links()), 10.0, "the peer never looked")
+            yield owner
+        finally:
+            for pane in list(owner.panes_by_id.values()):
+                process = getattr(pane, "process", None)
+                if process is not None and not process.is_terminated:
+                    process.kill()
+            owner.stop()
+
+
+async def test_a_paste_reads_the_clipboard_of_a_person_at_a_peer(tmp_path):
+    "Nobody is attached here: the person who looks from a peer is asked. Lillecarl/pyterm#992."
+    terminal = ClipboardTerminal()
+    terminal.selections["c"] = "copied at the peer"
+    async with looked_at_from_a_peer(tmp_path, terminal, Clipboard.ON) as owner:
+        assert await paste(owner) == (0, "copied at the peer")
+
+
+async def test_a_peer_under_external_keeps_its_clipboard(tmp_path):
+    terminal = ClipboardTerminal()
+    terminal.selections["c"] = "copied at the peer"
+    async with looked_at_from_a_peer(tmp_path, terminal, Clipboard.EXTERNAL) as owner:
+        _code, text = await paste(owner)
+    assert text != "copied at the peer"
+    assert terminal.queries == 0
+
+
 async def test_a_paste_of_the_primary_reads_the_desktop_primary(tmp_path):
     terminal = ClipboardTerminal()
     terminal.selections["p"] = "selected on the desktop"

@@ -45,6 +45,7 @@ from prompt_toolkit.application.current import get_app
 from prompt_toolkit.clipboard import ClipboardData
 from prompt_toolkit.keys import Keys
 
+from pymux.connection.clipboard_reads import CLIPBOARD_READ_SECONDS
 from pymux.enums import Clipboard, WindowScroll, Woke
 from pymux.graphics.window_frames import FrameRects, VideoFrame, WindowView
 from pymux.ids import PaneId
@@ -80,6 +81,10 @@ HELD_TYPES = TEXT_TYPES[:3]
 #: machine. Lillecarl/pyterm#958.
 IMAGE_TYPE = "image/png"
 
+#: How long a terminal's paste into a window answers the window's reads.
+#: Its Ctrl+V reads at once; a later Ctrl+V asks the terminal again, which
+#: may hold something newer by then.
+PASTE_SECONDS = 2.0
 #: OSC 52's letter for each selection.
 OSC52_LETTER = {"clipboard": "c", "primary": "p"}
 
@@ -197,8 +202,9 @@ class WaylandServer:
         #: the clipboard offers as `IMAGE_TYPE`. Lillecarl/pyterm#958.
         self.image: bytes | None = None
         #: What the person's terminal last pasted into a window, which the
-        #: clipboard offers until a pane copies.
+        #: clipboard offers to the reads its Ctrl+V starts.
         self.pasted: str | None = None
+        self._pasted_until = 0.0
         #: Each open window, by the compositor's id, and the pane showing it.
         self.panes: dict[int, Pane] = {}
         #: The same windows' widgets, which the events update.
@@ -530,6 +536,7 @@ class WaylandServer:
         if compositor is None:
             return
         self.pasted = text
+        self._pasted_until = anyio.current_time() + PASTE_SECONDS
         _hold(compositor, "clipboard", self.image is not None)
         found = evdev_of(Keys.ControlV)
         if found is not None:
@@ -776,7 +783,7 @@ class WaylandServer:
         if mime_type == IMAGE_TYPE and target == "clipboard" and self.image is not None:
             await _write_all(fd, self.image)
             return
-        if target == "clipboard" and self.pasted is not None:
+        if target == "clipboard" and self.pasted is not None and anyio.current_time() <= self._pasted_until:
             await _write_all(fd, self.pasted.encode("utf-8"))
             return
         if self.pymux.options.set_clipboard is Clipboard.ON:
@@ -790,8 +797,17 @@ class WaylandServer:
         await _write_all(fd, text.encode("utf-8"))
 
     async def _read_the_terminal(self, target: str) -> str | None:
-        "The selection of the terminal a person used last, or None."
+        """
+        The selection of the terminal a person used last, or None: a
+        client's here, or the person's at a peer, who is no client here.
+        Lillecarl/pyterm#992.
+        """
         client = self.pymux.latest_client()
+        links = [link for link in self.pymux.peer_links() if link.can(Capability.CLIPBOARD_READS) and link.sources]
+        link = max(links, key=lambda link: link.last_used, default=None)
+        if link is not None and (client is None or link.last_used > client.last_used):
+            # The peer reads its terminal with the same wait; the link adds its own trip.
+            return await link.clipboard_asks.ask(OSC52_LETTER[target], 2 * CLIPBOARD_READ_SECONDS)
         if client is None:
             return None
         return await client.client.clipboard.read(OSC52_LETTER[target])

@@ -56,6 +56,7 @@ from ..wayland.window_pane import WindowWidget
 from .copying import place_of
 from .dial import abort, dial, dial_beside, ssh_connection_of
 from .files import Relays
+from .clipboard_asks import clipboard_answer
 from .plugin_messages import PluginAsks, plugin_answer
 from .program import HOLD_FOR_FRESH, RemoteProgram
 from .tree import MirrorTree
@@ -803,6 +804,9 @@ class Peer:
     async def _answer_plugin(self, packet: Message) -> None:
         self.send(await plugin_answer(self.tree.pymux, packet, self.address, dialled=True))
 
+    async def _answer_clipboard(self, packet: Message) -> None:
+        self.send(await clipboard_answer(self.tree.pymux, packet))
+
     def _refusal(self, packet: Message) -> str | None:
         """
         Read the owner's first packet: why the link cannot work, or
@@ -859,6 +863,10 @@ class Peer:
             return
         if packet.get(Field.CMD) == Packet.PLUGIN_ANSWER:
             self.plugin_asks.answered(packet)
+            return
+        if packet.get(Field.CMD) == Packet.CLIPBOARD_ASK:
+            if self._tasks is not None:
+                self._tasks.start_soon(self._answer_clipboard, packet)
             return
         if packet.get(Field.CMD) == Packet.RESTARTING:
             self.restart = (

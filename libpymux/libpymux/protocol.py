@@ -137,6 +137,11 @@ class Capability(StrEnum):
     #: link, as `plugin-ask`, and the answer comes back as
     #: `plugin-answer`. Lillecarl/pyterm#988.
     PLUGIN_MESSAGES = "plugin-messages"
+    #: The owner asks a peer for its person's clipboard (`clipboard-ask`),
+    #: when a program in a pane pastes through the compositor, and the
+    #: peer answers with the text or nothing (`clipboard-answer`).
+    #: Lillecarl/pyterm#992.
+    CLIPBOARD_READS = "clipboard-reads"
 
 
 #: The version each capability came with, while each was a version. A
@@ -529,6 +534,11 @@ class Packet(StrEnum):
     # `data`. Lillecarl/pyterm#988.
     PLUGIN_ASK = "plugin-ask"
     PLUGIN_ANSWER = "plugin-answer"
+    # Owner to peer: read your person's selection `data` (OSC 52's letter)
+    # under `request`. The answer is `clipboard-answer`, with the text as
+    # `data`, or no `data`. Lillecarl/pyterm#992.
+    CLIPBOARD_ASK = "clipboard-ask"
+    CLIPBOARD_ANSWER = "clipboard-answer"
 
 
 class Field(StrEnum):
