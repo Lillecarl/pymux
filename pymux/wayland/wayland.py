@@ -45,7 +45,7 @@ from prompt_toolkit.application.current import get_app
 from prompt_toolkit.clipboard import ClipboardData
 from prompt_toolkit.keys import Keys
 
-from pymux.connection.clipboard_reads import CLIPBOARD_READ_SECONDS
+from pymux.connection.clipboard_reads import CLIPBOARD_ASK_SECONDS, CLIPBOARD_READ_SECONDS
 from pymux.enums import Clipboard, WindowScroll, Woke
 from pymux.graphics.window_frames import FrameRects, VideoFrame, WindowView
 from pymux.ids import PaneId
@@ -806,8 +806,8 @@ class WaylandServer:
         links = [link for link in self.pymux.peer_links() if link.can(Capability.CLIPBOARD_READS) and link.sources]
         link = max(links, key=lambda link: link.last_used, default=None)
         if link is not None and (client is None or link.last_used > client.last_used):
-            # The peer reads its terminal with the same wait; the link adds its own trip.
-            return await link.clipboard_asks.ask(OSC52_LETTER[target], 2 * CLIPBOARD_READ_SECONDS)
+            # The peer waits on its terminal at most this long; the link adds its own trip.
+            return await link.clipboard_asks.ask(OSC52_LETTER[target], CLIPBOARD_ASK_SECONDS + CLIPBOARD_READ_SECONDS)
         if client is None:
             return None
         return await client.client.clipboard.read(OSC52_LETTER[target])

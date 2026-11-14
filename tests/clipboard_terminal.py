@@ -8,6 +8,8 @@ from __future__ import annotations
 import base64
 import re
 
+import anyio
+
 #: A query or a write of OSC 52, as the server writes it.
 _OSC52 = re.compile(r"\x1b\]52;([cp]);([^\x07\x1b]*)(?:\x07|\x1b\\)")
 
@@ -27,6 +29,8 @@ class ClipboardTerminal:
         self.chunk = chunk
         self.selections: dict[str, str] = {}
         self.queries = 0
+        #: Set by the first query, for a test that answers by hand.
+        self.asked = anyio.Event()
         self.typed = None
         self.state = None
 
@@ -37,12 +41,13 @@ class ClipboardTerminal:
         for letter, payload in _OSC52.findall(message.get("data", "")):
             if payload == "?":
                 self.queries += 1
+                self.asked.set()
                 if self.answers:
-                    self._reply(letter)
+                    self.reply(letter)
             else:
                 self.selections[letter] = base64.b64decode(payload).decode()
 
-    def _reply(self, letter: str) -> None:
+    def reply(self, letter: str) -> None:
         encoded = base64.b64encode(self.selections.get(letter, "").encode()).decode()
         reply = "\x1b]52;%s;%s\x07" % (letter, encoded)
         size = self.chunk or len(reply)

@@ -15,6 +15,7 @@ from clipboard_terminal import ClipboardTerminal
 from prompt_toolkit.data_structures import Size
 from session import over_connection
 
+from pymux.connection import clipboard_reads
 from pymux.connection.clipboard_reads import CLIPBOARD_READ_SECONDS
 
 SIZE = Size(rows=24, columns=80)
@@ -85,3 +86,30 @@ async def test_a_silent_terminal_is_asked_once():
         with anyio.fail_after(CLIPBOARD_READ_SECONDS / 2):
             assert await state.client.clipboard.read("c") is None
         assert terminal.queries == 1
+
+
+async def test_a_terminal_that_asks_the_person_gets_time(monkeypatch):
+    """
+    kitty asks the person before it answers a read, and a click takes
+    longer than a silent terminal is given. A terminal that speaks kitty's
+    clipboard protocol waits `CLIPBOARD_ASK_SECONDS`. The short wait is cut
+    so the late answer comes well past it without a slow test.
+    """
+    monkeypatch.setattr(clipboard_reads, "CLIPBOARD_READ_SECONDS", 0.05)
+    terminal = ClipboardTerminal(answers=False)
+    terminal.selections["c"] = "after a click"
+    async with attached(terminal) as state:
+        state.client.replies.kitty_clipboard = True
+        got: list[str | None] = []
+
+        async def paste() -> None:
+            got.append(await state.client.clipboard.read("c"))
+
+        with anyio.fail_after(5):
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(paste)
+                await terminal.asked.wait()
+                await anyio.sleep(0.2)
+                terminal.reply("c")
+        assert got == ["after a click"]
+        assert state.client.clipboard.answers is True

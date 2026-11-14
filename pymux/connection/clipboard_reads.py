@@ -34,6 +34,12 @@ _FILE_TRANSFER_REPLY = OSC + Osc.FILE_TRANSFER + ";"
 #: again on this connection. Most refuse reads by default, silently.
 CLIPBOARD_READ_SECONDS = 1.0
 
+#: The wait for a terminal that speaks kitty's clipboard protocol. kitty
+#: asks the person in a dialog on every read by default, and a click
+#: takes longer than `CLIPBOARD_READ_SECONDS`. Only Wayland pastes wait,
+#: so a long wait holds one paste and nothing else.
+CLIPBOARD_ASK_SECONDS = 30.0
+
 #: The longest clipboard answer taken, in characters of base64. Past it
 #: the answer is dropped, and nothing of it reaches a pane as keys.
 CLIPBOARD_REPLY_LIMIT = 24 << 20
@@ -87,7 +93,7 @@ class ClipboardReader:
         self._asked = True
         self.client.forward_osc(osc(Osc.CLIPBOARD, selection, QUERY))
         self.client.pymux.invalidate(Woke.CLIPBOARD_ASKED)
-        with anyio.move_on_after(CLIPBOARD_READ_SECONDS):
+        with anyio.move_on_after(self.wait()):
             await done.wait()
         if not done.is_set():
             with suppress(ValueError):
@@ -96,6 +102,10 @@ class ClipboardReader:
                 self.answers = False
             return None
         return answer[0] or None
+
+    def wait(self) -> float:
+        "How long a read waits for this terminal's answer."
+        return CLIPBOARD_ASK_SECONDS if self.client.replies.kitty_clipboard else CLIPBOARD_READ_SECONDS
 
     def take_answer(self, data: str) -> str:
         """
