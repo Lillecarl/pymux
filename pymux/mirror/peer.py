@@ -47,7 +47,6 @@ from ..client.relink import Relink, Restarting, Wait
 from ..client.ssh_requests import added, forward_in, forwards_packet, removed
 from ..commands import CommandException
 from ..connection.log_asks import LogAsks, log_answer
-from ..connection.rate import Rate
 from ..core.forwarding import question
 from ..enums import Clipboard, Woke
 from ..graphics.kitty_frames import decoders
@@ -142,8 +141,8 @@ class Peers:
         self.bytes_down = 0
         self.bytes_up = 0
         #: What `#{link_rate_down}` and `#{link_rate_up}` read.
-        self.rate_down = Rate()
-        self.rate_up = Rate()
+        self.rate_down = pymux.meters.meter(lambda: self.bytes_down)
+        self.rate_up = pymux.meters.meter(lambda: self.bytes_up)
         #: The addresses a loaded snapshot was linked to.
         self.returning: list[str] = []
         #: Each mirror a loaded snapshot was in copy mode on (`copy_rows`).

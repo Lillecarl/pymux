@@ -1,45 +1,57 @@
 """
-A rate reads the last few seconds of a count, in a unit that fits.
+A meter reads the last few seconds of a count, in a unit that fits.
 
-The rules this judges: the first read has nothing to compare with and
-reads zero; later reads divide the bytes since a sample by the seconds
-since it; a count that stopped reads zero once a window has passed;
-and a rate prints in B/s, kB/s, MB/s or GB/s, with a decimal only
-under ten. Lillecarl/pyterm#680. A frame rate prints in fps.
-Lillecarl/pyterm#598.
+The rules this judges: the first sample has nothing to compare with and
+reads zero; later samples divide the count since an earlier one by the
+seconds since it; a count that stopped reads zero once a window has
+passed; and a rate prints in B/s, kB/s, MB/s or GB/s, with a decimal
+only under ten. Lillecarl/pyterm#680, Lillecarl/pyterm#996. A frame
+rate prints in fps. Lillecarl/pyterm#598.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from pymux.connection.rate import RATE_WINDOW, Rate, frames_per_second, per_second
+from pymux.connection.rate import frames_per_second, per_second
+from pymux.core.meters import RATE_WINDOW, Meter
 
 
-def test_the_first_read_is_zero():
-    assert Rate().read(5000, 100.0) == 0.0
+def counted(*totals: int):
+    "A meter whose count reads `totals` in turn, one a sample."
+    left = list(totals)
+    return Meter(lambda: left.pop(0))
 
 
-def test_a_rate_divides_the_bytes_since_a_sample_by_the_seconds():
-    rate = Rate()
-    rate.read(0, 100.0)
-    assert rate.read(4000, 104.0) == 1000.0
+def test_the_first_sample_is_zero():
+    meter = counted(5000)
+    meter.sample(100.0)
+    assert meter.rate == 0.0
+
+
+def test_a_rate_divides_the_count_since_a_sample_by_the_seconds():
+    meter = counted(0, 1000, 2000)
+    for second in range(3):
+        meter.sample(100.0 + second)
+    assert meter.rate == 1000.0
 
 
 def test_a_count_that_stopped_reads_zero_a_window_later():
-    rate = Rate()
+    seconds = 10 + int(RATE_WINDOW) + 1
+    meter = counted(*[min(second, 9) * 1000 for second in range(seconds)])
     for second in range(10):
-        rate.read(second * 1000, 100.0 + second)
-    stopped = 9000
-    assert rate.read(stopped, 110.0) > 0
-    assert rate.read(stopped, 110.0 + RATE_WINDOW + 1) == 0.0
+        meter.sample(100.0 + second)
+    assert meter.rate > 0
+    for second in range(10, seconds):
+        meter.sample(100.0 + second)
+    assert meter.rate == 0.0
 
 
-def test_reads_many_times_a_second_keep_few_samples():
-    rate = Rate()
-    for tick in range(1000):
-        rate.read(tick, 100.0 + tick / 100)
-    assert len(rate._samples) <= RATE_WINDOW + 2
+def test_samples_older_than_the_window_go():
+    meter = counted(*range(100))
+    for second in range(100):
+        meter.sample(100.0 + second)
+    assert len(meter._samples) <= RATE_WINDOW + 2
 
 
 @pytest.mark.parametrize(

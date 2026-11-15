@@ -61,6 +61,7 @@ from .focus import Focus
 from .forward_requests import ForwardRequests
 from .hooks import Hooks
 from .kitty_transfers import KittyTransfers
+from .meters import Meters
 from .outward import Outward
 from .overlays import Overlays
 from .pane import Pane
@@ -187,6 +188,7 @@ class Pymux:
         "port_offers": Keep.REBUILT,
         # A mirror's program asks the next server's link again.
         "peers": Keep.REBUILT,
+        "meters": Keep.REBUILT,
         "waking": Keep.REBUILT,
         "focus": Keep.REBUILT,
         # The running server.
@@ -310,6 +312,8 @@ class Pymux:
         self.rich_clipboard = RichClipboard(self)
         self.drag_and_drop = DragAndDrop(self)
         self.kitty_transfers = KittyTransfers(self)
+        #: The meters a status line shows. Before anything that makes one.
+        self.meters = Meters(self)
         #: The links to other servers whose panes this one mirrors.
         #: Lillecarl/pyterm#761.
         self.peers = Peers(self)
@@ -677,6 +681,7 @@ class Pymux:
             self.loop = asyncio.get_running_loop()
             self.error_notice.install()
             tasks.start_soon(self.waking.auto_refresh)
+            tasks.start_soon(self.meters.run)
             tasks.start_soon(watch_window_output, self)
             tasks.start_soon(partial(watch_the_loop, stacks=self.stall_stacks))
             tasks.start_soon(sweep, self)

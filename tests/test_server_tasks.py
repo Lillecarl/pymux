@@ -34,6 +34,7 @@ from pymux.connection.server import FAILURES_THAT_END_A_CONNECTION, ServerConnec
 
 # pymux's own, and not the builtin of the same name. The read loop of a
 # connection ends on this one and logs anything else.
+from pymux.core.meters import Meters
 from pymux.graphics.graphics import OuterImageIds
 from pymux.pipes.base import BrokenPipeError
 
@@ -99,6 +100,7 @@ class FakePymux:
         self.removed = []
         self.terminals = FakeTerminals()
         self.outer_image_ids = OuterImageIds()
+        self.meters = Meters(self)
         # `Pymux.serving` is where a connection asks to be served.
         self.serving = self
 

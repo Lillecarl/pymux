@@ -35,9 +35,9 @@ if TYPE_CHECKING:
 
     from pymux.connection.client import ClientRole
     from pymux.connection.client_state import ClientState
-    from pymux.connection.rate import Rate
     from pymux.connection.server import ServerConnection
     from pymux.core.main import Pymux
+    from pymux.core.meters import Meter
     from pymux.core.pane import Pane
     from pymux.core.session import OwnOptions, Session
     from pymux.core.window_tree import Window
@@ -831,9 +831,18 @@ def _client_bytes(count: Callable[[PipeConnection], int]) -> Callable[[FormatCon
     return bytes_of
 
 
-def _client_rate(
-    count: Callable[[PipeConnection], int], rate: Callable[[ServerConnection], Rate]
-) -> Callable[[FormatContext], str]:
+def _shown(context: FormatContext, name: str, read: Callable[[], str]) -> str:
+    """
+    A meter's reading, noted on the frame that draws it, so the next
+    sample that would read differently redraws it (`Meters.sample`).
+    Lillecarl/pyterm#996.
+    """
+    if context.client is None:
+        return read()
+    return context.client.app.shows_meter(name, read)
+
+
+def _client_rate(rate: Callable[[ServerConnection], Meter], name: str) -> Callable[[FormatContext], str]:
     """
     The same bytes per second over the last few seconds, in a unit
     that fits (`pymux.connection.rate`). For a person; a script reads the counts.
@@ -844,7 +853,8 @@ def _client_rate(
         client = _client_of(context)
         if client is None:
             return ""
-        return per_second(rate(client.connection).read_now(count(client.connection.pipe_connection)))
+        meter = rate(client.connection)
+        return _shown(context, name, lambda: per_second(meter.rate))
 
     return rate_of
 
@@ -859,22 +869,23 @@ def _link_rate(down: bool) -> Callable[[FormatContext], str]:
 
     def rate_of(context: FormatContext) -> str:
         peers = context.pymux.peers
-        if down:
-            return per_second(peers.rate_down.read_now(peers.bytes_down))
-        return per_second(peers.rate_up.read_now(peers.bytes_up))
+        meter = peers.rate_down if down else peers.rate_up
+        return _shown(context, "link_rate_down" if down else "link_rate_up", lambda: per_second(meter.rate))
 
     return rate_of
 
 
 def _client_fps(context: FormatContext) -> str:
     """
-    The frames a second this client gets, over the last few seconds.
-    A status line shows it where a template puts it. Lillecarl/pyterm#598.
+    The frames a second this client gets that draw more than the clock
+    and the meters, over the last few seconds. A status line shows it
+    where a template puts it. Lillecarl/pyterm#598.
     """
     client = _client_of(context)
     if client is None:
         return ""
-    return frames_per_second(client.pacing.rate_frames.read_now(client.pacing.frames_sent))
+    meter = client.pacing.rate_frames
+    return _shown(context, "client_fps", lambda: frames_per_second(meter.rate))
 
 
 def _client_window_fps(context: FormatContext) -> str:
@@ -887,8 +898,8 @@ def _client_window_fps(context: FormatContext) -> str:
     client = _client_of(context)
     if client is None:
         return ""
-    rate = client.pacing.rate_window_frames.read_now(client.pacing.window_frames_sent)
-    return frames_per_second(rate) if rate else ""
+    meter = client.pacing.rate_window_frames
+    return _shown(context, "client_window_fps", lambda: frames_per_second(meter.rate) if meter.rate else "")
 
 
 def _client_readonly(context: FormatContext) -> str:
@@ -1013,8 +1024,8 @@ tmux_variables: dict[str, Callable[[FormatContext], str]] = {
     "client_flags": _client_flags,
     "client_bytes_down": _client_bytes(lambda pipe: pipe.bytes_out),
     "client_bytes_up": _client_bytes(lambda pipe: pipe.bytes_in),
-    "client_rate_down": _client_rate(lambda pipe: pipe.bytes_out, lambda connection: connection.rate_down),
-    "client_rate_up": _client_rate(lambda pipe: pipe.bytes_in, lambda connection: connection.rate_up),
+    "client_rate_down": _client_rate(lambda connection: connection.rate_down, "client_rate_down"),
+    "client_rate_up": _client_rate(lambda connection: connection.rate_up, "client_rate_up"),
     "link_bytes_down": lambda c: str(c.pymux.peers.bytes_down),
     "link_bytes_up": lambda c: str(c.pymux.peers.bytes_up),
     "link_rate_down": _link_rate(down=True),

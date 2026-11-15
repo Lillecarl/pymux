@@ -34,7 +34,6 @@ from ..mirror.tunnel import OwnerTunnel
 from ..pipes.base import BrokenPipeError
 from .attach import start_gui
 from .packet_table import PacketTable
-from .rate import Rate
 from .requests import Requests
 
 if TYPE_CHECKING:
@@ -139,8 +138,8 @@ class ServerConnection:
 
         #: What `#{client_rate_down}` and `#{client_rate_up}` read, off
         #: the pipe's counts. Lillecarl/pyterm#680.
-        self.rate_down = Rate()
-        self.rate_up = Rate()
+        self.rate_down = pymux.meters.meter(lambda: self.pipe_connection.bytes_out)
+        self.rate_up = pymux.meters.meter(lambda: self.pipe_connection.bytes_in)
         #: The scope the background work of this connection runs in.
         #: `serve()` opens it, so every task of a client ends when that
         #: client goes, and none of them can outlive the server: the

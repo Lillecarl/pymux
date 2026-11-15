@@ -44,11 +44,11 @@ from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 
 from pymux.connection.known_terminals import Identity, identify
-from pymux.connection.rate import Rate
 from pymux.connection.server import ServerConnection
 from pymux.connection.terminal_answers import TerminalAnswers
 from pymux.core.environment import take_environment_from
 from pymux.core.main import Pymux
+from pymux.core.meters import Meter
 from pymux.graphics.graphics import ClientGraphics
 from pymux.keys.keys import KittyVt100Parser
 from pymux.pipes.memory import connect_in_memory
@@ -115,8 +115,8 @@ class _Transport:
         self._pymux = pymux
         self.pipe_connection = _NoPipe()
         self.size = DEFAULT_SIZE
-        self.rate_down = Rate()
-        self.rate_up = Rate()
+        self.rate_down = Meter(lambda: 0)
+        self.rate_up = Meter(lambda: 0)
 
     @property
     def name(self) -> str:

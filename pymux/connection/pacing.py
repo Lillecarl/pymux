@@ -8,6 +8,7 @@ counts `#{client_fps}` reads.
 from __future__ import annotations
 
 from collections import deque
+from collections.abc import Callable
 from typing import (
     TYPE_CHECKING,
     ClassVar,
@@ -19,7 +20,6 @@ from pyte.sequences.reports import ask_status
 
 from ..log import logger
 from ..options.client_options import ClientOptions
-from .rate import Rate
 
 if TYPE_CHECKING:
     from .client import ClientRole
@@ -56,6 +56,8 @@ class FramePacing:
         "rate_frames": Keep.DROPPED,
         "window_frames_sent": Keep.DROPPED,
         "rate_window_frames": Keep.DROPPED,
+        # The client state that sets it is made again.
+        "drawing_for_time": Keep.REBUILT,
     }
 
     def __init__(self, client: ClientRole) -> None:
@@ -76,14 +78,19 @@ class FramePacing:
         #: A frame was skipped for the terminal, so its answer asks for
         #: the next one. Lillecarl/pyterm#826.
         self.frame_held = False
-        #: The frames this client was sent, and what `#{client_fps}`
-        #: reads off them. Lillecarl/pyterm#598.
+        #: The frames this client was sent that drew more than the clock
+        #: and the meters, and what `#{client_fps}` reads off them.
+        #: Lillecarl/pyterm#598, Lillecarl/pyterm#996.
         self.frames_sent = 0
-        self.rate_frames = Rate()
+        self.rate_frames = client.pymux.meters.meter(lambda: self.frames_sent)
+        #: Whether the frame going out is one only time asked for
+        #: (`ClientApplication.drawing_for_time`). The client state sets
+        #: it; a command's client draws nothing.
+        self.drawing_for_time: Callable[[], bool] = lambda: False
         #: The window panes' frames, which go out apart from the frames
         #: above, and what `#{client_window_fps}` reads off them.
         self.window_frames_sent = 0
-        self.rate_window_frames = Rate()
+        self.rate_window_frames = client.pymux.meters.meter(lambda: self.window_frames_sent)
 
     def frame_answered(self) -> None:
         self.frames_out = max(0, self.frames_out - 1)
@@ -115,7 +122,8 @@ class FramePacing:
             await self.frames_all_shown()
 
     def frame_went_out(self) -> None:
-        self.frames_sent += 1
+        if not self.drawing_for_time():
+            self.frames_sent += 1
 
     def window_frame_went_out(self) -> None:
         self.window_frames_sent += 1

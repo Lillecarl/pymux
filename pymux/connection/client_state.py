@@ -48,6 +48,7 @@ from ..style.colors import DefaultColors
 from ..style.nearest import NEAREST
 from ..style.style import DEFAULT_THEME, theme
 from ..wayland.window_pane import WindowWidget
+from .client_app import ClientApplication
 from .extra_cursors import Placed, cursors_on_the_client
 from .frame_holds import FrameHolds
 from .lookups import Lookups
@@ -452,6 +453,8 @@ class ClientState:
         self.layout_manager = LayoutManager(self.pymux, self)
 
         self.app = self._create_app()
+        app = self.app
+        self.client.pacing.drawing_for_time = lambda: app.drawing_for_time
 
         #: What this client's next frame waits for (`frame_holds`).
         self.frame_holds = FrameHolds(self.app.invalidate, lambda: self.pymux.tasks)
@@ -847,7 +850,7 @@ class ClientState:
         """
         pymux = self.pymux
 
-        app = Application(
+        app = ClientApplication(
             output=self.output,
             input=self.input,
             # One buffer for the whole session. Copy mode in one client

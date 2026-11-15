@@ -30,7 +30,7 @@ class Waking:
     def __init__(self, pymux: Pymux) -> None:
         self.pymux = pymux
 
-    def refresh_what_time_moves(self, but_not: Application[Any] | None = None) -> None:
+    def refresh_what_time_moves(self, but_not: Application[Any] | None = None, for_time: bool = False) -> None:
         """
         Ask for a frame from each client whose screen moved by itself.
 
@@ -52,6 +52,10 @@ class Waking:
         `but_not` is the application that already asked for a frame, so
         that `client_asked_for_frame` can ask about the others and
         leave that one alone.
+
+        `for_time` says only the clock moved the text, so the frame is
+        no meter's content (`ClientApplication`). A window list that
+        moved because a pane wrote is content. Lillecarl/pyterm#996.
         """
         for client_state in self.pymux._client_states.values():
             # Every scheduled redraw records the tick, for its own
@@ -76,7 +80,10 @@ class Waking:
                     "Drawing 1 of the clients: the text that time moves changed to %r",
                     text,
                 )
-                client_state.app.invalidate()
+                if for_time:
+                    client_state.app.invalidate_for_time()
+                else:
+                    client_state.app.invalidate()
 
     def client_asked_for_frame(self, app: Application[Any]) -> None:
         """
@@ -140,7 +147,7 @@ class Waking:
                 )
             )
             try:
-                self.refresh_what_time_moves()
+                self.refresh_what_time_moves(for_time=True)
             except Exception:
                 # The clock must not take the server with it. In a task
                 # group an exception cancels the siblings, and the

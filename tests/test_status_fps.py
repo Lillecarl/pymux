@@ -33,18 +33,17 @@ async def test_a_template_shows_the_frame_rates_where_it_says():
                 " '{{ client_fps }}{% if client_window_fps %} / {{ client_window_fps }} wl{% endif %}'"
             )
             right = connection.client.state.layout_manager.status.right
-            # The rate's own clock, so a stall between two lines moves
-            # nothing. Lillecarl/pyterm#846.
+            # Sampled by hand at times of the test's own, so a stall
+            # between two lines moves nothing. Lillecarl/pyterm#846.
             now = [1000.0]
-            window_frames = connection.client.pacing.rate_window_frames
-            window_frames.clock = lambda: now[0]
-            # A count read two seconds ago, before any read now keeps one.
-            window_frames.read_now(0)
-            now[0] += 2
+            pymux.meters.clock = lambda: now[0]
+            pymux.meters.sample()
             assert re.fullmatch(r"\d+\.?\d* fps", right())
 
             # 120 window frames in the two seconds: sixty a second.
-            connection.client.pacing.window_frames_sent = 120
+            connection.client.pacing.window_frames_sent += 120
+            now[0] += 2
+            pymux.meters.sample()
             assert right().endswith(" / 60 fps wl")
         for pane in list(pymux.panes_by_id.values()):
             pane.process.kill()
