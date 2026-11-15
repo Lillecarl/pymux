@@ -245,6 +245,8 @@ def create_app(
             connection.pymux.counters,
             client.pacing.frame_went_out,
             client.pacing.report_after_frame,
+            send_for_time=lambda packet: connection.send_packet(packet, for_time=True),
+            drawing_for_time=lambda: client.pacing.drawing_for_time(),
         )
         if start
         else NoStdout()

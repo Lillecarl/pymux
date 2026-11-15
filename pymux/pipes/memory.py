@@ -120,12 +120,16 @@ class MemoryConnection(PipeConnection):
             await anyio.sleep(DRAIN_POLL)
 
     @override
-    async def write(self, frame: bytes, compress_after: bool = False, urgent: bool = False) -> None:
+    async def write(
+        self, frame: bytes, compress_after: bool = False, urgent: bool = False, for_time: bool = False
+    ) -> None:
         """
         Give the next encoded packet to the peer. Nothing here crosses a
         network, so nothing is compressed (`can_compress`).
         """
         self.write_nowait(frame)
+        if for_time:
+            self.bytes_out_for_time += len(frame)
 
     @override
     def close(self) -> None:

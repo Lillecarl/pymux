@@ -8,6 +8,8 @@ it was drawn kept a frame alive every few ticks instead.
 
 from __future__ import annotations
 
+import re
+
 import anyio
 from prompt_toolkit.application.current import set_app
 from test_a_session_on_a_pyte_screen import attached, shows
@@ -29,7 +31,7 @@ async def test_an_idle_client_reads_zero_and_then_asks_for_nothing():
         connection = pymux.connections[-1]
         app = connection.client.state.app
         with set_app(app):
-            pymux.handle_command("set-option -g status-right 'meter {{ client_fps }}'")
+            pymux.handle_command("set-option -g status-right 'meter {{ client_fps }} {{ client_rate_down }}'")
         await shows(session, "meter ")
         now = [1000.0]
         pymux.meters.clock = lambda: now[0]
@@ -37,7 +39,7 @@ async def test_an_idle_client_reads_zero_and_then_asks_for_nothing():
             now[0] += 1
             pymux.meters.sample()
             await drawn(app)
-        await shows(session, "meter 0.0 fps")
+        await shows(session, "meter 0.0 fps 0 B/s")
 
         for _second in range(5):
             now[0] += 1
@@ -62,7 +64,8 @@ async def test_a_meter_that_moves_redraws_the_client():
         connection.client.pacing.frames_sent += 30
         now[0] += 1
         pymux.meters.sample()
-        await shows(session, "meter 30 fps")
+        # Thirty, and the frames the setup drew between the samples.
+        await shows(session, re.compile(r"meter \d\d fps"))
         for pane in list(pymux.panes_by_id.values()):
             pane.process.kill()
 

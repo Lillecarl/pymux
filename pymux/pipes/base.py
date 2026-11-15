@@ -71,6 +71,10 @@ class PipeConnection(ABC):
     #: network moved. Lillecarl/pyterm#679.
     bytes_out: int
     bytes_in: int
+    #: The part of `bytes_out` that frames only time asked for carried:
+    #: the clock and the meters. A meter of the client's rate leaves it
+    #: out, or it counts its own redraw. Lillecarl/pyterm#996.
+    bytes_out_for_time = 0
 
     @abstractmethod
     async def read(self) -> Message:
@@ -85,13 +89,16 @@ class PipeConnection(ABC):
     can_compress = False
 
     @abstractmethod
-    async def write(self, frame: bytes, compress_after: bool = False, urgent: bool = False) -> None:
+    async def write(
+        self, frame: bytes, compress_after: bool = False, urgent: bool = False, for_time: bool = False
+    ) -> None:
         """
         Write one encoded packet, its framing included
         (`libpymux.wire.encode_json` or `encode_msgpack`). With
         `compress_after`, every write after this one goes into one zstd
         stream, in the order the writes go out. An `urgent` write goes
-        ahead of every write that waits for its turn: sound.
+        ahead of every write that waits for its turn: sound. A `for_time`
+        write counts in `bytes_out_for_time` too.
 
         This can raise BrokenPipeError.
         """

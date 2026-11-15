@@ -354,7 +354,9 @@ class PosixSocketConnection(PipeConnection):
         return data
 
     @override
-    async def write(self, frame: bytes, compress_after: bool = False, urgent: bool = False) -> None:
+    async def write(
+        self, frame: bytes, compress_after: bool = False, urgent: bool = False, for_time: bool = False
+    ) -> None:
         """
         Write the next encoded packet.
 
@@ -385,7 +387,10 @@ class PosixSocketConnection(PipeConnection):
 
         try:
             async with self._turns.turn(urgent):
-                await self._send_all(await self._compressed(data) if self._compressor is not None else data)
+                wire = await self._compressed(data) if self._compressor is not None else data
+                await self._send_all(wire)
+                if for_time:
+                    self.bytes_out_for_time += len(wire)
                 if compress_after:
                     self._compressor = Compressor()
         finally:

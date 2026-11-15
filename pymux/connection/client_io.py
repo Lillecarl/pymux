@@ -67,8 +67,14 @@ class SocketStdout:
         counters: Counters | None = None,
         frame_went_out: Callable[[], None] | None = None,
         after_frame: Callable[[int], str] | None = None,
+        send_for_time: Callable[[Message], None] | None = None,
+        drawing_for_time: Callable[[], bool] = lambda: False,
     ) -> None:
         self.send_packet = send_packet
+        #: How a frame only time asked for goes, so its bytes count
+        #: apart (`PipeConnection.bytes_out_for_time`). Lillecarl/pyterm#996.
+        self.send_for_time = send_for_time
+        self.drawing_for_time = drawing_for_time
         self.counters = counters
         #: Told of each frame, for the count of the one client it goes to.
         self.frame_went_out = frame_went_out
@@ -93,7 +99,9 @@ class SocketStdout:
         if self.frame_went_out is not None:
             self.frame_went_out()
 
-        self.send_packet({Field.CMD: Packet.OUT, Field.DATA: written})
+        for_time = self.send_for_time is not None and self.drawing_for_time()
+        send = self.send_for_time if for_time and self.send_for_time is not None else self.send_packet
+        send({Field.CMD: Packet.OUT, Field.DATA: written})
         self._buffer = []
 
     def isatty(self) -> bool:

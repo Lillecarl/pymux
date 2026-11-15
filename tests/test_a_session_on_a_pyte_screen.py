@@ -89,10 +89,10 @@ async def attached(pymux, read_only: bool = False, client_options=None):
     session.written = session.taken = 0
     write = ServerConnection.write_encoded
 
-    def counted(self, frame, compress_after=False):
+    def counted(self, frame, compress_after=False, for_time=False):
         if self is connection:
             session.written += 1
-        return write(self, frame, compress_after)
+        return write(self, frame, compress_after, for_time)
 
     # The packets, for a failure to show the bytes that drew it.
     session.packets = []
@@ -460,8 +460,8 @@ async def test_the_comparison_waits_for_a_slow_wire(pymux):
         connection = pymux.connections[-1]
         counted = connection.write_encoded
 
-        def late(frame, compress_after=False):
-            sent = counted(frame, compress_after)
+        def late(frame, compress_after=False, for_time=False):
+            sent = counted(frame, compress_after, for_time)
 
             async def deliver():
                 await anyio.sleep(0.2)

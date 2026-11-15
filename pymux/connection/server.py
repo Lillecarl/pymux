@@ -138,7 +138,9 @@ class ServerConnection:
 
         #: What `#{client_rate_down}` and `#{client_rate_up}` read, off
         #: the pipe's counts. Lillecarl/pyterm#680.
-        self.rate_down = pymux.meters.meter(lambda: self.pipe_connection.bytes_out)
+        self.rate_down = pymux.meters.meter(
+            lambda: self.pipe_connection.bytes_out - self.pipe_connection.bytes_out_for_time
+        )
         self.rate_up = pymux.meters.meter(lambda: self.pipe_connection.bytes_in)
         #: The scope the background work of this connection runs in.
         #: `serve()` opens it, so every task of a client ends when that
@@ -399,10 +401,11 @@ class ServerConnection:
         # client that is merely slow keeps its place.
         self._unanswered = 0
 
-    def send_packet(self, data: object, compress_after: bool = False) -> None:
+    def send_packet(self, data: object, compress_after: bool = False, for_time: bool = False) -> None:
         """
         Send packet to client. `compress_after` turns the stream to zstd
-        after this one (`PipeConnection.write`).
+        after this one, and `for_time` says only the clock or a meter
+        asked for it (`PipeConnection.write`).
         """
         if self.closed:
             return
@@ -413,7 +416,7 @@ class ServerConnection:
             recording.hear("out", data[Field.DATA])
         # Serialised now: the write runs later, and the packet is what
         # was true when it was sent, in the format of the moment.
-        self.spawn(self.write_encoded(self.encode(data), compress_after))
+        self.spawn(self.write_encoded(self.encode(data), compress_after, for_time))
 
     async def say_restarting(self, wait: float, why: str) -> None:
         """
@@ -449,10 +452,10 @@ class ServerConnection:
             return
         await self.write_encoded(self.encode(data_obj))
 
-    async def write_encoded(self, frame: bytes, compress_after: bool = False) -> None:
+    async def write_encoded(self, frame: bytes, compress_after: bool = False, for_time: bool = False) -> None:
         "Write one encoded packet; a client that is gone is let go."
         try:
-            await self.pipe_connection.write(frame, compress_after)
+            await self.pipe_connection.write(frame, compress_after, for_time=for_time)
         except BrokenPipeError:
             self.detach_and_close()
 
