@@ -1360,11 +1360,16 @@ async def marks(page: Page) -> list[Mark]:
             continue
         wanted[node["backendDOMNodeId"]] = (role, str((node.get("name") or {}).get("value", "")))
     snapshot = await page.send("DOMSnapshot.captureSnapshot", {"computedStyles": []})
+    # The snapshot's bounds are device pixels: at a devicePixelRatio of 2
+    # each box is twice its CSS size. Lillecarl/pyterm#997.
+    metrics = await page.send("Page.getLayoutMetrics")
+    css = metrics["layoutViewport"]["clientWidth"] / metrics["cssLayoutViewport"]["clientWidth"]
     (top, *_frames) = snapshot["documents"]
     backend = top["nodes"]["backendNodeId"]
     found: dict[int, Mark] = {}
-    for index, (x, y, width, height) in zip(top["layout"]["nodeIndex"], top["layout"]["bounds"], strict=True):
+    for index, bounds in zip(top["layout"]["nodeIndex"], top["layout"]["bounds"], strict=True):
         node = backend[index]
+        x, y, width, height = (one / css for one in bounds)
         if node in wanted and node not in found and width > 0 and height > 0:
             role, name = wanted[node]
             found[node] = Mark("%s%d" % (REF_PREFIX, node), role, name, x, y, width, height)

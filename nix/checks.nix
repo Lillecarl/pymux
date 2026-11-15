@@ -808,7 +808,8 @@ in
           ${waylandTestEnv}/bin/python -m pytest -q -p no:cacheprovider \
           -o faulthandler_timeout=120 \
           ${lib.optionalString (browsersTests != "") "-k ${lib.escapeShellArg browsersTests}"} \
-          tests/test_mcp_browsers.py tests/test_the_web_page_in_a_browser.py
+          tests/test_mcp_browsers.py tests/test_the_web_page_in_a_browser.py \
+          tests/test_a_click_lands_where_aimed.py
       '';
 
   # Sound between panes and a client, through a real PipeWire and a
