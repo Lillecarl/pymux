@@ -806,6 +806,26 @@ def test_a_leave_takes_the_pointer_off_every_cell():
     assert [key_press.data for key_press in pressed if key_press.key == Keys.Vt100MouseEvent] == ["\x1b[<35;4;2M"]
 
 
+def test_a_negative_pixel_is_a_mouse_report_and_not_text():
+    """
+    kitty writes a negative pixel for a pointer left of or above its
+    window. prompt_toolkit's patterns take no minus, so the report
+    reached a pane as an Escape and fifteen typed characters.
+    """
+    pressed = []
+    parser = KittyVt100Parser(pressed.append, pixel_cell=lambda: (10, 20, 0))
+    parser.feed_and_flush("\x1b[<73;-1673;-1124M")
+    assert [(key_press.key, key_press.data) for key_press in pressed] == [(Keys.Vt100MouseEvent, "\x1b[<73;1;1M")]
+    assert parser.pointer_cell == (0, 0)
+
+
+def test_a_negative_report_without_a_cell_size_is_dropped():
+    pressed = []
+    parser = KittyVt100Parser(pressed.append, pixel_cell=lambda: None)
+    parser.feed_and_flush("\x1b[<0;-5;3Mx")
+    assert [key_press.data for key_press in pressed] == ["x"]
+
+
 def test_the_parser_reads_pixels_only_while_told_the_cell():
     pressed = []
     cell = [None]

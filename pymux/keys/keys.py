@@ -126,6 +126,12 @@ _MODIFIED_F3_RE = re.compile(r"^\x1b\[1;([2-8])R\Z")
 _KITTY_PREFIX_RE = re.compile(r"^\x1b\[(?:[0-9;:<=>?$]*|>[0-9;:]* )$")
 
 
+#: A prefix of an SGR mouse report whose pixel may be negative, as
+#: kitty writes one under DEC 1016. prompt_toolkit's patterns take no
+#: minus, and hand the rest of the report to a pane as typed text.
+_SIGNED_MOUSE_PREFIX_RE = re.compile(r"^\x1b\[<\d*(?:;-?\d*){0,2}\Z")
+
+
 _STRING_PREFIX_RE = re.compile(
     r"^(?:\x1b[_P][^\x1b\x9c]*"
     r"|\x1b\][^\x1b\x9c\x07]*)\x1b?\Z"
@@ -351,7 +357,7 @@ class KittyVt100Parser(Vt100Parser):
         variable parameters, which prompt_toolkit's table cannot list.
         Lillecarl/pyterm#699.
         """
-        if _KITTY_PREFIX_RE.match(prefix):
+        if _KITTY_PREFIX_RE.match(prefix) or _SIGNED_MOUSE_PREFIX_RE.match(prefix):
             return True
         if len(prefix) <= MAX_STRING_LENGTH and _STRING_PREFIX_RE.match(prefix):
             return True
@@ -380,6 +386,9 @@ class KittyVt100Parser(Vt100Parser):
         # `EMOJI_WIDTH_PROBE`'s, on row 2, and `CLUSTER_WIDTH_PROBE`'s,
         # on rows 3 to 5, so row 1 is the key. A probe that asks on row
         # 1 would be read as a key press here. Lillecarl/pyterm#246.
+        if "-" in prefix and SgrMouseReport.parse(prefix) is not None:
+            return Keys.Vt100MouseEvent
+
         f3 = _MODIFIED_F3_RE.match(prefix)
         if f3 is not None:
             return cast("Keys | tuple[Keys, ...]", key_named(str.__str__(Keys.F3), int(f3.group(1)) - 1))
@@ -425,14 +434,18 @@ class KittyVt100Parser(Vt100Parser):
             if self.pointer_moved is not None:
                 self.pointer_moved()
             return
-        if key is Keys.Vt100MouseEvent and self.pixel_cell is not None:
-            cell = self.pixel_cell()
+        if key is Keys.Vt100MouseEvent:
+            cell = self.pixel_cell() if self.pixel_cell is not None else None
             if cell is not None:
                 converted = pixels_to_cells(insert_text, *cell)
                 if converted is None:
                     return
                 insert_text, *fraction = converted
                 self.pointer_fraction = (fraction[0], fraction[1])
+            elif "-" in insert_text:
+                # A negative cell would index prompt_toolkit's handler
+                # table from its far end.
+                return
         if key is Keys.Vt100MouseEvent:
             report = SgrMouseReport.parse(insert_text)
             if report is not None:
