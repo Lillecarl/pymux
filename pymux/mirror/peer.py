@@ -47,6 +47,7 @@ from ..client.relink import Relink, Restarting, Wait
 from ..client.ssh_requests import added, forward_in, forwards_packet, removed
 from ..commands import CommandException
 from ..connection.log_asks import LogAsks, log_answer
+from ..connection.rate import Rate
 from ..core.forwarding import question
 from ..enums import Clipboard, Woke
 from ..graphics.kitty_frames import decoders
@@ -127,11 +128,22 @@ class Peers:
         "returning_copies": Keep.DROPPED,
         "returning_places": Keep.DROPPED,
         "tunnels": Keep.DROPPED,
+        "bytes_down": Keep.DROPPED,
+        "bytes_up": Keep.DROPPED,
+        "rate_down": Keep.DROPPED,
+        "rate_up": Keep.DROPPED,
     }
 
     def __init__(self, pymux: Pymux) -> None:
         self.pymux = pymux
         self.by_address: dict[str, Peer] = {}
+        #: What every link this server dialled carried, as the wire
+        #: carries it: after zstd, before ssh. `#{link_bytes_down}`.
+        self.bytes_down = 0
+        self.bytes_up = 0
+        #: What `#{link_rate_down}` and `#{link_rate_up}` read.
+        self.rate_down = Rate()
+        self.rate_up = Rate()
         #: The addresses a loaded snapshot was linked to.
         self.returning: list[str] = []
         #: Each mirror a loaded snapshot was in copy mode on (`copy_rows`).
@@ -754,6 +766,7 @@ class Peer:
                         if str(error):
                             lost = ConnectionResetError(str(error))
                         break
+                    self.tree.pymux.peers.bytes_down += len(data)
                     for packet in reader.feed(data):
                         if self.accepted:
                             self._take(packet)
@@ -796,6 +809,7 @@ class Peer:
         with suppress(anyio.BrokenResourceError, anyio.ClosedResourceError):
             async for encoded in self._receive:
                 await stream.send(encoded)
+                self.tree.pymux.peers.bytes_up += len(encoded)
         await stream.aclose()
 
     async def _answer_log(self, packet: Message) -> None:

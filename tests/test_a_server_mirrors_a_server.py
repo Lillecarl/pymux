@@ -57,6 +57,7 @@ from pymux.core.snapshot.read import load, start
 from pymux.core.snapshot.write import save
 from pymux.core.upgrade import welcome_back
 from pymux.enums import Clipboard, MessageRow, WindowSize
+from pymux.format import format_pymux_string
 from pymux.layout.geometry import plan_of, room_for_panes
 from pymux.mirror import link as mirror_link
 from pymux.mirror import peer as mirror_peer
@@ -606,6 +607,30 @@ async def test_a_pane_streams_only_while_seen(two_servers):
     peer.attach_client_to(client, here_session(peer))
     peer.invalidate()
     await until(lambda: rows_of(control) == rows_of(owner_control), "the mirror catches up when seen again")
+
+
+async def test_the_link_counts_what_crosses_it(two_servers):
+    """
+    `link_bytes_down` is every byte the owner wrote to the link, as the
+    wire carried it. `client_bytes_down` counts the feed to the client
+    here instead, which is not the network.
+    """
+    owner, peer, client = two_servers
+    there, here = await shown_here(owner, peer, client)
+    there.terminal.terminal_control.feed_output("counted on the way\r\n")
+    control = here.terminal.terminal_control
+    await until(lambda: "counted on the way" in "".join(rows_of(control)), "the mirror follows the owner")
+    (link,) = owner.peer_links()
+    sent = link.connection.pipe_connection
+    await until(
+        lambda: peer.peers.bytes_down == sent.bytes_out,
+        "every byte sent arrives",
+        lambda: (peer.peers.bytes_down, sent.bytes_out),
+    )
+    assert peer.peers.bytes_up > 0
+    counted = format_pymux_string(peer, "#{link_bytes_down} #{link_rate_down} #{link_rate_up}")
+    assert counted.split()[0] == str(peer.peers.bytes_down)
+    assert counted.split()[2] == "B/s"
 
 
 async def test_the_owner_lays_out_at_the_size_of_the_peer(two_servers):

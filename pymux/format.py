@@ -849,6 +849,23 @@ def _client_rate(
     return rate_of
 
 
+def _link_rate(down: bool) -> Callable[[FormatContext], str]:
+    """
+    Bytes a second over the links this server dialled to mirror other
+    servers, after zstd: what crosses the network to show a mirrored
+    pane. `client_rate_down` counts this server's feed to its own client
+    instead, which redraws a pane uncompressed.
+    """
+
+    def rate_of(context: FormatContext) -> str:
+        peers = context.pymux.peers
+        if down:
+            return per_second(peers.rate_down.read_now(peers.bytes_down))
+        return per_second(peers.rate_up.read_now(peers.bytes_up))
+
+    return rate_of
+
+
 def _client_fps(context: FormatContext) -> str:
     """
     The frames a second this client gets, over the last few seconds.
@@ -998,6 +1015,10 @@ tmux_variables: dict[str, Callable[[FormatContext], str]] = {
     "client_bytes_up": _client_bytes(lambda pipe: pipe.bytes_in),
     "client_rate_down": _client_rate(lambda pipe: pipe.bytes_out, lambda connection: connection.rate_down),
     "client_rate_up": _client_rate(lambda pipe: pipe.bytes_in, lambda connection: connection.rate_up),
+    "link_bytes_down": lambda c: str(c.pymux.peers.bytes_down),
+    "link_bytes_up": lambda c: str(c.pymux.peers.bytes_up),
+    "link_rate_down": _link_rate(down=True),
+    "link_rate_up": _link_rate(down=False),
     "client_fps": _client_fps,
     "client_window_fps": _client_window_fps,
     "client_session": lambda c: c.client.session.name if c.client else "",
