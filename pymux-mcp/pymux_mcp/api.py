@@ -902,7 +902,7 @@ async def browser_at(
     """
     What is at a point of a tab, as a ref, a role and a name: the
     element to act on that holds the point. Read the point off
-    `browser.screenshot`.
+    `browser.screenshot`, and give its size as `of`.
     """
     async with _tab(server, name, tab) as (driver, page):
         return await driver.at(page, *await driver.point(page, x, y, of))
@@ -921,8 +921,10 @@ async def browser_click(
 ) -> Json:
     """
     Click an element, named by a ref or a CSS selector, at its centre;
-    or a point, read off `browser.screenshot`. Answers what the click
-    hit.
+    or a point. A point read off `browser.screenshot` takes `of`, the
+    picture's size, since the picture is not drawn in CSS pixels. Not a
+    point off `pane.capture`: that picture holds the window around the
+    page, at the terminal's cell size. Answers what the click hit.
     """
     if (x is None) != (y is None):
         raise ValueError("a point takes both `x` and `y`")
@@ -1013,8 +1015,9 @@ async def browser_screenshot(
     ] = False,
 ) -> Png:
     """
-    A picture of a tab. With `marks`, act on what you see by its ref,
-    with no snapshot of the whole page.
+    A picture of a tab's page, the picture to aim `browser.click` by.
+    With `marks`, act on what you see by its ref, with no snapshot of
+    the whole page. `pane.capture` shows what the person sees instead.
     """
     async with _tab(server, name, tab) as (driver, page):
         png, found = await driver.screenshot(page, full_page, fit, marks)
