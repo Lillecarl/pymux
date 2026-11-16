@@ -659,11 +659,15 @@ async def test_redraw_writes_what_the_terminal_lost(pymux):
                     del row[x]
         assert line_breaks(session, client_state)
 
+        # The redraw's own frame, and not a quiet screen: under six suites
+        # it came after 0.3 s of quiet. Lillecarl/pyterm#1000.
+        since = client_state.app.render_counter
         with set_app(client_state.app):
             pymux.handle_command("redraw")
-        await settled(session)
+        await a_frame_after(session, client_state, since)
 
-        found = line_breaks(session, client_state) + await wire_differs(session, client_state)
+        found = await wire_differs(session, client_state)
+        found += line_breaks(session, client_state)
         assert not found, "\n".join([*found, "", *rows_of(session)])
 
 
