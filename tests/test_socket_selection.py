@@ -183,6 +183,23 @@ def test_a_peer_that_closes_with_no_answer_is_an_error(tmp_path, capsys):
     assert "closed the connection with no answer" in capsys.readouterr().err
 
 
+def test_a_peer_that_is_slow_is_not_one_that_closed(tmp_path, capsys):
+    "A timeout is not a close: the server may be alive and busy. Lillecarl/pyterm#1002."
+    from pymux.client.command import CommandClient
+
+    path = str(tmp_path / "pymux.sock.someone.0")
+    listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    listener.bind(path)
+    listener.listen(1)
+    try:
+        assert CommandClient(path).run_command("list-sessions", timeout=0.1) == 1
+    finally:
+        listener.close()
+    said = capsys.readouterr().err
+    assert "gave no answer in 0.1 seconds" in said
+    assert "closed the connection" not in said
+
+
 def test_the_library_answers_the_same_list(sockets, a_dead_socket):
     "`Server.list()` reads this one, and the two must agree."
     from libpymux.sockets import socket_paths

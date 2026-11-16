@@ -20,11 +20,13 @@ from libpymux.wire import encode_json
 
 from .base import Client
 
-__all__ = ["NO_ANSWER", "CommandClient"]
+__all__ = ["NO_ANSWER", "NO_ANSWER_IN", "CommandClient"]
 
 #: A server ends every command with its exit code. A peer that closes
 #: without one ran no command, or is not a pymux server. Lillecarl/pyterm#608.
 NO_ANSWER = "pymux: %s closed the connection with no answer. Is a pymux server listening there?\n"
+#: A server that has not answered when the caller's patience ends.
+NO_ANSWER_IN = "pymux: %s gave no answer in %g seconds.\n"
 
 
 class CommandClient(Client):
@@ -74,6 +76,11 @@ class CommandClient(Client):
         while True:
             try:
                 data = self.socket.recv(READ_SIZE)
+            except TimeoutError:
+                # Not NO_ANSWER: the server may be alive and slow, and a
+                # close is a different fault. Lillecarl/pyterm#1002.
+                sys.stderr.write(NO_ANSWER_IN % (self.socket_name, timeout))
+                return 1
             except OSError:
                 break
 
