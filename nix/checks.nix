@@ -802,9 +802,12 @@ in
         # The build sandbox has no room for Firefox's content sandbox; a
         # job a test starts inherits this.
         export MOZ_DISABLE_CONTENT_SANDBOX=1
-        # A whole run takes two to five minutes; a hang ends here rather
-        # than holding the gate for ever.
-        timeout --signal=INT --kill-after=10 360 \
+        # A whole run of 51 tests takes 250 to 290 s; a hang ends here
+        # rather than holding the gate for ever. A gate on a loaded
+        # dynhetz reached 50 of them at 360 s, still going, so twice a
+        # run. `faulthandler_timeout` catches one test that hangs.
+        # Lillecarl/pyterm#1000.
+        timeout --signal=INT --kill-after=10 600 \
           ${waylandTestEnv}/bin/python -m pytest -q -p no:cacheprovider \
           -o faulthandler_timeout=120 \
           ${lib.optionalString (browsersTests != "") "-k ${lib.escapeShellArg browsersTests}"} \
