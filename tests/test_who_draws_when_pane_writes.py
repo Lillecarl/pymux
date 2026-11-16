@@ -27,6 +27,7 @@ if somebody takes the wake away rather than narrowing it.
 from __future__ import annotations
 
 import sys
+from collections import Counter
 
 import anyio
 from prompt_toolkit.application.current import set_app
@@ -147,10 +148,13 @@ async def test_pane_does_not_wake_client_looking_elsewhere():
         await settled(a, b)
         drawn_by_a = a.app.render_counter
         drawn_by_b = b.app.render_counter
+        woke = Counter(pymux.counters.invalidates)
         await five_writes(window_of_a.panes[0], "a pane of the other window\r\n")
 
         assert a.app.render_counter > drawn_by_a
-        assert b.app.render_counter == drawn_by_b
+        # What else asked every client for a frame meanwhile: under six
+        # suites at once b drew once more. Lillecarl/pyterm#1000.
+        assert b.app.render_counter == drawn_by_b, Counter(pymux.counters.invalidates) - woke
 
 
 async def test_title_pane_writes_reaches_other_client():
