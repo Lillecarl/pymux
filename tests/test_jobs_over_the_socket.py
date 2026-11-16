@@ -21,9 +21,12 @@ import socket
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 import pytest
 from libpymux.agentic import AGENT_SESSION_VARS
+from pyterm_pytest.fairclock import Deadline, pids_naming
+from pyterm_pytest.fairclock import subprocess as fair_subprocess
 
 #: How long one CLI call may take. A detached command answers at
 #: once; anything slower is the server not answering at all.
@@ -32,8 +35,8 @@ CLI_TIMEOUT = 20
 
 def _wait_for_server(sock_path, timeout: float = 10.0) -> None:
     "Hold until the daemon answers on its socket, or fail the test."
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
+    deadline = Deadline(timeout, pids_naming(str(Path(sock_path).parent)))
+    while not deadline.passed():
         try:
             sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             try:
@@ -43,7 +46,7 @@ def _wait_for_server(sock_path, timeout: float = 10.0) -> None:
                 sock.close()
         except OSError:
             time.sleep(0.05)
-    pytest.fail("no server answered on %s" % (sock_path,))
+    pytest.fail("no server answered on %s in %s" % (sock_path, deadline))
 
 
 @pytest.fixture
@@ -87,11 +90,16 @@ def cli(sock_path, *args, env=None, cwd=None):
     """
     full_env = {key: value for key, value in os.environ.items() if key not in AGENT_SESSION_VARS}
     full_env.update(env or {})
-    return subprocess.run(
+    # In fair time, and the server's with it: `upgrade-server` waits for a
+    # check that imports all of pymux, which under a loaded gate took
+    # more than 20 s of wall time. The server is found by the test's
+    # directory, not by its socket: an upgraded one has no -S in its argv,
+    # only the --log there. Lillecarl/pyterm#1000.
+    return fair_subprocess.run(
         [sys.executable, "-m", "pymux", "-S", str(sock_path), *[str(a) for a in args]],
+        CLI_TIMEOUT,
+        pids_naming(str(Path(sock_path).parent)),
         capture_output=True,
-        timeout=CLI_TIMEOUT,
-        check=False,
         env=full_env,
         cwd=str(cwd) if cwd is not None else None,
     )

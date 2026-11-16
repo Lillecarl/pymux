@@ -19,6 +19,7 @@ import time
 
 import pytest
 from libpymux.sockets import socket_directory
+from pyterm_pytest.fairclock import Deadline, pids_naming
 from test_jobs_over_the_socket import CLI_TIMEOUT, _wait_for_server, cli
 
 #: What the counted pane prints: one numbered line every 20 ms, past the
@@ -78,6 +79,11 @@ def _new_build(tmp_path, script: str, **values) -> list[str]:
     return [str(wrapper)]
 
 
+def _deadline(sock) -> Deadline:
+    "`CLI_TIMEOUT` of fair time, for this test's server and what it runs."
+    return Deadline(CLI_TIMEOUT, pids_naming(str(sock.parent)))
+
+
 def _answer(sock, *args) -> str:
     done = cli(sock, *args)
     assert done.returncode == 0, done.stderr.decode()
@@ -86,13 +92,13 @@ def _answer(sock, *args) -> str:
 
 def _once_it_answers(sock, *args) -> str:
     "The answer of a server that may be between two builds."
-    deadline = time.monotonic() + CLI_TIMEOUT
+    deadline = _deadline(sock)
     while True:
         done = cli(sock, *args)
         if done.returncode == 0:
             return done.stdout.decode()
-        if time.monotonic() > deadline:
-            pytest.fail("no answer to %s: %s" % (args, done.stderr.decode()))
+        if deadline.passed():
+            pytest.fail("no answer to %s in %s: %s" % (args, deadline, done.stderr.decode()))
         time.sleep(0.1)
 
 
@@ -103,14 +109,14 @@ def _counted(sock) -> list[int]:
     The file comes first: each capture is a CLI process, 0.17 CPU
     seconds measured, and the count takes six seconds.
     """
-    deadline = time.monotonic() + CLI_TIMEOUT
-    while not (sock.parent / COUNTED).exists() and time.monotonic() < deadline:
+    deadline = _deadline(sock)
+    while not (sock.parent / COUNTED).exists() and not deadline.passed():
         time.sleep(0.05)
     counting = _pane(sock, 0)
     while True:
         text = _answer(sock, "capture-pane", "-p", "-S", "-", "-t", counting)
         numbers = [int(line.split()[1]) for line in text.splitlines() if line.startswith("line ")]
-        if LINES in numbers or time.monotonic() > deadline:
+        if LINES in numbers or deadline.passed():
             return numbers
         time.sleep(0.1)
 
@@ -192,9 +198,9 @@ def test_kill_server_ends_its_programs(server):
 
     cli(server, "kill-server")
 
-    deadline = time.monotonic() + CLI_TIMEOUT
+    deadline = _deadline(server)
     while not all(_gone(pid) for pid in pids):
-        assert time.monotonic() < deadline, "a program outlived kill-server"
+        assert not deadline.passed(), "a program outlived kill-server by %s" % deadline
         time.sleep(0.05)
 
 
@@ -242,9 +248,9 @@ def _shell_answers(sock) -> None:
     "Type into the shell pane, and read what it printed back."
     shell = _pane(sock, 1)
     _answer(sock, "send-keys", "-t", shell, "echo mar''ker", "Enter")
-    deadline = time.monotonic() + CLI_TIMEOUT
+    deadline = _deadline(sock)
     while "marker" not in _answer(sock, "capture-pane", "-p", "-t", shell):
-        assert time.monotonic() < deadline, "the shell never answered"
+        assert not deadline.passed(), "the shell did not answer in %s" % deadline
         time.sleep(0.1)
 
 
@@ -310,12 +316,12 @@ def test_a_build_that_crashes_after_the_exec_leaves_a_report(server, tmp_path):
     said = cli(server, "upgrade-server", shlex.join(_new_build(tmp_path, CRASHES_AFTER_THE_EXEC)))
     assert said.returncode == 0, said.stderr.decode()
 
-    deadline = time.monotonic() + CLI_TIMEOUT
+    deadline = _deadline(server)
     while not (reports := list(tmp_path.glob("crash-%d-*.log" % old))):
-        assert time.monotonic() < deadline, "no crash report: %s" % ((tmp_path / LOG).read_text(),)
+        assert not deadline.passed(), "no crash report in %s: %s" % (deadline, (tmp_path / LOG).read_text())
         time.sleep(0.1)
     while not _gone(old):
-        assert time.monotonic() < deadline, "the crashed server still runs"
+        assert not deadline.passed(), "the crashed server still runs after %s" % deadline
         time.sleep(0.1)
     (kept,) = _leftovers(old)
     try:
@@ -379,9 +385,9 @@ def test_an_upgrade_keeps_a_pane_that_views_a_job(server):
     (server.parent / GO).touch()
 
     ended = "[job %s exited 3]" % job
-    deadline = time.monotonic() + CLI_TIMEOUT
+    deadline = _deadline(server)
     while ended not in (text := _answer(server, "capture-pane", "-p", "-S", "-", "-t", viewer)):
-        assert time.monotonic() < deadline, "the viewer never said how the job ended"
+        assert not deadline.passed(), "the viewer did not say how the job ended in %s" % deadline
         time.sleep(0.1)
     assert text.count(ended) == 1
     numbers = [int(line.split()[1]) for line in text.splitlines() if line.startswith("job ")]
@@ -398,9 +404,9 @@ def test_an_upgrade_kills_a_program_still_in_its_grace(server, tmp_path):
     written = tmp_path / "ignores.pid"
     command = "sh -c %s" % shlex.quote(IGNORES_HUP % shlex.quote(str(written)))
     pane = _answer(server, "split-window", "-d", "-P", "-F", "#{pane_id}", command).strip()
-    deadline = time.monotonic() + CLI_TIMEOUT
+    deadline = _deadline(server)
     while not (text := written.read_text().strip() if written.exists() else ""):
-        assert time.monotonic() < deadline, "the program never wrote its pid"
+        assert not deadline.passed(), "the program did not write its pid in %s" % deadline
         time.sleep(0.05)
     pid = int(text)
 
@@ -408,9 +414,9 @@ def test_an_upgrade_kills_a_program_still_in_its_grace(server, tmp_path):
     said = cli(server, "upgrade-server", shlex.join([sys.executable, "-m", "pymux"]))
     assert said.returncode == 0, said.stderr.decode()
 
-    deadline = time.monotonic() + CLI_TIMEOUT
+    deadline = _deadline(server)
     while not _gone(pid):
-        assert time.monotonic() < deadline, "a program that ignores SIGHUP outlived the upgrade"
+        assert not deadline.passed(), "a program that ignores SIGHUP outlived the upgrade by %s" % deadline
         time.sleep(0.05)
 
 
@@ -423,9 +429,9 @@ def test_an_upgrade_keeps_a_pane_whose_program_ended(server):
     "remain-on-exit keeps it, with its screen and no program to carry. Lillecarl/pyterm#740."
     _answer(server, "set-option", "-g", "remain-on-exit", "on")
     pane = _answer(server, "split-window", "-d", "-P", "-F", "#{pane_id}", "sh -c 'echo last words; exit 3'").strip()
-    deadline = time.monotonic() + CLI_TIMEOUT
+    deadline = _deadline(server)
     while _dead(server, pane) != "1":
-        assert time.monotonic() < deadline, "the program never ended"
+        assert not deadline.passed(), "the program did not end in %s" % deadline
         time.sleep(0.05)
 
     said = cli(server, "upgrade-server", shlex.join([sys.executable, "-m", "pymux"]))
