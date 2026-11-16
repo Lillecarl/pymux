@@ -69,6 +69,9 @@ async def test_a_terminal_that_did_not_answer_hears_no_record(pymux):
         client = pymux.connections[-1].client
         # Its own answer first, so none can arrive after this.
         await once(lambda: client.replies.program_status, 10.0, "no answer")
+        # And the clear that answer sends, which goes with a frame: under
+        # six suites at once it went after `before`. Lillecarl/pyterm#1000.
+        await once(lambda: report("state=clear") in written(session.packets), 10.0, "the first clear never went")
         client.replies.program_status = False
         (pane,) = pymux.panes_by_id.values()
         before = len(written(session.packets))
