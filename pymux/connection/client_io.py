@@ -321,6 +321,23 @@ class ClientInput:
             return self._input.typeahead_hash()
         return "closed-pipe-input-%i" % id(self)
 
+    def read_keys(self) -> list[KeyPress]:
+        """
+        No keys once the pipe is closed. prompt_toolkit's reader still
+        runs once after the close while the application exits: its
+        wrapper removes the reader and calls it anyway. Under load the
+        detach test met that read. Lillecarl/pyterm#1000.
+        """
+        if self._input is None:
+            return []
+        return self._input.read_keys()
+
+    def flush_keys(self) -> list[KeyPress]:
+        "As `read_keys`: its timer can fire after the close too."
+        if self._input is None:
+            return []
+        return self._input.flush_keys()
+
     # Implement raw/cooked mode by sending this to the attached client.
 
     def raw_mode(self) -> AbstractContextManager[None]:
