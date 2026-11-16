@@ -89,7 +89,10 @@ async def test_pane_whose_program_ended_is_gone_and_says_so():
     to respawn, and the command says that rather than making a pane
     nobody can see.
     """
-    async with create_session() as (pymux, state):
+    # The attach's window only. The plain session's own one runs NOTHING,
+    # which under load was still starting after this pane had gone, and
+    # the command found it. Lillecarl/pyterm#1000.
+    async with create_session(window=None) as (pymux, state):
         with set_app(state.app):
             pane = pymux.arrangement.get_active_pane()
             pane.process.kill()
