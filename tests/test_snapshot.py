@@ -588,6 +588,15 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                     viewed = int(command.split()[-1])
                     await once(lambda: viewed in _viewers_of(pymux), 10.0, "the viewer never came")
                 await settled(session, 0.1)
+        # A still screen is not the alternate pane's program writing: under
+        # load it had not started, every pane's parser sat at rest, and
+        # `pane_programs.stream` held one value. Its one printf leaves it
+        # on ALT and mid-sequence together. Lillecarl/pyterm#1000.
+        await once(
+            lambda: any("ALT" in _text(pane) for pane in panes_of(pymux) if not isinstance(pane.process, JobFeed)),
+            10.0,
+            "the alternate pane never wrote",
+        )
         await settled(session)
         _vary_what_no_command_reaches(pymux, connection.client.state)
         jobs = _jobs_of(pymux)
