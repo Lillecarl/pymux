@@ -102,6 +102,7 @@ from pathlib import Path
 # middleman's, and the relay adopts them: `middleman.py` says what
 # each one is for.
 from middleman import FENCE, FIRST_BYTE, QUIET, SHOWS_OSC_99, fence_sequence
+from pyterm_pytest.fairclock import Deadline
 
 #: How much to move at once.
 CHUNK = 65536
@@ -430,10 +431,15 @@ def read_keys(path):
     return steps
 
 
-def due(delay, when, last_output):
-    "When a step waiting `delay` after the step at `when` is due."
+def due(delay, when, quiet):
+    """
+    When a step waiting `delay` after the step at `when` is due. A quiet
+    one is due once `quiet` has passed, and at `QUIET_LIMIT` at the latest.
+    """
     if isinstance(delay, Quiet):
-        return min(max(when, last_output) + delay, when + QUIET_LIMIT)
+        if quiet.passed():
+            return when
+        return min(time.monotonic() + max(0.01, quiet.clock.left(quiet.seconds)), when + QUIET_LIMIT)
     return when + delay
 
 
@@ -727,7 +733,18 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None, ask_dir=None):
     # The fence that proves the keys were consumed, and the file that
     # says it happened.
     fence_pending = fence_seen is not None
-    last_output = when
+    # The silence a quiet step waits for, in fair time: under load the
+    # program had not started in 0.4 s, and its silence was taken for
+    # the end of its writing. Each write starts it again.
+    # Lillecarl/pyterm#1000.
+    quiet = None
+
+    def head_due():
+        nonlocal quiet
+        delay = waiting[0][0]
+        if isinstance(delay, Quiet) and quiet is None:
+            quiet = Deadline(delay)
+        return due(delay, when, quiet)
 
     selector = selectors.DefaultSelector()
     selector.register(master, selectors.EVENT_READ)
@@ -747,11 +764,12 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None, ask_dir=None):
             # frame -- so a script reads as a sequence of waits and not
             # as a list of absolute times.
             mark = None
-            while waiting and now >= due(waiting[0][0], when, last_output):
+            while waiting and now >= head_due():
                 delay, keys = waiting.pop(0)
                 if isinstance(delay, Quiet):
                     note(started, "quiet for %gs" % (delay,) if now < when + QUIET_LIMIT else "never quiet")
                     when = now
+                    quiet = None
                     continue
                 when += delay
                 os.write(master, keys)
@@ -773,7 +791,7 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None, ask_dir=None):
                 mark = len(seen) if keys else None
 
             if waiting:
-                until = max(0.0, due(waiting[0][0], when, last_output) - now)
+                until = max(0.0, head_due() - now)
             elif fence_pending:
                 fence_pending = False
                 came, copied = frame_and_fence(
@@ -827,7 +845,8 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None, ask_dir=None):
                 out.write(piece)
                 out.flush()
                 copied += len(piece)
-                last_output = time.monotonic()
+                if quiet is not None:
+                    quiet = Deadline(quiet.seconds)
     finally:
         selector.close()
         os.close(master)
