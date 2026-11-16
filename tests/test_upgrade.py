@@ -84,9 +84,23 @@ def _deadline(sock) -> Deadline:
     return Deadline(CLI_TIMEOUT, pids_naming(str(sock.parent)))
 
 
+def _server_side(sock) -> str:
+    "Whether the server still runs, and its log: a failed command alone cannot say which end went. Lillecarl/pyterm#1002."
+    log = sock.parent / LOG
+    said = log.read_text() if log.exists() else "(no log)\n"
+    running = []
+    for pid in pids_naming(str(sock.parent)):
+        try:
+            argv = open("/proc/%d/cmdline" % pid, "rb").read().replace(b"\0", b" ").decode(errors="replace")
+        except OSError:
+            continue
+        running.append("  %d %s" % (pid, argv))
+    return "processes of this test:\n%s\nthe server's log:\n%s" % ("\n".join(running) or "  none", said)
+
+
 def _answer(sock, *args) -> str:
     done = cli(sock, *args)
-    assert done.returncode == 0, done.stderr.decode()
+    assert done.returncode == 0, "%s\n%s" % (done.stderr.decode(), _server_side(sock))
     return done.stdout.decode()
 
 
@@ -98,7 +112,7 @@ def _once_it_answers(sock, *args) -> str:
         if done.returncode == 0:
             return done.stdout.decode()
         if deadline.passed():
-            pytest.fail("no answer to %s in %s: %s" % (args, deadline, done.stderr.decode()))
+            pytest.fail("no answer to %s in %s: %s\n%s" % (args, deadline, done.stderr.decode(), _server_side(sock)))
         time.sleep(0.1)
 
 

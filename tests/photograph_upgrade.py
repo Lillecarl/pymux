@@ -214,8 +214,12 @@ def upgrade_in(terminal, seat, work, out):
         raise RuntimeError("the server did not start: %s" % started.stderr.decode())
     # Before the client attaches: a finished job tells every client, and
     # this check chooses the message the client has.
-    for args in JOBS:
-        run_cli(socket_path, args)
+    # What they said is kept: the attach after them was once refused,
+    # and these were the first to reach the server. Lillecarl/pyterm#1002.
+    with open(room / "jobs.log", "w") as said:
+        for args in JOBS:
+            done = run_cli(socket_path, args)
+            said.write("%s: %d\n%s" % (shlex.join(args), done.returncode, done.stderr.decode("utf-8", "replace")))
 
     attach = "exec python3 -m pymux -S %s -f %s attach 2>%s" % (
         shlex.quote(str(socket_path)),
