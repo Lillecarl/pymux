@@ -995,9 +995,18 @@ async def test_every_colour_on_the_terminal_is_what_a_redraw_writes(pymux, seed,
         await shows(session, "$")
         client_state = pymux.connections[-1].client.state
         with set_app(client_state.app):
-            pymux.handle_command("set-option frame-rate %d" % rate)
+            pymux.handle_command("set-window-option frame-rate %d" % rate)
             pymux.handle_command("split-window -h 'sleep 1000'")
         await settled(session)
+
+        # The new pane's name moves from bash to sleep when its shell
+        # execs. Under load that came after the last frame, and the redraw
+        # wrote a title no frame had. Lillecarl/pyterm#1000.
+        def named() -> bool:
+            client_state.app.invalidate()
+            return "slee" in rows_of(session)[0]
+
+        await once(named, 10.0, lambda: "the pane was never named sleep: %r" % (rows_of(session)[0],))
         controls = [
             pane.terminal.terminal_control for pane in sorted(pymux.panes_by_id.values(), key=lambda pane: pane.pane_id)
         ]
