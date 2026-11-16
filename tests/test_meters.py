@@ -79,6 +79,9 @@ async def test_content_behind_the_clocks_request_counts():
     pymux = Pymux()
     pymux.options.test_mode = True
     async with pymux.running(), attached(pymux) as session:
+        # The shell's prompt first: under load it came after the frames
+        # below and was counted as their content. Lillecarl/pyterm#1000.
+        await shows(session, "$")
         connection = pymux.connections[-1]
         app = connection.client.state.app
         pacing = connection.client.pacing
