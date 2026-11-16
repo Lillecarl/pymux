@@ -460,11 +460,13 @@ def test_no_key_is_pressed_before_the_boot_fence_comes_back(tmp_path):
     the frame out.
     """
     # "asking." is the questions, and the pane forwards nothing until
-    # after "drawn.". The frame for the last key comes from the
-    # background write: the forwarder reads no keys, and the keys' own
-    # fence waits for the program to answer one.
-    pane = "stty -echo; printf 'asking.'; (sleep 1.4; printf 'framed.') & exec python3 %s %s %s"
-    seen, fence_seen, error = run_fenced(tmp_path, '0.0 b"k"\n', pane, forwarder_text=LATE_FORWARDER)
+    # after "drawn.". The frame for the key comes from the background
+    # reader, as in `ANSWERS_THE_KEY`: the forwarder reads no keys, and
+    # the keys' own fence waits for the program to answer one. A frame
+    # on a timer came before the key under six suites, and the fence
+    # waited out the hold. Lillecarl/pyterm#1000.
+    pane = "stty -echo; printf 'asking.'; exec 3<&0; (read line <&3; printf 'framed.') & exec python3 %s %s %s"
+    seen, fence_seen, error = run_fenced(tmp_path, '0.0 b"k\\n"\n', pane, forwarder_text=LATE_FORWARDER)
 
     assert fence_seen.exists()
     assert b"asking." in seen and b"drawn." in seen
