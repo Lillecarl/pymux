@@ -556,6 +556,10 @@ def line_breaks(session: SessionScreen, client_state) -> list[str]:
     in the frame pymux committed or on the client's terminal.
     """
     committed = client_state.app.renderer._last_screen
+    if committed is None:
+        # A reset drops the last frame until the next render: under load a
+        # read fell between the two. Lillecarl/pyterm#1000.
+        return ["no frame since the renderer was reset"]
     outer = session.screen
 
     def drawn_line(char: str) -> bool:
