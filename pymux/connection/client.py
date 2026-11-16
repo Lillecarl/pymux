@@ -306,6 +306,10 @@ class ClientRole:
         output = self.state.output
         assert isinstance(output, FrameOutput)
         output.write_after_frame(sequence)
+        # Held for a frame, so one has to come: a terminal's 7501 answer
+        # draws nothing, and its clear sat here until a pane drew.
+        # Lillecarl/pyterm#1000.
+        self.state.app.invalidate()
 
     def set_pointer_shape(self, shape: str) -> bool:
         """

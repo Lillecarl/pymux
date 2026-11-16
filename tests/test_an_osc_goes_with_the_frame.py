@@ -24,7 +24,7 @@ import sys
 import pytest
 from libpymux.protocol import Packet
 from session import once
-from test_a_session_on_a_pyte_screen import attached, shows
+from test_a_session_on_a_pyte_screen import attached, settled, shows
 
 from pymux.connection.client import ClientRole
 from pymux.connection.client_io import FrameOutput, SocketStdout
@@ -36,6 +36,14 @@ from pymux.enums import Clipboard, NotificationPopups
 COPIED = "\x1b]52;c;aGVsbG8=\x07"
 
 
+class _App:
+    def __init__(self) -> None:
+        self.invalidated = 0
+
+    def invalidate(self) -> None:
+        self.invalidated += 1
+
+
 class _ClientState:
     "As much of one as `forward_osc` reads."
 
@@ -43,6 +51,7 @@ class _ClientState:
 
     def __init__(self, output) -> None:
         self.output = output
+        self.app = _App()
 
 
 @pytest.fixture
@@ -158,6 +167,15 @@ def test_a_frame_that_draws_nothing_still_carries_it(wire):
     assert written(sent) == COPIED
 
 
+def test_the_client_asks_for_the_frame_that_carries_it(wire):
+    "A terminal's 7501 answer draws nothing, and the clear it sends still goes."
+    client, _output, _sent = wire
+
+    client.forward_osc(COPIED)
+
+    assert client.state.app.invalidated == 1
+
+
 def test_a_client_with_no_terminal_is_written_nothing(wire):
     "The temporary client of a socket command reads the answer, not this."
     client, _output, sent = wire
@@ -198,6 +216,26 @@ async def test_a_real_client_holds_it_through_a_flush_between_frames():
 
             wire = written(session.packets)
             assert wire.index("drawn-before-the-fence") < wire.index("fence-611")
+    finally:
+        for pane in list(mux.panes_by_id.values()):
+            if not pane.process.is_terminated:
+                pane.process.kill()
+
+
+async def test_an_idle_client_still_sends_it():
+    """
+    A terminal's OSC 7501 answer draws nothing, and the clear it sends
+    went with no frame to carry it: it waited for a pane to draw.
+    Lillecarl/pyterm#1000.
+    """
+    mux = Pymux()
+    mux.options.test_mode = True
+    try:
+        async with mux.running(), attached(mux) as session:
+            await shows(session, "$")
+            await settled(session, 0.5)
+            mux.connections[-1].client.forward_osc(COPIED)
+            await once(lambda: COPIED in written(session.packets), 10.0, "no frame carried it")
     finally:
         for pane in list(mux.panes_by_id.values()):
             if not pane.process.is_terminated:
