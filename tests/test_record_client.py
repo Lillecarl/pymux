@@ -53,6 +53,15 @@ async def recorded(pymux, tmp_path, monkeypatch, then=(), resize=False) -> tuple
         said_keys = "echo recorded-$((6*7))\r"
         session.take(json.dumps({"type": "text", "text": said_keys}))
         await shows(session, "recorded-42")
+
+        # And the prompt after it: under load the shell wrote it once
+        # `shown` was read, and only the replay had it. Lillecarl/pyterm#1000.
+        def prompted() -> bool:
+            rows = rows_of(session)
+            answer = next(i for i, row in enumerate(rows) if "recorded-42" in row)
+            return any("$" in row for row in rows[answer + 1 : -1])
+
+        await once(prompted, 10.0, "no prompt came after the answer")
         # The status line changes when the recording ends.
         shown = rows_of(session)[:-1]
 
