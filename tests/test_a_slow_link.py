@@ -15,12 +15,16 @@ draws or not.
 
 from __future__ import annotations
 
+import gc
 import itertools
+import math
 import time
+from typing import NamedTuple
 
 import anyio
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
+from pyterm_pytest.fairclock import Stopwatch
 from session import once, over_connection
 
 from pymux.connection.pacing import STATUS_REPORT
@@ -180,11 +184,24 @@ async def test_a_frame_past_the_bytes_waits_however_few_frames():
 
 #: The round trip to Carl's Mac, as the audio link measures it.
 ROUND_TRIP = 0.05
+
+
+class Delay(NamedTuple):
+    "A key's wait for its frame: in fair time, on the wall, and how much of it the collector paused."
+
+    fair: float
+    wall: float
+    collected: float
+
+    def __repr__(self) -> str:
+        return "%.3f fair, %.3f wall, %.3f collecting" % self
+
+
 #: F5 and F6, and the word each shows.
 KEYS = (("\x1b[15~", "alpha"), ("\x1b[17~", "kilo"))
 
 
-async def test_a_key_draws_within_a_round_trip_while_a_pane_animates():
+async def test_a_key_draws_within_a_round_trip_while_a_pane_animates(request):
     """
     Something on the screen animates, so the client always has a frame
     in flight and waits for its terminal. A key's frame goes once the
@@ -194,12 +211,36 @@ async def test_a_key_draws_within_a_round_trip_while_a_pane_animates():
     layout. Lillecarl/pyterm#826.
     """
     packets: list = []
-    arrived: list[tuple[float, str]] = []
+    # Each frame and each key at a fair time: the server runs in this
+    # process, so on a loaded machine a key waits for a CPU as well as
+    # for its frame, and only the second is pymux's. Lillecarl/pyterm#981.
+    fair = Stopwatch()
+    # Each frame: its fair time, its wall time, and what it drew.
+    arrived: list[tuple[float, float, str]] = []
 
     def read(packet) -> None:
         packets.append(packet)
         if packet.get("cmd") == "out" and packet.get("data"):
-            arrived.append((time.monotonic(), packet["data"]))
+            arrived.append((fair.elapsed(), time.monotonic(), packet["data"]))
+
+    # The collector's pauses, as (began, ended): one in a key's window
+    # is time this process ran, so the fair stopwatch keeps it in.
+    collected: list[list[float]] = []
+
+    def collecting(phase: str, _info: dict) -> None:
+        if phase == "start":
+            collected.append([time.monotonic(), math.inf])
+        elif collected:
+            collected[-1][1] = time.monotonic()
+
+    gc.callbacks.append(collecting)
+    request.addfinalizer(lambda: gc.callbacks.remove(collecting))
+    # What the suite's earlier tests left alive is not this test's heap:
+    # in a worker that had run thousands of them, one collection held a
+    # key for 0.343 s of its 0.353 s. Frozen, it is never scanned, and a
+    # collection of what pymux makes here still counts.
+    gc.freeze()
+    request.addfinalizer(gc.unfreeze)
 
     async with over_connection(read_packet=read) as session:
         state = await attach_paced(session, packets)
@@ -215,7 +256,7 @@ async def test_a_key_draws_within_a_round_trip_while_a_pane_animates():
             "Reads each frame, and answers its report a round trip after."
             answered = 0
             while True:
-                sent = sum(data.count(STATUS_REPORT) for _, data in arrived)
+                sent = sum(data.count(STATUS_REPORT) for *_, data in arrived)
                 for _ in range(sent - answered):
                     await anyio.sleep(ROUND_TRIP)
                     session.typed(state, ANSWER)
@@ -229,7 +270,7 @@ async def test_a_key_draws_within_a_round_trip_while_a_pane_animates():
                 await anyio.sleep(0.05)
 
         delays = []
-        started = time.monotonic()
+        started, started_fair = time.monotonic(), fair.elapsed()
         drawn_before = len(arrived)
         async with anyio.create_task_group() as tasks:
             tasks.start_soon(terminal)
@@ -238,28 +279,32 @@ async def test_a_key_draws_within_a_round_trip_while_a_pane_animates():
             for key in range(12):
                 await anyio.sleep(0.037 * (key % 5) + 0.1)
                 before = len(arrived)
-                pressed = time.monotonic()
+                pressed, pressed_wall = fair.elapsed(), time.monotonic()
                 key_sequence, word = KEYS[key % 2]
                 session.typed(state, key_sequence)
                 await once(
-                    lambda: any(word in data for _, data in arrived[before:]),
+                    lambda: any(word in data for *_, data in arrived[before:]),
                     5.0,
                     lambda: (
                         "key %d's frame never came: %r, %r"
-                        % (len(delays), [data for _, data in arrived[before:]][-3:], state.message)
+                        % (len(delays), [data for *_, data in arrived[before:]][-3:], state.message)
                     ),
                 )
-                delays.append(next(at for at, data in arrived[before:] if word in data) - pressed)
+                at, at_wall = next((at, wall) for at, wall, data in arrived[before:] if word in data)
+                paused = sum(max(0.0, min(ended, at_wall) - max(began, pressed_wall)) for began, ended in collected)
+                delays.append(Delay(at - pressed, at_wall - pressed_wall, paused))
             tasks.cancel_scope.cancel()
+        # A ceiling counts over the wall's seconds, which load only makes
+        # easier; a floor over the fair ones, which load cannot lower.
         seconds = time.monotonic() - started
         redraws = (state.app.render_counter - renders) / seconds
         # A key may wait for the frame in flight, one round trip at most.
-        assert max(delays) < ROUND_TRIP * 1.6, sorted(delays)
+        assert max(delay.fair for delay in delays) < ROUND_TRIP * 1.6, sorted(delays, reverse=True)[:3]
         # Twenty spins and a key or two a second, and no spin of skips.
         assert redraws < 150, redraws
         # Five frames may be out, so the spinner's twenty a second all go:
         # one in flight held it to one a round trip. Lillecarl/pyterm#827.
-        drawn = (len(arrived) - drawn_before) / seconds
+        drawn = (len(arrived) - drawn_before) / (fair.elapsed() - started_fair)
         assert drawn > 15, drawn
 
 
