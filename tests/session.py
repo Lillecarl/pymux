@@ -42,6 +42,7 @@ from prompt_toolkit.data_structures import Size
 from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
+from pyterm_pytest.fairclock import Deadline
 
 from pymux.connection.known_terminals import Identity, identify
 from pymux.connection.server import ServerConnection
@@ -335,10 +336,13 @@ async def once(question, seconds: float, complaint: str | Callable[[], str], pol
     time runs out while the server never had a turn to answer; a loop
     that runs freely asks a thousand times in five seconds, so a real
     "never" still fails in the time. Lillecarl/pyterm#623.
+
+    `seconds` is fair time: what this process waited for a CPU does not
+    count. Lillecarl/pyterm#1000.
     """
-    deadline = time.monotonic() + seconds
+    deadline = Deadline(seconds)
     asked = 0
-    while time.monotonic() < deadline or asked < polls:
+    while not deadline.passed() or asked < polls:
         answer = question()
         if answer:
             return answer
