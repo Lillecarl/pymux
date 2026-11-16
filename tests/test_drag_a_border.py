@@ -258,4 +258,19 @@ async def test_the_pointer_keeps_the_shape_while_a_drag_lasts():
         await once(lambda: _shape("sb_h_double_arrow") in "".join(sent), 10.0, "the drag never set the shape")
         assert _shape("") not in _since(sent, "sb_h_double_arrow")
         report(PRESS, x - 5, y, "m")
-        await once(lambda: _shape("") in _since(sent, "sb_h_double_arrow"), 10.0, "the release kept the shape")
+        # Seen once under six suites, cause unknown: the release reaching
+        # another handler leaves the drag on; a frame that never came
+        # leaves it off with the shape sent. Lillecarl/pyterm#1000.
+        await once(
+            lambda: _shape("") in _since(sent, "sb_h_double_arrow"),
+            10.0,
+            lambda: (
+                "the release kept the shape: drag %r, shape sent %r, frames %d, after the shape %r"
+                % (
+                    state.border_drag,
+                    state.client.pointer_shape_sent,
+                    state.app.render_counter,
+                    _since(sent, "sb_h_double_arrow")[-200:],
+                )
+            ),
+        )
