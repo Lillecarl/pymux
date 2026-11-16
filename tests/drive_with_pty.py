@@ -69,7 +69,7 @@ from pyte.sequences.csi import set_mode
 from pyte.sequences.strings import dcs, osc
 from pyte.sixel import decode_sixel
 from pyte.streams import Stream
-from pyterm_pytest.deadline import Deadline, pids_naming
+from pyterm_pytest.fairclock import Deadline, pids_naming
 
 from pymux.graphics.blocks import LOWER_HALF, UPPER_HALF
 from pymux.graphics.graphics import CELL_SIZE_QUERY

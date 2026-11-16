@@ -26,7 +26,7 @@ from pathlib import Path
 import anyio
 import pytest
 from libpymux.protocol import Field, Packet
-from pyterm_pytest.deadline import Deadline
+from pyterm_pytest.fairclock import Deadline
 from test_ssh_client import create_key
 
 from pymux.client import reconnect as reconnect_module
