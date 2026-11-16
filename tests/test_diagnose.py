@@ -15,6 +15,9 @@ import socket
 import subprocess
 import sys
 import time
+from pathlib import Path
+
+from test_upgrade import _once_it_answers
 
 from pymux.diagnose import as_json, diagnose, human
 
@@ -52,6 +55,9 @@ def test_a_report_of_a_running_server(tmp_path):
         while not os.path.exists(sock) and time.time() < deadline:
             time.sleep(0.05)
         assert os.path.exists(sock), "the test server never came up"
+        # The first command makes the first window, and under load that
+        # took longer than diagnose's 2 s. Lillecarl/pyterm#1002.
+        _once_it_answers(Path(sock), "list-sessions")
 
         report = diagnose(socket_name=sock, config_file=None)
 
