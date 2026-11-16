@@ -176,6 +176,10 @@ class Serving:
         started = time.monotonic()
         try:
             anyio.run(serve)
+            # A log that ends without this line, a crash or "Ended by"
+            # ended with SIGKILL or with no Python left to say it.
+            # Lillecarl/pyterm#1002.
+            logger.info("The server stopped after %.1f s.", time.monotonic() - started)
         except BaseException as error:
             # A daemon's stderr is /dev/null, so a crash that is not
             # written down is a crash nobody can read. The report goes

@@ -21,6 +21,7 @@ from ..answer import Answer
 from ..commands import handle_command
 from ..ids import PaneId
 from ..keys.actions import Origin, started_by
+from ..log import logger
 from ..pipes.base import BrokenPipeError
 from .attach import create_app
 from .client import ClientRole
@@ -139,6 +140,8 @@ class Requests:
 
         client = self.connection.client
         if client is None:
+            # The caller hears NO_ANSWER, so the log says which command. Lillecarl/pyterm#1002.
+            logger.warning("A connection closed before its command ran: %r.", packet.get(Field.DATA))
             self.connection.close_connection()
             return
         client_state = client.state
