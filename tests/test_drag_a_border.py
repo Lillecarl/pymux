@@ -253,7 +253,9 @@ async def test_the_pointer_keeps_the_shape_while_a_drag_lasts():
             10.0,
             "the drag never moved the line",
         )
-        assert _shape("sb_h_double_arrow") in "".join(sent)
+        # The layout moves before the frame that carries the shape goes
+        # out: under six suites at once it had not. Lillecarl/pyterm#1000.
+        await once(lambda: _shape("sb_h_double_arrow") in "".join(sent), 10.0, "the drag never set the shape")
         assert _shape("") not in _since(sent, "sb_h_double_arrow")
         report(PRESS, x - 5, y, "m")
         await once(lambda: _shape("") in _since(sent, "sb_h_double_arrow"), 10.0, "the release kept the shape")
