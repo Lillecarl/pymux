@@ -91,7 +91,6 @@ import shlex
 import shutil
 import sys
 import time
-from itertools import pairwise
 from pathlib import Path
 
 from pyterm_pytest.seats import (
@@ -354,10 +353,16 @@ class Camera:
         coin tosses, which is how "2 Test of screen features #13" came
         out 6108 pixels apart while both sides were behaving.
 
-        What can be compared is the behaviour. This counts how many of
-        the consecutive pictures differ: zero is a screen that does not
-        blink, and anything above it is one that does. `compare_one`
-        then asks only whether the two sides agree about that.
+        What can be compared is the behaviour. This counts the pictures
+        that go back to an earlier one after a change: zero is a screen
+        that does not blink, and anything above it is one that does.
+        `compare_one` then asks only whether the two sides agree about
+        that.
+
+        **A change that stays is a paint, not a blink.** Under a loaded
+        gate the pane's first picture of "4 Test of double-sized
+        characters #5" came before its paint, and seven alike after it
+        read as a blink that bare xterm did not have. Lillecarl/pyterm#1000.
         """
         shots = []
         for frame in range(BLINK_FRAMES):
@@ -369,7 +374,12 @@ class Camera:
             shot = self.into / ("%04d.%d.png" % (number, frame))
             take_one(shot)
             shots.append(shot)
-        return sum(1 for first, second in pairwise(shots) if differences(first, second) != 0)
+        return sum(
+            1
+            for later in range(2, len(shots))
+            if differences(shots[later - 1], shots[later]) != 0
+            and any(differences(shots[earlier], shots[later]) == 0 for earlier in range(later - 1))
+        )
 
     def take_them(self, work: Path, log_path: Path):
         """
