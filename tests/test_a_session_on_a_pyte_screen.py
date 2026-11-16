@@ -785,7 +785,10 @@ async def test_every_frame_beside_a_pane_is_on_the_terminal(pymux, seed, mode):
         with set_app(client_state.app):
             pymux.handle_command("set-option render-mode %s" % mode)
             pymux.handle_command("split-window -h 'sleep 1000'")
-        await settled(session)
+        # The split drawn, and not a quiet screen from before it: under
+        # load step 0 found no line in any column. Lillecarl/pyterm#1000.
+        found = await until_whole(session, client_state)
+        assert not found, "\n".join([*found, "", *rows_of(session)])
         controls = [
             pane.terminal.terminal_control for pane in sorted(pymux.panes_by_id.values(), key=lambda pane: pane.pane_id)
         ]
