@@ -7,6 +7,7 @@ pane. Lillecarl/pyterm#914.
 from __future__ import annotations
 
 import sys
+import termios
 
 from libpymux.protocol import Packet
 from prompt_toolkit.application.current import set_app
@@ -125,6 +126,13 @@ async def _sent_more_than_the_pane_holds(tmp_path, program: str, monkeypatch) ->
         with set_app(state.app):
             await session.pymux.panes.create_window("%s %s" % (sys.executable, script))
         pane = session.pymux.arrangement.get_active_window().panes[0]
+        # Raw before anything is sent: under load the program had not
+        # reached `tty.setraw` yet, the line discipline threw the long
+        # line away, and nothing stalled. Lillecarl/pyterm#1000.
+        master = pane.process.backend.master
+        await once(
+            lambda: not termios.tcgetattr(master)[3] & termios.ICANON, 20.0, "the program never put its pty in raw mode"
+        )
         write = pane.screen.write_process_input
         wired = Wired(state, pane)
         pane.screen.write_process_input = write
