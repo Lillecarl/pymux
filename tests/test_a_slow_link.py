@@ -252,6 +252,10 @@ async def test_a_key_draws_within_a_round_trip_while_a_pane_animates(request):
             mux.handle_command("bind-key -n F6 display-message kilo")
         renders = state.app.render_counter
 
+        # When the terminal answered, on the wall: for the timeline of a
+        # key that took too long.
+        answers: list[float] = []
+
         async def terminal() -> None:
             "Reads each frame, and answers its report a round trip after."
             answered = 0
@@ -260,6 +264,7 @@ async def test_a_key_draws_within_a_round_trip_while_a_pane_animates(request):
                 for _ in range(sent - answered):
                     await anyio.sleep(ROUND_TRIP)
                     session.typed(state, ANSWER)
+                    answers.append(time.monotonic())
                 answered = sent
                 await anyio.sleep(0.002)
 
@@ -270,6 +275,8 @@ async def test_a_key_draws_within_a_round_trip_while_a_pane_animates(request):
                 await anyio.sleep(0.05)
 
         delays = []
+        # Each key's press and its frame, on the wall.
+        windows: list[tuple[float, float]] = []
         started, started_fair = time.monotonic(), fair.elapsed()
         drawn_before = len(arrived)
         async with anyio.create_task_group() as tasks:
@@ -293,13 +300,35 @@ async def test_a_key_draws_within_a_round_trip_while_a_pane_animates(request):
                 at, at_wall = next((at, wall) for at, wall, data in arrived[before:] if word in data)
                 paused = sum(max(0.0, min(ended, at_wall) - max(began, pressed_wall)) for began, ended in collected)
                 delays.append(Delay(at - pressed, at_wall - pressed_wall, paused))
+                windows.append((pressed_wall, at_wall))
             tasks.cancel_scope.cancel()
+
+        def worst_window() -> str:
+            "What came and went around the slowest key: did it wait for an answer, or after one?"
+            worst = max(range(len(delays)), key=lambda key: delays[key].fair)
+            pressed_wall, at_wall = windows[worst]
+            word = KEYS[worst % 2][1]
+            events = [
+                (wall, "frame%s%s" % (" report" if STATUS_REPORT in data else "", " key" if word in data else ""))
+                for _, wall, data in arrived
+                if pressed_wall - 2 * ROUND_TRIP <= wall <= at_wall
+            ]
+            events += [(wall, "answer") for wall in answers if pressed_wall - 2 * ROUND_TRIP <= wall <= at_wall]
+            return "key %d, %r: %s" % (
+                worst,
+                delays[worst],
+                ", ".join("%+.3f %s" % (wall - pressed_wall, what) for wall, what in sorted(events)),
+            )
+
         # A ceiling counts over the wall's seconds, which load only makes
         # easier; a floor over the fair ones, which load cannot lower.
         seconds = time.monotonic() - started
         redraws = (state.app.render_counter - renders) / seconds
         # A key may wait for the frame in flight, one round trip at most.
-        assert max(delay.fair for delay in delays) < ROUND_TRIP * 1.6, sorted(delays, reverse=True)[:3]
+        assert max(delay.fair for delay in delays) < ROUND_TRIP * 1.6, (
+            sorted(delays, reverse=True)[:3],
+            worst_window(),
+        )
         # Twenty spins and a key or two a second, and no spin of skips.
         assert redraws < 150, redraws
         # Five frames may be out, so the spinner's twenty a second all go:
