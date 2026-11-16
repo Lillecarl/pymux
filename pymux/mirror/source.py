@@ -56,6 +56,9 @@ class MirrorSource:
         self.registration: dict[str, Any] | None = None
         #: The palette entries the peer was last told the program set.
         self.palette: tuple[tuple[int, str], ...] = ()
+        #: Where the peer was last told copy mode stands. A mirror of a
+        #: mirror hears the place move in frames that change no cell.
+        self.place: Place | None = None
 
     def start(self) -> None:
         self.control.followers.append(self)
@@ -144,9 +147,10 @@ class MirrorSource:
             self.palette = palette
             frame = {**(frame or {}), "palette": [list(entry) for entry in palette]}
         if frame is None:
-            if not owed:
+            if not owed and place == self.place:
                 return None
             frame = {}
+        self.place = place
         return {
             Field.CMD: Packet.MIRROR_FRAME,
             Field.PANE_ID: int(self.pane.pane_id),

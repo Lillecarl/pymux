@@ -1588,6 +1588,33 @@ async def test_a_chain_of_three_encodes_input_once_on_the_owner(two_servers):
             third.stop()
 
 
+async def test_a_chain_of_three_passes_on_a_copy_place_that_moves_no_cell(two_servers):
+    """
+    A's frame can carry where copy mode stands and change no cell of B's
+    page: under six suites the place came in a frame of its own. B's
+    frame to C was then empty, and C never heard it. Lillecarl/pyterm#1000.
+    """
+    owner, peer, client = two_servers
+    _there, middle = await shown_here(owner, peer, client)
+
+    third = Pymux()
+    third.options.test_mode = True
+    async with third.running():
+        try:
+            third.handle_command("connect %s" % (peer.socket_name,))
+            (link,) = third.peers.by_address.values()
+            await until(lambda: middle.pane_id in link.tree.panes, "B's mirror of A's pane reaches C")
+            last = link.tree.panes[middle.pane_id].process
+            last.seen(True)
+            await until(lambda: links_of(peer) and links_of(peer)[0].peer.sources, "C mirrors B's pane")
+
+            sink = middle.terminal.terminal_control.mirror.sink
+            sink.take({Field.CMD: Packet.MIRROR_FRAME, Field.FRAME: {}, Field.COPYING: [3, None, None]})
+            await until(lambda: last.copying == (3, None, None), "C hears the place", seen=lambda: last.copying)
+        finally:
+            third.stop()
+
+
 async def test_an_upgrade_saves_no_mirror_and_links_again(two_servers, tmp_path):
     "The snapshot holds the owner's address and none of its sessions; the next server links again."
     owner, peer, client = two_servers
