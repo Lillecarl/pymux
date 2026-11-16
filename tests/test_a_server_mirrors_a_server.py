@@ -33,6 +33,7 @@ from pyte.mouse import MouseAction, MouseBits, MouseButton, MouseInput
 from pyte.osc import ColorBase
 from pyte.sequences.file_transfer import Action, TransferCommand
 from pyte.sequences.kitty_clipboard import ClipboardPacket
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from session import Client
 from test_drag_a_border import DRAG, PRESS, _drawn, _mouse
 from test_kittys_clipboard import PNG as KITTY_PNG
@@ -76,9 +77,13 @@ def rows_of(control) -> list[str]:
 
 
 async def until(condition, what: str, seen=None) -> None:
-    "Wait for `condition`, which the other server's packets make true. `seen` says what was there instead."
+    """
+    Wait for `condition`, which the other server's packets make true. `seen` says what was there instead.
+    Five seconds of fair time: every server of a test runs in its one loop, and a loaded machine
+    held a test's loop still for 1.9 s. Lillecarl/pyterm#1000.
+    """
     try:
-        with anyio.fail_after(5):
+        with fair_anyio.fail_after(5):
             while not condition():
                 await anyio.sleep(0.01)
     except TimeoutError:
