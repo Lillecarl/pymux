@@ -15,6 +15,8 @@ is `#{session_name}`.
 
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from pymux.answer import Answer
@@ -82,6 +84,15 @@ async def test_each_default_template_draws_what_its_tmux_format_did(pymux, optio
     "Every default is jinja, and looks as tmux's spelling did. Lillecarl/pyterm#962."
     pymux.options.test_mode = True
     window = pymux.current_session.arrangement.get_active_window()
+    # The window's name and where its pane is, so neither spelling reads
+    # the pane's process, which is still starting: under the full gate
+    # its directory read as the home for one spelling and as nothing for
+    # the next, and its name as python3.14 and as nothing.
+    # Lillecarl/pyterm#989.
+    window.chosen_name = "work"
+    # And its title, which the program sets.
+    window.active_pane.screen.titles.window = "title"
+    window.active_pane.current_directory = os.path.expanduser("~/work")
     owner = window.options if option == "pane_title_format" else pymux.session_defaults
     default = getattr(owner, option)
     assert holds_a_template(default)
