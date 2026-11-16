@@ -19,6 +19,7 @@ Lillecarl/pyterm#941.
 
 from __future__ import annotations
 
+import math
 import threading
 import time
 from collections.abc import Callable
@@ -28,6 +29,9 @@ import apsw
 
 #: Big enough that writing it out takes a commit tenths of a second.
 SIZE = 128 << 20
+
+#: The finest gap a hold is measured to, in seconds.
+STEP = 0.001
 
 
 def longest_hold(prepare: Callable[[], Callable[[], None]]) -> tuple[float, float]:
@@ -51,10 +55,14 @@ def longest_hold(prepare: Callable[[], Callable[[], None]]) -> tuple[float, floa
     # Not a wait on `ready` alone: a held GIL keeps this thread from
     # returning out of it until the call is over, and every tick after
     # would fall outside the window.
-    ticks = []
+    # A tick kept only once it is `STEP` past the last one: every tick
+    # was hundreds of millions under load, where the commit ran for
+    # seconds, and reading them back outran the suite's two minutes.
+    # A gap then reads at most `STEP` too long. Lillecarl/pyterm#1000.
+    ticks = [-math.inf]
     while not window:
-        if ready.is_set():
-            ticks.append(time.monotonic())
+        if ready.is_set() and (now := time.monotonic()) - ticks[-1] >= STEP:
+            ticks.append(now)
     worker.join()
 
     ((start, end),) = window
