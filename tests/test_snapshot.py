@@ -16,12 +16,14 @@ from typing import Any, ClassVar, override
 
 import anyio
 import apsw
+import ptterm.control
 import pytest
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.clipboard import ClipboardData
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.selection import SelectionState, SelectionType
 from ptyhost.backends.posix import PosixBackend
+from pyte.freeze import freeze
 from pyte.keep import Keep
 from pyte.page import RowMark
 from session import once
@@ -511,6 +513,15 @@ def _text(pane) -> str:
     return "\n".join(line.text for line in screen.page.text_lines(0, screen.max_y))
 
 
+def _streams(pymux) -> dict[int, str]:
+    "Each pane's parser state, as the snapshot writes it, by pane id."
+    return {
+        int(pane.pane_id): json.dumps(freeze(pane.terminal.terminal_control.stream).root)
+        for pane in panes_of(pymux)
+        if not isinstance(pane.process, JobFeed)
+    }
+
+
 def _viewers_of(pymux) -> dict:
     "Each pane that views a job, by the job's id."
     return {pane.process.job.job_id: pane for pane in pymux.panes_by_id.values() if isinstance(pane.process, JobFeed)}
@@ -524,7 +535,11 @@ def _pane_count(pymux) -> int:
     return sum(len(window.panes) for session in pymux.sessions for window in session.arrangement.windows)
 
 
-async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_path):
+async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_path, monkeypatch):
+    # The open sequence the alternate pane ends on has to last until the
+    # save. A pane drops one after 5 s, and under six suites at once the
+    # save came later than that. Lillecarl/pyterm#1000.
+    monkeypatch.setattr(ptterm.control, "_GROUND_TIMEOUT", 3600)
     alternate = tmp_path / "alternate.sh"
     alternate.write_text("printf '%s\\r\\n\\033[?1049h\\033[31mALT\\033[0m\\033[3'\nsleep 60\n" % ("wrapped " * 20))
     pymux.socket_name = str(tmp_path / "server.sock")
@@ -597,12 +612,23 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
             10.0,
             "the alternate pane never wrote",
         )
+        (alternate_pane,) = [
+            pane for pane in panes_of(pymux) if not isinstance(pane.process, JobFeed) and "ALT" in _text(pane)
+        ]
+        # And its last bytes, which draw nothing, so no still screen waits for them.
+        await once(
+            lambda: alternate_pane.terminal.terminal_control.stream._pending,
+            10.0,
+            lambda: "the alternate pane is not mid-sequence: %s" % (_streams(pymux),),
+        )
         await settled(session)
         _vary_what_no_command_reaches(pymux, connection.client.state)
         jobs = _jobs_of(pymux)
         questions = await _questions_of(pymux)
 
         first = tmp_path / "first.sqlite"
+        # What each pane's parser held as it was saved, for the failure below.
+        streams_at_save = _streams(pymux)
         save(pymux, first)
         shell = pymux.sessions[0].arrangement.windows[0].panes[0]
         before = _text(shell)
@@ -724,7 +750,7 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
     assert _rows(first, "SELECT returncode, stdout_dropped > 0, stderr_dropped > 0 FROM jobs WHERE job_id = 2") == [
         (3, 1, 1)
     ]
-    assert _constant_columns(first) == []
+    assert _constant_columns(first) == [], "the parser states at the save: %s" % (streams_at_save,)
     assert _dump(_as_the_takeover_leaves_it(second, tmp_path / "second-taken.sqlite")) == _dump(
         _as_the_takeover_leaves_it(first, tmp_path / "first-taken.sqlite")
     )
