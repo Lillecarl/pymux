@@ -767,7 +767,7 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None, ask_dir=None):
             while waiting and now >= head_due():
                 delay, keys = waiting.pop(0)
                 if isinstance(delay, Quiet):
-                    note(started, "quiet for %gs" % (delay,) if now < when + QUIET_LIMIT else "never quiet")
+                    note(started, "quiet for %s" % (quiet,) if now < when + QUIET_LIMIT else "never quiet")
                     when = now
                     quiet = None
                     continue

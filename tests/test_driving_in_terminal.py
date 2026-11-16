@@ -140,10 +140,14 @@ def test_steps_happen_in_order(tmp_path):
 
 
 #: Writes for a second, saying "early" if a key comes meanwhile, then
-#: says "late" when one comes.
+#: says "late" when one comes. `tty.setcbreak` and not `stty`: the quiet
+#: clock reads its processes every 0.25 s, so a shell and an stty that
+#: come and go between two reads can wait unforgiven while the ticker
+#: writes nothing. The likely cause of 0.4 s of quiet before the first
+#: tick under six suites. Lillecarl/pyterm#1000.
 TICKER = """
-import os, select, sys, time
-os.system("stty -echo -icanon")
+import select, sys, time, tty
+tty.setcbreak(sys.stdin.fileno())
 for _ in range(10):
     sys.stdout.write("tick ")
     sys.stdout.flush()
