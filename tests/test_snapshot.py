@@ -34,7 +34,7 @@ from test_every_attribute_has_a_fate import declared, live_objects
 from pymux.commands.wait_for import WaitChannel
 from pymux.core.main import Pymux
 from pymux.core.snapshot.read import Program, Takeover, load, start
-from pymux.core.snapshot.schema import OLD_CLIENT_COLUMNS, SNAPSHOT_VERSION, WRITES, SnapshotError, panes_of
+from pymux.core.snapshot.schema import SNAPSHOT_VERSION, WRITES, SnapshotError, panes_of
 from pymux.core.snapshot.write import Snapshot, fds_of, save, values_of
 from pymux.core.upgrade import welcome_back
 from pymux.core.window_tree import LayoutTypes
@@ -59,7 +59,6 @@ from pymux.options import tables
 from pymux.options.client_options import ClientOptions
 from pymux.options.server_options import ServerOptions
 from pymux.options.session_options import SessionOptions
-from pymux.options.tables import ClientOptionRow
 from pymux.query import ask
 
 
@@ -281,18 +280,22 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     # column differs between the two rows.
     for each in SessionOptions.DECLARED.values():
         setattr(second.options, each.attribute, getattr(second.options, each.attribute))
-    # Every default but frame-rate, which the first session's holds.
-    second.arrangement.window_defaults.update(
-        synchronize_panes=True,
-        monitor_bell=False,
-        monitor_activity=False,
-        monitor_silence=30,
-        monitor_notification=False,
-        strip=True,
-        window_size=WindowSize.LATEST,
-        wayland_scale="2",
-        window_codec=WindowCodec.VP9,
-    )
+    # The server's, which every session shares; frame-rate and the
+    # pane formats come from commands below.
+    defaults = {
+        "synchronize_panes": True,
+        "monitor_bell": False,
+        "monitor_activity": False,
+        "monitor_silence": 30,
+        "monitor_notification": False,
+        "strip": True,
+        "window_size": WindowSize.LATEST,
+        "wayland_scale": "2",
+        "window_codec": WindowCodec.VP9,
+    }
+    pymux.window_defaults.update(defaults)
+    pymux.set_by_hand["window_defaults"].update(defaults)
+    assert second.arrangement.window_defaults is pymux.window_defaults
     pymux.global_environment["UNSET"] = None
     pymux.options.set_clipboard = Clipboard.ON
     pymux.options.forward_mode = ForwardMode.ASK
@@ -419,7 +422,7 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
 
 
 #: A table that holds one row, so no column of it can vary.
-ONE_ROW = {"server_options", "session_defaults"}
+ONE_ROW = {"server_options", "session_defaults", "window_defaults"}
 
 #: Tables only a link to another server fills. The upgrade tests in
 #: `test_a_server_mirrors_a_server.py` take them through a snapshot.
@@ -595,6 +598,10 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                 "resize-pane -U 2",
                 "split-window -h",
                 "display-popup -w 40 -h 10 -T pop 'sleep 60'",
+                # Every window takes the -g values, the second session's
+                # too, so one window holds its own. Lillecarl/pyterm#971.
+                "set-window-option pane-title-format ' mine '",
+                "set-window-option pane-message-format ' mine '",
                 "new-session -d -s second",
             ):
                 windows = _window_count(pymux)
@@ -828,43 +835,31 @@ def _shape_of_a_fresh_snapshot() -> dict[str, list[tuple]]:
     return _shape(db)
 
 
-def _as_version_39(path) -> None:
-    "Put each client's options back as columns of `clients`, as 39 kept them."
+def _as_version_40(path) -> None:
+    "Put the window defaults back in one row per session, as 40 kept them, and drop a table 41 added since."
     db = apsw.Connection(str(path))
-    for attribute in tables.columns_of(ClientOptionRow).keys() - set(ClientOptionRow.KEY):
-        old = OLD_CLIENT_COLUMNS.get(attribute, attribute)
-        db.execute(f"ALTER TABLE clients ADD COLUMN {old}")
-        db.execute(
-            f"UPDATE clients SET {old} = (SELECT {attribute} FROM client_options o WHERE o.client_id = clients.client_id)"
-        )
-    db.execute("DROP TABLE client_options")
-    # 39 left an option a client never announced NULL.
-    db.execute("UPDATE clients SET audio = NULL")
-    db.execute("PRAGMA user_version = 39")
+    db.execute("DROP TABLE window_defaults")
+    db.execute(
+        "CREATE TABLE window_defaults(session_id INTEGER PRIMARY KEY REFERENCES sessions(session_id), strip INTEGER)"
+    )
+    db.execute("INSERT INTO window_defaults SELECT session_id, 1 FROM sessions")
+    db.execute("DROP TABLE key_bindings_by_hand")
+    db.execute("PRAGMA user_version = 40")
     db.close()
 
 
-def test_a_version_39_snapshot_loads_its_client_options(pymux, tmp_path):
-    "39 kept them as columns of `clients`. Lillecarl/pyterm#771."
-    pymux.returning_clients["gone"] = {
-        "session_id": pymux.sessions[0].session_id,
-        "previous_session_id": None,
-        "windows": {},
-        "settings": {"message": "bye"},
-        "options": values_of(ClientOptions(name="phone", swap_light_and_dark_colors=True, audio=ClientAudio.OFF)),
-    }
-    path = tmp_path / "v39.sqlite"
+def test_a_version_40_snapshot_takes_its_window_defaults_from_the_file(pymux, tmp_path):
+    "40 kept them per session, with no mark of who set them. Lillecarl/pyterm#971."
+    path = tmp_path / "v40.sqlite"
     save(pymux, path)
-    _as_version_39(path)
+    _as_version_40(path)
 
     loaded = Pymux()
+    _configure(loaded, "set-window-option -g monitor-silence 30")
     load(loaded, path)
 
-    options = loaded.returning_clients["gone"]["options"]
-    assert options["name"] == "phone"
-    assert options["swap_light_and_dark_colors"] is True
-    assert options["audio"] is ClientAudio.ON
-    assert loaded.returning_clients["gone"]["settings"]["message"] == "bye"
+    assert loaded.window_defaults == {"monitor_silence": 30}
+    assert all(session.arrangement.window_defaults is loaded.window_defaults for session in loaded.sessions)
 
 
 async def test_a_column_this_build_declares_and_the_file_lacks_takes_its_default(pymux, tmp_path):
@@ -948,7 +943,30 @@ def test_an_upgrade_takes_the_new_file_and_keeps_what_a_person_set(pymux, tmp_pa
     assert loaded.session_defaults.status_left == "mine"
     assert loaded.options.default_terminal == ServerOptions().default_terminal
     assert loaded.options.job_ttl == 30
-    assert loaded.set_by_hand == {"options": set(), "session_defaults": {"status_left"}, "hooks": set()}
+    assert loaded.set_by_hand == {
+        "options": set(),
+        "session_defaults": {"status_left"},
+        "window_defaults": set(),
+        "hooks": set(),
+    }
+
+
+def test_an_upgrade_takes_the_new_file_and_keeps_the_window_defaults_a_person_set(pymux, tmp_path):
+    "One set for the server, as tmux's -g: a session made later starts from it too. Lillecarl/pyterm#971."
+    _configure(pymux, "set-window-option -g monitor-silence 10", "set-window-option -g strip on")
+    pymux.handle_command("set-window-option -g monitor-bell off")
+    later = pymux.create_session("later")
+    assert later.arrangement.window_defaults is pymux.window_defaults
+    path = tmp_path / "windows.sqlite"
+    save(pymux, path)
+
+    loaded = Pymux()
+    _configure(loaded, "set-window-option -g monitor-silence 20")
+    load(loaded, path)
+
+    assert loaded.window_defaults == {"monitor_silence": 20, "monitor_bell": False}
+    assert loaded.set_by_hand["window_defaults"] == {"monitor_bell"}
+    assert all(session.arrangement.window_defaults is loaded.window_defaults for session in loaded.sessions)
 
 
 def test_an_upgrade_takes_the_new_file_and_keeps_what_a_person_bound(pymux, tmp_path):

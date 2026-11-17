@@ -128,7 +128,13 @@ class Session:
         "remote": Keep.DROPPED,
     }
 
-    def __init__(self, session_id: SessionId, name: str, defaults: SessionOptions) -> None:
+    def __init__(
+        self,
+        session_id: SessionId,
+        name: str,
+        defaults: SessionOptions,
+        window_defaults: dict[str, object] | None = None,
+    ) -> None:
         #: The number in `$0`, the way tmux spells a session. It counts
         #: from zero for each server, and no two sessions of one server
         #: ever share it, including after one is killed.
@@ -136,7 +142,7 @@ class Session:
 
         self.name = name
         self.options = OwnOptions(defaults)
-        self.arrangement = Arrangement(self.options)
+        self.arrangement = Arrangement(self.options, window_defaults)
 
         #: What `set-environment` without `-g` fills. A new pane of this
         #: session reads this over the global environment.

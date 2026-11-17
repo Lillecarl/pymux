@@ -152,10 +152,8 @@ def options_table(
     return make_dataclass(name, specs, frozen=True, slots=True, namespace=namespace, module=__name__)
 
 
-#: What every new window of a session starts with, as `set-window-option -g` said.
-WindowDefaultRow = options_table(
-    WindowOptions, "WindowDefaultRow", "window_defaults", "session_id", "sessions(session_id)", defaults=True
-)
+#: What every new window starts with, as `set-window-option -g` said, in one row.
+WindowDefaultRow = options_table(WindowOptions, "WindowDefaultRow", "window_defaults", "id", None, defaults=True)
 #: One window's options.
 WindowOptionRow = options_table(
     WindowOptions, "WindowOptionRow", "window_options", "window_id", "windows(window_id)", defaults=False

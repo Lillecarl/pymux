@@ -251,6 +251,10 @@ def _open(path: str | os.PathLike[str]) -> apsw.Connection:
     db.close()
     for step in steps:
         stepped.execute(step)
+    # A step changes only what it must; what this build adds since, it
+    # adds here too.
+    if added := missing_from(stepped):
+        stepped.execute(added)
     return stepped
 
 
@@ -399,6 +403,11 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
             for attribute, value in loaded_options(scope, row).items():
                 if attribute in by_hand[holder]:
                     setattr(getattr(pymux, holder), attribute, value)
+    # In place: every session's arrangement holds this dict. Lillecarl/pyterm#971.
+    for row in select(db, WindowDefaultRow):
+        for attribute, value in loaded_options(WindowOptions, row).items():
+            if attribute in by_hand["window_defaults"]:
+                pymux.window_defaults[attribute] = value
     pymux.set_by_hand = by_hand
     _read_bindings(pymux, db)
     pymux.global_environment = {row.name: row.value for row in select(db, GlobalEnvironmentRow)}
@@ -461,7 +470,12 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
     windows: dict[int, Window] = {}
     sessions = []
     for row in select(db, SessionRow, "ORDER BY position"):
-        session = Session(SessionId(row.session_id), row.session_name, defaults=pymux.session_defaults)
+        session = Session(
+            SessionId(row.session_id),
+            row.session_name,
+            defaults=pymux.session_defaults,
+            window_defaults=pymux.window_defaults,
+        )
         session.created = row.session_created
         session.last_used = row.last_used
         if row.default_height is not None and row.default_width is not None:
@@ -479,8 +493,6 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
             for attribute, value in loaded_options(SessionOptions, own).items():
                 setattr(session.options, attribute, value)
         arrangement = session.arrangement
-        for default in select(db, WindowDefaultRow, "WHERE session_id = ?", session.session_id):
-            arrangement.window_defaults.update(loaded_options(WindowOptions, default))
 
         for window_row in select(
             db, WindowRow, "WHERE session_id = ? ORDER BY linked DESC, position", session.session_id

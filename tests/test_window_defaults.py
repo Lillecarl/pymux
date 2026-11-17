@@ -139,6 +139,17 @@ def test_tmux_spelling_of_it_works_too():
     assert pymux.arrangement.window_defaults == {"strip": True}
 
 
+def test_dash_g_reaches_a_session_made_after_it():
+    "One set for the server, as tmux's: a config line is read before the sessions it speaks for. Lillecarl/pyterm#971."
+    pymux = Pymux()
+    assert complaints(pymux, "set-window-option -g strip on") == []
+
+    later = pymux.create_session("later")
+
+    assert later.arrangement.window_defaults == {"strip": True}
+    assert later.arrangement.window_defaults is pymux.window_defaults
+
+
 def test_value_that_is_not_on_or_off_is_refused_with_dash_g_too():
     pymux = Pymux()
 

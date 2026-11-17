@@ -274,7 +274,16 @@ class FieldOption(Option):
         "What every new window starts with. Changes no window that is open."
         if self.scope is not Scope.WINDOW:
             return super().set_default(pymux, value)
-        pymux.arrangement.window_defaults[self.declared.attribute] = self._parse(value)
+        pymux.window_defaults[self.declared.attribute] = self._parse(value)
+        self._note_default(pymux, by_hand=not a_file_speaks(pymux))
+
+    def _note_default(self, pymux: Pymux, *, by_hand: bool) -> None:
+        "As `_note_who_set`, for what every new window starts with. Lillecarl/pyterm#971."
+        marked = pymux.set_by_hand["window_defaults"]
+        if by_hand:
+            marked.add(self.declared.attribute)
+        else:
+            marked.discard(self.declared.attribute)
 
     @override
     def unset(self, pymux: Pymux, target: Holder | None = None, *, default: bool = False) -> None:
@@ -288,7 +297,8 @@ class FieldOption(Option):
         """
         attribute = self.declared.attribute
         if self.scope is Scope.WINDOW and default:
-            pymux.arrangement.window_defaults.pop(attribute, None)
+            pymux.window_defaults.pop(attribute, None)
+            self._note_default(pymux, by_hand=False)
             return
 
         owner = self.held_by(pymux, target)
@@ -296,7 +306,7 @@ class FieldOption(Option):
         if isinstance(options, OwnOptions):
             options.forget(attribute)
         elif self.scope is Scope.WINDOW:
-            fallback = pymux.arrangement.window_defaults.get(attribute, self.declared.default)
+            fallback = pymux.window_defaults.get(attribute, self.declared.default)
             setattr(options, attribute, copy.deepcopy(fallback))
         else:
             setattr(options, attribute, copy.deepcopy(self.declared.default))

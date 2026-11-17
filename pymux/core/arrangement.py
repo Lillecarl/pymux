@@ -47,7 +47,8 @@ class Arrangement:
         "_unlinked_windows": Keep.SAVED,
         # The session's options, which the session saves.
         "options": Keep.REBUILT,
-        "window_defaults": Keep.SAVED,
+        # The server's, which `Pymux` saves.
+        "window_defaults": Keep.REBUILT,
         "_last_active_window": Keep.SAVED,
         "_active_window_for_cli": Keep.SAVED,
         # Its newest window, which is what `last-window` reaches.
@@ -70,7 +71,11 @@ class Arrangement:
     def renumber_windows(self, value: bool) -> None:
         self.options.renumber_windows = value
 
-    def __init__(self, options: SessionOptions | OwnOptions | None = None) -> None:
+    def __init__(
+        self,
+        options: SessionOptions | OwnOptions | None = None,
+        window_defaults: dict[str, object] | None = None,
+    ) -> None:
         self.windows: list[Window] = []
 
         #: Where `base_index` and `renumber_windows` live: the session's
@@ -95,7 +100,11 @@ class Arrangement:
         #
         # Like tmux, setting one changes no window that is already
         # open. It says what the next one starts as.
-        self.window_defaults: dict[str, object] = {}
+        #
+        # The server's dict, which every session shares: a config line
+        # reaches a session made after it too. Lillecarl/pyterm#971. An
+        # arrangement no session holds has its own.
+        self.window_defaults: dict[str, object] = window_defaults if window_defaults is not None else {}
 
         self._active_window_for_cli: WeakKeyDictionary[Application[Any], Window] = WeakKeyDictionary()
         # The windows each client left, the newest last. Closing its

@@ -173,6 +173,7 @@ class Pymux:
         "shims": Keep.REBUILT,
         "options": Keep.SAVED,
         "session_defaults": Keep.SAVED,
+        "window_defaults": Keep.SAVED,
         "set_by_hand": Keep.SAVED,
         "terminals": Keep.REBUILT,
         "outward": Keep.REBUILT,
@@ -228,10 +229,19 @@ class Pymux:
         #: What every session reads unless it set its own. Lillecarl/pyterm#758.
         self.session_defaults = SessionOptions()
         self.session_defaults.owner = self
-        #: The fields of `options` and of `session_defaults`, and the names
-        #: of the hooks, that a person set and no configuration file did.
-        #: Lillecarl/pyterm#969, Lillecarl/pyterm#970.
-        self.set_by_hand: dict[str, set[str]] = {"options": set(), "session_defaults": set(), "hooks": set()}
+        #: What every new window of every session starts with, as
+        #: `set-window-option -g` said: tmux's global window options. Each
+        #: session's arrangement holds this same dict. Lillecarl/pyterm#971.
+        self.window_defaults: dict[str, object] = {}
+        #: The fields of `options`, `session_defaults` and `window_defaults`,
+        #: and the names of the hooks, that a person set and no
+        #: configuration file did. Lillecarl/pyterm#969, Lillecarl/pyterm#970.
+        self.set_by_hand: dict[str, set[str]] = {
+            "options": set(),
+            "session_defaults": set(),
+            "window_defaults": set(),
+            "hooks": set(),
+        }
         # `--log-level` told the logger before this server existed.
         self.options.hold("log_level", log.level())
 
@@ -455,6 +465,7 @@ class Pymux:
             session_id=session_id,
             name=name if name is not None else str(session_id),
             defaults=self.session_defaults,
+            window_defaults=self.window_defaults,
         )
         self.sessions.append(session)
 

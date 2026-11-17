@@ -25,11 +25,6 @@ from ...options.client_options import ClientOptions
 from ...options.option_fields import Declared, Options
 from ...options.server_options import ServerOptions
 from ...options.session_options import SessionOptions
-from ...options.tables import (
-    ClientOptionRow,
-    create_table,
-    literal,
-)
 from ...options.window_options import WindowOptions
 from ..pane import Pane
 from ..session import Session
@@ -44,7 +39,6 @@ __all__ = [
     "CLIENT_MODES",
     "CLIENT_SETTINGS",
     "CLIENT_SETTING_TYPES",
-    "OLD_CLIENT_COLUMNS",
     "SAVED",
     "SNAPSHOT_VERSION",
     "STEPS",
@@ -64,7 +58,7 @@ SAVED: dict[type[Options], tuple[Declared, ...]] = {
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
-SNAPSHOT_VERSION = 40
+SNAPSHOT_VERSION = 41
 
 
 #: What a client holds besides its options, each a column of `clients`
@@ -80,36 +74,16 @@ CLIENT_SETTING_TYPES: dict[str, type] = {
 CLIENT_SETTINGS = tuple(CLIENT_SETTING_TYPES)
 
 
-#: The columns of `clients` that 39 kept a client's options in, by the
-#: option's attribute where the name differs.
-OLD_CLIENT_COLUMNS = {"swap_light_and_dark_colors": "swap_dark_and_light"}
-
-
-def _client_options_move_out() -> str:
-    """
-    39 kept a client's options as columns of `clients`, which a NULL
-    left unset. 40 gives them a table of their own, and
-    `swap-light-and-dark-colors` its attribute's name. Lillecarl/pyterm#771.
-    """
-    declared = SAVED[ClientOptions]
-    old = {each.attribute: OLD_CLIENT_COLUMNS.get(each.attribute, each.attribute) for each in declared}
-    values = ",\n  ".join(
-        "coalesce(%s, %s)" % (old[each.attribute], literal(each.stored(each.default))) for each in declared
-    )
-    return (
-        create_table(ClientOptionRow)
-        + "INSERT INTO client_options(client_id, %s) SELECT client_id,\n  %s\nFROM clients;\n"
-        % (", ".join(each.attribute for each in declared), values)
-        + "".join("ALTER TABLE clients DROP COLUMN %s;\n" % column for column in old.values())
-    )
-
-
 #: What takes a snapshot of the version before this one up to it. A
 #: snapshot only ever goes from a running build to the next one, so a
 #: change of shape adds the one step from the version before it and
 #: deletes any older step. An added table or column needs none:
-#: `missing_from` adds it.
-STEPS: dict[int, str] = {39: _client_options_move_out()}
+#: `missing_from` adds it, after a step too.
+#:
+#: 40 kept the window defaults per session. 41 keeps one row for the
+#: server, and the old rows have no marks of who set them, so the
+#: configuration file says them all. Lillecarl/pyterm#971.
+STEPS: dict[int, str] = {40: "DROP TABLE window_defaults;\n"}
 
 
 #: The fields `ClientState.modes` holds, one JSON value in `client_modes`.
@@ -142,7 +116,6 @@ WRITES: dict[str, frozenset[str]] = {
         {
             "windows",
             "_unlinked_windows",
-            "window_defaults",
             "_last_active_window",
             "_active_window_for_cli",
             "_window_history_for_cli",
@@ -205,7 +178,7 @@ WRITES: dict[str, frozenset[str]] = {
         | {"created", "server_id", "socket_name", "listener", "original_cwd", "source_file", "_startup_done"}
         | {"clipboard", "named_buffers", "prompt_history", "message_log", "hooks", "key_bindings_manager"}
         | {"notifications", "notification_center", "wait_channels"}
-        | {"options", "session_defaults", "set_by_hand"}
+        | {"options", "session_defaults", "window_defaults", "set_by_hand"}
     ),
 }
 

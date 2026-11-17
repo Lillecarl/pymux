@@ -408,7 +408,7 @@ def option_as_written(pymux: Pymux, option: Option, args: argparse.Namespace, ta
 
     holder = None
     if option.scope is Scope.WINDOW and getattr(args, "g", False):
-        value = pymux.arrangement.window_defaults.get(option.attribute_name)
+        value = pymux.window_defaults.get(option.attribute_name)
     else:
         try:
             holder = option.held_by(pymux, target)

@@ -429,6 +429,7 @@ def rows_of(pymux: Pymux, *, mirrored: bool) -> Iterator[Row]:
         yield CounterRow(name, value)
     yield ServerOptionRow(1, **_stored_options(ServerOptions, values_of(pymux.options)))
     yield SessionDefaultRow(1, **_stored_options(SessionOptions, values_of(pymux.session_defaults)))
+    yield WindowDefaultRow(1, **_stored_options(WindowOptions, pymux.window_defaults))
     for holder, attributes in sorted(pymux.set_by_hand.items()):
         for attribute in sorted(attributes):
             yield SetByHandRow(holder, attribute)
@@ -472,8 +473,6 @@ def session_rows(session: Session, position: int) -> Iterator[Row]:
         yield SessionTagRow(session.session_id, key, value)
     if own := session.options.own():
         yield SessionOptionRow(session.session_id, **_stored_options(SessionOptions, own))
-    if arrangement.window_defaults:
-        yield WindowDefaultRow(session.session_id, **_stored_options(WindowOptions, arrangement.window_defaults))
     for linked, windows in ((True, arrangement.windows), (False, arrangement._unlinked_windows)):
         for place, window in enumerate(windows):
             yield from _window_rows(session, window, linked, place)
