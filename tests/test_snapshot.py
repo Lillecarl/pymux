@@ -835,31 +835,48 @@ def _shape_of_a_fresh_snapshot() -> dict[str, list[tuple]]:
     return _shape(db)
 
 
-def _as_version_40(path) -> None:
-    "Put the window defaults back in one row per session, as 40 kept them, and drop a table 41 added since."
+def _as_version_41(path, pane_id: int, pipe: tuple[int, int]) -> None:
+    "One compositor with one window pane and its program, in the tables as 41 kept them."
     db = apsw.Connection(str(path))
-    db.execute("DROP TABLE window_defaults")
+    db.execute("DROP TABLE window_panes")
+    db.execute("DROP TABLE window_programs")
     db.execute(
-        "CREATE TABLE window_defaults(session_id INTEGER PRIMARY KEY REFERENCES sessions(session_id), strip INTEGER)"
+        "CREATE TABLE window_panes(pane_id INTEGER PRIMARY KEY REFERENCES panes(pane_id), toplevel INTEGER NOT NULL)"
     )
-    db.execute("INSERT INTO window_defaults SELECT session_id, 1 FROM sessions")
-    db.execute("DROP TABLE key_bindings_by_hand")
-    db.execute("PRAGMA user_version = 40")
+    db.execute(
+        "CREATE TABLE window_programs(tag INTEGER PRIMARY KEY, pid INTEGER NOT NULL,"
+        " stdout_fd INTEGER NOT NULL, stderr_fd INTEGER NOT NULL, pane_id INTEGER)"
+    )
+    db.execute("INSERT INTO wayland_compositor VALUES (1, ?, ?, 1)", (pipe[0], os.getpid()))
+    db.execute("INSERT INTO window_panes VALUES (?, 7)", (pane_id,))
+    db.execute("INSERT INTO window_programs VALUES (3, ?, ?, ?, ?)", (os.getpid(), *pipe, pane_id))
+    db.execute("PRAGMA user_version = 41")
     db.close()
 
 
-def test_a_version_40_snapshot_takes_its_window_defaults_from_the_file(pymux, tmp_path):
-    "40 kept them per session, with no mark of who set them. Lillecarl/pyterm#971."
-    path = tmp_path / "v40.sqlite"
-    save(pymux, path)
-    _as_version_40(path)
+async def test_a_version_41_snapshot_names_its_one_compositor_for_each_window(pymux, tmp_path):
+    "41 held one compositor; 42 names a window's and a program's. Lillecarl/pyterm#1012."
+    path = tmp_path / "v41.sqlite"
+    async with pymux.running():
+        pane = (await pymux.panes.create_window("true")).panes[0]
+        save(pymux, path)
+    read, write = os.pipe()
+    try:
+        _as_version_41(path, pane.pane_id, (read, write))
 
-    loaded = Pymux()
-    _configure(loaded, "set-window-option -g monitor-silence 30")
-    load(loaded, path)
+        loaded = Pymux()
+        load(loaded, path)
 
-    assert loaded.window_defaults == {"monitor_silence": 30}
-    assert all(session.arrangement.window_defaults is loaded.window_defaults for session in loaded.sessions)
+        (child,) = loaded.wayland.children
+        assert child.number == 1
+        assert child.inherited is not None
+        assert list(child.inherited.panes) == [7]
+        assert child.inherited.panes[7].terminal.host is child
+        ((program, _pipes),) = child.inherited.programs
+        assert (program.compositor, program.tag, program.pane_id) == (1, 3, pane.pane_id)
+    finally:
+        os.close(read)
+        os.close(write)
 
 
 async def test_a_column_this_build_declares_and_the_file_lacks_takes_its_default(pymux, tmp_path):

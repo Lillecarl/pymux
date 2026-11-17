@@ -31,7 +31,7 @@ def wl(pymux: Pymux, args: argparse.Namespace):
         argv = argv[1:]
     if not argv:
         raise CommandException("nothing to run")
-    if pymux.wayland.compositor is None:
+    if pymux.wayland.display is None:
         raise CommandException("no Wayland compositor runs: wayland-server is off, or pysmithay is not here")
     pane = the_pane(pymux, args.target_pane)
     caller = pymux.caller

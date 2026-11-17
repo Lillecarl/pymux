@@ -619,9 +619,10 @@ class ProgramRow:
 @dataclass(frozen=True, slots=True)
 class CompositorRow:
     """
-    The Wayland compositor's process, which outlives an upgrade's exec:
-    the socket to it, carried under this number, and the protocol its
-    `Hello` named. Lillecarl/pyterm#1004.
+    A Wayland compositor's process, which outlives an upgrade's exec:
+    its number among the server's children, the socket to it, carried
+    under this number, and the protocol its `Hello` named.
+    Lillecarl/pyterm#1004, Lillecarl/pyterm#1012.
     """
 
     TABLE: ClassVar[str] = "wayland_compositor"
@@ -634,11 +635,12 @@ class CompositorRow:
 
 @dataclass(frozen=True, slots=True)
 class WindowPaneRow:
-    "A pane that shows a Wayland window, by the compositor's id for the window."
+    "A pane that shows a Wayland window: the compositor's number, and its id for the window."
 
     TABLE: ClassVar[str] = "window_panes"
     KEY: ClassVar[tuple[str, ...]] = ("pane_id",)
     pane_id: int = field(metadata=column(references="panes(pane_id)"))
+    compositor: int
     toplevel: int
 
 
@@ -646,12 +648,13 @@ class WindowPaneRow:
 class WindowProgramRow:
     """
     A program `pymux wl` started: its pid and the read ends of its two
-    pipes, which an exec carries under these numbers, by the tag of the
-    connection it was given.
+    pipes, which an exec carries under these numbers, by its compositor
+    and the tag of the connection it was given.
     """
 
     TABLE: ClassVar[str] = "window_programs"
-    KEY: ClassVar[tuple[str, ...]] = ("tag",)
+    KEY: ClassVar[tuple[str, ...]] = ("compositor", "tag")
+    compositor: int
     tag: int
     pid: int
     stdout_fd: int

@@ -214,7 +214,7 @@ class Shown:
 
 @dataclass(frozen=True, slots=True)
 class Pixels:
-    "A Wayland window's last frame, as `WaylandServer.frame` copies it out."
+    "A Wayland window's last frame, as `CompositorChild.frame` copies it out."
 
     width: int
     height: int

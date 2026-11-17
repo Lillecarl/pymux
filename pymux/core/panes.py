@@ -27,7 +27,7 @@ from ..keys.key_spelling import why_pane_cannot_read
 from ..log import logger
 from ..pane_command import PaneCommand, argv_of
 from ..plugin_api.events import BellRang, PaneEnded
-from ..wayland.window_pane import WindowWidget, is_window_pane
+from ..wayland.window_pane import WindowWidget
 from .environment import pane_environment
 from .pane import Pane
 from .planes import remember_the_size_made_at
@@ -525,13 +525,6 @@ class PaneMaker:
         self.take_ended_pane(pane)
         self.pymux.plugins.emit(PaneEnded(pane.pane_id), pane)
         self.pymux.invalidate(Woke.PANE_ENDED)
-
-    def close_window_panes(self) -> None:
-        "Take every window pane away, as `upgrade-server -W` does before it stops the compositor."
-        for pane in list(self.pymux.panes_by_id.values()):
-            if is_window_pane(pane):
-                pane.process.kill()
-                self.take_ended_pane(pane)
 
     def register_pane(self, pane: Pane) -> None:
         "Record a pane, and tell it what the clients' terminals are."

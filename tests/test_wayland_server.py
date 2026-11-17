@@ -133,7 +133,7 @@ async def test_an_image_from_the_persons_clipboard_is_offered_and_pasted(mux):
 
 async def test_a_terminal_paste_into_a_window_is_offered_until_a_pane_copies(mux):
     "The window that got the paste reads it on its Ctrl+V; no window here, and the clipboard still holds it."
-    mux.wayland.paste(12345, "pasted there")
+    mux.wayland.newest.paste(12345, "pasted there")
     assert await paste(mux) == (0, "pasted there")
     async with copying(mux, "copied here"):
         await once(lambda: mux.wayland.pasted is None, 10.0, "the copy never replaced the paste")

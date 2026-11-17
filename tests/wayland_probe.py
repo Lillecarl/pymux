@@ -17,6 +17,7 @@ does to a window when the pane is killed.
 from __future__ import annotations
 
 import mmap
+import os
 import sys
 
 from pywayland.client import Display
@@ -85,7 +86,17 @@ def main(log_path: str, animate: bool, idle: bool, text: bool) -> None:
         configured.append(serial)
 
     toplevel.dispatcher["configure"] = on_toplevel_configure
-    toplevel.dispatcher["close"] = lambda _toplevel: closing.append(True)
+
+    def on_close(_toplevel) -> None:
+        closing.append(True)
+        if not drew:
+            # Asked before it drew everything: a pane no client sizes
+            # never gets that far. A callback's raise goes nowhere.
+            log.write("closed\n")
+            os._exit(0)
+
+    drew = []
+    toplevel.dispatcher["close"] = on_close
     xdg_surface.dispatcher["configure"] = on_configure
     surface.commit()
     while not configured:
@@ -153,6 +164,7 @@ def main(log_path: str, animate: bool, idle: bool, text: bool) -> None:
         text_input.dispatcher["enter"] = take_text
         text_input.dispatcher["commit_string"] = lambda _ti, text: log.write("text %s\n" % (text,))
     log.write("drew\n")
+    drew.append(True)
 
     # With --animate, a new frame each time the last was shown.
     flip = 0

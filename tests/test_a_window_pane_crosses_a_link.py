@@ -80,8 +80,8 @@ async def mirrored_window(tmp_path, codec: WindowCodec):
                 env=dict(os.environ, WAYLAND_DISPLAY=owner.wayland.display, XDG_RUNTIME_DIR=str(runtime)),
             ) as probe:
                 try:
-                    await once(lambda: owner.wayland.panes, 10.0, "the window never opened a pane")
-                    (there,) = owner.wayland.panes.values()
+                    await once(lambda: owner.wayland.window_panes(), 10.0, "the window never opened a pane")
+                    (there,) = owner.wayland.window_panes()
                     peer.handle_command("connect %s" % (owner.socket_name,))
                     (link,) = peer.peers.by_address.values()
                     here = await once(lambda: link.tree.panes.get(there.pane_id), 10.0, "the pane never came")

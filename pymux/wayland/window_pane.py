@@ -46,8 +46,8 @@ if TYPE_CHECKING:
 
 class WindowHost(Protocol):
     """
-    Where a window pane's window lives: this server's compositor
-    (`WaylandServer`), or another server that lends it over a peer link
+    Where a window pane's window lives: one of this server's compositors
+    (`CompositorChild`), or another server that lends it over a peer link
     (`RemoteWindow`). `toplevel` is the host's own name for the window.
     Lillecarl/pyterm#890.
     """

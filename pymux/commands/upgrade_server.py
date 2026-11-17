@@ -22,10 +22,11 @@ def upgrade_server(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None]:
     cannot is refused with nothing lost. Attached clients wait for the
     new server and attach again. Lillecarl/pyterm#401.
 
-    Wayland windows go on too: the compositor's process outlives the
-    exec, and the new build adopts it. A new build that cannot speak to
-    it refuses the upgrade; `-W` closes every window pane and starts a
-    new compositor instead. Lillecarl/pyterm#1004.
+    Wayland windows go on too: each compositor that holds one outlives
+    the exec, and the new build adopts it and starts one of its own for
+    new windows. A new build that cannot speak to one refuses the
+    upgrade; `-W` closes that compositor's windows instead.
+    Lillecarl/pyterm#1004, Lillecarl/pyterm#1012.
     """
     from pymux.core.upgrade import upgrade
 
@@ -41,6 +42,6 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
         "-W",
         "--close-windows",
         action="store_true",
-        help="close every Wayland window and start a new compositor, which the new build always can",
+        help="close the Wayland windows of a compositor the new build cannot adopt, rather than refuse",
     )
     parser.add_argument("command", nargs="?", default="pymux", metavar="COMMAND")

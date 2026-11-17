@@ -21,6 +21,7 @@ from prompt_toolkit.layout.containers import WritePosition
 
 from ..graphics.window_frames import frame_parts, video_parts
 from ..log import logger
+from ..wayland.wayland import CompositorChild
 from ..wayland.window_pane import now
 
 if TYPE_CHECKING:
@@ -148,14 +149,13 @@ class MirrorWindowSource:
             x, y = float(data.get("x", 0)), float(data.get("y", 0))
             cell = Point(x=int(x), y=int(y))
             fraction = (x - int(x), y - int(y))
-            wayland = self.link.connection.pymux.wayland
-            if host is not wayland:
+            if not isinstance(host, CompositorChild):
                 return
             if kind == "scroll":
-                wayland.scroll(widget.toplevel, cell, int(data.get("steps", 0)), now(), fraction)
+                host.scroll(widget.toplevel, cell, int(data.get("steps", 0)), now(), fraction)
             else:
                 button = data.get("button")
-                wayland.pointer(
+                host.pointer(
                     widget.toplevel,
                     cell,
                     None if button is None else int(button),

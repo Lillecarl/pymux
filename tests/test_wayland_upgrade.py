@@ -11,6 +11,7 @@ import base64
 import json
 import os
 import shlex
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -25,13 +26,14 @@ from test_upgrade import (
     LOG,
     _answer,
     _deadline,
-    _gone,
     _new_build,
     _once_it_answers,
     _parent_of,
     _server_pid,
     _server_side,
 )
+
+from pymux.wayland.wayland import socket_path_of
 
 PROBE = Path(__file__).with_name("wayland_probe.py")
 NEW_BUILD = [sys.executable, "-m", "pymux"]
@@ -61,10 +63,7 @@ def server(tmp_path, monkeypatch):
     assert started.returncode == 0, started.stderr.decode()
     _wait_for_server(sock)
     try:
-        log = tmp_path / "probe.log"
-        log.touch()
-        wl = shlex.join([sys.executable, "-m", "pymux", "wl", "--", sys.executable, str(PROBE), str(log)])
-        _answer(sock, "split-window", "-d", "--tag", "probe", wl)
+        _open_a_window(sock, tmp_path / "probe.log", "probe")
         # No client shows it, so it waits for a capture to draw more.
         _until(sock, lambda: _window_pane(sock) is not None, "the window never opened a pane")
         yield sock
@@ -87,17 +86,27 @@ def _window_pane(sock) -> str | None:
     return None if not rows else "%%%d" % rows[0]["pane_id"]
 
 
+def _window_panes(sock) -> list[str]:
+    said = _once_it_answers(sock, "sql", "--json", "SELECT pane_id FROM panes WHERE window_pane = 1 ORDER BY pane_id")
+    return ["%%%d" % row["pane_id"] for row in json.loads(said)["rows"]]
+
+
+def _compositors(sock) -> list[int]:
+    "The compositors' pids, oldest first."
+    lines = _once_it_answers(sock, "list-processes").splitlines()
+    return [int(line.split()[1]) for line in lines if line.startswith("wayland ")]
+
+
 def _compositor(sock) -> int:
-    "The compositor's pid, once one runs: the new image adopts it after it answers."
-    found: list[int] = []
+    "The oldest compositor's pid, once one runs: the new image adopts it after it answers."
+    _until(sock, lambda: bool(_compositors(sock)), "no compositor runs")
+    return _compositors(sock)[0]
 
-    def runs() -> bool:
-        lines = _once_it_answers(sock, "list-processes").splitlines()
-        found[:] = [int(line.split()[1]) for line in lines if line.startswith("wayland ")]
-        return bool(found)
 
-    _until(sock, runs, "no compositor runs")
-    return found[0]
+def _open_a_window(sock, log: Path, tag: str) -> None:
+    log.touch()
+    wl = shlex.join([sys.executable, "-m", "pymux", "wl", "--", sys.executable, str(PROBE), str(log)])
+    _answer(sock, "split-window", "-d", "--tag", tag, wl)
 
 
 def _probe_pid(sock, log: Path) -> int:
@@ -159,16 +168,56 @@ def test_a_refused_upgrade_keeps_the_window_drawing(server, tmp_path):
     _draws(server, pane)
 
 
-def test_close_windows_starts_a_new_compositor(server, tmp_path):
-    log = tmp_path / "probe.log"
-    compositor, probe = _compositor(server), _probe_pid(server, log)
+def test_close_windows_keeps_a_window_the_new_build_adopts(server, tmp_path):
+    "-W closes only the windows of a compositor the new build cannot adopt."
+    pane, compositor = _window_pane(server), _compositor(server)
 
     said = cli(server, "upgrade-server", "-W", shlex.join(NEW_BUILD))
 
     assert said.returncode == 0, said.stderr.decode()
-    _until(server, lambda: _window_pane(server) is None, "the window pane stayed")
-    _until(server, lambda: _gone(probe), "the probe outlived its window")
-    _until(server, lambda: _compositor(server) != compositor, "no new compositor started")
+    assert _window_pane(server) == pane
+    assert _compositor(server) == compositor
+    _draws(server, pane)
+
+
+def test_new_windows_go_to_the_new_build_and_an_old_compositor_ends_with_its_last(server, tmp_path):
+    "One compositor per build: Lillecarl/pyterm#1012."
+    first, old = _window_pane(server), _compositor(server)
+
+    said = cli(server, "upgrade-server", shlex.join(NEW_BUILD))
+
+    assert said.returncode == 0, said.stderr.decode()
+    _until(server, lambda: len(_compositors(server)) == 2, "the new build started no compositor of its own")
+    assert _compositors(server)[0] == old
+    new = _compositors(server)[1]
+    _open_a_window(server, tmp_path / "second.log", "second")
+    _until(server, lambda: len(_window_panes(server)) == 2, "the second window never opened a pane")
+    (second,) = [pane for pane in _window_panes(server) if pane != first]
+
+    # Both compositors hold a window, so both cross the next upgrade.
+    said = cli(server, "upgrade-server", shlex.join(NEW_BUILD))
+
+    assert said.returncode == 0, said.stderr.decode()
+    _until(server, lambda: len(_compositors(server)) == 3, "the third build started no compositor of its own")
+    assert _compositors(server)[:2] == [old, new]
+    _draws(server, first)
+    _draws(server, second)
+
+    _answer(server, "kill-pane", "-t", first)
+
+    _until(server, lambda: old not in _compositors(server), "the old compositor outlived its last window")
+    assert new in _compositors(server)
+    assert _window_panes(server) == [second]
+    _draws(server, second)
+    # A pane's display leads to the newest compositor, once the one it
+    # was started beside has gone too.
+    _answer(server, "kill-pane", "-t", second)
+    _until(server, lambda: len(_compositors(server)) == 1, "the second compositor outlived its last window")
+    display = dict(os.environ, WAYLAND_DISPLAY=str(socket_path_of(str(server))))
+    copied = subprocess.run(["wl-copy", "after both ended"], env=display, timeout=15, check=False)
+    assert copied.returncode == 0
+    pasted = subprocess.run(["wl-paste", "--no-newline"], env=display, capture_output=True, timeout=15, check=False)
+    assert pasted.stdout == b"after both ended", pasted.stderr.decode()
 
 
 def test_an_upgrade_right_after_one_keeps_the_window(server):

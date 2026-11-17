@@ -23,6 +23,14 @@ started there belongs on that screen, not on one nobody looks at.
 - Otherwise the panes share their selections among themselves and
   nothing more: a copy stays with the pane that made it, and a paste
   never reads what the person copied.
+
+**A compositor runs per build.** Each process (`CompositorChild`) runs
+the pysmithay of the image that started it. An upgrade carries every
+child that holds a window across the exec, and the new image starts one
+of its own for new windows; an older child ends once its last window
+and program have. Each listens on a path of its own, and the server's
+path is a link to the newest, so a pane's `WAYLAND_DISPLAY` reaches the
+newest build. Lillecarl/pyterm#1012.
 """
 
 from __future__ import annotations
@@ -106,8 +114,8 @@ READ_LIMIT = 16 << 20
 WRITE_SECONDS = 30.0
 
 #: How long to wait for a socket path another process holds, and how
-#: often to try it. An upgrade's old server holds it for as long as the
-#: new one takes to load, which `upgrade.LOAD_TIMEOUT` bounds.
+#: often to try it. Another server started on the same socket holds it
+#: until that server stops.
 BIND_SECONDS = 120.0
 
 #: How long the compositor's process has to end once told to, before it
@@ -205,13 +213,16 @@ class _Inherited:
 
 @dataclasses.dataclass
 class Inheritance:
-    "What a snapshot hands the next image of the compositor, for `keep` to adopt."
+    "What a snapshot hands the next image of one compositor child, for it to adopt."
 
     compositor: CompositorRow
     #: The window panes the snapshot built, by the compositor's id for each window.
-    panes: dict[int, Pane]
+    panes: dict[int, Pane] = dataclasses.field(default_factory=dict)
     #: Each `pymux wl` program, and its pipes.
-    programs: list[tuple[WindowProgramRow, JobPipes]]
+    programs: list[tuple[WindowProgramRow, JobPipes]] = dataclasses.field(default_factory=list)
+
+    def holds_windows(self) -> bool:
+        return bool(self.panes or self.programs)
 
 
 class Launch:
@@ -262,10 +273,11 @@ def available() -> bool:
 
 def socket_path_of(server_socket: str | None) -> str | None:
     """
-    Where the compositor listens: beside the server's own socket, so the
+    What `WAYLAND_DISPLAY` names: beside the server's own socket, so the
     path stays the same across `upgrade-server` and a pane keeps a
-    working `WAYLAND_DISPLAY` through one. With no socket, the first
-    free `wayland-N` in `$XDG_RUNTIME_DIR`.
+    working display through one. It is a link to the newest child's
+    socket. With no socket, None: the child takes the first free
+    `wayland-N` in `$XDG_RUNTIME_DIR`, and nothing links to it.
 
     The name ends in ".sock" because Wayland's lock file replaces the
     extension, and a dotted server name would otherwise share one.
@@ -276,31 +288,41 @@ def socket_path_of(server_socket: str | None) -> str | None:
     return os.path.join(directory, "wayland-%s.sock" % (name,))
 
 
-class WaylandServer:
-    "The compositor of one pymux server, while `wayland-server` is on."
+def child_path_of(server_socket: str | None, number: int) -> str | None:
+    "Where child `number` listens: beside the link, so its lock file is its own too."
+    link = socket_path_of(server_socket)
+    if link is None:
+        return None
+    return "%s.%d.sock" % (os.path.splitext(link)[0], number)
 
-    def __init__(self, pymux: Pymux) -> None:
-        self.pymux = pymux
+
+class CompositorChild:
+    """
+    One compositor's process and the windows it holds. It is the host of
+    each of its window panes, so a window is named by its child and the
+    child's own id for it. Lillecarl/pyterm#1012.
+    """
+
+    def __init__(self, server: WaylandServer, number: int, path: str | None) -> None:
+        self.server = server
+        self.pymux = server.pymux
+        #: Its number among the server's children, which a snapshot keeps.
+        self.number = number
+        #: Where it listens, or None for the first free `wayland-N`.
+        self.path = path
         self.compositor: RemoteCompositor | None = None
         #: The compositor's process, while it runs.
         self._process: anyio.abc.Process | _Inherited | None = None
-        #: Stopped for `upgrade-server`.
-        self.paused = False
         #: Paused for an upgrade's exec to carry, until `take_back`.
         self.handed_over = False
-        #: What a snapshot loaded, until `keep` adopts it.
+        #: What a snapshot loaded, until the child adopts it.
         self.inherited: Inheritance | None = None
-        #: What `WAYLAND_DISPLAY` says to reach it, while it runs.
+        #: Whether it ends once it holds no window: every child but the newest.
+        self.draining = False
+        #: Whether an inherited child's adoption began.
+        self.started = False
+        #: The socket it listens on, while it runs.
         self.display: str | None = None
-        #: The text a pane last copied, per selection.
-        self.copied: dict[str, str] = {}
-        #: The image the person's machine held at their last Ctrl-V, which
-        #: the clipboard offers as `IMAGE_TYPE`. Lillecarl/pyterm#958.
-        self.image: bytes | None = None
-        #: What the person's terminal last pasted into a window, which the
-        #: clipboard offers to the reads its Ctrl+V starts.
-        self.pasted: str | None = None
-        self._pasted_until = 0.0
         #: Each open window, by the compositor's id, and the pane showing it.
         self.panes: dict[int, Pane] = {}
         #: The same windows' widgets, which the events update.
@@ -313,76 +335,25 @@ class WaylandServer:
         #: The programs `pymux wl` started, by their connection's tag.
         self._launches: dict[int, Launch] = {}
         self._tasks: anyio.abc.TaskGroup | None = None
-        self._changed = anyio.Event()
-        self._scope: anyio.CancelScope | None = None
+        self.scope: anyio.CancelScope | None = None
 
-    def option_changed(self) -> None:
-        "`wayland-server` moved: start or stop on the next turn."
-        self._changed.set()
-        if not self.pymux.options.wayland_server and self._scope is not None:
-            self._scope.cancel()
-
-    async def keep(self) -> None:
-        """
-        Run the compositor whenever the option is on, and again after its
-        process ends on its own: the panes keep a `WAYLAND_DISPLAY` that
-        leads somewhere. Never returns.
-        """
-        while True:
-            ended = False
-            if (inherited := self.inherited) is not None:
-                with anyio.CancelScope() as self._scope:
-                    try:
-                        ended = await self._serve_inherited(inherited)
-                    except Exception:
-                        logger.exception("The adopted Wayland compositor stopped.")
-                        ended = True
-                    finally:
-                        self.inherited = None
-                self._scope = None
-            elif self.pymux.options.wayland_server and not self.paused and available():
-                with anyio.CancelScope() as self._scope:
-                    # Whatever a dead compositor's last calls raise ends
-                    # it and its windows, and never the server.
-                    try:
-                        ended = await self._serve()
-                    except Exception:
-                        logger.exception("The Wayland compositor stopped.")
-                        ended = True
-                self._scope = None
-            if ended and self.pymux.options.wayland_server and not self.paused:
-                await anyio.sleep(RESTART_SECONDS)
-                continue
-            await self._changed.wait()
-            self._changed = anyio.Event()
-
-    def pids(self) -> list[int]:
-        "The compositor's process, while it runs: pymux's own, for `renice`."
+    def pid(self) -> int | None:
         process = self._process
-        return [] if process is None or process.returncode is not None else [process.pid]
-
-    async def pause(self) -> None:
-        """
-        Stop the compositor's process for `upgrade-server`, and wait until
-        it has gone: the exec keeps this pid, and the new image would
-        never reap it. Its windows closed already.
-        """
-        self.paused = True
-        process = self._process
-        if self._scope is not None:
-            self._scope.cancel()
-        if process is not None:
-            with anyio.move_on_after(2 * CHILD_EXIT_SECONDS):
-                await process.wait()
-
-    def resume(self) -> None:
-        "An upgrade that failed: serve again."
-        self.paused = False
-        self._changed.set()
+        return None if process is None or process.returncode is not None else process.pid
 
     def holds_windows(self) -> bool:
-        "Whether a window or a `pymux wl` program would end with the compositor."
-        return bool(self.panes or self._launches)
+        "Whether a window or a `pymux wl` program would end with it."
+        inherited = self.inherited
+        return bool(self.panes or self._launches or (inherited is not None and inherited.holds_windows()))
+
+    def stop(self) -> None:
+        if self.scope is not None:
+            self.scope.cancel()
+
+    def _end_if_empty(self) -> None:
+        if self.draining and not self.holds_windows():
+            logger.info("The Wayland compositor %d holds no window, and ends.", self.number)
+            self.stop()
 
     def hand_over(self) -> None:
         """
@@ -413,27 +384,28 @@ class WaylandServer:
             windows = compositor.resume()
         except OSError as error:
             # `dispatch` hears that it went.
-            logger.warning("The Wayland compositor did not resume: %s", error)
+            logger.warning("The Wayland compositor %d did not resume: %s", self.number, error)
             return
         self._reconcile(compositor, dict(self.panes), windows, tasks)
 
     def snapshot_rows(self) -> list[CompositorRow | WindowPaneRow | WindowProgramRow]:
-        "What an upgrade's snapshot holds of the compositor, its windows and their programs."
-        rows: list[CompositorRow | WindowPaneRow | WindowProgramRow] = []
         compositor, process = self.compositor, self._process
         if compositor is None or process is None:
-            return rows
-        rows.append(CompositorRow(1, compositor.fileno(), process.pid, compositor.version))
-        rows.extend(WindowPaneRow(pane.pane_id, toplevel) for toplevel, pane in self.panes.items())
+            return []
+        number = self.number
+        rows: list[CompositorRow | WindowPaneRow | WindowProgramRow] = [
+            CompositorRow(number, compositor.fileno(), process.pid, compositor.version)
+        ]
+        rows.extend(WindowPaneRow(pane.pane_id, number, toplevel) for toplevel, pane in self.panes.items())
         for tag, launch in self._launches.items():
             pipes = launch.pipes
             if not pipes.reaped:
                 adopted = None if launch.adopted is None else launch.adopted.pane_id
-                rows.append(WindowProgramRow(tag, pipes.pid, pipes.stdout, pipes.stderr, adopted))
+                rows.append(WindowProgramRow(number, tag, pipes.pid, pipes.stdout, pipes.stderr, adopted))
         return rows
 
     def carried(self) -> list[int]:
-        "The fds an upgrade's exec carries for the compositor and its programs, as `snapshot_rows` names them."
+        "The fds an upgrade's exec carries for it and its programs, as `snapshot_rows` names them."
         fds: list[int] = []
         for row in self.snapshot_rows():
             if isinstance(row, CompositorRow):
@@ -446,30 +418,33 @@ class WaylandServer:
             fds += [fd for _row, pipes in inherited.programs for fd in pipes.fds]
         return fds
 
-    async def _serve(self) -> bool:
+    async def serve(self) -> bool:
         "Whether the compositor's process ended on its own."
         if pysmithay is None:
             return False
-        path = socket_path_of(self.pymux.socket_name)
-        async with self._child(path) as compositor:
+        async with self._child() as compositor:
             if compositor is None:
                 return False
-            await self._serve_on(compositor, path)
+            await self._serve_on(compositor)
             return True
 
-    async def _serve_inherited(self, inherited: Inheritance) -> bool:
+    async def serve_inherited(self) -> bool:
         """
         Adopt the compositor an upgrade's exec carried, with its windows.
-        One that cannot be adopted is killed, and its windows end: `keep`
-        starts a new one.
+        One that cannot be adopted is killed, and its windows end.
         """
         assert pysmithay is not None
+        inherited = self.inherited
+        assert inherited is not None
         row = inherited.compositor
         process = _Inherited(row.pid)
         try:
+            if not speaks(row.version):
+                # Only `upgrade-server -W` lets a check pass this.
+                raise OSError("this build does not speak its protocol, version %d" % (row.version,))
             compositor, windows = await pysmithay.RemoteCompositor.adopt(row.fd, row.version)
         except OSError as error:
-            logger.warning("The Wayland compositor could not be adopted: %s", error)
+            logger.warning("The Wayland compositor %d could not be adopted: %s", self.number, error)
             with contextlib.suppress(OSError):
                 os.close(row.fd)
             for _row, pipes in inherited.programs:
@@ -481,7 +456,7 @@ class WaylandServer:
                 await process.wait()
             return True
         async with self._owning(process):
-            await self._serve_on(compositor, socket_path_of(self.pymux.socket_name), inherited, windows)
+            await self._serve_on(compositor, inherited, windows)
         return True
 
     @contextlib.asynccontextmanager
@@ -500,7 +475,7 @@ class WaylandServer:
             self._process = None
 
     @contextlib.asynccontextmanager
-    async def _child(self, path: str | None) -> AsyncIterator[RemoteCompositor | None]:
+    async def _child(self) -> AsyncIterator[RemoteCompositor | None]:
         """
         The compositor, in a process of its own (`pysmithay.host`), or None
         when there cannot be one: so that a window can outlive this
@@ -514,7 +489,7 @@ class WaylandServer:
         assert pysmithay is not None
         ours, theirs = socket.socketpair()
         try:
-            argv = host_command(theirs.fileno(), path, wait=BIND_SECONDS)
+            argv = host_command(theirs.fileno(), self.path, wait=BIND_SECONDS)
             process = await anyio.open_process(
                 argv, pass_fds=(theirs.fileno(),), stdin=DEVNULL, stdout=DEVNULL, stderr=None
             )
@@ -546,23 +521,28 @@ class WaylandServer:
     async def _serve_on(
         self,
         compositor: RemoteCompositor,
-        path: str | None,
         inherited: Inheritance | None = None,
         windows: list[tuple[int, int, str, str]] | None = None,
     ) -> None:
         self.compositor = compositor
         self.display = compositor.socket_name
-        logger.info("Wayland compositor on %s", self.display)
+        if self.path is None and os.path.isabs(self.display):
+            self.path = self.display
+        logger.info("Wayland compositor %d on %s", self.number, self.display)
         try:
             for target in OSC52_LETTER:
                 _hold(compositor, target)
             async with anyio.create_task_group() as tasks:
                 self._tasks = tasks
+                self.server.serving(self)
                 if inherited is not None and windows is not None:
                     self._adopt(compositor, inherited, windows, tasks)
                 for fd in compositor.fds():
                     tasks.start_soon(self._dispatch_on, compositor, fd, tasks)
         finally:
+            # Before the shutdown, which frees the path for another
+            # server's child, whose link would then go too.
+            self.server.unlink(self)
             compositor.shutdown()
             self.handed_over = False
             self._tasks = None
@@ -571,7 +551,10 @@ class WaylandServer:
             # A window does not outlive its compositor.
             for toplevel in list(self.panes):
                 self._closed(toplevel)
-            if path:
+            path = self.path
+            # The server's link, where a child of a build before
+            # Lillecarl/pyterm#1012 listened: the newest's now.
+            if path and not os.path.islink(path):
                 for leftover in (path, os.path.splitext(path)[0] + ".lock"):
                     with contextlib.suppress(FileNotFoundError):
                         os.unlink(leftover)
@@ -582,7 +565,7 @@ class WaylandServer:
             try:
                 events = compositor.dispatch()
             except OSError as error:
-                logger.warning("The Wayland compositor's process ended: %s", error)
+                logger.warning("The Wayland compositor %d's process ended: %s", self.number, error)
                 tasks.cancel_scope.cancel()
                 return
             for event in events:
@@ -597,9 +580,9 @@ class WaylandServer:
         "One event of `dispatch`."
         match event:
             case ("selection", str(target), list(mime_types)) if mime_types:
-                tasks.start_soon(self._take_selection, compositor, target, mime_types)
+                tasks.start_soon(self.server.take_selection, self, target, mime_types)
             case ("send", str(target), str(mime_type), int(pipe)):
-                tasks.start_soon(self._answer_paste, target, mime_type, pipe)
+                tasks.start_soon(self.server.answer_paste, target, mime_type, pipe)
             case ("toplevel", int(toplevel), int(tag)):
                 self._opened(compositor, toplevel, self._launches.get(tag), tasks)
             case ("title", int(toplevel), str(title)) if toplevel in self.widgets:
@@ -664,11 +647,12 @@ class WaylandServer:
             launch.adopted = None if row.pane_id is None else self.pymux.panes_by_id.get(PaneId(row.pane_id))
             launch.opened.set()
             self._launches[row.tag] = launch
-            tasks.start_soon(self._run, launch, row.tag)
+            tasks.start_soon(self._read_program, launch, row.tag)
         self._reconcile(compositor, inherited.panes, windows, tasks)
         # Until here an upgrade is refused: these panes were in no table.
         self.inherited = None
-        logger.info("Adopted the Wayland compositor with %d windows.", len(windows))
+        logger.info("Adopted the Wayland compositor %d with %d windows.", self.number, len(windows))
+        self._end_if_empty()
 
     def _reconcile(
         self,
@@ -718,6 +702,7 @@ class WaylandServer:
         if pane is not None and widget is not None:
             widget.process.is_terminated = True
             self.pymux.panes.window_pane_ended(pane)
+        self._end_if_empty()
 
     async def _pace(self, compositor: RemoteCompositor, toplevel: int, pacer: _Pacer) -> None:
         """
@@ -767,11 +752,12 @@ class WaylandServer:
         the pane kills the shell `pymux wl` ran in, and the command with
         it. Its first connection is handed over as `WAYLAND_SOCKET`, a
         socket pair with no path, so the window says which pane it is
-        for and nothing is left behind. `WAYLAND_DISPLAY` names the
-        shared socket for any later connection, whose windows go beside.
-        `DISPLAY` is dropped, so a program that would open on an X
-        server fails here, where `pymux wl` shows why.
-        Raises OSError when the program cannot start. Lillecarl/pyterm#632.
+        for and nothing is left behind. `WAYLAND_DISPLAY` names this
+        child's own socket for any later connection, whose windows go
+        beside, on this child after an upgrade too. `DISPLAY` is
+        dropped, so a program that would open on an X server fails here,
+        where `pymux wl` shows why. Raises OSError when the program
+        cannot start. Lillecarl/pyterm#632.
 
         `XDG_SESSION_TYPE` says Wayland, which is what Chromium and Qt
         pick their platform by: Chromium went to X11 and found no
@@ -802,10 +788,10 @@ class WaylandServer:
             os.close(fd)
         launch = Launch(pane, JobPipes(pid, stdout, stderr, parent=True))
         self._launches[tag] = launch
-        tasks.start_soon(self._run, launch, tag)
+        tasks.start_soon(self._read_program, launch, tag)
         return launch
 
-    async def _run(self, launch: Launch, tag: int) -> None:
+    async def _read_program(self, launch: Launch, tag: int) -> None:
         pipes = launch.pipes
         try:
             async with anyio.create_task_group() as pumps:
@@ -824,6 +810,7 @@ class WaylandServer:
         finally:
             self._launches.pop(tag, None)
             launch.exited.set()
+            self._end_if_empty()
 
     def _rate_of(self, toplevel: int) -> int:
         """
@@ -910,9 +897,10 @@ class WaylandServer:
         compositor = self.compositor
         if compositor is None:
             return
-        self.pasted = text
-        self._pasted_until = anyio.current_time() + PASTE_SECONDS
-        _hold(compositor, "clipboard", self.image is not None)
+        server = self.server
+        server.pasted = text
+        server.pasted_until = anyio.current_time() + PASTE_SECONDS
+        _hold(compositor, "clipboard", server.image is not None)
         found = evdev_of(Keys.ControlV)
         if found is not None:
             self.press(toplevel, *found, now())
@@ -1104,10 +1092,214 @@ class WaylandServer:
             encoder=self.compositor.vp9_encoder if self.compositor is not None else None,
         )
 
-    async def _take_selection(self, compositor: RemoteCompositor, target: str, mime_types: list[str]) -> None:
+
+class WaylandServer:
+    "The compositors of one pymux server, while `wayland-server` is on, and the selections they share."
+
+    def __init__(self, pymux: Pymux) -> None:
+        self.pymux = pymux
+        #: Every child that runs or is adopted, oldest first.
+        self.children: list[CompositorChild] = []
+        #: The child new windows go to, while it runs.
+        self.newest: CompositorChild | None = None
+        #: The number the next child takes; a snapshot's children keep theirs.
+        self._next_number = 1
+        #: Stopped for `upgrade-server`.
+        self.paused = False
+        #: The text a pane last copied, per selection.
+        self.copied: dict[str, str] = {}
+        #: The image the person's machine held at their last Ctrl-V, which
+        #: the clipboard offers as `IMAGE_TYPE`. Lillecarl/pyterm#958.
+        self.image: bytes | None = None
+        #: What the person's terminal last pasted into a window, which the
+        #: clipboard offers to the reads its Ctrl+V starts.
+        self.pasted: str | None = None
+        self.pasted_until = 0.0
+        self._tasks: anyio.abc.TaskGroup | None = None
+        self._changed = anyio.Event()
+
+    @property
+    def display(self) -> str | None:
+        "What `WAYLAND_DISPLAY` says to reach the newest child, while it runs."
+        newest = self.newest
+        if newest is None or newest.display is None:
+            return None
+        return socket_path_of(self.pymux.socket_name) or newest.display
+
+    def window_panes(self) -> list[Pane]:
+        "Every pane that shows a window, of every child."
+        return [pane for child in self.children for pane in child.panes.values()]
+
+    def option_changed(self) -> None:
+        "`wayland-server` moved: start or stop on the next turn."
+        self._changed.set()
+        if not self.pymux.options.wayland_server:
+            for child in self.children:
+                child.stop()
+
+    def inherit(self, row: CompositorRow) -> CompositorChild:
+        """
+        A child an upgrade's exec carried, as a snapshot names it: the
+        loader fills in its windows and programs, and `adopt_carried`
+        adopts it. It drains, since the newest child is this build's own.
+        """
+        child = CompositorChild(self, row.id, None)
+        child.inherited = Inheritance(row)
+        child.draining = True
+        self.children.append(child)
+        self._next_number = max(self._next_number, row.id + 1)
+        return child
+
+    def adopt_carried(self) -> None:
+        "Adopt each child the snapshot named, once the load is done and `keep` runs."
+        if self._tasks is None:
+            return
+        for child in self.children:
+            if child.inherited is not None and not child.started:
+                child.started = True
+                self._tasks.start_soon(self._serve, child, child.serve_inherited)
+
+    def adopting(self) -> bool:
+        "Whether a child an upgrade carried is not adopted yet: its windows are in no table."
+        return any(child.inherited is not None for child in self.children)
+
+    async def keep(self) -> None:
+        """
+        Adopt each child an upgrade carried, and run the newest whenever
+        the option is on, again after its process ends on its own: the
+        panes keep a `WAYLAND_DISPLAY` that leads somewhere. Never returns.
+        """
+        async with anyio.create_task_group() as tasks:
+            self._tasks = tasks
+            self.adopt_carried()
+            while True:
+                ended = False
+                if self.pymux.options.wayland_server and not self.paused and available():
+                    number = self._next_number
+                    self._next_number += 1
+                    child = self.newest = CompositorChild(self, number, child_path_of(self.pymux.socket_name, number))
+                    self.children.append(child)
+                    ended = await self._serve(child, child.serve)
+                if ended and self.pymux.options.wayland_server and not self.paused:
+                    await anyio.sleep(RESTART_SECONDS)
+                    continue
+                await self._changed.wait()
+                self._changed = anyio.Event()
+
+    async def _serve(self, child: CompositorChild, serve: Callable[[], Awaitable[bool]]) -> bool:
+        "Whether the child's process ended on its own. Whatever it raises ends it and its windows, never the server."
+        ended = False
+        with anyio.CancelScope() as child.scope:
+            try:
+                ended = await serve()
+            except Exception:
+                logger.exception("The Wayland compositor %d stopped.", child.number)
+                ended = True
+        child.scope = None
+        child.inherited = None
+        if child in self.children:
+            self.children.remove(child)
+        if self.newest is child:
+            self.newest = None
+        # A child of a build before Lillecarl/pyterm#1012 listened on the
+        # link's path, and took it away as it ended.
+        self._link()
+        return ended
+
+    def serving(self, child: CompositorChild) -> None:
+        "A child listens: a pane's display leads there, if it is the newest."
+        if child is self.newest:
+            self._link()
+
+    def _link(self) -> None:
+        "Point the server's display at the newest child's socket."
+        link, newest = socket_path_of(self.pymux.socket_name), self.newest
+        if link is None or newest is None or newest.display is None or newest.path is None:
+            return
+        if os.path.islink(link) and os.readlink(link) == newest.path:
+            return
+        temporary = link + ".new"
+        try:
+            with contextlib.suppress(FileNotFoundError):
+                os.unlink(temporary)
+            os.symlink(newest.path, temporary)
+            os.replace(temporary, link)
+        except OSError as error:
+            logger.warning("The Wayland display %s does not lead to %s: %s", link, newest.path, error)
+
+    def unlink(self, child: CompositorChild) -> None:
+        "The newest child stops: the display leads nowhere, rather than to a socket nobody answers."
+        link = socket_path_of(self.pymux.socket_name)
+        if link is None or child is not self.newest:
+            return
+        with contextlib.suppress(OSError):
+            if os.readlink(link) == child.path:
+                os.unlink(link)
+
+    def pids(self) -> list[int]:
+        "The compositors' processes, while they run: pymux's own, for `renice`."
+        return [pid for child in self.children if (pid := child.pid()) is not None]
+
+    async def pause(self, keep_windows: bool = False) -> None:
+        """
+        Stop the compositors' processes for `upgrade-server`, and wait
+        until they have gone: the exec keeps this pid, and the new image
+        would never reap them. `keep_windows` keeps each that holds a
+        window, for the exec to carry.
+        """
+        self.paused = True
+        stopping = [child for child in self.children if not (keep_windows and child.holds_windows())]
+        processes = [child._process for child in stopping if child._process is not None]
+        for child in stopping:
+            child.stop()
+        for process in processes:
+            with anyio.move_on_after(2 * CHILD_EXIT_SECONDS):
+                await process.wait()
+
+    def resume(self) -> None:
+        "An upgrade that failed: serve again."
+        self.paused = False
+        self._changed.set()
+
+    def holds_windows(self) -> bool:
+        "Whether a window or a `pymux wl` program would end with a compositor."
+        return any(child.holds_windows() for child in self.children)
+
+    def hand_over(self) -> None:
+        "Each child stops writing, for an upgrade's exec to carry it. Raises `OSError` when one does not answer."
+        for child in self.children:
+            child.hand_over()
+
+    def take_back(self) -> None:
+        "An upgrade that failed after `hand_over`: the same processes write again."
+        for child in self.children:
+            child.take_back()
+
+    def snapshot_rows(self) -> list[CompositorRow | WindowPaneRow | WindowProgramRow]:
+        "What an upgrade's snapshot holds of the compositors, their windows and their programs."
+        return [row for child in self.children for row in child.snapshot_rows()]
+
+    def carried(self) -> list[int]:
+        "The fds an upgrade's exec carries for the compositors and their programs."
+        return [fd for child in self.children for fd in child.carried()]
+
+    async def launch(self, pane: Pane, argv: list[str], cwd: str | None, env: dict[str, str]) -> Launch:
+        "`CompositorChild.launch`, on the newest child."
+        newest = self.newest
+        if newest is None:
+            raise OSError("no Wayland compositor runs")
+        return await newest.launch(pane, argv, cwd, env)
+
+    def rescale(self) -> None:
+        "Configure every window again, after a `wayland-scale` changed."
+        for child in self.children:
+            child.rescale()
+
+    async def take_selection(self, child: CompositorChild, target: str, mime_types: list[str]) -> None:
         "A pane copied: read it, and pass it on as `set-clipboard` allows."
+        compositor = child.compositor
         mime_type = next((one for one in TEXT_TYPES if one in mime_types), None)
-        if mime_type is None:
+        if compositor is None or mime_type is None:
             return
         try:
             fd = compositor.request_selection(target, mime_type)
@@ -1122,6 +1314,10 @@ class WaylandServer:
             # A copy here is newer than the image a Ctrl-V brought, and than a paste.
             self.image = None
             self.pasted = None
+        # A pane of another child pastes what this one copied.
+        for other in self.children:
+            if other is not child and other.compositor is not None:
+                _hold(other.compositor, target)
         if self.pymux.options.set_clipboard is not Clipboard.ON or not text:
             return
         if target == "clipboard":
@@ -1162,15 +1358,18 @@ class WaylandServer:
         # Nothing to withdraw leaves the selection where it is: under
         # `set-clipboard off` a pane holds it, and its text stays.
         had, self.image = self.image is not None, image
-        if self.compositor is not None and (image is not None or had):
-            _hold(self.compositor, "clipboard", image is not None)
+        if image is None and not had:
+            return
+        for child in self.children:
+            if child.compositor is not None:
+                _hold(child.compositor, "clipboard", image is not None)
 
-    async def _answer_paste(self, target: str, mime_type: str, fd: int) -> None:
-        "A pane pasted what the compositor holds: find it, and write it."
+    async def answer_paste(self, target: str, mime_type: str, fd: int) -> None:
+        "A pane pasted what a compositor holds: find it, and write it."
         if mime_type == IMAGE_TYPE and target == "clipboard" and self.image is not None:
             await _write_all(fd, self.image)
             return
-        if target == "clipboard" and self.pasted is not None and anyio.current_time() <= self._pasted_until:
+        if target == "clipboard" and self.pasted is not None and anyio.current_time() <= self.pasted_until:
             await _write_all(fd, self.pasted.encode("utf-8"))
             return
         if self.pymux.options.set_clipboard is Clipboard.ON:
@@ -1207,7 +1406,7 @@ class WaylandServer:
 
 
 def _hold(compositor: RemoteCompositor, target: str, image: bool = False) -> None:
-    "Take the selection, answered by `_answer_paste` when a pane pastes."
+    "Take the selection, answered by `answer_paste` when a pane pastes."
     compositor.set_selection(target, dict.fromkeys((*HELD_TYPES, IMAGE_TYPE) if image else HELD_TYPES))
 
 

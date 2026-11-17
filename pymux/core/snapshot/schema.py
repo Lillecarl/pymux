@@ -25,6 +25,7 @@ from ...options.client_options import ClientOptions
 from ...options.option_fields import Declared, Options
 from ...options.server_options import ServerOptions
 from ...options.session_options import SessionOptions
+from ...options.tables import WindowProgramRow, create_table
 from ...options.window_options import WindowOptions
 from ..pane import Pane
 from ..session import Session
@@ -58,7 +59,7 @@ SAVED: dict[type[Options], tuple[Declared, ...]] = {
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
-SNAPSHOT_VERSION = 41
+SNAPSHOT_VERSION = 42
 
 
 #: What a client holds besides its options, each a column of `clients`
@@ -80,10 +81,18 @@ CLIENT_SETTINGS = tuple(CLIENT_SETTING_TYPES)
 #: deletes any older step. An added table or column needs none:
 #: `missing_from` adds it, after a step too.
 #:
-#: 40 kept the window defaults per session. 41 keeps one row for the
-#: server, and the old rows have no marks of who set them, so the
-#: configuration file says them all. Lillecarl/pyterm#971.
-STEPS: dict[int, str] = {40: "DROP TABLE window_defaults;\n"}
+#: 41 held one compositor; 42 holds one per build, and a window and a
+#: program name theirs. A program's tag is its compositor's own, so the
+#: key of `window_programs` takes the compositor too. Lillecarl/pyterm#1012.
+STEPS: dict[int, str] = {
+    41: "ALTER TABLE window_panes ADD COLUMN compositor INTEGER NOT NULL DEFAULT 0;\n"
+    "UPDATE window_panes SET compositor = (SELECT id FROM wayland_compositor);\n"
+    "ALTER TABLE window_programs RENAME TO window_programs_41;\n"
+    + create_table(WindowProgramRow)
+    + "INSERT INTO window_programs (compositor, tag, pid, stdout_fd, stderr_fd, pane_id)\n"
+    "  SELECT (SELECT id FROM wayland_compositor), tag, pid, stdout_fd, stderr_fd, pane_id FROM window_programs_41;\n"
+    "DROP TABLE window_programs_41;\n"
+}
 
 
 #: The fields `ClientState.modes` holds, one JSON value in `client_modes`.

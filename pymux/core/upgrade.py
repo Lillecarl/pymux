@@ -65,13 +65,15 @@ if TYPE_CHECKING:
     from ..connection.client_state import ClientState
     from .main import Pymux
 
-__all__ = ["CHECK", "RESUME", "check", "resume", "upgrade", "welcome_back"]
+__all__ = ["CHECK", "CLOSE_WINDOWS", "RESUME", "check", "resume", "upgrade", "welcome_back"]
 
 #: What a client shows while the new build starts.
 UPGRADING = "pymux is being upgraded."
 
 #: The mode words of the new build: the check, and the start after the exec.
 CHECK = "check-snapshot"
+#: What follows the check's path when `upgrade-server -W` lets it close windows.
+CLOSE_WINDOWS = "close-windows"
 RESUME = "resume-server"
 
 #: How long the check may take, in seconds. It reads every history,
@@ -91,9 +93,11 @@ OURS = ("pymux", "libpymux", "ptterm", "ptyhost", "pyte", "prompt_toolkit")
 
 async def upgrade(pymux: Pymux, command: list[str], close_windows: bool = False) -> None:
     """
-    Replace this server's build with the one `command` starts. The
-    compositor goes across with its windows, unless `close_windows` or it
-    holds none: then it stops, and the new build starts its own.
+    Replace this server's build with the one `command` starts. Each
+    compositor that holds a window goes across with it, and the rest
+    stop; the new build starts its own for new windows. The new build
+    refuses a compositor it cannot adopt, unless `close_windows`: then
+    it closes that compositor's windows. Lillecarl/pyterm#1012.
     """
     executable = shutil.which(command[0])
     if executable is None:
@@ -102,12 +106,9 @@ async def upgrade(pymux: Pymux, command: list[str], close_windows: bool = False)
     _refuse(pymux)
     # A recording holds Python objects of this build, so it ends here.
     pymux.finish_recordings()
-    if pymux.wayland.inherited is not None:
+    if pymux.wayland.adopting():
         # Its windows are in no pane table yet, and would be lost.
         raise CommandException("the Wayland compositor is still being adopted; try again")
-    hands_over = pymux.wayland.holds_windows() and not close_windows
-    if not hands_over:
-        pymux.panes.close_window_panes()
 
     path = Path(socket_directory()) / ("pymux.core.upgrade.%d.sqlite" % os.getpid())
     written = Snapshot(path)
@@ -121,15 +122,14 @@ async def upgrade(pymux: Pymux, command: list[str], close_windows: bool = False)
         await pymux.audio.pause()
         # And the portal's private bus, for the same reason.
         await pymux.portal.pause()
-        # And a compositor whose windows closed above, for the same
-        # reason. One with windows crosses the exec. Lillecarl/pyterm#1004.
-        if not hands_over:
-            await pymux.wayland.pause()
+        # And each compositor that holds no window, for the same reason.
+        # One with windows crosses the exec. Lillecarl/pyterm#1004.
+        await pymux.wayland.pause(keep_windows=True)
         step("sound, portal and compositor paused")
         try:
             written.write(pymux)
             step("snapshot written")
-            await _check(command, written.partial)
+            await _check(command, written.partial, close_windows)
             step("new build checked")
             for connection in list(pymux.connections):
                 client = connection.client
@@ -189,11 +189,12 @@ class _Steps:
         self._wall, self._cpu = wall, cpu
 
 
-async def _check(command: list[str], path: Path) -> None:
+async def _check(command: list[str], path: Path, close_windows: bool) -> None:
     "Run the new build's check on `path`, and refuse the upgrade with its reason when it fails."
+    words = [CHECK, str(path), *([CLOSE_WINDOWS] if close_windows else [])]
     try:
         with anyio.fail_after(CHECK_TIMEOUT):
-            result = await anyio.run_process([*command, CHECK, str(path)], check=False)
+            result = await anyio.run_process([*command, *words], check=False)
     except TimeoutError:
         logger.warning("The new build %s took longer than %ds to check.", command[0], CHECK_TIMEOUT)
         raise CommandException("the new build took longer than %ds to check this server" % CHECK_TIMEOUT)
@@ -304,7 +305,7 @@ def log_arguments() -> list[str]:
     return ["--log", str(logfile)] if logfile is not None else []
 
 
-def check(path: str) -> None:
+def check(path: str, close_windows: bool = False) -> None:
     """
     The check, in the new build: raise when it cannot run the server
     `path` describes. Every module of pymux imports, and the snapshot
@@ -317,7 +318,8 @@ def check(path: str) -> None:
         # In a loop, because a job's `done` is an event.
         pymux = Pymux()
         load(pymux, path)
-        _refuse_the_compositor(pymux)
+        if not close_windows:
+            _refuse_the_compositors(pymux)
 
     try:
         anyio.run(load_it)
@@ -329,19 +331,20 @@ def check(path: str) -> None:
         os._exit(1)
 
 
-def _refuse_the_compositor(pymux: Pymux) -> None:
+def _refuse_the_compositors(pymux: Pymux) -> None:
     "A compositor this build cannot adopt: its windows would end. `-W` closes them on purpose."
     from ..wayland import wayland
 
-    inherited = pymux.wayland.inherited
-    if inherited is None:
-        return
-    version = inherited.compositor.version
-    if not wayland.speaks(version):
-        raise SnapshotError(
-            "this build cannot adopt the Wayland compositor, which speaks version %d, so %d windows would close;"
-            " upgrade-server -W closes them" % (version, len(inherited.panes))
-        )
+    for child in pymux.wayland.children:
+        inherited = child.inherited
+        if inherited is None or not inherited.holds_windows():
+            continue
+        version = inherited.compositor.version
+        if not wayland.speaks(version):
+            raise SnapshotError(
+                "this build cannot adopt the Wayland compositor %d, which speaks version %d, so %d windows would"
+                " close; upgrade-server -W closes them" % (child.number, version, len(inherited.panes))
+            )
 
 
 def _import_everything() -> None:

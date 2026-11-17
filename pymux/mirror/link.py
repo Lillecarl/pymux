@@ -48,6 +48,7 @@ from ..log import logger
 from ..pipes.base import BrokenPipeError
 from ..style.style import DEFAULT_THEME
 from ..terminals import PeerTerminal
+from ..wayland.wayland import CompositorChild
 from ..wayland.window_pane import WindowWidget
 from .clipboard_asks import ClipboardAsks
 from .copying import place_of
@@ -576,7 +577,7 @@ class PeerLink:
         error = None
         if not self.can(Capability.WINDOWS):
             error = "it shows a Wayland window, and the server mirroring it needs an upgrade to show one"
-        elif widget.host is not self.connection.pymux.wayland:
+        elif not isinstance(widget.host, CompositorChild):
             error = "it shows a Wayland window that this server mirrors itself"
         if error is not None:
             self.connection.send_packet(

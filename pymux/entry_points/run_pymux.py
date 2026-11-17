@@ -301,8 +301,10 @@ def run() -> None:
             match a.upgrade_words:
                 case [path]:
                     upgrade.check(path)
+                case [path, upgrade.CLOSE_WINDOWS]:
+                    upgrade.check(path, close_windows=True)
                 case _:
-                    sys.exit("usage: pymux %s PATH" % (Mode.CHECK_SNAPSHOT,))
+                    sys.exit("usage: pymux %s PATH [%s]" % (Mode.CHECK_SNAPSHOT, upgrade.CLOSE_WINDOWS))
 
         case Mode.RESUME_SERVER:
             from pymux.core import upgrade

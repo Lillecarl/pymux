@@ -207,14 +207,14 @@ async def measure(name: str, offer: dict) -> dict:
                     env=dict(os.environ, WAYLAND_DISPLAY=pymux.wayland.display, XDG_RUNTIME_DIR=str(runtime)),
                 ) as player:
                     try:
-                        await once(lambda: pymux.wayland.panes, 20.0, "mpv never opened a pane")
+                        await once(lambda: pymux.wayland.window_panes(), 20.0, "mpv never opened a pane")
                         # The first frames open the codec and size the window.
                         await anyio.sleep(2.0)
                         before = state.client.connection.pipe_connection.bytes_out
                         await tick(SECONDS, dump, lateness)
                         sent = state.client.connection.pipe_connection.bytes_out - before
-                        (toplevel,) = pymux.wayland.panes
-                        drawn = pymux.wayland.frame(toplevel)
+                        (pane,) = pymux.wayland.window_panes()
+                        drawn = pane.terminal.host.frame(pane.terminal.toplevel)
                         window_size = drawn[:2] if drawn is not None else None
                         compressed = state.client.connection.pipe_connection._compressor is not None
                     finally:

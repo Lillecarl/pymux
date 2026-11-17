@@ -111,8 +111,8 @@ async def with_a_window(
             env=dict(os.environ, WAYLAND_DISPLAY=pymux.wayland.display, XDG_RUNTIME_DIR=str(runtime)),
         ) as probe:
             try:
-                await once(lambda: pymux.wayland.panes, 10.0, "the window never opened a pane")
-                (pane,) = pymux.wayland.panes.values()
+                await once(lambda: pymux.wayland.window_panes(), 10.0, "the window never opened a pane")
+                (pane,) = pymux.wayland.window_panes()
                 yield pymux, state, pane, recorder, log, probe
             finally:
                 if probe.returncode is None:
@@ -136,7 +136,7 @@ async def test_a_hand_over_taken_back_keeps_the_window_drawing(tmp_path):
         held = logged(log).count("frame")
         pymux.wayland.take_back()
         await once(lambda: logged(log).count("frame") > held + 2, 10.0, "the window never drew again")
-        assert list(pymux.wayland.panes.values()) == [pane]
+        assert list(pymux.wayland.window_panes()) == [pane]
 
 
 async def test_a_window_opens_a_pane_beside_the_active_one(tmp_path):
@@ -498,8 +498,8 @@ async def test_wl_turns_the_pane_it_ran_in_into_the_window(tmp_path, monkeypatch
         got = await session.command(
             "wl -- %s %s %s" % (sys.executable, PROBE, log), pane_id=shell.pane_id, environment=dict(os.environ)
         )
-        await once(lambda: pymux.wayland.panes, 10.0, "the window never opened")
-        (pane,) = pymux.wayland.panes.values()
+        await once(lambda: pymux.wayland.window_panes(), 10.0, "the window never opened")
+        (pane,) = pymux.wayland.window_panes()
         # In the shell's place, and the shell is gone: one pane, not two.
         assert window.panes == [pane]
         assert window.active_pane is pane
@@ -526,20 +526,20 @@ async def test_a_capture_lets_a_window_nobody_shows_draw_what_it_waits_to(tmp_pa
     """
     async with with_a_window(tmp_path, kitty=False) as (pymux, _state, pane, _recorder, log, _probe):
         toplevel = pane.terminal.toplevel
-        await once(lambda: pymux.wayland.frame(toplevel), 10.0, "the window never drew")
+        await once(lambda: pane.terminal.host.frame(toplevel), 10.0, "the window never drew")
         await anyio.sleep(0.3)
-        assert not red_square_in(pymux.wayland.frame(toplevel))
-        await pymux.wayland.drawn_again([toplevel], 10.0)
-        assert red_square_in(pymux.wayland.frame(toplevel))
+        assert not red_square_in(pane.terminal.host.frame(toplevel))
+        await pane.terminal.host.drawn_again([toplevel], 10.0)
+        assert red_square_in(pane.terminal.host.frame(toplevel))
         assert "drew" in logged(log)
 
 
 async def test_a_window_that_never_stops_drawing_costs_a_capture_its_timeout(tmp_path):
     async with with_a_window(tmp_path, kitty=False, animate=True) as (pymux, _state, pane, _recorder, log, _probe):
         toplevel = pane.terminal.toplevel
-        await once(lambda: pymux.wayland.frame(toplevel), 10.0, "the window never drew")
+        await once(lambda: pane.terminal.host.frame(toplevel), 10.0, "the window never drew")
         with fair_anyio.fail_after(5.0):
-            await pymux.wayland.drawn_again([toplevel], 0.5)
+            await pane.terminal.host.drawn_again([toplevel], 0.5)
         assert "frame" in logged(log)
 
 
@@ -551,8 +551,8 @@ async def test_capture_pane_png_of_a_window_pane_is_the_windows_frame(tmp_path, 
         await session.command(
             "wl -- %s %s %s" % (sys.executable, PROBE, log), pane_id=shell.pane_id, environment=dict(os.environ)
         )
-        await once(lambda: pymux.wayland.panes, 10.0, "the window never opened")
-        (pane,) = pymux.wayland.panes.values()
+        await once(lambda: pymux.wayland.window_panes(), 10.0, "the window never opened")
+        (pane,) = pymux.wayland.window_panes()
         await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
 
         got = await session.command("capture-pane -p --png -t %%%d" % pane.pane_id)
@@ -560,7 +560,7 @@ async def test_capture_pane_png_of_a_window_pane_is_the_windows_frame(tmp_path, 
         told = answered(got)
         assert (told["err"], told["exit"]) == ("", 0)
         picture = Image.open(io.BytesIO(base64.b64decode(told["out"])))
-        width, height, rgba = pymux.wayland.frame(pane.terminal.toplevel)
+        width, height, rgba = pane.terminal.host.frame(pane.terminal.toplevel)
         assert picture.size == (width, height)
         assert picture.convert("RGBA").tobytes() == rgba
         # The probe's fill, in RGBA: it wrote B, G, R, A.
@@ -584,7 +584,7 @@ async def test_a_picture_of_the_whole_shows_the_windows_frame_in_its_pane(tmp_pa
         await session.command(
             "wl -- %s %s %s" % (sys.executable, PROBE, log), pane_id=shell.pane_id, environment=dict(os.environ)
         )
-        await once(lambda: pymux.wayland.panes, 10.0, "the window never opened")
+        await once(lambda: pymux.wayland.window_panes(), 10.0, "the window never opened")
         await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
         # capture-client reads the client's last frame, which may not show the window yet.
         await once(
@@ -593,7 +593,7 @@ async def test_a_picture_of_the_whole_shows_the_windows_frame_in_its_pane(tmp_pa
             "the client never drew the window pane",
         )
 
-        (pane,) = pymux.wayland.panes.values()
+        (pane,) = pymux.wayland.window_panes()
         got = await session.command(
             "%s -p --png --font %s --cell 4x8" % (command, shlex.quote(FONT)), pane_id=pane.pane_id
         )
@@ -603,7 +603,7 @@ async def test_a_picture_of_the_whole_shows_the_windows_frame_in_its_pane(tmp_pa
         picture = Image.open(io.BytesIO(base64.b64decode(told["out"]))).convert("RGB")
         # The one pane is the frame scaled to its cells. A client's status
         # line may sit above it; a window has none.
-        width, height, rgba = pymux.wayland.frame(pane.terminal.toplevel)
+        width, height, rgba = pane.terminal.host.frame(pane.terminal.toplevel)
         size = (pane.terminal.columns * 4, pane.terminal.rows * 8)
         frame = Image.frombytes("RGBA", (width, height), rgba).resize(size, Image.Resampling.LANCZOS)
         top = 0
@@ -623,7 +623,7 @@ async def test_a_later_window_of_a_wl_program_goes_beside_its_first(tmp_path, mo
     both = "env -u WAYLAND_SOCKET %s %s & exec %s %s" % (probe, second, probe, first)
     async with with_a_shell(tmp_path, monkeypatch) as (pymux, session, window, shell):
         await session.command("wl -- sh -c %s" % shlex.quote(both), pane_id=shell.pane_id, environment=dict(os.environ))
-        await once(lambda: len(pymux.wayland.panes) == 2, 10.0, "two windows never opened")
+        await once(lambda: len(pymux.wayland.window_panes()) == 2, 10.0, "two windows never opened")
         assert shell not in window.panes
         assert len(window.panes) == 2
 
@@ -871,7 +871,7 @@ async def test_the_pane_goes_when_the_window_closes(tmp_path):
         await once(lambda: "closed" in logged(log), 10.0, "the window was never asked to close")
         with fair_anyio.fail_after(10):
             await probe.wait()
-        await once(lambda: not pymux.wayland.panes, 10.0, "the compositor still holds the window")
+        await once(lambda: not pymux.wayland.window_panes(), 10.0, "the compositor still holds the window")
         window = state.session.arrangement.get_active_window()
         assert pane not in window.panes
         assert window.active_pane in window.panes
@@ -886,7 +886,7 @@ async def test_a_compositor_that_dies_under_a_drawing_window_takes_only_its_pane
         await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
         (pid,) = pymux.wayland.pids()
         os.kill(pid, signal.SIGKILL)
-        await once(lambda: not pymux.wayland.panes, 10.0, "the dead compositor's window kept its pane")
+        await once(lambda: not pymux.wayland.window_panes(), 10.0, "the dead compositor's window kept its pane")
         await once(
             lambda: pymux.wayland.display and pymux.wayland.pids() not in ([], [pid]),
             10.0,

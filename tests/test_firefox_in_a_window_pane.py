@@ -136,8 +136,8 @@ async def firefox_in_a_pane(tmp_path, page: str, route: str):
             [FIREFOX, "--no-remote", "--new-instance", "--profile", str(profile), url.as_uri()], env=environment
         ) as firefox:
             try:
-                await once(lambda: pymux.wayland.panes, 60.0, "Firefox never opened a pane")
-                (pane,) = pymux.wayland.panes.values()
+                await once(lambda: pymux.wayland.window_panes(), 60.0, "Firefox never opened a pane")
+                (pane,) = pymux.wayland.window_panes()
                 yield pymux, state, pane, recorder
             finally:
                 if firefox.returncode is None:

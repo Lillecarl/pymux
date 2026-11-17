@@ -81,7 +81,6 @@ from ...options.tables import (
     select,
 )
 from ...options.window_options import WindowOptions
-from ...wayland.wayland import Inheritance
 from ...wayland.window_pane import WindowWidget, is_window_pane
 from ..pane import Pane
 from ..session import Session
@@ -418,15 +417,20 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
     for job in _read_jobs(db, takeover):
         pymux.jobs._jobs[job.job_id] = job
 
-    window_panes: dict[int, Pane] = {}
+    # Before the panes: a window pane's widget names its compositor.
+    carried = {row.id: pymux.wayland.inherit(row) for row in select(db, CompositorRow)}
 
     def pane_of(row: PaneRow, on_done: Callable[[], None] | None = None) -> Pane:
         viewing = select(db, ViewerRow, "WHERE pane_id = ?", row.pane_id)
         showing = select(db, WindowPaneRow, "WHERE pane_id = ?", row.pane_id)
         if showing:
-            toplevel = showing[0].toplevel
-            widget = WindowWidget(pymux.wayland, toplevel, pymux)
-            pane = window_panes[toplevel] = pymux.panes.window_pane_of(widget, PaneId(row.pane_id))
+            window = showing[0]
+            child = carried.get(window.compositor)
+            if child is None or child.inherited is None:
+                raise SnapshotError("the window pane %d names no compositor" % (row.pane_id,))
+            widget = WindowWidget(child, window.toplevel, pymux)
+            pane = pymux.panes.window_pane_of(widget, PaneId(row.pane_id))
+            child.inherited.panes[window.toplevel] = pane
         elif viewing:
             pane = _viewer(pymux, viewing[0])
         else:
@@ -576,14 +580,13 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
     pymux.jobs.saved_queries = {row.name: (row.sql, row.description) for row in select(db, SavedQueryRow)}
     pymux.jobs.forgotten_seeds = {row.name for row in select(db, ForgottenSeedRow)}
     _read_notifications(pymux, db, counters)
-    compositor = select(db, CompositorRow)
-    if compositor:
-        programs = [
-            (row, JobPipes(row.pid, row.stdout_fd, row.stderr_fd, parent=True)) for row in select(db, WindowProgramRow)
-        ]
-        pymux.wayland.inherited = Inheritance(compositor[0], window_panes, programs)
-    elif window_panes:
-        raise SnapshotError("the snapshot holds window panes and no compositor for them")
+    for program in select(db, WindowProgramRow):
+        child = carried.get(program.compositor)
+        if child is None or child.inherited is None:
+            raise SnapshotError("the window program %d names no compositor" % (program.pid,))
+        pipes = JobPipes(program.pid, program.stdout_fd, program.stderr_fd, parent=True)
+        child.inherited.programs.append((program, pipes))
+    pymux.wayland.adopt_carried()
     return server["listener_fd"]
 
 
