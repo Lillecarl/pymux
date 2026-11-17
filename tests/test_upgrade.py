@@ -203,7 +203,8 @@ def _gone(pid: int) -> bool:
     try:
         with open("/proc/%d/stat" % pid) as f:
             return f.read().rsplit(")", 1)[1].split()[0] == "Z"
-    except FileNotFoundError:
+    # ESRCH: it was reaped between the open and the read. Lillecarl/pyterm#1000.
+    except FileNotFoundError, ProcessLookupError:
         return True
 
 
