@@ -16,8 +16,8 @@ def list_processes(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Name the processes that are pymux's own on this machine.
 
-    One to a line: a role, then a pid. `server` is this process, `sound` each program sound runs, and
-    `client` each client on this machine. A program a pane, a job or
+    One to a line: a role, then a pid. `server` is this process, `sound` each program sound runs,
+    `wayland` the compositor's process, and `client` each client on this machine. A program a pane, a job or
     `run-shell` runs is a person's and is never listed. `pymux renice`
     reads this. Lillecarl/pyterm#675.
     """
@@ -25,6 +25,7 @@ def list_processes(pymux: Pymux, args: argparse.Namespace) -> None:
     lines = ["server %d" % os.getpid()]
     lines.extend("sound %d" % pid for pid in pymux.audio.pids())
     lines.extend("portal %d" % pid for pid in pymux.portal.pids())
+    lines.extend("wayland %d" % pid for pid in pymux.wayland.pids())
     for client in pymux._client_states:
         # A client of another machine says a pid of that machine.
         if client.pid and client.hostname == here:

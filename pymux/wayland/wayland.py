@@ -33,6 +33,7 @@ import errno
 import logging
 import math
 import os
+import socket
 import sys
 from collections.abc import Awaitable, Callable, Iterable
 from subprocess import DEVNULL, PIPE, STDOUT
@@ -55,9 +56,11 @@ from pymux.wayland.wayland_scale import DEFAULT_WAYLAND_SCALE, resolve_scale
 from pymux.wayland.window_pane import WindowWidget, evdev_of, now
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
     from prompt_toolkit.data_structures import Point
     from prompt_toolkit.layout.containers import WritePosition
-    from pysmithay import Compositor, Vp9Encoder
+    from pysmithay import RemoteCompositor, RemoteEncoder
 
     from pymux.connection.client_state import ClientState
     from pymux.core.main import Pymux
@@ -65,6 +68,7 @@ if TYPE_CHECKING:
 
 try:
     import pysmithay
+    from pysmithay.host import command as host_command
 except ImportError:
     pysmithay = None
 
@@ -100,7 +104,14 @@ WRITE_SECONDS = 30.0
 #: often to try it. An upgrade's old server holds it for as long as the
 #: new one takes to load, which `upgrade.LOAD_TIMEOUT` bounds.
 BIND_SECONDS = 120.0
-BIND_RETRY_SECONDS = 0.25
+
+#: How long the compositor's process has to end once told to, before it
+#: is killed: it closes every window first.
+CHILD_EXIT_SECONDS = 5.0
+
+#: How long after the compositor's process ended on its own a new one
+#: starts: a child that dies at once must not spin the server.
+RESTART_SECONDS = 1.0
 
 
 class _Pacer:
@@ -193,7 +204,11 @@ class WaylandServer:
 
     def __init__(self, pymux: Pymux) -> None:
         self.pymux = pymux
-        self.compositor: Compositor | None = None
+        self.compositor: RemoteCompositor | None = None
+        #: The compositor's process, while it runs.
+        self._process: anyio.abc.Process | None = None
+        #: Stopped for `upgrade-server`.
+        self.paused = False
         #: What `WAYLAND_DISPLAY` says to reach it, while it runs.
         self.display: str | None = None
         #: The text a pane last copied, per selection.
@@ -227,23 +242,114 @@ class WaylandServer:
             self._scope.cancel()
 
     async def keep(self) -> None:
-        "Run the compositor whenever the option is on. Never returns."
+        """
+        Run the compositor whenever the option is on, and again after its
+        process ends on its own: the panes keep a `WAYLAND_DISPLAY` that
+        leads somewhere. Never returns.
+        """
         while True:
-            if self.pymux.options.wayland_server and available():
+            ended = False
+            if self.pymux.options.wayland_server and not self.paused and available():
                 with anyio.CancelScope() as self._scope:
-                    await self._serve()
+                    # Whatever a dead compositor's last calls raise ends
+                    # it and its windows, and never the server.
+                    try:
+                        ended = await self._serve()
+                    except Exception:
+                        logger.exception("The Wayland compositor stopped.")
+                        ended = True
                 self._scope = None
+            if ended and self.pymux.options.wayland_server and not self.paused:
+                await anyio.sleep(RESTART_SECONDS)
+                continue
             await self._changed.wait()
             self._changed = anyio.Event()
 
-    async def _serve(self) -> None:
-        if pysmithay is None:
-            return
-        path = socket_path_of(self.pymux.socket_name)
-        compositor = await _bind(path)
-        if compositor is None:
-            return
+    def pids(self) -> list[int]:
+        "The compositor's process, while it runs: pymux's own, for `renice`."
+        process = self._process
+        return [] if process is None or process.returncode is not None else [process.pid]
 
+    async def pause(self) -> None:
+        """
+        Stop the compositor's process for `upgrade-server`, and wait until
+        it has gone: the exec keeps this pid, and the new image would
+        never reap it. Its windows closed already.
+        """
+        self.paused = True
+        process = self._process
+        if self._scope is not None:
+            self._scope.cancel()
+        if process is not None:
+            with anyio.move_on_after(2 * CHILD_EXIT_SECONDS):
+                await process.wait()
+
+    def resume(self) -> None:
+        "An upgrade that failed: serve again."
+        self.paused = False
+        self._changed.set()
+
+    async def _serve(self) -> bool:
+        "Whether the compositor's process ended on its own."
+        if pysmithay is None:
+            return False
+        path = socket_path_of(self.pymux.socket_name)
+        async with self._child(path) as compositor:
+            if compositor is None:
+                return False
+            await self._serve_on(compositor, path)
+            return True
+
+    @contextlib.asynccontextmanager
+    async def _child(self, path: str | None) -> AsyncIterator[RemoteCompositor | None]:
+        """
+        The compositor, in a process of its own (`pysmithay.host`), or None
+        when there cannot be one: so that a window can outlive this
+        server's image. Lillecarl/pyterm#1004.
+
+        **A path in use is waited for**, by the child: a compositor that
+        another process still holds lets go only when that process ends.
+        Giving up there would leave this server with no compositor, and
+        every pane with a `WAYLAND_DISPLAY` that leads nowhere.
+        """
+        assert pysmithay is not None
+        ours, theirs = socket.socketpair()
+        try:
+            argv = host_command(theirs.fileno(), path, wait=BIND_SECONDS)
+            process = await anyio.open_process(
+                argv, pass_fds=(theirs.fileno(),), stdin=DEVNULL, stdout=DEVNULL, stderr=None
+            )
+        except OSError as error:
+            ours.close()
+            logger.warning("No Wayland compositor: %s", error)
+            process = None
+        finally:
+            theirs.close()
+        if process is None:
+            yield None
+            return
+        self._process = process
+        compositor = None
+        try:
+            try:
+                compositor = await pysmithay.RemoteCompositor.start(ours.detach(), BIND_SECONDS + CHILD_EXIT_SECONDS)
+            except OSError as error:
+                # No XDG_RUNTIME_DIR, or a path another server keeps:
+                # the panes get no display, as without pysmithay.
+                logger.warning("No Wayland compositor: %s", error)
+            yield compositor
+        finally:
+            if compositor is not None:
+                compositor.shutdown()
+            with anyio.CancelScope(shield=True):
+                with anyio.move_on_after(CHILD_EXIT_SECONDS):
+                    await process.wait()
+                if process.returncode is None:
+                    process.kill()
+                    await process.wait()
+            self._process = None
+
+    async def _serve_on(self, compositor: RemoteCompositor, path: str | None) -> None:
         self.compositor = compositor
         self.display = compositor.socket_name
         logger.info("Wayland compositor on %s", self.display)
@@ -255,7 +361,6 @@ class WaylandServer:
                 for fd in compositor.fds():
                     tasks.start_soon(self._dispatch_on, compositor, fd, tasks)
         finally:
-            # Here, on the loop thread: the last reference may go on any.
             compositor.shutdown()
             self._tasks = None
             self.compositor = None
@@ -268,10 +373,16 @@ class WaylandServer:
                     with contextlib.suppress(FileNotFoundError):
                         os.unlink(leftover)
 
-    async def _dispatch_on(self, compositor: Compositor, fd: int, tasks: anyio.abc.TaskGroup) -> None:
+    async def _dispatch_on(self, compositor: RemoteCompositor, fd: int, tasks: anyio.abc.TaskGroup) -> None:
         while True:
             await anyio.wait_readable(fd)
-            for event in compositor.dispatch():
+            try:
+                events = compositor.dispatch()
+            except OSError as error:
+                logger.warning("The Wayland compositor's process ended: %s", error)
+                tasks.cancel_scope.cancel()
+                return
+            for event in events:
                 # One event that fails to land must not end the
                 # compositor, and every window with it.
                 try:
@@ -279,7 +390,7 @@ class WaylandServer:
                 except Exception:
                     logger.exception("Handling the Wayland event %r failed.", event[:2])
 
-    def _handle(self, compositor: Compositor, event: tuple[Any, ...], tasks: anyio.abc.TaskGroup) -> None:
+    def _handle(self, compositor: RemoteCompositor, event: tuple[Any, ...], tasks: anyio.abc.TaskGroup) -> None:
         "One event of `dispatch`."
         match event:
             case ("selection", str(target), list(mime_types)) if mime_types:
@@ -312,7 +423,9 @@ class WaylandServer:
     # ------------------------------------------------------------------
     # Windows in panes. Lillecarl/pyterm#622.
 
-    def _opened(self, compositor: Compositor, toplevel: int, launch: Launch | None, tasks: anyio.abc.TaskGroup) -> None:
+    def _opened(
+        self, compositor: RemoteCompositor, toplevel: int, launch: Launch | None, tasks: anyio.abc.TaskGroup
+    ) -> None:
         widget = WindowWidget(self, toplevel, self.pymux)
         pane = None
         if launch is not None and launch.adopted is None:
@@ -342,7 +455,7 @@ class WaylandServer:
             widget.process.is_terminated = True
             self.pymux.panes.window_pane_ended(pane)
 
-    async def _pace(self, compositor: Compositor, toplevel: int, pacer: _Pacer) -> None:
+    async def _pace(self, compositor: RemoteCompositor, toplevel: int, pacer: _Pacer) -> None:
         """
         Let one window draw its next frame once a client has shown the
         last, no sooner than the frame rate of the pymux window holding
@@ -687,7 +800,7 @@ class WaylandServer:
                 return None
             return await read
 
-        async def video(encoder: Vp9Encoder) -> VideoFrame | None:
+        async def video(encoder: RemoteEncoder) -> VideoFrame | None:
             if self.compositor is None:
                 return None
             try:
@@ -714,10 +827,10 @@ class WaylandServer:
             rects=rects,
             codec=str(found[1].options.window_codec) if found is not None else "",
             video=video,
-            encoder=None if pysmithay is None else pysmithay.Vp9Encoder,
+            encoder=self.compositor.vp9_encoder if self.compositor is not None else None,
         )
 
-    async def _take_selection(self, compositor: Compositor, target: str, mime_types: list[str]) -> None:
+    async def _take_selection(self, compositor: RemoteCompositor, target: str, mime_types: list[str]) -> None:
         "A pane copied: read it, and pass it on as `set-clipboard` allows."
         mime_type = next((one for one in TEXT_TYPES if one in mime_types), None)
         if mime_type is None:
@@ -819,31 +932,7 @@ class WaylandServer:
         return self.copied.get(target, "")
 
 
-async def _bind(path: str | None) -> Compositor | None:
-    """
-    A compositor on `path`, or None when there cannot be one.
-
-    **A path in use is waited for.** `upgrade-server` starts the new
-    build while the old one still holds the lock, and the old one lets
-    go only when it exits, after the new one says it is ready. Giving up
-    here left an upgraded server with no compositor, and every pane with
-    a `WAYLAND_DISPLAY` that led nowhere.
-    """
-    assert pysmithay is not None
-    deadline = anyio.current_time() + BIND_SECONDS
-    while True:
-        try:
-            return pysmithay.Compositor(path)
-        except OSError as error:
-            if "in use" not in str(error) or anyio.current_time() > deadline:
-                # No XDG_RUNTIME_DIR, or a path another server keeps:
-                # the panes get no display, as without pysmithay.
-                logger.warning("No Wayland compositor: %s", error)
-                return None
-        await anyio.sleep(BIND_RETRY_SECONDS)
-
-
-def _hold(compositor: Compositor, target: str, image: bool = False) -> None:
+def _hold(compositor: RemoteCompositor, target: str, image: bool = False) -> None:
     "Take the selection, answered by `_answer_paste` when a pane pastes."
     compositor.set_selection(target, dict.fromkeys((*HELD_TYPES, IMAGE_TYPE) if image else HELD_TYPES))
 

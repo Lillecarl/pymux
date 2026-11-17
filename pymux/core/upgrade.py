@@ -114,7 +114,10 @@ async def upgrade(pymux: Pymux, command: list[str]) -> None:
         await pymux.audio.pause()
         # And the portal's private bus, for the same reason.
         await pymux.portal.pause()
-        step("sound and portal paused")
+        # And the compositor's process, for the same reason; its windows
+        # closed above.
+        await pymux.wayland.pause()
+        step("sound, portal and compositor paused")
         try:
             written.write(pymux)
             step("snapshot written")
@@ -156,6 +159,7 @@ async def upgrade(pymux: Pymux, command: list[str]) -> None:
             _resume(pymux)
         pymux.audio.resume()
         pymux.portal.resume()
+        pymux.wayland.resume()
         raise
 
 

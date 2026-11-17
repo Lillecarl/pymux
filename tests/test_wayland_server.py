@@ -9,11 +9,13 @@ from __future__ import annotations
 import base64
 import contextlib
 import os
+import signal
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 import anyio
+import psutil
 import pytest
 from clipboard_terminal import ClipboardTerminal
 from fairclock import anyio as fair_anyio
@@ -192,6 +194,33 @@ async def test_the_option_stops_and_starts_it(mux):
 
     mux.handle_command("set-option wayland-server on")
     await once(lambda: mux.wayland.display == path, 10.0, "it never started again")
+
+
+async def test_the_compositor_runs_in_a_process_of_its_own(mux):
+    "So that its windows can outlive the server's image. Lillecarl/pyterm#1004."
+    (pid,) = mux.wayland.pids()
+    assert psutil.Process(pid).ppid() == os.getpid()
+
+
+async def test_an_upgrade_reaps_the_compositor_and_a_failed_one_starts_it_again(mux):
+    "The exec keeps the server's pid, and the new image would never reap the child."
+    path = mux.wayland.display
+    (pid,) = mux.wayland.pids()
+    with fair_anyio.fail_after(20):
+        await mux.wayland.pause()
+    assert mux.wayland.pids() == []
+    assert not psutil.pid_exists(pid)
+
+    mux.wayland.resume()
+    await once(lambda: mux.wayland.display == path and mux.wayland.pids(), 10.0, "it never started again")
+
+
+async def test_a_compositor_whose_process_died_is_started_again(mux):
+    path = mux.wayland.display
+    (pid,) = mux.wayland.pids()
+    os.kill(pid, signal.SIGKILL)
+    await once(lambda: mux.wayland.pids() not in ([], [pid]), 10.0, "no new compositor started")
+    await once(lambda: mux.wayland.display == path, 10.0, "the new compositor never listened")
 
 
 # ----------------------------------------------------------------------

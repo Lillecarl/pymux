@@ -11,6 +11,7 @@ import base64
 import io
 import os
 import shlex
+import signal
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -857,3 +858,23 @@ async def test_the_pane_goes_when_the_window_closes(tmp_path):
         window = state.session.arrangement.get_active_window()
         assert pane not in window.panes
         assert window.active_pane in window.panes
+
+
+async def test_a_compositor_that_dies_under_a_drawing_window_takes_only_its_panes(tmp_path):
+    """
+    Its process ends while frames flow: the server goes on, the window's
+    pane goes, and a new compositor listens. Lillecarl/pyterm#1004.
+    """
+    async with with_a_window(tmp_path, animate=True) as (pymux, state, pane, _recorder, log, _probe):
+        await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
+        (pid,) = pymux.wayland.pids()
+        os.kill(pid, signal.SIGKILL)
+        await once(lambda: not pymux.wayland.panes, 10.0, "the dead compositor's window kept its pane")
+        await once(
+            lambda: pymux.wayland.display and pymux.wayland.pids() not in ([], [pid]),
+            10.0,
+            "no new compositor started",
+        )
+        window = state.session.arrangement.get_active_window()
+        assert pane not in window.panes
+        assert not pymux.done.is_set()
