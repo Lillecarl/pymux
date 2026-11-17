@@ -1,11 +1,12 @@
 """
-The two pipes of a job that runs without a terminal: pumped into the
-job's tails while it runs, and reaped when it ends.
+The two pipes of a program that runs without a terminal: pumped while
+it runs, and reaped when it ends. A job's, and a Wayland program's.
 """
 
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from contextlib import suppress
 
 import anyio
@@ -14,9 +15,7 @@ from ptyhost.backends.posix import reaped_now, stranger_ended
 
 from pymux.log import logger
 
-from .job import Job, land
-
-__all__ = ["JobPipes"]
+__all__ = ["JobPipes", "wait_for"]
 
 
 class JobPipes:
@@ -64,8 +63,8 @@ class JobPipes:
             with suppress(OSError):
                 os.kill(self.pid, number)
 
-    async def pump(self, fd: int, job: Job, name: str) -> None:
-        "Drain one pipe into the tail of its stream, until the end."
+    async def pump(self, fd: int, heard: Callable[[bytes], None]) -> None:
+        "Drain one pipe into `heard`, until the end."
         os.set_blocking(fd, False)
         try:
             while True:
@@ -85,7 +84,7 @@ class JobPipes:
                     break
                 if not data:
                     break
-                land(job, name, data)
+                heard(data)
         finally:
             with suppress(OSError):
                 os.close(fd)
@@ -108,12 +107,13 @@ class JobPipes:
             else:
                 # Abandoned on a cancel: the caller kills the child, and the
                 # thread's wait then returns.
-                self.returncode = await anyio.to_thread.run_sync(_wait_for, self.pid, abandon_on_cancel=True)
+                self.returncode = await anyio.to_thread.run_sync(wait_for, self.pid, abandon_on_cancel=True)
         self._ended = True
         return self.returncode
 
 
-def _wait_for(pid: int) -> int | None:
+def wait_for(pid: int) -> int | None:
+    "Block until the child `pid` ends: its exit code, or None when it is no child of this process."
     try:
         return os.waitstatus_to_exitcode(os.waitpid(pid, 0)[1])
     except ChildProcessError:

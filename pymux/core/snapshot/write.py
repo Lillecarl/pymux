@@ -28,6 +28,7 @@ from ...options.tables import (
     LIVE_ROWS,
     SCHEMA,
     SCREEN_TABLES,
+    WAYLAND_TABLES,
     AppearanceRow,
     ChangedRows,
     ClientModesRow,
@@ -165,7 +166,7 @@ class Snapshot:
     def write(self, pymux: Pymux) -> None:
         "Write what `pymux` holds now over what the write before held."
         _refuse_the_server(pymux)
-        panes = panes_of(pymux)
+        panes = [pane for pane in panes_of(pymux) if not is_window_pane(pane)]
         for pane in panes:
             _refuse_what_cannot_be_saved(pane)
         jobs = pymux.jobs.listing()
@@ -176,6 +177,9 @@ class Snapshot:
             written = self.rows.write(self.db, rows_of(pymux, mirrored=False))
             modes = self.modes.write(self.db, _client_mode_rows(pymux, mirrored=False))
             self._write_jobs(jobs)
+            for table in WAYLAND_TABLES:
+                self.db.execute("DELETE FROM %s" % table)
+            insert(self.db, pymux.wayland.snapshot_rows())
             alive = {pane.pane_id for pane in panes}
             for gone in set(self.freezers) - alive:
                 del self.freezers[gone]

@@ -35,6 +35,7 @@ __all__ = [
     "SCHEMA",
     "SCREEN_TABLES",
     "TABLES",
+    "WAYLAND_TABLES",
     "ChangedRows",
     "affinity",
     "column",
@@ -179,6 +180,9 @@ JOB_TABLES = ("jobs", "job_tags", "job_output")
 
 #: A pane's program and its screen, which only the transition holds.
 SCREEN_TABLES = ("pane_programs", "screen_appearances", "screen_rows")
+
+#: The compositor and its windows' programs, which only the transition holds too.
+WAYLAND_TABLES = ("wayland_compositor", "window_panes", "window_programs")
 
 #: What a client is in the middle of -- a held prefix, a key table, a
 #: prompt -- which typing changes, so only the transition holds it too.
@@ -605,6 +609,50 @@ class ProgramRow:
 
 
 @dataclass(frozen=True, slots=True)
+class CompositorRow:
+    """
+    The Wayland compositor's process, which outlives an upgrade's exec:
+    the socket to it, carried under this number, and the protocol its
+    `Hello` named. Lillecarl/pyterm#1004.
+    """
+
+    TABLE: ClassVar[str] = "wayland_compositor"
+    KEY: ClassVar[tuple[str, ...]] = ("id",)
+    id: int
+    fd: int
+    pid: int
+    version: int
+
+
+@dataclass(frozen=True, slots=True)
+class WindowPaneRow:
+    "A pane that shows a Wayland window, by the compositor's id for the window."
+
+    TABLE: ClassVar[str] = "window_panes"
+    KEY: ClassVar[tuple[str, ...]] = ("pane_id",)
+    pane_id: int = field(metadata=column(references="panes(pane_id)"))
+    toplevel: int
+
+
+@dataclass(frozen=True, slots=True)
+class WindowProgramRow:
+    """
+    A program `pymux wl` started: its pid and the read ends of its two
+    pipes, which an exec carries under these numbers, by the tag of the
+    connection it was given.
+    """
+
+    TABLE: ClassVar[str] = "window_programs"
+    KEY: ClassVar[tuple[str, ...]] = ("tag",)
+    tag: int
+    pid: int
+    stdout_fd: int
+    stderr_fd: int
+    #: The window pane its first window took, once it did.
+    pane_id: int | None
+
+
+@dataclass(frozen=True, slots=True)
 class AppearanceRow:
     TABLE: ClassVar[str] = "screen_appearances"
     KEY: ClassVar[tuple[str, ...]] = ("pane_id", "appearance")
@@ -679,6 +727,9 @@ ROWS = (
     ProgramRow,
     AppearanceRow,
     ScreenRow,
+    CompositorRow,
+    WindowPaneRow,
+    WindowProgramRow,
     ClientModesRow,
 )
 
@@ -689,7 +740,9 @@ SCHEMA = "".join(create_table(kind) for kind in ROWS)
 
 #: The tables of window management, which `sql` reads under `live`. A
 #: snapshot holds the jobs, the screens and the client modes beside them.
-LIVE_TABLES = tuple(table for table in TABLES if table not in JOB_TABLES + SCREEN_TABLES + CLIENT_MODE_TABLES)
+LIVE_TABLES = tuple(
+    table for table in TABLES if table not in JOB_TABLES + SCREEN_TABLES + WAYLAND_TABLES + CLIENT_MODE_TABLES
+)
 
 
 #: The rows of `LIVE_TABLES`.

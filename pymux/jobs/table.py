@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import codecs
 import errno
+import functools
 import os
 import signal
 import time
@@ -294,8 +295,8 @@ class JobTable:
                 pipes.send_signal(signal.SIGTERM)
         try:
             async with anyio.create_task_group() as pumps:
-                pumps.start_soon(pipes.pump, pipes.stdout, job, "stdout")
-                pumps.start_soon(pipes.pump, pipes.stderr, job, "stderr")
+                pumps.start_soon(pipes.pump, pipes.stdout, functools.partial(land, job, "stdout"))
+                pumps.start_soon(pipes.pump, pipes.stderr, functools.partial(land, job, "stderr"))
                 job.returncode = await pipes.reap()
         except anyio.get_cancelled_exc_class():
             # The server is going down: no orphan.

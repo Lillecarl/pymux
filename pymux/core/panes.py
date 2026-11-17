@@ -492,9 +492,11 @@ class PaneMaker:
         self._window_pane_shown()
         return pane
 
-    def window_pane_of(self, widget: WindowWidget) -> Pane:
-        "A registered pane that shows `widget`'s window, in no window yet."
+    def window_pane_of(self, widget: WindowWidget, pane_id: PaneId | None = None) -> Pane:
+        "A registered pane that shows `widget`'s window, in no window yet: `pane_id` when a snapshot names one."
         pane = Pane(widget)
+        if pane_id is not None:
+            pane.pane_id = pane_id
 
         def focus_pane_on_click() -> None:
             "Select this pane: the mouse went to it, as `_build_pane` does for a terminal."
@@ -525,7 +527,7 @@ class PaneMaker:
         self.pymux.invalidate(Woke.PANE_ENDED)
 
     def close_window_panes(self) -> None:
-        "Take every window pane away, as an upgrade does: no window survives its compositor."
+        "Take every window pane away, as `upgrade-server -W` does before it stops the compositor."
         for pane in list(self.pymux.panes_by_id.values()):
             if is_window_pane(pane):
                 pane.process.kill()

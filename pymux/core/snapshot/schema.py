@@ -226,13 +226,12 @@ def panes_of(pymux: Pymux) -> list[Pane]:
 
 def terminal_of(pane: Pane) -> Terminal:
     """
-    The terminal of a pane the snapshot holds. A Wayland window lives on
-    the server's compositor, which no handover carries, and the upgrade
-    closes it before it writes. Lillecarl/pyterm#622.
+    The terminal of a pane the snapshot holds a program for. A Wayland
+    window pane has none: `window_panes` holds it. Lillecarl/pyterm#1004.
     """
     terminal = pane.terminal
     if not isinstance(terminal, Terminal):
-        raise SnapshotError("pane %%%d shows a Wayland window, which no handover carries" % pane.pane_id)
+        raise SnapshotError("pane %%%d shows a Wayland window, not a terminal" % pane.pane_id)
     return terminal
 
 

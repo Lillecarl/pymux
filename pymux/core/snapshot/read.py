@@ -36,6 +36,7 @@ from ...options.tables import (
     ClientRow,
     ClientWindowRow,
     ColumnWidthRow,
+    CompositorRow,
     CounterRow,
     ForgottenSeedRow,
     GlobalEnvironmentRow,
@@ -70,12 +71,16 @@ from ...options.tables import (
     WaitChannelRow,
     WindowDefaultRow,
     WindowOptionRow,
+    WindowPaneRow,
+    WindowProgramRow,
     WindowRow,
     WindowTagRow,
     missing_from,
     select,
 )
 from ...options.window_options import WindowOptions
+from ...wayland.wayland import Inheritance
+from ...wayland.window_pane import WindowWidget, is_window_pane
 from ..pane import Pane
 from ..session import Session
 from ..splits import HSplit, Split, VSplit
@@ -206,7 +211,12 @@ async def start(pymux: Pymux) -> None:
     for job in pymux.jobs.listing():
         if not job.is_done:
             pymux.tasks.start_soon(pymux.jobs.supervise, job)
+    # Paused since the exec: `keep` adopts the compositor the snapshot
+    # names, or starts one.
+    pymux.wayland.resume()
     for pane in panes_of(pymux):
+        if is_window_pane(pane):
+            continue
         control = terminal_of(pane).terminal_control
         if not control._running:
             await control.start(pymux.tasks)
@@ -389,9 +399,16 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
     for job in _read_jobs(db, takeover):
         pymux.jobs._jobs[job.job_id] = job
 
+    window_panes: dict[int, Pane] = {}
+
     def pane_of(row: PaneRow, on_done: Callable[[], None] | None = None) -> Pane:
         viewing = select(db, ViewerRow, "WHERE pane_id = ?", row.pane_id)
-        if viewing:
+        showing = select(db, WindowPaneRow, "WHERE pane_id = ?", row.pane_id)
+        if showing:
+            toplevel = showing[0].toplevel
+            widget = WindowWidget(pymux.wayland, toplevel, pymux)
+            pane = window_panes[toplevel] = pymux.panes.window_pane_of(widget, PaneId(row.pane_id))
+        elif viewing:
             pane = _viewer(pymux, viewing[0])
         else:
             program = _program(db, PaneId(row.pane_id))
@@ -537,6 +554,14 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
     pymux.jobs.saved_queries = {row.name: (row.sql, row.description) for row in select(db, SavedQueryRow)}
     pymux.jobs.forgotten_seeds = {row.name for row in select(db, ForgottenSeedRow)}
     _read_notifications(pymux, db, counters)
+    compositor = select(db, CompositorRow)
+    if compositor:
+        programs = [
+            (row, JobPipes(row.pid, row.stdout_fd, row.stderr_fd, parent=True)) for row in select(db, WindowProgramRow)
+        ]
+        pymux.wayland.inherited = Inheritance(compositor[0], window_panes, programs)
+    elif window_panes:
+        raise SnapshotError("the snapshot holds window panes and no compositor for them")
     return server["listener_fd"]
 
 

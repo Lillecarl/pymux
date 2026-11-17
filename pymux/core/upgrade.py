@@ -43,6 +43,7 @@ import shlex
 import shutil
 import sys
 import time
+import traceback
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -88,8 +89,12 @@ KILL_TIMEOUT = 2.0
 OURS = ("pymux", "libpymux", "ptterm", "ptyhost", "pyte", "prompt_toolkit")
 
 
-async def upgrade(pymux: Pymux, command: list[str]) -> None:
-    "Replace this server's build with the one `command` starts."
+async def upgrade(pymux: Pymux, command: list[str], close_windows: bool = False) -> None:
+    """
+    Replace this server's build with the one `command` starts. The
+    compositor goes across with its windows, unless `close_windows` or it
+    holds none: then it stops, and the new build starts its own.
+    """
     executable = shutil.which(command[0])
     if executable is None:
         raise CommandException("%s: not found" % command[0])
@@ -97,10 +102,12 @@ async def upgrade(pymux: Pymux, command: list[str]) -> None:
     _refuse(pymux)
     # A recording holds Python objects of this build, so it ends here.
     pymux.finish_recordings()
-    # A Wayland window lives on this server's compositor, which ends with
-    # the exec, so its pane goes now and not into the snapshot.
-    # Lillecarl/pyterm#622.
-    pymux.panes.close_window_panes()
+    if pymux.wayland.inherited is not None:
+        # Its windows are in no pane table yet, and would be lost.
+        raise CommandException("the Wayland compositor is still being adopted; try again")
+    hands_over = pymux.wayland.holds_windows() and not close_windows
+    if not hands_over:
+        pymux.panes.close_window_panes()
 
     path = Path(socket_directory()) / ("pymux.core.upgrade.%d.sqlite" % os.getpid())
     written = Snapshot(path)
@@ -114,9 +121,10 @@ async def upgrade(pymux: Pymux, command: list[str]) -> None:
         await pymux.audio.pause()
         # And the portal's private bus, for the same reason.
         await pymux.portal.pause()
-        # And the compositor's process, for the same reason; its windows
-        # closed above.
-        await pymux.wayland.pause()
+        # And a compositor whose windows closed above, for the same
+        # reason. One with windows crosses the exec. Lillecarl/pyterm#1004.
+        if not hands_over:
+            await pymux.wayland.pause()
         step("sound, portal and compositor paused")
         try:
             written.write(pymux)
@@ -139,6 +147,10 @@ async def upgrade(pymux: Pymux, command: list[str]) -> None:
             _refuse(pymux)
             _pause(pymux)
             paused = True
+            try:
+                pymux.wayland.hand_over()
+            except OSError as error:
+                raise CommandException("the Wayland compositor did not pause: %s" % (error,))
             written.write(pymux)
         except SnapshotError as e:
             raise CommandException(str(e))
@@ -157,6 +169,7 @@ async def upgrade(pymux: Pymux, command: list[str]) -> None:
         pymux.refusing_commands = False
         if paused:
             _resume(pymux)
+        pymux.wayland.take_back()
         pymux.audio.resume()
         pymux.portal.resume()
         pymux.wayland.resume()
@@ -260,6 +273,7 @@ def carried(pymux: Pymux) -> list[int]:
     listener = pymux.listener
     if isinstance(listener, PosixSocketListener):
         fds.append(listener.socket.fileno())
+    fds += pymux.wayland.carried()
     return fds
 
 
@@ -301,9 +315,33 @@ def check(path: str) -> None:
 
     async def load_it() -> None:
         # In a loop, because a job's `done` is an event.
-        load(Pymux(), path)
+        pymux = Pymux()
+        load(pymux, path)
+        _refuse_the_compositor(pymux)
 
-    anyio.run(load_it)
+    try:
+        anyio.run(load_it)
+    except Exception:
+        # The reason is the last line the caller shows. A finalizer at
+        # shutdown printed after it otherwise.
+        traceback.print_exc()
+        sys.stderr.flush()
+        os._exit(1)
+
+
+def _refuse_the_compositor(pymux: Pymux) -> None:
+    "A compositor this build cannot adopt: its windows would end. `-W` closes them on purpose."
+    from ..wayland import wayland
+
+    inherited = pymux.wayland.inherited
+    if inherited is None:
+        return
+    version = inherited.compositor.version
+    if not wayland.speaks(version):
+        raise SnapshotError(
+            "this build cannot adopt the Wayland compositor, which speaks version %d, so %d windows would close;"
+            " upgrade-server -W closes them" % (version, len(inherited.panes))
+        )
 
 
 def _import_everything() -> None:
@@ -347,6 +385,9 @@ def resume(path: str) -> None:
     started = time.monotonic()
     try:
         pymux = Pymux()
+        # Until `start`: a compositor started before the load would wait
+        # for the path the carried one holds.
+        pymux.wayland.paused = True
         server = read_server(path)
         pymux.source_file = server["source_file"]
         pymux.socket_name = server["socket_name"]

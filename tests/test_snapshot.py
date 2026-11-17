@@ -419,6 +419,10 @@ ONE_ROW = {"server_options", "session_defaults"}
 #: `test_a_server_mirrors_a_server.py` take them through a snapshot.
 LINKED = {"peer_copies", "peer_places"}
 
+#: Tables only a Wayland compositor fills. The upgrade tests in
+#: `test_wayland_server.py` take them through a snapshot.
+WAYLAND = set(tables.WAYLAND_TABLES)
+
 #: Columns that hold one value in every row however the server is used.
 CONSTANT = {
     ("counters", "value"),  # five counters, and two of them may agree
@@ -493,7 +497,7 @@ def _constant_columns(path) -> list[tuple[str, str]]:
     try:
         found = []
         for table in tables.TABLES:
-            if table in ONE_ROW or table in LINKED:
+            if table in ONE_ROW or table in LINKED or table in WAYLAND:
                 continue
             if db.execute("SELECT count(*) FROM %s" % table).fetchone()[0] < 2:
                 found.append((table, "(fewer than two rows)"))

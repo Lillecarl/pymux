@@ -122,6 +122,22 @@ def logged(log: Path) -> list[str]:
     return log.read_text().splitlines()
 
 
+async def test_a_hand_over_taken_back_keeps_the_window_drawing(tmp_path):
+    """
+    An upgrade that fails after the compositor paused for its exec: the
+    same process writes again, and the window, whose commit it held, is
+    told its frame is done. Lillecarl/pyterm#1004.
+    """
+    async with with_a_window(tmp_path, animate=True) as (pymux, _state, pane, _recorder, log, _probe):
+        await once(lambda: logged(log).count("frame") >= 2, 10.0, "the window never animated")
+        pymux.wayland.hand_over()
+        await anyio.sleep(0.5)
+        held = logged(log).count("frame")
+        pymux.wayland.take_back()
+        await once(lambda: logged(log).count("frame") > held + 2, 10.0, "the window never drew again")
+        assert list(pymux.wayland.panes.values()) == [pane]
+
+
 async def test_a_window_opens_a_pane_beside_the_active_one(tmp_path):
     async with with_a_window(tmp_path) as (pymux, state, pane, _recorder, _log, _probe):
         window = state.session.arrangement.get_active_window()
