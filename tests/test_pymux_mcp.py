@@ -224,6 +224,15 @@ def test_a_picture_is_answered_as_an_image():
     assert (image.mime_type, base64.b64decode(image.data)) == ("image/png", b"\x89PNG")
 
 
+async def test_a_picture_takes_the_cell_every_model_reads_plain_text_at():
+    "Lillecarl/pyterm#1005: 7x14, unless the caller names one or null."
+    events = []
+    for cell in ((), ((10, 20),), (None,)):
+        arguments = {"pane": "%5", "format": "png"} | ({"cell": cell[0]} if cell else {})
+        await OPERATIONS.call(RecordingServer(events), "pane.capture", arguments)
+    assert ["--cell 7x14" in events[0], "--cell 10x20" in events[1], "--cell" in events[2]] == [True, True, False]
+
+
 async def test_two_tools_over_mcp(tmp_path):
     async def server_for():
         return await _nowhere(tmp_path)

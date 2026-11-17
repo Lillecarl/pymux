@@ -34,6 +34,29 @@ ids that the other operations take.
 
 `command` runs any pymux command line, for what the rest do not cover.
 
+## How small a picture a model reads
+
+A PNG capture draws each cell 7x14 pixels unless the caller names a
+size. `tools/png_legibility.py` measured it on 2026-11-17: four samples
+in a 100x30 pane, each model transcribing the picture, scored in wrong
+characters per thousand against the pane's text (Lillecarl/pyterm#1005).
+
+| cell | image tokens | `ls -l` (Haiku, Sonnet, Opus) | code (Haiku, Sonnet, Opus) |
+| --- | --- | --- | --- |
+| 10x20 | 802 | 0, 0, 0 | 71, 293, 38 |
+| 9x18 | 670 | 0, 0, 0 | 85, 76, 41 |
+| 7x14 | 385 | 0, 0, 0 | 122, 117, 26 |
+| 6x12 | 296 | 0, 0, 0 | 89, 181, 51 |
+| 5x10 | 208 | 6, -, - | 141, -, - |
+| 4x8 | 145 | 35, -, - | 203, -, - |
+
+The same `ls -l` as text costs 348 tokens, so from 7x14 down the picture
+is the cheaper of the two. Every model misreads box drawing at every
+size: it miscounts a run of one glyph, such as a border, and swaps rare
+symbols. Exact text, code above all, reads from `format: text`. The
+bundled face read as well as the system's for Haiku; Sonnet and Opus
+were measured in the bundled one alone, to keep the calls few.
+
 ## Browsers
 
 `browser.open` starts a browser for an agent to drive over the DevTools

@@ -48,6 +48,21 @@ NO_PASTE_DELAY: Final = (0.25, 0.5)
 #: scaling it down, which costs tokens and blurs it both.
 PNG_FIT: Final = 1568
 
+#: A cell of a PNG, in pixels. Measured with `tools/png_legibility.py`
+#: (Lillecarl/pyterm#1005): Haiku, Sonnet and Opus read plain text at
+#: 7x14 and at 6x12 with no error, and Opus reads code no worse here
+#: than at 10x20. A 100x30 pane costs 385 tokens, against 802 at 10x20.
+#: Box drawing and runs of one glyph are misread at every size.
+PNG_CELL: Final = (7, 14)
+
+Cell = Annotated[
+    tuple[int, int] | None,
+    Field(
+        description="For `png`: one cell's width and height in pixels. 7x14 reads plain text exactly;"
+        " null for the terminal's own."
+    ),
+]
+
 #: What pymux says when it has no font to draw a PNG with, and the
 #: bundled one is offered instead.
 NO_FONT: Final = "no font to draw with"
@@ -256,10 +271,7 @@ async def capture(
         Literal["text", "html", "png"],
         Field(description="`html` adds colours, bold, underline and links; `png` is a picture of the pane."),
     ] = "text",
-    cell: Annotated[
-        tuple[int, int] | None,
-        Field(description="For `png`: one cell's width and height in pixels; the attached terminal's when left out."),
-    ] = None,
+    cell: Cell = PNG_CELL,
     fit: Annotated[
         int | None,
         Field(gt=0, description="For `png`: the longest edge in pixels; the cell shrinks to fit. null for none."),
@@ -308,10 +320,7 @@ async def capture_client(
         Literal["text", "png"],
         Field(description="`png` is a picture of everything the client shows, in its own colours."),
     ] = "text",
-    cell: Annotated[
-        tuple[int, int] | None,
-        Field(description="For `png`: one cell's width and height in pixels; the client terminal's when left out."),
-    ] = None,
+    cell: Cell = PNG_CELL,
     fit: Annotated[
         int | None,
         Field(gt=0, description="For `png`: the longest edge in pixels; the cell shrinks to fit. null for none."),
@@ -339,10 +348,7 @@ async def capture_window(
         Literal["text", "png"],
         Field(description="`png` is a picture of the window's panes and borders, in their own colours."),
     ] = "text",
-    cell: Annotated[
-        tuple[int, int] | None,
-        Field(description="For `png`: one cell's width and height in pixels; the attached terminal's when left out."),
-    ] = None,
+    cell: Cell = PNG_CELL,
     fit: Annotated[
         int | None,
         Field(gt=0, description="For `png`: the longest edge in pixels; the cell shrinks to fit. null for none."),
