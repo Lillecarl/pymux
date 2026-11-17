@@ -21,7 +21,13 @@ from pymux.core.main import Pymux
 SIZE = Size(rows=24, columns=80)
 
 #: Says it is ready once the trap is set, and writes "handled" from it.
-TRAPS = "trap 'echo handled > %(handled)s; exit 0' HUP\ntouch %(ready)s\nwhile :; do sleep 0.05; done\n"
+#: Written aside and moved in: a redirection makes the file before it
+#: writes, and under six suites a test read it empty in between.
+#: Lillecarl/pyterm#1000.
+TRAPS = (
+    "trap 'echo handled > %(handled)s.part; mv %(handled)s.part %(handled)s; exit 0' HUP\n"
+    "touch %(ready)s\nwhile :; do sleep 0.05; done\n"
+)
 
 
 async def _command(pymux, state, text):
