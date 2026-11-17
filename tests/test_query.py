@@ -78,11 +78,17 @@ async def test_the_collector_types_count_what_is_tracked():
     async with create_session() as (pymux, _state):
         rows = await _rows(
             pymux,
-            "SELECT sum(objects) FROM collector_types WHERE type = :name",
+            "SELECT sum(objects) FROM collector_types WHERE type = :name AND owner IS NULL",
             name="%s.%s" % (Held.__module__, Held.__qualname__),
+        )
+        owned = await _rows(
+            pymux,
+            "SELECT sum(objects) FROM collector_types WHERE type = 'builtins.type' AND owner = :owner",
+            owner=Held.__module__,
         )
 
     assert rows == [(len(kept),)], rows
+    assert owned[0][0] >= 1, owned
 
 
 async def test_the_live_tables_answer_what_the_objects_hold():

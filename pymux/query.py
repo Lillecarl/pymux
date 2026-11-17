@@ -25,6 +25,7 @@ from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import nullcontext
 from dataclasses import dataclass, fields
 from functools import partial
+from types import FunctionType
 from typing import TYPE_CHECKING, Any, NamedTuple, cast, get_type_hints
 
 import anyio
@@ -65,9 +66,9 @@ if not apsw.using_amalgamation or not apsw.apsw_version().startswith(apsw.sqlite
 
 #: What this server answers with. Agents read it with `PRAGMA
 #: user_version` and re-read the tables when it differs from what they
-#: were told. 15: `collector_types` counts what each generation of
-#: the cycle collector tracks, by type.
-SCHEMA_VERSION = 15
+#: were told. 16: `collector_types` counts what each generation of
+#: the cycle collector tracks, by type and the module that defined it.
+SCHEMA_VERSION = 16
 
 #: The questions every boot starts with. A name an agent saves later
 #: replaces one of these for the rest of the boot; the next boot seeds
@@ -253,10 +254,15 @@ class CollectorView:
 
 @dataclass(frozen=True, slots=True)
 class CollectorTypeView:
-    "How many objects of one type a generation tracks, and does not hold frozen."
+    """
+    How many objects of one type a generation tracks, and does not hold
+    frozen. `owner` is the module a function or a class was defined
+    in, which tells the code of a module imported late from state.
+    """
 
     generation: int
     type: str
+    owner: str | None
     objects: int
 
 
@@ -374,10 +380,14 @@ def _collector_types(pymux: Pymux) -> Iterator[CollectorTypeView]:
     # 100 000. Only a question that reads this table pays it.
     for generation in range(len(gc.get_stats())):
         counted = Counter(
-            "%s.%s" % (type(one).__module__, type(one).__qualname__) for one in gc.get_objects(generation)
+            (
+                "%s.%s" % (type(one).__module__, type(one).__qualname__),
+                getattr(one, "__module__", None) if isinstance(one, (FunctionType, type)) else None,
+            )
+            for one in gc.get_objects(generation)
         )
-        for name, objects in counted.items():
-            yield CollectorTypeView(generation, name, objects)
+        for (name, owner), objects in counted.items():
+            yield CollectorTypeView(generation, name, owner if isinstance(owner, str) else None, objects)
 
 
 def _live(pymux: Pymux, table: str) -> Iterator[Any]:
