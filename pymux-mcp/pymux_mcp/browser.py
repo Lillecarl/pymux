@@ -112,6 +112,19 @@ QUIET: Final = (
     "--password-store=basic",
 )
 
+#: Chromium's preferences that keep a prompt off the page: no offer to
+#: save a password, an address or a card, no translate bar, and no
+#: notification permission question. Each covers the page an agent
+#: drives, and nobody answers it. No switch sets these, so pymux writes
+#: them into the profile's `Default/Preferences` at each start.
+#: Lillecarl/pyterm#1009.
+CHROMIUM_PREFERENCES: Final = {
+    "credentials_enable_service": False,
+    "profile": {"password_manager_enabled": False, "default_content_setting_values": {"notifications": 2}},
+    "autofill": {"profile_enabled": False, "credit_card_enabled": False},
+    "translate": {"enabled": False},
+}
+
 #: Less motion, so a watched browser sends fewer frames: every one
 #: crosses to each client that shows it. Measured on Chromium 155: the
 #: switch makes `prefers-reduced-motion: reduce` match, and a site that
@@ -412,6 +425,7 @@ def _chromium(
     proxy: str | None = None,
 ) -> list[str]:
     placed = {Seat.HEADLESS: ["--headless=new"], Seat.PANE: ["--ozone-platform=wayland"], Seat.DESKTOP: []}
+    _prefer(profile / "Default" / "Preferences", CHROMIUM_PREFERENCES)
     return [
         executable,
         *placed[seat],
@@ -425,6 +439,24 @@ def _chromium(
         *arguments,
         BLANK,
     ]
+
+
+def _prefer(path: Path, preferences: Mapping[str, Any]) -> None:
+    "Merge `preferences` into the JSON at `path`, keeping every other key a kept profile has there."
+    try:
+        found = json.loads(path.read_text())
+    except FileNotFoundError, ValueError:
+        found = {}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(_merged(found if isinstance(found, dict) else {}, preferences)))
+
+
+def _merged(found: dict[str, Any], preferences: Mapping[str, Any]) -> dict[str, Any]:
+    merged = dict(found)
+    for key, value in preferences.items():
+        below = merged.get(key)
+        merged[key] = _merged(below, value) if isinstance(value, Mapping) and isinstance(below, dict) else value
+    return merged
 
 
 def _proxy_switches(proxy: str | None) -> list[str]:
@@ -454,6 +486,8 @@ def _qutebrowser(
         "_own = _os.path.join(str(config.configdir), 'config.py')\n"
         "if _os.path.exists(_own):\n"
         "    config.source(_own)\n"
+        # After the person's own: a permission question nobody answers. Lillecarl/pyterm#1009.
+        + "c.content.notifications.enabled = False\n"
         # After the person's own, which may name a proxy of its own.
         + ("" if proxy is None else "c.content.proxy = %r\n" % ("socks5://%s/" % (proxy,),))
     )
@@ -494,6 +528,15 @@ GECKO_PREFERENCES: Final = {
     "toolkit.startup.max_resumed_crashes": -1,
     "ui.prefersReducedMotion": 1,
     "general.smoothScroll": False,
+    # No offer to save a password or fill a form, no translation bar and
+    # no notification question: nobody answers them. Lillecarl/pyterm#1009.
+    "signon.rememberSignons": False,
+    "signon.autofillForms": False,
+    "signon.generation.enabled": False,
+    "extensions.formautofill.addresses.enabled": False,
+    "extensions.formautofill.creditCards.enabled": False,
+    "browser.translations.automaticallyPopup": False,
+    "dom.webnotifications.enabled": False,
 }
 
 #: The environment of a Firefox or Glide. A staged update is applied at

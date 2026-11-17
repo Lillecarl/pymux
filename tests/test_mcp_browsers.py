@@ -296,6 +296,53 @@ async def test_firefox_is_reached_from_inside_and_keeps_its_profile(server, tmp_
         await call(server, "browser.close", name="probe")
 
 
+async def test_chromium_offers_to_save_nothing_and_keeps_a_kept_profiles_preferences(server, tmp_path, monkeypatch):
+    """
+    No password, address or card offer, no translate bar and no
+    notification question: nobody answers them. Chromium keeps what it
+    read when it writes its preferences back. Lillecarl/pyterm#1009.
+    """
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    preferences = tmp_path / "state" / "pymux" / "browsers" / "work" / "Default" / "Preferences"
+    preferences.parent.mkdir(parents=True)
+    preferences.write_text(json.dumps({"browser": {"show_home_button": True}, "autofill": {"profile_enabled": True}}))
+    await call(server, "browser.open", name="probe", seat="headless", profile="work", arguments=ARGUMENTS)
+    await call(server, "browser.close", name="probe")
+
+    written = json.loads(preferences.read_text())
+    assert written["credentials_enable_service"] is False, written
+    assert written["profile"]["password_manager_enabled"] is False, written
+    assert written["profile"]["default_content_setting_values"]["notifications"] == 2, written
+    assert written["autofill"]["profile_enabled"] is False and written["autofill"]["credit_card_enabled"] is False
+    assert written["translate"]["enabled"] is False, written
+    assert written["browser"]["show_home_button"] is True, written
+
+
+@needs_firefox
+async def test_firefox_offers_to_save_nothing(server):
+    "Lillecarl/pyterm#1009."
+    await call(server, "browser.open", name="probe", kind="firefox", seat="headless")
+    try:
+        for name in ("signon.rememberSignons", "signon.autofillForms", "dom.webnotifications.enabled"):
+            code = "Services.prefs.getBoolPref(%s)" % (json.dumps(name),)
+            assert await call(server, "gecko.chrome", name="probe", code=code) is False, name
+    finally:
+        await call(server, "browser.close", name="probe")
+
+
+@needs_qutebrowser
+async def test_qutebrowser_asks_no_notification_question(server):
+    "Lillecarl/pyterm#1009."
+    await call(
+        server, "browser.open", name="probe", kind="qutebrowser", seat="headless", arguments=QUTEBROWSER_ARGUMENTS
+    )
+    try:
+        said = await call(server, "qutebrowser.python", name="probe", code="config.val.content.notifications.enabled")
+        assert said["value"] is False, said
+    finally:
+        await call(server, "browser.close", name="probe")
+
+
 #: A second browser window, held where Firefox's startup has registered it
 #: and not yet given it a `gBrowser`.
 HALF_STARTED = """(async () => {
