@@ -368,7 +368,7 @@ def main() -> int:
 
     failed: Counter = Counter()
     pieces = []
-    broken = []
+    broken: dict[str, list[str]] = {}
 
     ran = [name for name in names if not left_out(name) and re.search(include, name)]
 
@@ -390,9 +390,9 @@ def main() -> int:
         if errors.strip():
             pieces.append("--- what the run wrote to stderr ---\n" + errors)
             if _RAISED in errors:
-                broken.append(name)
-        if _EMITTED.search(output):
-            broken.append(name)
+                broken.setdefault(name, []).append(errors[errors.rindex(_RAISED) :][-3000:])
+        for found in _EMITTED.finditer(output):
+            broken.setdefault(name, []).append(output[max(0, found.start() - 1500) : found.end()])
 
     log = "\n".join(pieces)
 
@@ -408,12 +408,16 @@ def main() -> int:
 
     status = check_exclusions(names, include)
 
-    for name in sorted(set(broken)):
+    # The evidence goes to the check's own log: vterm.log lives in the
+    # run's output, which a reader of the gate's log may never open.
+    # Lillecarl/pyterm#744.
+    for name in sorted(broken):
         print(
             "vterm: %s expected lines the middle man cannot emit, or it "
-            "raised. Read the log: this is a fault here and not a "
-            "difference." % name
+            "raised. This is a fault here and not a difference:" % name
         )
+        for evidence in broken[name]:
+            print(evidence)
         status = 1
 
     return report(failed, include) or status
