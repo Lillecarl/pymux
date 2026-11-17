@@ -672,6 +672,9 @@ in
         env = {
           inherit selection durations;
           PYMUX_CPU = cpuNames;
+          # How many tests the run names for what they left alive, and
+          # for the collector's pauses. Lillecarl/pyterm#1001.
+          PYMUX_HEAP = builtins.getEnv "PYMUX_HEAP";
           PYMUX_PROFILE_COLLECTION = builtins.getEnv "PYMUX_PROFILE_COLLECTION";
           PYMUX_HANG_SECONDS = toString hangIsSeconds;
           PYMUX_BASE16_SCHEMES = "${base16-schemes-json}/base16-schemes.json";

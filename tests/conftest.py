@@ -14,16 +14,21 @@ suite around it.
 
 from __future__ import annotations
 
+import collections
 import cProfile
 import faulthandler
+import gc
 import os
 import pstats
 import resource
+import statistics
 import sys
+import time
 from pathlib import Path
 
 import pytest
 from hypothesis import HealthCheck, settings
+from hypothesis.internal.entropy import deterministic_PRNG
 from prompt_toolkit.application.current import _current_app_session
 from ptyhost.process import Process
 
@@ -94,6 +99,24 @@ def pytest_collection(session):
             stats.sort_stats("tottime").print_stats(30)
 
 
+def pytest_collection_finish(session):
+    """
+    Freeze what importing the suite made, so a full collection never
+    scans it again. It is most of a worker's heap: 360 000 objects after
+    the first test, against 410 000 to 440 000 after the last, and one
+    collection of all of it held a timing test for 0.343 s.
+    Lillecarl/pyterm#1001.
+
+    Hypothesis makes its own `Random` first: it checks with
+    `gc.get_referrers`, which sees no frozen object, and made after the
+    freeze it warns that nothing holds the one its module holds.
+    """
+    with deterministic_PRNG():
+        pass
+    gc.collect()
+    gc.freeze()
+
+
 #: How many of the costliest tests by CPU the run names. The check sets it.
 #: `--durations` is wall time, and under load wall time measures the load.
 CPU_NAMES = int(os.environ.get("PYMUX_CPU") or 0)
@@ -123,15 +146,98 @@ def pytest_runtest_makereport(item, call):
     if CPU_NAMES and call.when == "teardown" and hasattr(item, "cpu_before"):
         spent = _cpu_seconds() - item.cpu_before
         outcome.get_result().user_properties.append(("cpu", spent))
+    if HEAP_NAMES and call.when == "teardown":
+        outcome.get_result().user_properties.append(("heap", _heap_after_a_test()))
+
+
+#: How many tests the run names for what they left alive and for the
+#: collector's longest pause. The check sets it. Each test then ends in
+#: a full collection and a count of every object, so a run takes longer.
+#: Lillecarl/pyterm#1001.
+HEAP_NAMES = int(os.environ.get("PYMUX_HEAP") or 0)
+
+#: The live objects by type after the last test of this worker.
+_heap_before: collections.Counter[str] | None = None
+_longest_pause = 0.0
+_pause_started = 0.0
+_heap_kept: list[tuple[int, str, str, int]] = []
+_pauses: list[tuple[float, str]] = []
+_live_by_worker: dict[str, list[int]] = {}
+#: What each full collection the measurement forced took, by worker.
+_collections_by_worker: dict[str, list[float]] = {}
+
+
+def _time_the_collector(phase, info):
+    global _pause_started, _longest_pause
+    if phase == "start":
+        _pause_started = time.perf_counter()
+    else:
+        _longest_pause = max(_longest_pause, time.perf_counter() - _pause_started)
+
+
+if HEAP_NAMES:
+    gc.callbacks.append(_time_the_collector)
+
+
+def _heap_after_a_test() -> tuple[int, list[tuple[str, int]], float, int, float]:
+    """
+    Growth since the last test, the types that grew most, the longest
+    pause, the live count, and what the full collection here took.
+    """
+    global _heap_before, _longest_pause
+    longest = _longest_pause
+    started = time.perf_counter()
+    gc.collect()
+    took = time.perf_counter() - started
+    # Not this collection's own pause: it is the measurement, not the test.
+    _longest_pause = 0.0
+    now = collections.Counter(type(one).__qualname__ for one in gc.get_objects())
+    before, _heap_before = _heap_before, now
+    if before is None:
+        return 0, [], longest, now.total(), took
+    grown = now.copy()
+    grown.subtract(before)
+    return now.total() - before.total(), grown.most_common(5), longest, now.total(), took
 
 
 def pytest_runtest_logreport(report):
     for name, value in report.user_properties:
         if name == "cpu":
             _cpu_spent.append((value, report.nodeid))
+        elif name == "heap":
+            grew, types, pause, live, took = value
+            worker = getattr(report, "node", None)
+            worker_id = getattr(worker, "gateway", None) and worker.gateway.id or "gw0"
+            _heap_kept.append((grew, report.nodeid, ", ".join("%s +%d" % one for one in types), live))
+            _pauses.append((pause, "%s %s (%d live)" % (worker_id, report.nodeid, live)))
+            _live_by_worker.setdefault(worker_id, []).append(live)
+            _collections_by_worker.setdefault(worker_id, []).append(took)
+
+
+def _heap_summary(terminalreporter) -> None:
+    write = terminalreporter.write_line
+    terminalreporter.section("the %d tests that left the most alive" % HEAP_NAMES)
+    for grew, nodeid, types, live in sorted(_heap_kept, reverse=True)[:HEAP_NAMES]:
+        write("%+8d %8d live  %s" % (grew, live, nodeid))
+        write("                    %s" % types)
+    terminalreporter.section("the %d longest collector pauses" % HEAP_NAMES)
+    for pause, where in sorted(_pauses, reverse=True)[:HEAP_NAMES]:
+        write("%7.3fs %s" % (pause, where))
+    terminalreporter.section("live objects of each worker: first, lowest, highest, last, and the tenths")
+    for worker_id, lives in sorted(_live_by_worker.items()):
+        tenths = [lives[len(lives) * part // 10] for part in range(10)]
+        write(
+            "%s %5d tests  %d %d %d %d  %s"
+            % (worker_id, len(lives), lives[0], min(lives), max(lives), lives[-1], " ".join(map(str, tenths)))
+        )
+    terminalreporter.section("a full collection after each test, by worker: median and longest")
+    for worker_id, took in sorted(_collections_by_worker.items()):
+        write("%s %.4fs %.4fs" % (worker_id, statistics.median(took), max(took)))
 
 
 def pytest_terminal_summary(terminalreporter):
+    if HEAP_NAMES:
+        _heap_summary(terminalreporter)
     if not CPU_NAMES:
         return
     write = terminalreporter.write_line

@@ -238,9 +238,9 @@ async def test_a_key_draws_within_a_round_trip_while_a_pane_animates(request):
     # What the suite's earlier tests left alive is not this test's heap:
     # in a worker that had run thousands of them, one collection held a
     # key for 0.343 s of its 0.353 s. Frozen, it is never scanned, and a
-    # collection of what pymux makes here still counts.
+    # collection of what pymux makes here still counts. Not unfrozen
+    # after: that would also thaw the heap the conftest froze.
     gc.freeze()
-    request.addfinalizer(gc.unfreeze)
 
     async with over_connection(read_packet=read) as session:
         state = await attach_paced(session, packets)
