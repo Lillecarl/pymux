@@ -8,12 +8,13 @@ from __future__ import annotations
 
 import contextvars
 import errno
+import gc
 import os
 import signal
 import socket
 import time
-from collections.abc import Awaitable, Callable
-from contextlib import suppress
+from collections.abc import Awaitable, Callable, Iterator
+from contextlib import contextmanager, suppress
 from typing import TYPE_CHECKING
 
 import anyio
@@ -32,6 +33,33 @@ if TYPE_CHECKING:
     from .main import Pymux
 
 __all__ = ["Serving"]
+
+
+@contextmanager
+def freeze_what_started() -> Iterator[None]:
+    """
+    Keep the heap the server started with out of every later scan, while it serves.
+
+    A full collection scans every tracked object. On dynhetz the live
+    server tracked 216 000 after an upgrade, and each full collection
+    held the loop for up to 66 ms: four frames at 60 Hz. What exists
+    once the modules are imported and a snapshot is loaded mostly lives
+    as long as the server. A frozen object that dies is still freed by
+    its reference count; only a cycle among frozen ones stays.
+
+    The way out thaws and collects. A frozen cycle is otherwise
+    finalized in interpreter teardown, where an import fails and a
+    `__del__` prints on the terminal a detach leaves: every
+    `check_detach_ends_client` run did. Lillecarl/pyterm#1016.
+    """
+    gc.collect()
+    gc.freeze()
+    logger.info("Froze %d objects out of the cycle collector.", gc.get_freeze_count())
+    try:
+        yield
+    finally:
+        gc.unfreeze()
+        gc.collect()
 
 
 def _listens(sock: socket.socket) -> bool:
@@ -163,7 +191,8 @@ class Serving:
                 async with self.pymux.running():
                     if resumed is not None:
                         await resumed()
-                    await self.pymux.done.wait()
+                    with freeze_what_started():
+                        await self.pymux.done.wait()
             finally:
                 # `stop()` is what set `done`, so this is usually a
                 # second call that finds nothing. It is here for the
@@ -244,33 +273,10 @@ class Serving:
         async def run() -> None:
             try:
                 async with self.pymux.running():
-                    server_end, client_end = connect_in_memory()
-
-                    # A context of its own, the same as for a client
-                    # that arrives over the socket. A
-                    # `prompt_toolkit.Application` becomes active in it.
-                    context = contextvars.copy_context()
-                    connection = context.run(lambda: ServerConnection(self.pymux, server_end))
-                    self.pymux.connections.append(connection)
-
-                    client = MemoryClient(client_end)
-                    # One process reads the file twice: as the server,
-                    # for everything, and as the client, for the lines
-                    # that are about this terminal. Lillecarl/pyterm#225.
-                    client.config_file = self.pymux.source_file
-                    client.chosen_name = chosen_name
-                    client.hang_up_others = hang_up_others
-                    # `-r` here is a watcher of a session nobody else
-                    # can reach, which is a thin thing to want; it is
-                    # passed on all the same, because the flag means
-                    # the same wherever it is written and `ctrl+b d`
-                    # is still the way out. Lillecarl/pyterm#469.
-                    client.read_only = read_only
-                    attached.append(client)
-                    await client.attach(
-                        detach_other_clients=detach_other_clients,
-                        color_depth=color_depth,
-                    )
+                    with freeze_what_started():
+                        await self._serve_one_terminal(
+                            attached, color_depth, detach_other_clients, chosen_name, hang_up_others, read_only
+                        )
             finally:
                 # The client has gone, and the server is in this
                 # process, so nothing is left for the session to live
@@ -295,3 +301,40 @@ class Serving:
             # process that started this one hears about it.
             for client in attached:
                 client.hang_up_the_parent()
+
+    async def _serve_one_terminal(
+        self,
+        attached: list[MemoryClient],
+        color_depth: ColorDepth | None,
+        detach_other_clients: bool,
+        chosen_name: str | None,
+        hang_up_others: bool,
+        read_only: bool,
+    ) -> None:
+        "The integrated route's one client, over a pair of queues, until it leaves."
+        server_end, client_end = connect_in_memory()
+
+        # A context of its own, the same as for a client that arrives
+        # over the socket. A `prompt_toolkit.Application` becomes
+        # active in it.
+        context = contextvars.copy_context()
+        connection = context.run(lambda: ServerConnection(self.pymux, server_end))
+        self.pymux.connections.append(connection)
+
+        client = MemoryClient(client_end)
+        # One process reads the file twice: as the server, for
+        # everything, and as the client, for the lines that are about
+        # this terminal. Lillecarl/pyterm#225.
+        client.config_file = self.pymux.source_file
+        client.chosen_name = chosen_name
+        client.hang_up_others = hang_up_others
+        # `-r` here is a watcher of a session nobody else can reach,
+        # which is a thin thing to want; it is passed on all the same,
+        # because the flag means the same wherever it is written and
+        # `ctrl+b d` is still the way out. Lillecarl/pyterm#469.
+        client.read_only = read_only
+        attached.append(client)
+        await client.attach(
+            detach_other_clients=detach_other_clients,
+            color_depth=color_depth,
+        )

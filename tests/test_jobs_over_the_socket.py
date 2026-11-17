@@ -154,6 +154,14 @@ def test_a_job_inherits_the_callers_directory_and_environment(server, tmp_path):
     assert "from-the-caller" in shown.stdout.decode()
 
 
+def test_a_server_freezes_what_it_started_with(server):
+    "The start heap stays out of every later scan, and the collector is timed. Lillecarl/pyterm#1016."
+    answered = cli(server, "sql", "--json", "SELECT generation, frozen FROM collector ORDER BY generation")
+    assert answered.returncode == 0, answered.stderr
+    rows = json.loads(answered.stdout.decode())["rows"]
+    assert rows and all(row["frozen"] > 10_000 for row in rows), rows
+
+
 def test_saved_queries_answer_over_the_wire(server):
     cli(server, "run", "--tag", "e2e", "--timeout", "20", "echo one", env={"OPENCODE_SESSION_ID": "e2e-1"})
     answered = cli(server, "sql", "--json", "--run", "by_tag", "--param", "tag=session")
