@@ -848,6 +848,11 @@ in
   # `pyrefly` reads its site-packages from the interpreter it is pointed
   # at, so it sees exactly the dependencies a suite runs on and not the
   # dev shell's older copies.
+  #
+  # pyrefly reads `sys.platform` as the platform it is told, and skips
+  # the branches of any other. So it runs once for each platform pymux
+  # supports, and the gate on Linux holds the macOS branches too.
+  # Lillecarl/pyterm#1024.
   types =
     runInSandbox
       {
@@ -855,9 +860,11 @@ in
         inputs = [ pyrefly ];
       }
       ''
-        pyrefly check --preset strict \
-          --python-interpreter-path "${waylandTestEnv}/bin/python" \
-          pymux
+        for platform in linux darwin; do
+          pyrefly check --preset strict --python-platform "$platform" \
+            --python-interpreter-path "${waylandTestEnv}/bin/python" \
+            pymux
+        done
       '';
 
   # The style of pymux, held by the linter and the formatter rather

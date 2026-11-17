@@ -225,6 +225,11 @@ anyio_mode = "auto"
 # Third-party code is a boundary by construction: the check passes
 # only `pymux/`, so prompt-toolkit's bodies are never checked no
 # matter the preset. Nothing here reaches upstream.
+#
+# dbus-fast and pysmithay are Linux only, so macOS has neither.
+# Lillecarl/pyterm#1024.
+ignore-missing-imports = ["dbus_fast", "dbus_fast.*", "pysmithay", "pysmithay.*"]
+
 [tool.pyrefly.errors]
 missing-override-decorator = "error"
 missing-attribute = "error"

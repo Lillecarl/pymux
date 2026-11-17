@@ -105,10 +105,9 @@ def server_machine_id() -> str:
         return _hashed(uuid.encode()) if uuid else ""
     try:
         with open("/etc/machine-id", "rb") as file:
-            mid = file.read().rstrip()
+            return _hashed(file.read().rstrip())
     except OSError:
         return ""
-    return _hashed(mid)
 
 
 def _platform_uuid() -> str:
