@@ -12,6 +12,7 @@ terminal at the peer.
 from __future__ import annotations
 
 import base64
+import contextlib
 import io
 import socket
 import sys
@@ -152,6 +153,30 @@ async def shown_here(owner, peer, client, link=None):
     peer.attach_client_to(client, session)
     peer.invalidate()
     return there, link.tree.panes[there.pane_id]
+
+
+@contextlib.contextmanager
+def a_client_watching(mux, pane):
+    """
+    A client on `mux` that looks at `pane`, a mirror. A `seen(True)` by
+    hand lasts until the next redraw there, whose sync asks the clients
+    and finds none: under six suites C told B to pause before the copy
+    place came. Lillecarl/pyterm#1000.
+    """
+    output = Vt100_Output(stdout=io.StringIO(), get_size=lambda: Size(rows=24, columns=80))
+    with create_pipe_input() as pipe:
+        client = mux.add_client(
+            output=output,
+            input=pipe,
+            color_depth=ColorDepth.DEPTH_8_BIT,
+            client=Client("watching", None, mux, "/dev/pts/9"),
+        )
+        (session,) = [
+            session for session in mux.sessions if any(pane in window.panes for window in session.arrangement.windows)
+        ]
+        mux.attach_client_to(client, session)
+        mux.invalidate()
+        yield client
 
 
 async def test_both_sides_of_a_link_hold_the_capabilities_both_named(two_servers):
@@ -1563,13 +1588,14 @@ async def test_a_chain_of_three_encodes_input_once_on_the_owner(two_servers):
 
     third = Pymux()
     third.options.test_mode = True
+    watching = contextlib.ExitStack()
     async with third.running():
         try:
             third.handle_command("connect %s" % (peer.socket_name,))
             (link,) = third.peers.by_address.values()
             await until(lambda: middle.pane_id in link.tree.panes, "B's mirror of A's pane reaches C")
             last = link.tree.panes[middle.pane_id].process
-            last.seen(True)
+            watching.enter_context(a_client_watching(third, link.tree.panes[middle.pane_id]))
             await until(lambda: links_of(peer) and links_of(peer)[0].peer.sources, "C mirrors B's pane")
 
             last.paste("pasted")
@@ -1605,6 +1631,7 @@ async def test_a_chain_of_three_encodes_input_once_on_the_owner(two_servers):
             )
             source.copying.end()
         finally:
+            watching.close()
             third.stop()
 
 
@@ -1619,19 +1646,24 @@ async def test_a_chain_of_three_passes_on_a_copy_place_that_moves_no_cell(two_se
 
     third = Pymux()
     third.options.test_mode = True
+    watching = contextlib.ExitStack()
     async with third.running():
         try:
             third.handle_command("connect %s" % (peer.socket_name,))
             (link,) = third.peers.by_address.values()
             await until(lambda: middle.pane_id in link.tree.panes, "B's mirror of A's pane reaches C")
             last = link.tree.panes[middle.pane_id].process
-            last.seen(True)
+            watching.enter_context(a_client_watching(third, link.tree.panes[middle.pane_id]))
             await until(lambda: links_of(peer) and links_of(peer)[0].peer.sources, "C mirrors B's pane")
 
+            # A redraw on C asks its clients who looks, as one under load did.
+            third.invalidate()
+            await anyio.sleep(0.2)
             sink = middle.terminal.terminal_control.mirror.sink
             sink.take({Field.CMD: Packet.MIRROR_FRAME, Field.FRAME: {}, Field.COPYING: [3, None, None]})
             await until(lambda: last.copying == (3, None, None), "C hears the place", seen=lambda: last.copying)
         finally:
+            watching.close()
             third.stop()
 
 
