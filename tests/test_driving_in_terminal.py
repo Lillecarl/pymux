@@ -140,13 +140,12 @@ def test_steps_happen_in_order(tmp_path):
 
 
 #: Writes for a second, saying "early" if a key comes meanwhile, then
-#: says "late" when one comes. `tty.setcbreak` and not `stty`: the quiet
-#: clock reads its processes every 0.25 s, so a shell and an stty that
-#: come and go between two reads can wait unforgiven while the ticker
-#: writes nothing. The likely cause of 0.4 s of quiet before the first
-#: tick under six suites. Lillecarl/pyterm#1000.
+#: says "late" when one comes. A key that comes before `setcbreak` is
+#: flushed, so it says neither. `%(start)s` seconds pass before the first
+#: tick, as a Python start did under six suites. Lillecarl/pyterm#1000.
 TICKER = """
 import select, sys, time, tty
+time.sleep(%(start)s)
 tty.setcbreak(sys.stdin.fileno())
 for _ in range(10):
     sys.stdout.write("tick ")
@@ -162,11 +161,15 @@ time.sleep(30)
 """
 
 
-def test_a_quiet_step_waits_for_the_program_to_stop_writing(tmp_path):
-    "A key after `quiet` lands once the writing is over, however long it ran."
+@pytest.mark.parametrize("start", [0, 0.6], ids=["at-once", "late"])
+def test_a_quiet_step_waits_for_the_program_to_stop_writing(tmp_path, start):
+    """
+    A key after `quiet` lands once the writing is over, however long it
+    ran, and however long the program took to start writing.
+    """
     keys = create_keys_file(tmp_path, 'quiet 0.4\n0 b"x"\n')
 
-    seen, error = run(keys, [sys.executable, "-c", TICKER], wanted=b".")
+    seen, error = run(keys, [sys.executable, "-c", TICKER % {"start": start}], wanted=b".")
 
     assert b"late." in seen, (seen, error)
     assert b"early." not in seen

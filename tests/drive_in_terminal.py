@@ -733,15 +733,18 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None, ask_dir=None):
     # The fence that proves the keys were consumed, and the file that
     # says it happened.
     fence_pending = fence_seen is not None
-    # The silence a quiet step waits for, in fair time: under load the
-    # program had not started in 0.4 s, and its silence was taken for
-    # the end of its writing. Each write starts it again.
-    # Lillecarl/pyterm#1000.
+    # The silence a quiet step waits for, in fair time. Each write starts
+    # it again, and the program's first write starts it at all: a
+    # Python that took 0.4 s to write its first byte under six suites
+    # was taken for one done writing, and its key was flushed by the
+    # `setcbreak` it had not reached yet. Lillecarl/pyterm#1000.
     quiet = None
 
     def head_due():
         nonlocal quiet
         delay = waiting[0][0]
+        if isinstance(delay, Quiet) and not seen:
+            return when + QUIET_LIMIT
         if isinstance(delay, Quiet) and quiet is None:
             quiet = Deadline(delay)
         return due(delay, when, quiet)
