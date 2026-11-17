@@ -59,6 +59,20 @@ class Pane(PaneFields):
         "The window that holds this pane, read again from the server."
         return self.server._window(await self.server.run(operations.window(self.window_id)))
 
+    async def split(
+        self,
+        command: str | None = None,
+        vertical: bool = True,
+        start_directory: str | None = None,
+        select: bool = True,
+        tags: Mapping[str, str | None] | None = None,
+    ) -> Pane | None:
+        "Split this pane, as `Window.split` splits a window's active one, and return the pane that appears."
+        row = await self.server.run(
+            operations.split_window(self.id, command, vertical, start_directory, select, tags or {})
+        )
+        return None if row is None else Pane(self.server, row)
+
     async def send_keys(self, text: str, enter: bool = True, literal: bool = True) -> None:
         """
         Send text to the program in this pane.

@@ -450,14 +450,15 @@ def rename_pane(pane_id: str, name: str) -> Operation[None]:
 
 
 def split_window(
-    window_id: str,
+    target: str,
     command: str | None,
     vertical: bool,
     start_directory: str | None,
     select: bool,
     tags: Mapping[str, str | None],
 ) -> Operation[Row | None]:
-    arguments = ["split-window", "-t", window_id, "-v" if vertical else "-h"]
+    "Split `target`: a window's active pane (`@1`), or the pane named (`%5`)."
+    arguments = ["split-window", "-t", target, "-v" if vertical else "-h"]
     if start_directory is not None:
         arguments += ["-c", start_directory]
     if not select:

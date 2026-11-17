@@ -24,7 +24,7 @@ name a thing for later without keeping its id.
 
 | step | op |
 | --- | --- |
-| make a place | `window.new`, or `window.split` beside the person's work |
+| make a place | `window.split` with no `window` splits the agent's own pane; `window.new` with no `session` opens in the agent's session |
 | type | `pane.send`: text, then named keys, then Return when asked |
 | type a line to an AI agent | `pane.sendline`: the text, a pause, then Return, so the agent submits it |
 | wait | `pane.wait_until` a condition; `pane.wait` for any change |
@@ -45,9 +45,14 @@ to the person in a window. A job outlives the call that started it.
 
 `browser.open` starts Chromium, or another `kind`: `qutebrowser`, `firefox`,
 `glide`:
-`seat: "pane"` in a window pane a person can watch (`window` splits theirs;
-Linux only), `seat: "desktop"` in a window on the server machine's desktop,
-`seat: "headless"` as a job. Then:
+`seat: "pane"` in a window pane a person can watch (Linux only),
+`seat: "desktop"` in a window on the server machine's desktop,
+`seat: "headless"` as a job.
+
+A headful browser goes in a pane of the agent's own window: leave out
+`window` and `session`, and the agent's pane splits for it. `window` splits
+another window; `session` opens a window of its own there. A browser opened
+elsewhere pops up where the person does not expect it. Then:
 
 - read: `browser.snapshot` (accessibility tree with refs), `browser.find`
   (only elements reading some text), `browser.screenshot` with `marks`

@@ -107,6 +107,27 @@ def _here(server: Server) -> str | None:
     return enclosing[1].id
 
 
+async def _home(server: Server) -> Pane | None:
+    "The pane the agent runs in, as the server has it now."
+    here = _here(server)
+    return None if here is None else await server.pane(here)
+
+
+async def _session(server: Server, name: str | None) -> Session:
+    "The session named; left out, the agent's own, else the oldest."
+    if name is None:
+        home = await _home(server)
+        if home is not None:
+            for session in await server.sessions():
+                if home.window_id in [window.id for window in await session.windows()]:
+                    return session
+        return await server.session()
+    found = await server.session_named(name)
+    if found is None:
+        raise LookupError("no session named %r" % (name,))
+    return found
+
+
 @operation("tree")
 async def tree(server: Server) -> list[Json]:
     """
@@ -169,6 +190,9 @@ async def command(server: Server, command: str) -> Json:
 #: What a `.new` operation's `tags` says.
 NewTags = Annotated[Tags | None, Field(description="Tags to find it by later; null makes a bare key.")]
 
+#: What a `session` that may be left out says.
+SESSION_DEFAULT: Final = "The session's name; left out, the session of the agent's own pane, else the oldest."
+
 
 @operation("session.new")
 async def new_session(server: Server, name: str, tags: NewTags = None) -> Json:
@@ -182,7 +206,7 @@ async def new_session(server: Server, name: str, tags: NewTags = None) -> Json:
 @operation("window.new")
 async def new_window(
     server: Server,
-    session: Annotated[str | None, Field(description="The session's name; the oldest session when left out.")] = None,
+    session: Annotated[str | None, Field(description=SESSION_DEFAULT)] = None,
     name: str | None = None,
     command: Annotated[str | None, Field(description="What to run in it; the default shell when left out.")] = None,
     directory: str | None = None,
@@ -190,9 +214,7 @@ async def new_window(
     tags: NewTags = None,
 ) -> Json:
     "Make a window in a session, and answer it with its one pane."
-    found = await (server.session() if session is None else server.session_named(session))
-    if found is None:
-        raise LookupError("no session named %r" % (session,))
+    found = await _session(server, session)
     window = await found.new_window(command=command, name=name, start_directory=directory, select=select, tags=tags)
     if window is None:
         raise LookupError("new-window answered nothing")
@@ -202,7 +224,10 @@ async def new_window(
 @operation("window.split")
 async def split_window(
     server: Server,
-    window: Annotated[str, Field(description="The window's id: `@1`.")],
+    window: Annotated[
+        str | None,
+        Field(description="The window's id: `@1`, split at its active pane. Left out, the agent's own pane splits."),
+    ] = None,
     command: str | None = None,
     below: Annotated[bool, Field(description="Put the new pane below; false puts it to the right.")] = True,
     directory: str | None = None,
@@ -210,9 +235,10 @@ async def split_window(
     tags: NewTags = None,
 ) -> Json:
     "Split a window, and answer the pane that appears."
-    pane = await Window(server, {"window_id": window}).split(
-        command=command, vertical=below, start_directory=directory, select=select, tags=tags
-    )
+    target: Window | Pane | None = await _home(server) if window is None else Window(server, {"window_id": window})
+    if target is None:
+        raise LookupError("name a `window`: the agent runs in no pane of this server")
+    pane = await target.split(command=command, vertical=below, start_directory=directory, select=select, tags=tags)
     if pane is None:
         raise LookupError("split-window answered nothing")
     return {**pane_json(pane), "tags": tags or {}}
@@ -602,7 +628,7 @@ async def job_output(server: Server, job: JobId, stderr: bool = False) -> str:
 async def view_job(
     server: Server,
     job: JobId,
-    session: Annotated[str | None, Field(description="The session's name; the oldest session when left out.")] = None,
+    session: Annotated[str | None, Field(description=SESSION_DEFAULT)] = None,
     name: Annotated[str | None, Field(description='The window\'s name; "job <id>" when left out.')] = None,
 ) -> Json:
     """
@@ -693,14 +719,15 @@ async def open_browser(
         str, Field(description="What to load; the answer comes once it loaded, or `timeout`.")
     ] = browser.BLANK,
     session: Annotated[
-        str | None, Field(description="For `pane`: the session's name; the oldest session when left out.")
+        str | None,
+        Field(description="For `pane`: open in a window of its own in this session, rather than beside the agent."),
     ] = None,
     window: Annotated[
         str | None,
         Field(
             description=(
-                "For `pane`: split this window (`@1`) and open beside what a person works on there,"
-                " rather than in a window of its own."
+                "For `pane`: split this window (`@1`) and open beside what a person works on there."
+                " With neither `window` nor `session`, the agent's own pane splits and the browser opens beside it."
             )
         ),
     ] = None,
@@ -751,10 +778,16 @@ async def open_browser(
     It runs across calls until `browser.close`, or until nobody used it
     for `idle` seconds: no browser operation, and no key or mouse from a
     person looking at its window. pymux holds it, as a window pane or a
-    job. A `pane` browser opens in a window that is not in front, or in
-    a split of `window` that leaves the keyboard where it was; closing
-    it then takes its panes away and leaves the window.
+    job. A `pane` browser opens in a split beside the agent's own pane,
+    or of `window`, that leaves the keyboard where it was; closing it
+    then takes its panes away and leaves the window. With `session`, or
+    from outside any pane, it opens in a window that is not in front.
     """
+    beside: Window | Pane | None = None
+    if window is not None:
+        beside = Window(server, {"window_id": window})
+    elif session is None and seat is browser.Seat.PANE:
+        beside = await _home(server)
     opened = await browser.open_browser(
         server,
         name,
@@ -763,7 +796,7 @@ async def open_browser(
         executable,
         arguments or (),
         idle,
-        window=window,
+        beside=beside,
         profile_name=profile,
         extensions=extensions or (),
         kind=kind,

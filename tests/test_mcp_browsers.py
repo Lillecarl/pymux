@@ -26,7 +26,7 @@ import anyio
 import psutil
 import pytest
 from anyio.abc import SocketAttribute
-from libpymux import Server
+from libpymux import Pane, Server, Session
 
 pytest.importorskip("pysmithay")
 CHROMIUM = shutil.which("chromium")
@@ -204,6 +204,36 @@ async def test_a_browser_beside_a_persons_work_takes_only_its_own_panes_away(ser
     await call(server, "browser.close", name="probe")
     assert await server.panes({"browser": "probe"}) == []
     assert [pane.id for pane in await window.panes()] == [work.id]
+
+
+async def _an_agent_in_a_newer_session(server: Server, monkeypatch) -> tuple[Session, Pane]:
+    "The agent runs in a session other than the oldest one, which a call naming nothing used to reach."
+    session = await server.new_session("agent")
+    assert session is not None
+    (window,) = await session.windows()
+    (pane,) = await window.panes()
+    monkeypatch.setenv("PYMUX", "%s,%s" % (server.socket_path, pane.id.removeprefix("%")))
+    return session, pane
+
+
+async def test_a_browser_opens_beside_the_agent_that_asked(server, monkeypatch):
+    "Lillecarl/pyterm#1013: not in a window of its own in the oldest session."
+    _, agent = await _an_agent_in_a_newer_session(server, monkeypatch)
+    opened = await call(server, "browser.open", name="probe", url=PAGE, arguments=ARGUMENTS)
+    try:
+        assert opened["window"] == agent.window_id and opened["pane"] != agent.id, opened
+        assert (await agent.refresh()).active, "the browser took the keyboard"
+    finally:
+        await call(server, "browser.close", name="probe")
+    assert [pane.id for pane in await server.panes() if pane.window_id == agent.window_id] == [agent.id]
+
+
+async def test_a_split_and_a_window_naming_nothing_start_from_the_agents_pane(server, monkeypatch):
+    session, agent = await _an_agent_in_a_newer_session(server, monkeypatch)
+    split = await call(server, "window.split")
+    assert split["window"] == agent.window_id and split["id"] != agent.id, split
+    window = await call(server, "window.new", name="beside")
+    assert window["id"] in [one.id for one in await session.windows()], window
 
 
 @pytest.mark.parametrize(("kind", "directory"), [("chromium", "browsers"), ("qutebrowser", "qutebrowsers")])

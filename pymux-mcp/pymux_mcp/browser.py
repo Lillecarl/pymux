@@ -336,7 +336,7 @@ async def open_browser(
     executable: str | None,
     arguments: Sequence[str],
     idle: float = DEFAULT_IDLE,
-    window: str | None = None,
+    beside: Window | Pane | None = None,
     profile_name: str | None = None,
     extensions: Sequence[str] = (),
     kind: Kind = Kind.CHROMIUM,
@@ -344,7 +344,7 @@ async def open_browser(
 ) -> Browser:
     """
     Start a browser of `kind` in `seat`, and answer it once it listens:
-    in a split of `window` when one is named, on the kept profile
+    in a split of `beside` when one is named, on the kept profile
     `profile_name` when one is named, with the unpacked `extensions`
     loaded, and through the SOCKS5 `proxy` (`host:port`) when one is
     named.
@@ -353,7 +353,7 @@ async def open_browser(
         raise ValueError("only Chromium loads extensions at the start")
     for directory in extensions:
         _an_extension(directory)
-    if window is not None and seat is not Seat.PANE:
+    if beside is not None and seat is not Seat.PANE:
         raise ValueError("only a `pane` browser opens in a window")
     if profile_name is not None and not PROFILE_NAME.fullmatch(profile_name):
         raise ValueError("%r is not a profile name: letters, digits, `.`, `_` and `-`" % (profile_name,))
@@ -391,10 +391,10 @@ async def open_browser(
             command = _gecko(program(kind, executable), seat, profile, arguments, proxy)
         if seat is not Seat.PANE:
             holder = await server.run_job(shlex.join(command), tags=tags)
-        elif window is None:
+        elif beside is None:
             holder = await _in_a_window(server, name, session, command, tags)
         else:
-            holder = await _beside(server, window, command, tags)
+            holder = await _beside(server, beside, command, tags)
         browser = Browser(name, kind, seat, profile, holder, used, idle)
         await _listening(browser, port)
     except BaseException:
@@ -610,11 +610,11 @@ async def _in_a_window(
     return window
 
 
-async def _beside(server: Server, window: str, command: Sequence[str], tags: Mapping[str, str]) -> Pane:
-    "A split of a window somebody works in; the keyboard stays where it was."
-    split = await Window(server, {"window_id": window}).split(vertical=False, select=False, tags=tags)
+async def _beside(server: Server, target: Window | Pane, command: Sequence[str], tags: Mapping[str, str]) -> Pane:
+    "A split of a window, or of a pane, somebody works in; the keyboard stays where it was."
+    split = await target.split(vertical=False, select=False, tags=tags)
     if split is None:
-        raise LookupError("no window %s" % (window,))
+        raise LookupError("no %s %s" % ("window" if isinstance(target, Window) else "pane", target.id))
     await _wl(server, split, command, split)
     # The window pane took the split's place, and its tags, under an id of its own.
     return (await server.panes({NAME_TAG: tags[NAME_TAG]}))[0]
