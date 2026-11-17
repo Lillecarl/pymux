@@ -44,6 +44,7 @@ async def test_a_question_sees_the_jobs_and_the_live_tables():
         "key_names",
         "forwards",
         "collector",
+        "collector_types",
     }
     assert live == set(tables.LIVE_TABLES)
     assert not live & {*tables.SCREEN_TABLES, *tables.JOB_TABLES, *tables.CLIENT_MODE_TABLES}
@@ -65,6 +66,23 @@ async def test_the_collector_table_says_what_each_generation_held(monkeypatch):
     assert [generation for generation, *_ in rows] == list(range(len(gc.get_stats())))
     _generation, collections, seconds, objects = rows[-1]
     assert collections >= 1 and seconds > 0 and objects > 0, rows
+
+
+async def test_the_collector_types_count_what_is_tracked():
+    "A dict made here is counted under the generation that holds it. Lillecarl/pyterm#1018."
+
+    class Held:
+        pass
+
+    kept = [Held() for _ in range(50)]
+    async with create_session() as (pymux, _state):
+        rows = await _rows(
+            pymux,
+            "SELECT sum(objects) FROM collector_types WHERE type = :name",
+            name="%s.%s" % (Held.__module__, Held.__qualname__),
+        )
+
+    assert rows == [(len(kept),)], rows
 
 
 async def test_the_live_tables_answer_what_the_objects_hold():

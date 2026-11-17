@@ -20,6 +20,7 @@ dataclasses, so that thread only reads values that cannot change.
 from __future__ import annotations
 
 import gc
+from collections import Counter
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import nullcontext
 from dataclasses import dataclass, fields
@@ -64,9 +65,9 @@ if not apsw.using_amalgamation or not apsw.apsw_version().startswith(apsw.sqlite
 
 #: What this server answers with. Agents read it with `PRAGMA
 #: user_version` and re-read the tables when it differs from what they
-#: were told. 14: `collector` says how long the cycle collector held
-#: the server, by generation.
-SCHEMA_VERSION = 14
+#: were told. 15: `collector_types` counts what each generation of
+#: the cycle collector tracks, by type.
+SCHEMA_VERSION = 15
 
 #: The questions every boot starts with. A name an agent saves later
 #: replaces one of these for the rest of the boot; the next boot seeds
@@ -250,6 +251,15 @@ class CollectorView:
     frozen: int
 
 
+@dataclass(frozen=True, slots=True)
+class CollectorTypeView:
+    "How many objects of one type a generation tracks, and does not hold frozen."
+
+    generation: int
+    type: str
+    objects: int
+
+
 class Answer(NamedTuple):
     "The columns, up to the limit of rows, and whether rows were left over."
 
@@ -359,6 +369,17 @@ def _collector(pymux: Pymux) -> Iterator[CollectorView]:
         )
 
 
+def _collector_types(pymux: Pymux) -> Iterator[CollectorTypeView]:
+    # One walk of every tracked object, on the loop: about 30 ms for
+    # 100 000. Only a question that reads this table pays it.
+    for generation in range(len(gc.get_stats())):
+        counted = Counter(
+            "%s.%s" % (type(one).__module__, type(one).__qualname__) for one in gc.get_objects(generation)
+        )
+        for name, objects in counted.items():
+            yield CollectorTypeView(generation, name, objects)
+
+
 def _live(pymux: Pymux, table: str) -> Iterator[Any]:
     # Here and not at the top: the snapshot reaches `pymux.core.main`.
     from .core.snapshot.write import rows_of
@@ -388,6 +409,7 @@ def tables_of(pymux: Pymux) -> dict[tuple[str, str], Table]:
         ("main", "key_names"): Table(KeyNameView, partial(_key_names, pymux)),
         ("main", "forwards"): Table(ForwardView, partial(_forwards, pymux)),
         ("main", "collector"): Table(CollectorView, partial(_collector, pymux)),
+        ("main", "collector_types"): Table(CollectorTypeView, partial(_collector_types, pymux)),
     }
     for kind in LIVE_ROWS:
         tables["live", kind.TABLE] = Table(kind, partial(_live, pymux, kind.TABLE))
