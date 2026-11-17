@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import datetime
 import os
+import sys
 import time
 import uuid
 import weakref
@@ -90,6 +91,34 @@ __all__ = [
 ]
 
 kernels.install()
+
+
+def hold_the_build() -> list[int]:
+    """
+    Keep the build this server runs from on disk while it runs.
+
+    A module imported late (deferimport, `upgrade-server`) reads its file
+    long after the start, so a garbage collection between the two leaves
+    a server that cannot import its own code. Nix's collector roots what
+    a process holds open, and on macOS it learns that from `lsof` alone
+    (`local-gc.cc:123`), never from the environment or the command line.
+    A venv's own store path holds only links into the packages, so no
+    file there is ever open. An fd on each directory the imports come
+    from names it to `lsof`, and a root keeps its whole closure.
+
+    The fds are close-on-exec: after an upgrade the new image holds its
+    own build, and the old one may go.
+    """
+    held: dict[str, int] = {}
+    for path in [sys.prefix, *sys.path]:
+        if not path or path in held:
+            continue
+        try:
+            held[path] = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+        except OSError:
+            # `python314.zip` and the like, which need not exist.
+            continue
+    return list(held.values())
 
 
 class Pymux:
@@ -196,6 +225,7 @@ class Pymux:
         "connections": Keep.DROPPED,
         "tasks": Keep.DROPPED,
         "stall_stacks": Keep.REBUILT,
+        "build_held": Keep.REBUILT,
         "error_notice": Keep.REBUILT,
         "loop": Keep.DROPPED,
         "done": Keep.DROPPED,
@@ -334,6 +364,8 @@ class Pymux:
         #: `None` before and after. Lillecarl/pyterm#89.
         self.tasks: anyio.abc.TaskGroup | None = None
         self.stall_stacks: TextIO | None = None
+        #: The fds `hold_the_build` keeps open while this server runs.
+        self.build_held: list[int] = []
 
         #: The corner that says an error was logged. Lillecarl/pyterm#243.
         self.error_notice = ErrorNotice(self)
@@ -674,6 +706,7 @@ class Pymux:
             introspect.time_the_collector()
         introspect.log_what_escapes()
         say_how_it_ends(logger)
+        self.build_held = hold_the_build()
 
     @asynccontextmanager
     async def running(self):
