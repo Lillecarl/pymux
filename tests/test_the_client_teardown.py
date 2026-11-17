@@ -158,6 +158,9 @@ class FakeConnection:
     def write_nowait(self, data):
         pass
 
+    def terminal_took_all(self):
+        pass
+
     def close(self):
         pass
 

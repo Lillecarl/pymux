@@ -42,9 +42,6 @@ __all__ = ["OwnerTunnel", "Tunnels"]
 #: How much one read takes from a TCP connection.
 CHUNK = 65536
 
-#: How often a port checks whether it sat unused long enough to close,
-#: as the client reaps its own forwards (`client.ssh_requests.REAP_POLL`).
-IDLE_POLL = 30.0
 
 #: The bytes a tunnel copies that fail as an ended stream.
 _ENDED = (anyio.EndOfStream, anyio.BrokenResourceError, anyio.ClosedResourceError, OSError)
@@ -175,6 +172,8 @@ class _Listening:
         self.port = port
         self.open = 0
         self.last = time.monotonic()
+        #: Set when a connection closes, while `serve` waits on it.
+        self._one_closed: anyio.Event | None = None
 
     def goes_to(self, peer: Peer, pane_id: int, port: int) -> bool:
         return (self.peer, self.pane_id, self.port) == (peer, pane_id, port)
@@ -183,8 +182,17 @@ class _Listening:
         "Carry each connection, until the port sat unused for `idle` seconds."
         async with listener, anyio.create_task_group() as tasks:
             tasks.start_soon(listener.serve, self._carry, tasks)
-            while self.open or time.monotonic() - self.last < idle:
-                await anyio.sleep(IDLE_POLL)
+            while True:
+                self._one_closed = anyio.Event()
+                if self.open:
+                    await self._one_closed.wait()
+                    continue
+                left = idle - (time.monotonic() - self.last)
+                if left <= 0:
+                    break
+                # A connection that opens in this wait is seen at its end.
+                with anyio.move_on_after(left):
+                    await self._one_closed.wait()
             tasks.cancel_scope.cancel()
 
     async def _carry(self, near: anyio.abc.ByteStream) -> None:
@@ -200,6 +208,8 @@ class _Listening:
         finally:
             self.open -= 1
             self.last = time.monotonic()
+            if self._one_closed is not None:
+                self._one_closed.set()
 
 
 class Tunnels:

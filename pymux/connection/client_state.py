@@ -164,6 +164,7 @@ class ClientState:
         "key_tables": Keep.SAVED,
         "message": Keep.SAVED,
         "confirmations": Keep.SAVED,
+        "_questions_changed": Keep.DROPPED,
         "prompt_text": Keep.SAVED,
         "prompt_command": Keep.SAVED,
         "prompt_buffer": Keep.SAVED,
@@ -326,6 +327,8 @@ class ClientState:
         #: that nothing happens without a yes, and losing a yes is the
         #: same surprise the other way round. Lillecarl/pyterm#268.
         self.confirmations: list[tuple[str, str]] = []
+        #: Set, and let go, when a question leaves the queue.
+        self._questions_changed: anyio.Event | None = None
 
         # When a "command-prompt" command is running.
         self.prompt_text: str | None = None
@@ -808,11 +811,28 @@ class ClientState:
         if not self.confirmations:
             return None
         _text, command = self.confirmations.pop(0)
+        self._question_left()
         return command
 
     def forget_questions(self) -> None:
         "Drop every question, answered by nobody."
         self.confirmations.clear()
+        self._question_left()
+
+    def _question_left(self) -> None:
+        if self._questions_changed is not None:
+            self._questions_changed.set()
+            self._questions_changed = None
+
+    async def question_left(self) -> None:
+        """
+        Return once a question leaves the queue, answered or forgotten.
+        A `y` runs its command in the same step that takes the question
+        away, so whatever the command changes is there when this returns.
+        """
+        if self._questions_changed is None:
+            self._questions_changed = anyio.Event()
+        await self._questions_changed.wait()
 
     def _handle_command(self, buffer: Buffer) -> bool:
         "When text is accepted in the command line."

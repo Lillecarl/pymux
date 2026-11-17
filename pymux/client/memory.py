@@ -75,6 +75,8 @@ class MemoryClient(TerminalClient):
         #: changed once they are gone. Lillecarl/pyterm#587.
         self._backlog = bytearray()
         self._more: anyio.Event | None = None
+        #: Set, and let go, when the backlog empties.
+        self._emptied: anyio.Event | None = None
         connection.held_for_terminal = lambda: len(self._backlog)
 
     @override
@@ -109,6 +111,11 @@ class MemoryClient(TerminalClient):
             except BlockingIOError:
                 continue
             del self._backlog[:written]
+            if not self._backlog:
+                if self._emptied is not None:
+                    self._emptied.set()
+                    self._emptied = None
+                self.connection.terminal_took_all()
 
     @override
     def send_packet(self, data: Message) -> None:
@@ -160,7 +167,9 @@ class MemoryClient(TerminalClient):
                     # frame cut short is worse than a short wait.
                     with anyio.move_on_after(DRAIN_SECONDS, shield=True):
                         while self._backlog:
-                            await anyio.sleep(0.01)
+                            if self._emptied is None:
+                                self._emptied = anyio.Event()
+                            await self._emptied.wait()
                     # The four tasks above end with this scope.
                     tasks.cancel_scope.cancel()
                     self.tasks = None

@@ -29,9 +29,6 @@ __all__ = [
     "connect_in_memory",
 ]
 
-#: How often `drained` looks again, in seconds.
-DRAIN_POLL = 0.02
-
 
 class MemoryConnection(PipeConnection):
     """
@@ -60,6 +57,8 @@ class MemoryConnection(PipeConnection):
         self.held_for_terminal: Callable[[], int] = lambda: 0
         self.bytes_out = 0
         self.bytes_in = 0
+        #: Set, and let go, when the peer's terminal took all it held.
+        self._emptied: anyio.Event | None = None
 
     def _join(self, peer: MemoryConnection) -> None:
         self._peer = peer
@@ -117,7 +116,19 @@ class MemoryConnection(PipeConnection):
     @override
     async def drained(self) -> None:
         while self.outstanding and not self._closed:
-            await anyio.sleep(DRAIN_POLL)
+            if self._emptied is None:
+                self._emptied = anyio.Event()
+            await self._emptied.wait()
+
+    def terminal_took_all(self) -> None:
+        "The client on this end has nothing left for its terminal: wake the peer's `drained`."
+        if self._peer is not None:
+            self._peer._wake_drained()
+
+    def _wake_drained(self) -> None:
+        if self._emptied is not None:
+            self._emptied.set()
+            self._emptied = None
 
     @override
     async def write(
@@ -144,8 +155,10 @@ class MemoryConnection(PipeConnection):
             return
         self._closed = True
         self._send.close()
+        self._wake_drained()
         if self._peer is not None:
             self._peer._send.close()
+            self._peer._wake_drained()
 
 
 def connect_in_memory() -> tuple[MemoryConnection, MemoryConnection]:

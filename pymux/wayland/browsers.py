@@ -39,9 +39,6 @@ ANSWER_SECONDS = 120.0
 #: yes: its own wait, `client.browser.START_SECONDS`, and a margin.
 START_SECONDS = 30.0
 
-#: How often a waiting launch looks whether its question was answered.
-QUESTION_POLL = 0.1
-
 
 class BrowserRefused(Exception):
     "The launch did not happen, and why, for the program in the pane to print."
@@ -106,7 +103,7 @@ class Browsers:
             self.pymux.invalidate()
             with anyio.move_on_after(ANSWER_SECONDS):
                 while launch.asked() and not launch.approved:
-                    await anyio.sleep(QUESTION_POLL)
+                    await client_state.question_left()
             if not launch.approved:
                 if launch.asked():
                     client_state.confirmations = [
