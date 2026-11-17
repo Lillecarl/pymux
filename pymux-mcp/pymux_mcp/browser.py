@@ -281,10 +281,65 @@ def program(kind: Kind, executable: str | None) -> str:
 
 
 async def find(server: Server, name: str) -> Browser:
-    "The browser called `name`, from the tags of what holds it."
+    "The browser called `name`, from the tags of what holds it; when it went, the reason `went` holds."
     for found in await _holders(server, {NAME_TAG: name}):
         return await _browser(server, found)
-    raise BrowserGone("no browser named %r; browser.open makes one, browser.list shows them" % (name,))
+    last = await anyio.to_thread.run_sync(went, name)
+    if last is None:
+        why = "if one was open, its program ended or its pane went; the server log says how a window program ended"
+    else:
+        why = "pymux-mcp closed one at %s: %s" % (time.strftime("%H:%M:%S", time.localtime(last["at"])), last["reason"])
+    raise BrowserGone("no browser named %r (%s); browser.open makes one, browser.list shows them" % (name, why))
+
+
+#: Why pymux-mcp closed each browser, as one JSON line each, newest last:
+#: every pymux-mcp of this user writes it, so an agent learns why a
+#: browser another one closed is gone. Lillecarl/pyterm#1014.
+WENT_FILE: Final = "browsers-went.jsonl"
+
+#: How many reasons the file keeps.
+WENT_KEPT: Final = 100
+
+
+def _went_path() -> Path:
+    return profiles().parent / WENT_FILE
+
+
+def note_went(browser: Browser, reason: str | None) -> None:
+    """
+    Keep why `browser` went, for `went`; `None` notes that it opened.
+    A failed write costs the reason and nothing else.
+    """
+    path = _went_path()
+    line = json.dumps({"name": browser.name, "kind": browser.kind.value, "at": time.time(), "reason": reason})
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            lines = path.read_text().splitlines()
+        except FileNotFoundError:
+            lines = []
+        kept_lines = [*lines, line][-WENT_KEPT:]
+        partial = path.with_suffix(".%d" % (os.getpid(),))
+        partial.write_text("".join(one + "\n" for one in kept_lines))
+        partial.replace(path)
+    except OSError:
+        pass
+
+
+def went(name: str) -> dict[str, Any] | None:
+    "Why pymux-mcp closed the newest browser called `name`, or None: it is open, or it went some other way."
+    try:
+        lines = _went_path().read_text().splitlines()
+    except OSError:
+        return None
+    for line in reversed(lines):
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(entry, dict) and entry.get("name") == name:
+            return entry if entry.get("reason") else None
+    return None
 
 
 async def every(server: Server) -> list[Browser]:
@@ -409,6 +464,8 @@ async def open_browser(
         else:
             holder = await _beside(server, beside, command, tags)
         browser = Browser(name, kind, seat, profile, holder, used, idle)
+        # A newer browser of the name, so an older one's reason is not its own.
+        await anyio.to_thread.run_sync(note_went, browser, None)
         await _listening(browser, port)
     except BaseException:
         _forget(profile)
@@ -686,7 +743,7 @@ async def _listening(browser: Browser, port: int | None) -> None:
                 await anyio.sleep(0.1)
     except TimeoutError:
         last = await said(browser)
-        await close(browser)
+        await close(browser, "it did not listen in %gs" % (LISTEN_TIMEOUT,))
         raise CDPError("the browser did not listen in %gs: %s" % (LISTEN_TIMEOUT, last)) from None
 
 
@@ -717,10 +774,10 @@ QUIT_TIMEOUT: Final = 10.0
 KILL_TIMEOUT: Final = 5.0
 
 
-async def close(browser: Browser) -> None:
+async def close(browser: Browser, reason: str = "browser.close") -> None:
     """
     Stop the browser, and take its holder away, and its profile unless
-    it is kept.
+    it is kept. `note_went` keeps `reason`.
 
     The browser is asked to quit first. Killing a window pane closes one
     of its windows and nothing more, and the next one opens in its place.
@@ -753,6 +810,8 @@ async def close(browser: Browser) -> None:
         await _unheld(browser, KILL_TIMEOUT)
     finally:
         _forget(browser.profile)
+        # Not awaited: a cancelled close still keeps its reason and ends its cleanup.
+        note_went(browser, reason)
         # Outside the profile when the profile's path is long.
         if browser.kind is Kind.QUTEBROWSER:
             bridge.socket_for(browser.profile).unlink(missing_ok=True)
@@ -917,7 +976,7 @@ async def sweep(server: Server, now: float | None = None) -> list[str]:
         if seen > browser.used:
             await touch(server, browser, seen)
         if browser.idle and now - browser.used > browser.idle:
-            await close(browser)
+            await close(browser, "unused for %ds, past its idle limit of %gs" % (now - browser.used, browser.idle))
             closed.append(browser.name)
     return closed
 

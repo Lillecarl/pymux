@@ -11,6 +11,7 @@ import base64
 import importlib.resources
 import json
 import re
+from pathlib import Path
 
 import pydantic
 import pymux_mcp.api
@@ -20,6 +21,7 @@ from libpymux.connection import CommandResult
 from libpymux.operations import drive
 from mcp import Client
 from mcp.types import ImageContent
+from pymux_mcp import browser
 from pymux_mcp.api import OPERATIONS, Png
 from pymux_mcp.openapi import document
 from pymux_mcp.registry import UnknownOperation
@@ -244,3 +246,29 @@ async def test_two_tools_over_mcp(tmp_path):
         gone = await client.call_tool("pymux", {"op": "tree"})
         assert gone.is_error
         assert "no pymux server" in gone.content[0].text
+
+
+def _a_browser(name: str) -> browser.Browser:
+    return browser.Browser(name, browser.Kind.CHROMIUM, browser.Seat.HEADLESS, Path("/nowhere"), None, 0.0, 0.0)
+
+
+def test_a_browser_pymux_mcp_closed_is_gone_with_its_reason(tmp_path, monkeypatch):
+    "Lillecarl/pyterm#1014."
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    assert browser.went("torg") is None
+    browser.note_went(_a_browser("torg"), None)
+    assert browser.went("torg") is None, "an open browser has no reason to be gone"
+    browser.note_went(_a_browser("torg"), "unused for 1900s")
+    browser.note_went(_a_browser("other"), "browser.close")
+    assert browser.went("torg")["reason"] == "unused for 1900s"
+    browser.note_went(_a_browser("torg"), None)
+    assert browser.went("torg") is None, "a newer browser of the name is not the one that was closed"
+
+
+def test_the_reasons_kept_are_bounded(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    for number in range(browser.WENT_KEPT + 5):
+        browser.note_went(_a_browser("b%d" % (number,)), "browser.close")
+    lines = (tmp_path / "pymux" / browser.WENT_FILE).read_text().splitlines()
+    assert len(lines) == browser.WENT_KEPT
+    assert browser.went("b0") is None and browser.went("b%d" % (browser.WENT_KEPT + 4,)) is not None

@@ -228,6 +228,20 @@ async def test_a_browser_opens_beside_the_agent_that_asked(server, monkeypatch):
     assert [pane.id for pane in await server.panes() if pane.window_id == agent.window_id] == [agent.id]
 
 
+async def test_a_browser_that_went_says_why(server, tmp_path, monkeypatch):
+    "Lillecarl/pyterm#1014: which rule closed it, read where an agent finds it gone."
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    await call(server, "browser.open", name="probe", seat="headless", arguments=ARGUMENTS)
+    await call(server, "browser.close", name="probe")
+    with pytest.raises(LookupError, match=r"pymux-mcp closed one at [0-9:]+: browser\.close"):
+        await call(server, "browser.evaluate", name="probe", expression="1")
+
+    await call(server, "browser.open", name="probe", seat="headless", idle=1, arguments=ARGUMENTS)
+    assert await browser.sweep(server, now=time.time() + 60) == ["probe"]
+    with pytest.raises(LookupError, match="past its idle limit of 1s"):
+        await call(server, "browser.evaluate", name="probe", expression="1")
+
+
 async def test_a_split_and_a_window_naming_nothing_start_from_the_agents_pane(server, monkeypatch):
     session, agent = await _an_agent_in_a_newer_session(server, monkeypatch)
     split = await call(server, "window.split")
