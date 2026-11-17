@@ -17,10 +17,19 @@ def open_url(pymux: Pymux, args: argparse.Namespace) -> None:
 
     The client that gets it follows `open-url-target`, and whether it
     asks first follows `open-url-mode`. "-c" is the answer of a
-    confirmation: it opens without asking again.
+    confirmation: it opens without asking again. "-n" forwards the
+    URL's loopback port to the client that asked and opens nothing,
+    as a copy of the URL does.
     """
     pane = pane_of_asking_client(pymux)
-    if pane is None:
+    if args.n:
+        try:
+            client_state = pymux.get_client_state()
+        except ValueError:
+            pymux.add_command_error("open-url -n forwards to a client, and no client asked.")
+            return
+        pymux.outward.forward_copied(args.url, client_state, pane, confirmed=bool(args.c))
+    elif pane is None:
         pymux.outward.open_url(args.url, confirmed=bool(args.c))
     else:
         pymux.outward.open_url_of_a_pane(args.url, bool(args.c), pane)
@@ -29,4 +38,5 @@ def open_url(pymux: Pymux, args: argparse.Namespace) -> None:
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, open_url)
     parser.add_argument("-c", dest="c", action="store_true", help="Open without asking again.")
+    parser.add_argument("-n", dest="n", action="store_true", help="Forward the URL's port, and open nothing.")
     parser.add_argument("url", metavar="<url>")

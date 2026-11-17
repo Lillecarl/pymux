@@ -222,6 +222,44 @@ class Outward:
             "fixed": not found.movable,
         }
 
+    def forward_copied(
+        self, text: str, client_state: ClientState, pane: Pane | None = None, confirmed: bool = False
+    ) -> None:
+        """
+        Forward the loopback port of a URL a person copied out of `pane`,
+        the client's active pane when left out,
+        to the client that copied it, and open nothing: they paste it
+        into a browser of their own. `url_forward` decides, as it does
+        for a URL opened.
+
+        Copy mode and URL mode call this, and never a pane's OSC 52 or
+        wl-copy: a program must not bind ports through the clipboard.
+        Lillecarl/pyterm#1010, Lillecarl/pyterm#442.
+
+        Not for a mirrored pane: its loopback is the owner's machine,
+        which a forward from this one does not reach.
+        """
+        url = text.strip()
+        if not url or any(character.isspace() for character in url) or "://" not in url:
+            return
+        if pane is None:
+            pane = client_state.session.arrangement.get_active_pane()
+        if pane is not None and isinstance(pane.process, RemoteProgram):
+            return
+        forward = self.url_forward(url, client_state)
+        if forward is None:
+            return
+        confirmed = confirmed and self.pymux.a_person_asked()
+        if self.pymux.options.forward_mode == ForwardMode.ASK and not confirmed:
+            client_state.ask(
+                "Forward %s:%d here for the URL you copied? (y/n)" % (forward["host"], forward["port"]),
+                "open-url -n -c %s" % (shlex.quote(url),),
+            )
+            return
+        client_state.client.connection.send_packet(
+            {Field.CMD: Packet.FORWARD_URL, Field.DATA: url, Field.FORWARD: forward}
+        )
+
     def who_acts(self, pane: Pane, param: str) -> tuple[bool, list[PeerLink]]:
         """
         Who opens the URL, or saves the download, of an "OSC 1337" of
@@ -691,6 +729,8 @@ class Outward:
         except ValueError:
             client = None
         self.write_user_clipboard(text, client=client)
+        if client is not None:
+            self.forward_copied(text, client)
 
     def write_user_clipboard(self, text: str, selection: str = "c", client: ClientState | None = None) -> None:
         """

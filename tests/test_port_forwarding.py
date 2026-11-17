@@ -31,7 +31,7 @@ from pymux.client import ssh_requests
 from pymux.client.forwards import Forwards
 from pymux.client.socks import Reply
 from pymux.client.ssh import SshClient
-from pymux.client.ssh_requests import forward_asked, open_asked, reap_forwards
+from pymux.client.ssh_requests import forward_asked, forward_url_asked, open_asked, reap_forwards
 from pymux.commands import list_forwards as list_forwards_command
 from pymux.core.forwarding import (
     ANY_PORT,
@@ -2000,6 +2000,139 @@ async def test_answering_yes_opens_it_with_the_forward():
         )
 
     assert asked[0]["forward"]["port"] == 3000
+
+
+# ----------------------------------------------------------------------
+# A copied URL brings its port too. Lillecarl/pyterm#1010.
+
+
+def _url_forwards(seen: list) -> list:
+    return [packet for packet in seen if packet.get("cmd") == "forward-url"]
+
+
+async def _copied(session, seen, text, can_forward=True, url_mode=False) -> list:
+    """
+    Copy `text` as a person does, then open an ordinary URL: the forward
+    a copy sends, if any, reaches the client before that open does.
+    """
+    await session.attach("the client", SIZE)
+    client_state = session.pymux.clients[0]
+    client_state.client.can_forward = can_forward
+    with as_the_person(session):
+        if url_mode:
+            session.pymux.outward.forward_copied(text, client_state, None)
+        else:
+            session.pymux.outward.copied_in_copy_mode(text)
+    session.pymux.handle_command("open-url https://example.com/")
+    await once(lambda: _open_requests(seen), 2.0, "The open after the copy never arrived.")
+    return _url_forwards(seen)
+
+
+@pytest.mark.parametrize("url_mode", [False, True])
+async def test_a_copied_sign_in_url_forwards_its_redirect_and_opens_nothing(url_mode):
+    seen = []
+
+    async with over_connection(read_packet=seen.append) as session:
+        (packet,) = await _copied(session, seen, AWS_LOGIN, url_mode=url_mode)
+
+    assert packet["data"] == AWS_LOGIN
+    assert packet["forward"] == {"host": "127.0.0.1", "port": 46747, "idle": 600, "fixed": True}
+    assert [one["data"] for one in _open_requests(seen)] == ["https://example.com/"]
+
+
+@pytest.mark.parametrize("text", ["https://example.com/", "just some words", "see %s" % (LOOPBACK_URL,)])
+async def test_a_copy_that_is_not_one_loopback_url_forwards_nothing(text):
+    seen = []
+
+    async with over_connection(read_packet=seen.append) as session:
+        assert await _copied(session, seen, text) == []
+
+
+@pytest.mark.parametrize("setting", [None, "open-url-forward off", "forward-mode off"])
+async def test_a_copy_forwards_nothing_where_an_open_would_forward_nothing(setting):
+    seen = []
+
+    async with over_connection(read_packet=seen.append) as session:
+        if setting is not None:
+            session.pymux.handle_command("set-option -g %s" % (setting,))
+        assert await _copied(session, seen, AWS_LOGIN, can_forward=setting is not None) == []
+
+
+async def test_a_pane_writing_the_clipboard_forwards_nothing():
+    "A program must not bind ports through the clipboard. Lillecarl/pyterm#442."
+    seen = []
+
+    async with over_connection(read_packet=seen.append) as session:
+        await session.attach("the client", SIZE)
+        session.pymux.clients[0].client.can_forward = True
+        session.pymux.handle_command("set-option -g set-clipboard on")
+        session.pymux.outward.write_user_clipboard(AWS_LOGIN)
+        session.pymux.handle_command("open-url https://example.com/")
+        await once(lambda: _open_requests(seen), 2.0, "The open never arrived.")
+
+    assert _url_forwards(seen) == []
+
+
+async def test_asking_about_forwards_asks_before_a_copy_forwards():
+    seen = []
+
+    async with over_connection(read_packet=seen.append) as session:
+        session.pymux.handle_command("set-option -g forward-mode ask")
+        assert await _copied(session, seen, AWS_LOGIN) == []
+        (question,) = _questions(session)
+        assert "127.0.0.1:46747" in question, question
+
+        answer = session.pymux.clients[0].answer()
+        assert answer is not None
+        with as_the_person(session):
+            session.pymux.handle_command(answer)
+        (packet,) = await once(lambda: _url_forwards(seen), 2.0, "A yes forwarded nothing.")
+
+    assert packet["forward"]["port"] == 46747
+
+
+async def test_a_program_cannot_answer_the_copy_question_itself():
+    "`-c` counts only from a person, as it does for `open-url`."
+    seen = []
+
+    async with over_connection(read_packet=seen.append) as session:
+        await session.attach("the client", SIZE)
+        session.pymux.clients[0].client.can_forward = True
+        session.pymux.handle_command("set-option -g forward-mode ask")
+        session.pymux.handle_command("open-url -n -c %s" % (shlex.quote(AWS_LOGIN),))
+        session.pymux.handle_command("open-url https://example.com/")
+        await once(lambda: _open_requests(seen), 2.0, "The open never arrived.")
+
+    assert _url_forwards(seen) == []
+
+
+async def test_the_client_forwards_a_copied_url_and_opens_no_browser():
+    sent = []
+    port = _free_port()
+    url = "https://signin.example/authorize?redirect_uri=http%%3A%%2F%%2F127.0.0.1%%3A%d%%2Fcallback" % (port,)
+
+    async with ssh_connection() as connection:
+        client = SshClient("ssh://127.0.0.1/tmp/nowhere.sock")
+        client.send_packet = sent.append
+
+        with _browser(client) as opened:
+            await forward_url_asked(
+                client,
+                connection,
+                {
+                    "cmd": "forward-url",
+                    "data": url,
+                    "forward": {"host": "127.0.0.1", "port": port, "idle": 600, "fixed": True},
+                },
+            )
+
+        assert opened == []
+        assert sent[0]["cmd"] == "forwards"
+        assert sent[0]["data"][0]["port"] == port
+        assert sent[0]["data"][0]["error"] == ""
+        assert "127.0.0.1:%d" % (port,) in sent[0]["message"], sent[0]
+
+        client.forwards.close()
 
 
 # ----------------------------------------------------------------------

@@ -164,6 +164,38 @@ async def open_asked(client: SshClient, connection: SSHClientConnection, packet:
         client.send_packet({Field.CMD: Packet.OPEN_FAILED, Field.DATA: url})
 
 
+async def forward_url_asked(client: SshClient, connection: SSHClientConnection, packet: Message) -> None:
+    """
+    Forward the port of a URL the person copied, as `open_asked` does,
+    and open no browser: they paste the URL into one themselves.
+    Lillecarl/pyterm#1010.
+    """
+    url = packet[Field.DATA]
+    asked = packet[Field.FORWARD]
+    host, port = asked["host"], asked["port"]
+
+    opened = await client.forwards.add(
+        connection,
+        Forward(Direction.LOCAL, host, port, host, port),
+        idle=asked["idle"],
+        fixed=asked.get("fixed", False),
+    )
+
+    if opened.error:
+        said = "Copied %s, but cannot forward %s:%d: %s" % (url, host, port, opened.error)
+    elif opened.port != port:
+        # The clipboard holds the URL with the port that was taken.
+        said = "Forwarded %s:%d here as port %d; paste %s instead." % (
+            host,
+            port,
+            opened.port,
+            with_port(url, opened.port),
+        )
+    else:
+        said = "Forwarded %s:%d here for the URL you copied." % (host, port)
+    report_forwards(client, said)
+
+
 async def browser_asked(client: SshClient, connection: SSHClientConnection, packet: Message) -> None:
     """
     Start the browser a program on the server asked for, forward its

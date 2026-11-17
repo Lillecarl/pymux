@@ -60,7 +60,14 @@ from .defaults import is_ssh_url as is_ssh_url
 from .forwards import Forwards
 from .reconnect import why
 from .relink import Relink, Restarting, TerminalWaiting
-from .ssh_requests import browser_asked, forward_asked, open_asked, reap_forwards, report_forwards
+from .ssh_requests import (
+    browser_asked,
+    forward_asked,
+    forward_url_asked,
+    open_asked,
+    reap_forwards,
+    report_forwards,
+)
 from .terminal import DELETE_EVERY_IMAGE, TerminalClient, drain_replies
 
 if TYPE_CHECKING:
@@ -572,6 +579,10 @@ class SshClient(TerminalClient):
                             connection,
                             packet,
                         )
+                        continue
+
+                    if packet[Field.CMD] == Packet.FORWARD_URL:
+                        tasks.start_soon(self._while_the_link_holds, forward_url_asked, self, connection, packet)
                         continue
 
                     if packet[Field.CMD] == Packet.REPORT_FORWARDS:

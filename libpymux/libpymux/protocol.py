@@ -312,6 +312,10 @@ class Packet(StrEnum):
     # The server asks, and the machine the person sits at acts.
     OPEN = "open"
     FORWARD = "forward"
+    # Forward the loopback port of a URL the person copied, as `open` with
+    # `forward` does, and open nothing. A client that does not know it
+    # drops it, and the copy forwards nothing. Lillecarl/pyterm#1010.
+    FORWARD_URL = "forward-url"
     # "Send `forwards` again, now." What a forward pymux made has left
     # before it is reaped moves between the reports a change sends, so
     # `list-forwards` asks. Lillecarl/pyterm#489.

@@ -645,6 +645,7 @@ class PymuxKeyBindings:
                         event.app.clipboard.set_text(url)
                         pymux.outward.write_user_clipboard(url)
                         pymux.show_message("Copied %s" % url)
+                        pymux.outward.forward_copied(url, client_state)
                     else:
                         # The person picked it, which is the question
                         # `open-url-mode ask` would put.
