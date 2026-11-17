@@ -16,7 +16,7 @@ import anyio
 import pytest
 from libpymux.wire import encode_json
 from prompt_toolkit.data_structures import Size
-from session import over_connection
+from session import once, over_connection
 
 from pymux.answer import Answer
 from pymux.introspect import traffic
@@ -91,6 +91,11 @@ async def test_each_client_reads_its_own_counts():
     async with over_connection() as session:
         here, _ = await session.attach("here", SIZE)
         there, _ = await session.attach("there", SIZE)
+        # An attach returns before its first frame: under six suites one
+        # client had been sent nothing yet. Lillecarl/pyterm#1000.
+        for state in (here, there):
+            pipe = state.client.connection.pipe_connection
+            await once(lambda pipe=pipe: pipe.bytes_out > 0, 10.0, "a client was never sent a frame")
 
         said = await _lines(session, "list-clients -F '#{client_tty} #{client_bytes_down} #{client_bytes_up}'")
 
