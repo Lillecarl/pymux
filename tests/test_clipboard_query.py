@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 import anyio
 from clipboard_terminal import ClipboardTerminal
 from prompt_toolkit.data_structures import Size
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from session import over_connection
 
 from pymux.connection import clipboard_reads
@@ -105,7 +106,7 @@ async def test_a_terminal_that_asks_the_person_gets_time(monkeypatch):
         async def paste() -> None:
             got.append(await state.client.clipboard.read("c"))
 
-        with anyio.fail_after(5):
+        with fair_anyio.fail_after(5):
             async with anyio.create_task_group() as tg:
                 tg.start_soon(paste)
                 await terminal.asked.wait()

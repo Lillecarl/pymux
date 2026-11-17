@@ -12,6 +12,7 @@ import anyio
 import pytest
 from libpymux.protocol import Field, Packet
 from prompt_toolkit.data_structures import Size
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from session import once, over_connection
 from test_a_pane_asks_for_a_file import AskedClient
 from test_a_server_mirrors_a_server import (  # noqa: F401 (fixtures)
@@ -42,7 +43,7 @@ async def printed(pymux, line: str) -> list[str]:
     try:
         answer = handle_command(pymux, line)
         if answer is not None:
-            with anyio.fail_after(10):
+            with fair_anyio.fail_after(10):
                 await answer
     finally:
         current_answer.reset(token)

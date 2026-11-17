@@ -18,6 +18,7 @@ import pytest
 from clipboard_terminal import ClipboardTerminal
 from prompt_toolkit.clipboard import ClipboardData
 from prompt_toolkit.data_structures import Size
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from session import once, over_connection
 
 pytest.importorskip("pysmithay")
@@ -61,7 +62,7 @@ def environment(mux):
 
 async def paste(mux, *flags):
     "wl-paste to its end; a paste nobody answers fails the test, not the run."
-    with anyio.fail_after(15):
+    with fair_anyio.fail_after(15):
         result = await anyio.run_process(["wl-paste", "--no-newline", *flags], env=environment(mux), check=False)
     return result.returncode, result.stdout.decode()
 
@@ -106,7 +107,7 @@ A_PNG = bytes.fromhex(
 
 async def types_and_image(mux) -> tuple[list[str], bytes]:
     "What wl-paste lists, and what it pastes as image/png."
-    with anyio.fail_after(15):
+    with fair_anyio.fail_after(15):
         listed = await anyio.run_process(["wl-paste", "--list-types"], env=environment(mux), check=False)
         image = await anyio.run_process(["wl-paste", "--type", "image/png"], env=environment(mux), check=False)
     return listed.stdout.decode().split(), image.stdout
@@ -177,7 +178,7 @@ async def test_a_new_server_waits_for_the_old_one_to_let_go(mux, tmp_path):
         assert successor.wayland.display is None
 
         mux.handle_command("set-option wayland-server off")
-        with anyio.fail_after(10):
+        with fair_anyio.fail_after(10):
             while successor.wayland.display != path:
                 await anyio.sleep(0.05)
         successor.stop()

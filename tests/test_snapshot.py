@@ -26,6 +26,7 @@ from ptyhost.backends.posix import PosixBackend
 from pyte.freeze import freeze
 from pyte.keep import Keep
 from pyte.page import RowMark
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from session import once
 from test_a_session_on_a_pyte_screen import attached, settled, shows
 from test_every_attribute_has_a_fate import declared, live_objects
@@ -658,13 +659,13 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                 assert [job.pty for job in adopted] == [True, False]
                 for job in adopted:
                     assert fresh.jobs.kill(job)
-                    with anyio.fail_after(10):
+                    with fair_anyio.fail_after(10):
                         await fresh.jobs.wait(job)
                     assert (job.returncode, job.kept("stdout")) == (None, b"started\n")
                 # Each viewer replays its job, and says once how it ended.
                 viewers = _viewers_of(fresh)
                 for job_id, ended in ((2, "[job 2 exited 3]"), (5, "[job 5 exited None]")):
-                    with anyio.fail_after(10):
+                    with fair_anyio.fail_after(10):
                         while ended not in _text(viewers[job_id]):
                             await anyio.sleep(0.05)
                     assert _text(viewers[job_id]).count(ended) == 1
@@ -697,7 +698,7 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                 reloaded = fresh.panes_by_id[shell.pane_id]
                 assert _text(reloaded) == before
                 reloaded.process.write_input("echo mar''ker\r")
-                with anyio.fail_after(10):
+                with fair_anyio.fail_after(10):
                     while "marker" not in _text(reloaded):
                         await anyio.sleep(0.05)
                 async with attached(fresh):
@@ -969,7 +970,7 @@ async def test_a_job_that_ends_between_two_writes_is_written_ended(pymux, tmp_pa
         try:
             written.write(pymux)
             go.touch()
-            with anyio.fail_after(10):
+            with fair_anyio.fail_after(10):
                 await pymux.jobs.wait(job)
             written.write(pymux)
             written.finish()
@@ -986,7 +987,7 @@ async def test_a_viewer_is_written_again_by_the_second_write(pymux, tmp_path):
         await shows(session, "$")
         job = pymux.jobs.submit("echo viewed")
         pymux.tasks.start_soon(pymux.jobs.supervise, job)
-        with anyio.fail_after(10):
+        with fair_anyio.fail_after(10):
             await pymux.jobs.wait(job)
         with set_app(pymux.connections[-1].client.state.app):
             pymux.handle_command("view-job -k %d" % job.job_id)

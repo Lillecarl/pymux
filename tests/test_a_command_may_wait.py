@@ -31,6 +31,7 @@ from pathlib import Path
 import anyio
 import pytest
 from prompt_toolkit.data_structures import Size
+from pyterm_pytest.fairclock import anyio as fair_anyio
 
 from pymux.answer import Answer
 
@@ -245,6 +246,6 @@ def _exit_of(packets) -> list:
 
 async def _until(question, seconds: float = 2.0) -> None:
     "Wait for something the server does in a task of its own."
-    with anyio.fail_after(seconds):
+    with fair_anyio.fail_after(seconds):
         while not question():
             await anyio.sleep(0.005)

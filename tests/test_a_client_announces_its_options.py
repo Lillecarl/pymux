@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager
 
 import anyio
 from libpymux.wire import encode_json
+from pyterm_pytest.fairclock import anyio as fair_anyio
 
 from pymux.config import client_options_in
 from pymux.connection.server import ServerConnection
@@ -146,7 +147,7 @@ async def _attached(pymux: Pymux, announced) -> ServerConnection:
 
     client_end.write_nowait(_start_gui(announced))
 
-    with anyio.fail_after(5.0):
+    with fair_anyio.fail_after(5.0):
         while connection.client is None and not connection.closed:
             await anyio.sleep(0.005)
 

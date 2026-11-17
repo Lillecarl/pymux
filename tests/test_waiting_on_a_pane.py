@@ -8,6 +8,7 @@ import sys
 
 import anyio
 import pytest
+from pyterm_pytest.fairclock import anyio as fair_anyio
 
 from pymux.answer import Answer
 from pymux.commands import call_command_handler
@@ -68,7 +69,7 @@ async def waited(mux, pane, *arguments: str) -> Answer:
     waiting, answer = started(mux, pane, *arguments)
     mux.answer = answer
     try:
-        with anyio.fail_after(2):
+        with fair_anyio.fail_after(2):
             await waiting
     finally:
         mux.answer = None
@@ -79,7 +80,7 @@ async def while_feeding(mux, waiting, answer: Answer, feed) -> Answer:
     "Await `waiting` while `feed` writes to the pane."
     mux.answer = answer
     try:
-        with anyio.fail_after(3):
+        with fair_anyio.fail_after(3):
             async with anyio.create_task_group() as group:
                 group.start_soon(lambda: waiting)
                 await feed()
@@ -234,7 +235,7 @@ async def test_send_keys_arms_the_wait_before_the_keys(pymux):
     arrives(pane, "ok at once\r\n")
     pymux.answer = answer
     try:
-        with anyio.fail_after(2):
+        with fair_anyio.fail_after(2):
             await waiting
     finally:
         pymux.answer = None

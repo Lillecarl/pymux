@@ -16,6 +16,7 @@ import argparse
 import anyio
 import pytest
 from prompt_toolkit.application.current import set_app
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from session import create_session
 
 from pymux.answer import Answer
@@ -142,7 +143,7 @@ async def test_kill_ends_a_pty_job(session):
     job = pymux.jobs.get(1)
     assert job is not None and job.pty and not job.is_done
     pymux.jobs.kill(job)
-    with anyio.fail_after(5):
+    with fair_anyio.fail_after(5):
         await pymux.jobs.wait(job)
     assert job.is_done
 
@@ -150,7 +151,7 @@ async def test_kill_ends_a_pty_job(session):
 @pytest.mark.parametrize("pty", [True, False], ids=["on a terminal", "on pipes"])
 async def test_a_running_job_ends_with_its_server(pty):
     "The scope's end kills it, and does not wait for it to end on its own. Lillecarl/pyterm#738."
-    with anyio.fail_after(10):
+    with fair_anyio.fail_after(10):
         async with create_session() as (pymux, _state):
             job = pymux.jobs.submit("exec sleep 60", None, [], None, pty)
             pymux.tasks.start_soon(pymux.jobs.supervise, job)

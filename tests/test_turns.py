@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import anyio
 from anyio.lowlevel import checkpoint
+from pyterm_pytest.fairclock import anyio as fair_anyio
 
 from pymux.pipes.base import Turns
 
@@ -35,7 +36,7 @@ async def test_an_urgent_writer_goes_ahead_of_every_waiting_one():
                 started.set()
                 await sent.wait()
 
-    with anyio.fail_after(10):
+    with fair_anyio.fail_after(10):
         async with anyio.create_task_group() as tasks:
             tasks.start_soon(write, "part 1")
             await started.wait()
@@ -64,7 +65,7 @@ async def test_a_writer_cancelled_while_it_waits_leaves_the_turn_to_the_next():
         async with turns.turn():
             order.append("waited")
 
-    with anyio.fail_after(10):
+    with fair_anyio.fail_after(10):
         async with anyio.create_task_group() as tasks:
             async with turns.turn():
                 tasks.start_soon(gives_up)

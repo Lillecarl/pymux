@@ -22,6 +22,7 @@ from contextlib import asynccontextmanager
 import anyio
 from libpymux.wire import encode_json
 from prompt_toolkit.application.current import set_app
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from test_the_link_comes_back import Terminal
 
 from pymux.client.base import Client
@@ -111,7 +112,7 @@ async def _attach(pymux: Pymux, tasks, hang_up_others: bool = False):
         )
     )
 
-    with anyio.fail_after(5.0):
+    with fair_anyio.fail_after(5.0):
         while connection.client is None and not connection.closed:
             await anyio.sleep(0.005)
 
@@ -119,7 +120,7 @@ async def _attach(pymux: Pymux, tasks, hang_up_others: bool = False):
 
 
 async def _until(what, says: str, seconds: float = 5.0) -> None:
-    with anyio.fail_after(seconds):
+    with fair_anyio.fail_after(seconds):
         while not what():
             await anyio.sleep(0.005)
 
@@ -177,7 +178,7 @@ async def test_the_packet_arrives_before_the_close():
 
             first.detach_and_close(hang_up=True)
 
-            with anyio.fail_after(5.0):
+            with fair_anyio.fail_after(5.0):
                 await heard.ended.wait()
             assert heard.exits, "the client heard nothing before the close"
         tasks.cancel_scope.cancel()

@@ -10,6 +10,7 @@ import base64
 import anyio
 import pytest
 from libpymux.protocol import Field, Packet
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from test_a_pane_asks_for_a_file import AskedClient
 
 from pymux.client import clipboard_image, terminal
@@ -39,7 +40,7 @@ async def test_the_image_goes_ahead_of_the_key_and_what_follows_it(client, monke
         return IMAGE
 
     monkeypatch.setattr(terminal, "clipboard_image", slow_image)
-    with anyio.fail_after(5):
+    with fair_anyio.fail_after(5):
         async with anyio.create_task_group() as tasks:
             client.tasks = tasks
             client._take_input("a")
@@ -63,7 +64,7 @@ async def test_no_image_says_so_and_withdraws_the_last_one(client, monkeypatch):
         return None
 
     monkeypatch.setattr(terminal, "clipboard_image", none)
-    with anyio.fail_after(5):
+    with fair_anyio.fail_after(5):
         async with anyio.create_task_group() as tasks:
             client.tasks = tasks
             client._take_input("\x16")

@@ -21,6 +21,7 @@ import socket
 
 import anyio
 from libpymux.wire import encode_json
+from pyterm_pytest.fairclock import anyio as fair_anyio
 
 from pymux.connection.attach import CANNOT_ATTACH
 from pymux.connection.server import ServerConnection
@@ -126,7 +127,7 @@ async def test_the_reason_reaches_the_client_before_the_close():
 
         client_end.write_nowait(encode_json(START_GUI))
 
-        with anyio.fail_after(5.0):
+        with fair_anyio.fail_after(5.0):
             while True:
                 packet = await client_end.read()
                 if packet["cmd"] == "out":
@@ -166,7 +167,7 @@ async def test_an_ordinary_server_lets_a_client_attach():
 
         client_end.write_nowait(encode_json(START_GUI))
 
-        with anyio.fail_after(5.0):
+        with fair_anyio.fail_after(5.0):
             while connection.client is None:
                 await anyio.sleep(0.005)
 
@@ -194,7 +195,7 @@ async def test_the_socket_of_an_integrated_server_refuses_an_attach(tmp_path):
         client.send(json.dumps(START_GUI).encode("utf-8") + b"\0")
 
         got = b""
-        with anyio.fail_after(5.0):
+        with fair_anyio.fail_after(5.0):
             while b"\0" not in got:
                 await anyio.wait_readable(client)
                 got += client.recv(1024)

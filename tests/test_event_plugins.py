@@ -13,6 +13,7 @@ import anyio
 from prompt_toolkit.application.current import set_app
 from pyte.osc import Osc
 from pyte.program_status import parse_report
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from run_commands import answered
 from session import create_session
 
@@ -110,7 +111,7 @@ async def _plugin(pymux: Pymux, name: str) -> Plugin:
 
 async def test_a_plugin_hears_what_happens_in_its_server(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch, hears_its_server=RECORDER)
-    with anyio.fail_after(DEADLINE):
+    with fair_anyio.fail_after(DEADLINE):
         async with create_session(window=SLEEPS) as (pymux, state):
             recorder = await _plugin(pymux, "hears_its_server")
             pane = pymux.arrangement.get_active_pane_for(state.app)
@@ -148,7 +149,7 @@ async def test_a_plugin_that_raises_fails_alone(tmp_path, monkeypatch):
         alone_raises_when_made=RAISES_WHEN_MADE,
         alone_records=RECORDER,
     )
-    with anyio.fail_after(DEADLINE):
+    with fair_anyio.fail_after(DEADLINE):
         async with create_session() as (pymux, state):
             recorder = await _plugin(pymux, "alone_records")
             slots = pymux.plugins.slots
@@ -173,7 +174,7 @@ async def test_a_plugin_runs_a_command_through_its_host(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch, asks_over_the_socket=ASKS_OVER_THE_SOCKET)
     pymux = Pymux()
     pymux.serving.listen_on_socket(str(tmp_path / "socket"))
-    with anyio.fail_after(DEADLINE):
+    with fair_anyio.fail_after(DEADLINE):
         async with create_session(pymux) as (pymux, state):
             asks = await _plugin(pymux, "asks_over_the_socket")
             await _until(lambda: asks.answer is not None)
@@ -228,7 +229,7 @@ async def test_an_installed_distribution_brings_a_plugin(tmp_path, monkeypatch):
         "pymux_test_dist",
         {"installed_records": RECORDS_AND_GREETS, "installed_clash": RECORDER},
     )
-    with anyio.fail_after(DEADLINE):
+    with fair_anyio.fail_after(DEADLINE):
         async with create_session() as (pymux, state):
             recorder = await _plugin(pymux, "installed_records")
             await _until(lambda: pymux.plugins.slots["installed_clash"].state is PluginState.FAILED)

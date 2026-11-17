@@ -17,12 +17,13 @@ from prompt_toolkit.application.current import set_app
 from prompt_toolkit.auto_suggest import Suggestion
 from prompt_toolkit.key_binding.key_processor import KeyPress
 from prompt_toolkit.keys import Keys
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from session import create_session
 
 
 async def until(condition, what: str) -> None:
     try:
-        with anyio.fail_after(5):
+        with fair_anyio.fail_after(5):
             while not condition():
                 await anyio.sleep(0.005)
     except TimeoutError:

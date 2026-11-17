@@ -16,6 +16,7 @@ import anyio
 import pytest
 from libpymux.wire import encode_json
 from prompt_toolkit.data_structures import Size
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from session import once, over_connection
 
 from pymux.answer import Answer
@@ -61,7 +62,7 @@ async def _take(client: socket.socket) -> bytes:
 async def test_a_socket_counts_what_the_wire_carried(pair):
     "After zstd: what a metered link pays for, not the frame."
     connection, client = pair
-    with anyio.fail_after(10):
+    with fair_anyio.fail_after(10):
         await connection.write(encode_json({"cmd": "ok"}), compress_after=True)
         frame = encode_json({"cmd": "out", "data": "x" * 100_000})
         await connection.write(frame)

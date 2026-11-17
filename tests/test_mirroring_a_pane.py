@@ -28,6 +28,7 @@ from libpymux.protocol import (
 from libpymux.wire import MSGPACK, encode_json
 from ptterm.control import TerminalControl
 from pyte.mouse import MouseAction
+from pyterm_pytest.fairclock import anyio as fair_anyio
 
 from pymux.answer import Answer, current_answer
 from pymux.commands.send_keys import send_keys
@@ -112,7 +113,7 @@ def picture(control: TerminalControl):
 
 async def converge(client_end, sink: MirrorSink, owner: TerminalControl) -> None:
     "Apply what the link sends until the peer shows the owner's screen."
-    with anyio.fail_after(5):
+    with fair_anyio.fail_after(5):
         while picture(sink.control) != picture(owner):
             packet = await client_end.read()
             if packet.get(Field.CMD) == Packet.MIRROR_REFUSED:
@@ -175,7 +176,7 @@ async def test_a_peer_takes_the_title_and_the_pointer(pymux):
         await converge(client_end, sink, owner)
         owner.feed_output("\x1b]2;the title\x1b\\\x1b]22;>wait\x1b\\")
         screen = sink.control.screen
-        with anyio.fail_after(5):
+        with fair_anyio.fail_after(5):
             while screen.pointer_shapes.shape != "wait":
                 sink.take(await client_end.read())
         assert screen.titles.window == "the title"
@@ -194,7 +195,7 @@ async def test_text_at_another_size_reaches_the_peer(pymux):
         await converge(client_end, sink, owner)
         owner.feed_output("\x1b]66;s=2:w=3;big\x1b\\")
         blocks = sink.control.screen.text_sizes.blocks
-        with anyio.fail_after(5):
+        with fair_anyio.fail_after(5):
             while not blocks:
                 sink.take(await client_end.read())
                 blocks = sink.control.screen.text_sizes.blocks
@@ -212,7 +213,7 @@ async def test_an_image_the_owner_shows_reaches_the_peer(pymux):
         await converge(client_end, sink, owner)
         owner.feed_output("\x1b_Ga=T,f=24,s=1,v=1,i=7,c=2,r=1;/wAA\x1b\\")
         graphics = sink.control.screen.graphics
-        with anyio.fail_after(5):
+        with fair_anyio.fail_after(5):
             while not graphics.placements:
                 sink.take(await client_end.read())
         assert graphics.images_by_id[7].data == b"\xff\x00\x00"
@@ -290,7 +291,7 @@ async def test_a_paused_mirror_gets_what_changed_on_resume(pymux):
         await converge(client_end, sink, owner)
 
         ask(client_end, Packet.MIRROR_PAUSE, pane)
-        with anyio.fail_after(5):
+        with fair_anyio.fail_after(5):
             while not source_of(connection).paused:
                 await anyio.sleep(0.01)
         owner.feed_output("\x1b[2J\x1b[Hwhile nobody watched")
@@ -338,7 +339,7 @@ async def test_a_peer_drives_the_pane_in_the_modes_the_program_set(pymux):
         ask(client_end, Packet.MIRROR_KEY, pane, data="\x1b[A", **{Field.KEY_PROFILE: {"menu": True}})
         ask(client_end, Packet.MIRROR_PASTE, pane, data="pasted")
         ask(client_end, Packet.MIRROR_MOUSE, pane, mouse={"action": 1, "column": 3, "row": 1})
-        with anyio.fail_after(5):
+        with fair_anyio.fail_after(5):
             while len(typed) < 3:
                 await anyio.sleep(0.01)
         assert typed == ["\x1bOA", "\x1b[200~pasted\x1b[201~", "\x1b[<0;4;2M"]
@@ -359,7 +360,7 @@ async def test_a_reply_from_the_peer_reaches_the_program_as_it_is(pymux):
         sink = a_peer()
         await converge(client_end, sink, owner)
         ask(client_end, Packet.MIRROR_WRITE, pane, data=reply)
-        with anyio.fail_after(5):
+        with fair_anyio.fail_after(5):
             while not typed:
                 await anyio.sleep(0.01)
         assert typed == [reply]
@@ -374,7 +375,7 @@ def shows(sink: MirrorSink, text: str) -> bool:
 async def until(client_end, sink: MirrorSink, seen) -> list[Message]:
     "Apply what the link sends until `seen()` holds, and give what was not a frame."
     others = []
-    with anyio.fail_after(5):
+    with fair_anyio.fail_after(5):
         while not seen():
             packet = await client_end.read()
             if packet.get(Field.CMD) == Packet.MIRROR_FRAME:
@@ -402,7 +403,7 @@ async def test_copy_mode_of_a_mirror_runs_on_the_owner_and_reads_its_history(pym
         ask(client_end, Packet.MIRROR_COPY, pane)
         # A page up moves by the window as last drawn, so a person sees
         # each page before the next.
-        with anyio.fail_after(5):
+        with fair_anyio.fail_after(5):
             while not shows(sink, "line 0 "):
                 ask(client_end, Packet.MIRROR_KEY, pane, data=PAGE_UP)
                 packet = await client_end.read()
@@ -411,7 +412,7 @@ async def test_copy_mode_of_a_mirror_runs_on_the_owner_and_reads_its_history(pym
                 sink.take(packet)
 
         ask(client_end, Packet.MIRROR_KEY, pane, data="q")
-        with anyio.fail_after(5):
+        with fair_anyio.fail_after(5):
             while source_of(connection).copying is not None:
                 await anyio.sleep(0.01)
         await converge(client_end, sink, owner)
@@ -460,7 +461,7 @@ async def test_what_a_peer_copies_in_copy_mode_goes_to_the_peer(pymux):
         for key in (PAGE_UP, "\x00", "\x05", "\x17"):
             ask(client_end, Packet.MIRROR_KEY, pane, data=key)
         copied = []
-        with anyio.fail_after(5):
+        with fair_anyio.fail_after(5):
             while not copied:
                 packet = await client_end.read()
                 if packet.get(Field.CMD) == Packet.MIRROR_COPIED:
@@ -497,7 +498,7 @@ async def test_a_pane_nobody_has_is_refused(pymux):
         ServerConnection(pymux, server_end)
         client_end.write_nowait(encode_json(HELLO))
         client_end.write_nowait(encode_json({Field.CMD: Packet.MIRROR, Field.PANE_ID: 99999}))
-        with anyio.fail_after(5):
+        with fair_anyio.fail_after(5):
             packet = await client_end.read()
             while packet[Field.CMD] == Packet.PEER_ACCEPTED:
                 packet = await client_end.read()
@@ -520,7 +521,7 @@ async def test_a_peer_of_no_common_version_is_told_which_side_to_upgrade(pymux, 
         server_end, client_end = connect_in_memory()
         ServerConnection(pymux, server_end)
         client_end.write_nowait(encode_json(hello))
-        with anyio.fail_after(5):
+        with fair_anyio.fail_after(5):
             packet = await client_end.read()
         assert packet[Field.CMD] == Packet.PEER_REFUSED
         assert packet[Field.ERROR].startswith("upgrade pymux on " + side)

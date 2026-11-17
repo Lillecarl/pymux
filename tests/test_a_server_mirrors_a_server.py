@@ -523,7 +523,7 @@ async def test_the_pace_of_a_transfer_there_is_the_owners_to_say(two_servers, mo
     there, _heard, raw, packets = await terminal_here(owner, peer, client, monkeypatch)
     there.terminal.terminal_control.feed_output(str(TransferCommand(Action.SEND, id="s1")))
     await until(lambda: raw, "the session reaches the terminal here", lambda: raw)
-    with anyio.fail_after(5):
+    with fair_anyio.fail_after(5):
         await peer.kitty_transfers.taken(client.client.connection, "s1")
     assert {Field.CMD: Packet.KITTY_TRANSFER_TAKEN, Field.DATA: "s1"} in packets
 
@@ -1219,7 +1219,7 @@ async def test_receive_there_asks_the_person_who_attaches_here(two_servers, tmp_
             client.client.files.took_part(part)
         client.client.files.took_part({Field.CMD: Packet.UPLOAD_DONE, Field.REQUEST: request})
 
-    with anyio.fail_after(10):
+    with fair_anyio.fail_after(10):
         async with anyio.create_task_group() as tasks:
             tasks.start_soon(the_person)
             said = await Server(owner.socket_name).cmd(
@@ -1807,7 +1807,7 @@ async def test_a_loopback_url_there_opens_through_a_port_here(two_servers, monke
         assert moved == with_port(url, urlparse(moved).port) and urlparse(moved).port != port
         async with await anyio.connect_tcp("127.0.0.1", urlparse(moved).port) as stream:
             await stream.send(b"hello")
-            with anyio.fail_after(5):
+            with fair_anyio.fail_after(5):
                 assert await stream.receive() == b"HELLO"
         tasks.cancel_scope.cancel()
 
@@ -1839,7 +1839,7 @@ async def test_a_tunnel_passes_a_server_that_only_mirrors_the_pane(two_servers):
             moved = await leaf.peers.tunnels.opened(far.process, "http://127.0.0.1:%d/" % (port,), 60)
             async with await anyio.connect_tcp("127.0.0.1", urlparse(moved).port) as stream:
                 await stream.send(b"hello")
-                with anyio.fail_after(5):
+                with fair_anyio.fail_after(5):
                     assert await stream.receive() == b"HELLO"
         finally:
             tasks.cancel_scope.cancel()
@@ -1956,7 +1956,7 @@ async def test_a_link_to_itself_mirrors_nothing(two_servers):
     link = peer.peers.of(peer.socket_name)
     updated = link.tree._updated
     link.watch()
-    with anyio.fail_after(5):
+    with fair_anyio.fail_after(5):
         await updated.wait()
     assert [session.remote for session in peer.sessions] == [None]
 

@@ -17,6 +17,7 @@ import pytest
 from libpymux.protocol import Field, Packet
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from session import once, over_connection
 
 from pymux.client import uploads
@@ -598,7 +599,7 @@ async def test_the_request_ends_when_the_client_goes():
         connection = state.client.connection
         upload = connection.client.files.ask_for(["x"], "%1")
         await session.detach(state)
-        with anyio.fail_after(10):
+        with fair_anyio.fail_after(10):
             [why] = await receive_into(upload, Path("/"), lambda _text: None)
         assert "went" in why
 

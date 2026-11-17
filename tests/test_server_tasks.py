@@ -28,6 +28,7 @@ import inspect
 import logging
 
 import anyio
+from pyterm_pytest.fairclock import anyio as fair_anyio
 
 from pymux.connection.attach import create_app
 from pymux.connection.server import FAILURES_THAT_END_A_CONNECTION, ServerConnection
@@ -116,7 +117,7 @@ class FakePymux:
 
 
 async def _until(question, seconds: float = 2.0) -> None:
-    with anyio.fail_after(seconds):
+    with fair_anyio.fail_after(seconds):
         while not question():
             await anyio.sleep(0)
 

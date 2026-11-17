@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import anyio
 from prompt_toolkit.application.current import set_app
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from test_a_session_on_a_pyte_screen import attached, pymux, shows  # noqa: F401 -- a fixture
 
 #: A clipboard write, as a program writes one.
@@ -36,6 +37,6 @@ async def test_a_clipboard_write_a_program_ends_on_reaches_the_client(pymux):
             pymux.handle_command("set-option set-clipboard on")
             pymux.handle_command("split-window \"printf '\\033%s\\007'\"" % COPIED)
 
-        with anyio.fail_after(10):
+        with fair_anyio.fail_after(10):
             while not any(COPIED in data for data in sent):
                 await anyio.sleep(0.02)

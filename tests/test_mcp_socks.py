@@ -10,9 +10,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import anyio
 import pytest
 from pymux_mcp import browser
+from pyterm_pytest.fairclock import anyio as fair_anyio
 
 PROXY = "127.0.0.1:41080"
 ASKED = ["forward-port", "-R", "127.0.0.1:0"]
@@ -44,7 +44,7 @@ async def test_a_socks_forward_that_stands_is_used_and_nothing_is_asked():
     "The person confirmed it once; the next browser asks them nothing."
     server = Forwarding([_row(PROXY)])
 
-    with anyio.fail_after(5):
+    with fair_anyio.fail_after(5):
         assert await browser.through_client(server) == PROXY
 
     assert server.asked == []
@@ -53,7 +53,7 @@ async def test_a_socks_forward_that_stands_is_used_and_nothing_is_asked():
 async def test_with_none_the_client_is_asked_for_one_and_its_port_is_used():
     server = Forwarding([], then=[_row(PROXY)])
 
-    with anyio.fail_after(5):
+    with fair_anyio.fail_after(5):
         assert await browser.through_client(server) == PROXY
 
     assert server.asked == [ASKED]
@@ -64,7 +64,7 @@ async def test_a_forward_that_failed_is_never_the_proxy(monkeypatch):
     monkeypatch.setattr(browser, "CONFIRM_WAIT", 0.3)
     server = Forwarding([], then=[_row("127.0.0.1:0", "port in use")])
 
-    with anyio.fail_after(5), pytest.raises(RuntimeError, match="port in use"):
+    with fair_anyio.fail_after(5), pytest.raises(RuntimeError, match="port in use"):
         await browser.through_client(server)
 
 
@@ -72,7 +72,7 @@ async def test_a_question_nobody_answers_says_so(monkeypatch):
     monkeypatch.setattr(browser, "CONFIRM_WAIT", 0.3)
     server = Forwarding([])
 
-    with anyio.fail_after(5), pytest.raises(RuntimeError, match="did not confirm"):
+    with fair_anyio.fail_after(5), pytest.raises(RuntimeError, match="did not confirm"):
         await browser.through_client(server)
 
 

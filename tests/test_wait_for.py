@@ -23,6 +23,7 @@ from __future__ import annotations
 import anyio
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from session import create_session, over_connection
 
 from pymux.answer import Answer
@@ -246,7 +247,7 @@ async def _finish(answer) -> None:
 
 
 async def _until(question, seconds: float = 5.0) -> None:
-    with anyio.fail_after(seconds):
+    with fair_anyio.fail_after(seconds):
         while not question():
             await anyio.sleep(0.005)
 

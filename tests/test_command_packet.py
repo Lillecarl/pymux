@@ -5,8 +5,8 @@ Lillecarl/pyterm#984.
 
 from __future__ import annotations
 
-import anyio
 from libpymux.wire import encode_json
+from pyterm_pytest.fairclock import anyio as fair_anyio
 
 from pymux.connection.server import ServerConnection
 from pymux.core.main import Pymux
@@ -26,7 +26,7 @@ async def test_a_pane_field_that_is_not_a_number_is_refused():
         client_end.write_nowait(encode_json({"cmd": "run-command", "data": "has-session", "pane_id": "%1"}))
 
         said = []
-        with anyio.fail_after(DEADLINE):
+        with fair_anyio.fail_after(DEADLINE):
             while not said or said[-1]["cmd"] != "exit":
                 said.append(await client_end.read())
 

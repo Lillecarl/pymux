@@ -11,6 +11,7 @@ import sys
 from types import SimpleNamespace
 
 import anyio
+from pyterm_pytest.fairclock import anyio as fair_anyio
 
 from pymux.core.forwarding import Direction
 from pymux.core.port_offers import PortOffers, listening_ports
@@ -31,7 +32,7 @@ async def test_a_listener_in_the_process_tree_is_found():
     async with await anyio.open_process([sys.executable, "-c", LISTENS]) as child:
         try:
             assert child.stdout is not None
-            with anyio.fail_after(10):
+            with fair_anyio.fail_after(10):
                 port = int((await child.stdout.receive()).decode().split()[0])
             found = await anyio.to_thread.run_sync(listening_ports, os.getpid())
             assert port in found

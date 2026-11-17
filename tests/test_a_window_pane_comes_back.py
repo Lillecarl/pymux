@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import anyio
 from libpymux.protocol import Field
+from pyterm_pytest.fairclock import anyio as fair_anyio
 
 from pymux.graphics.graphics import ClientGraphics
 from pymux.graphics.window_frames import FrameRects, WindowView
@@ -88,6 +89,6 @@ async def _run(coroutine) -> None:
 
 
 async def wait_for(condition, seconds: float = 2.0) -> None:
-    with anyio.fail_after(seconds):
+    with fair_anyio.fail_after(seconds):
         while not condition():
             await anyio.sleep(0)

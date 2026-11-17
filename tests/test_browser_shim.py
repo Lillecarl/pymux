@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 
 import anyio
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from websockets.asyncio.server import serve
 
 from pymux.wayland.browser_shim import bridge
@@ -39,7 +40,7 @@ async def test_each_message_crosses_both_ways_and_the_pipes_end_reaches_the_brid
         program_reads, bridge_writes = os.pipe()
         bridge_reads, program_writes = os.pipe()
         large = '{"id":3,"data":"%s"}' % ("x" * 3_000_000)
-        with anyio.fail_after(10):
+        with fair_anyio.fail_after(10):
             async with anyio.create_task_group() as tasks:
                 tasks.start_soon(bridge, "ws://127.0.0.1:%d" % port, bridge_reads, bridge_writes)
                 # One message split over two writes, and one far over a

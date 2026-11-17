@@ -14,6 +14,7 @@ from __future__ import annotations
 import anyio
 import pytest
 from prompt_toolkit.application.current import set_app
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from run_commands import run_as
 from session import create_session, once
 
@@ -35,7 +36,7 @@ async def _run_answering(pymux, state, command) -> None:
 
 async def _shows(pane, text: str, seconds: float = 5) -> None:
     "Hold until the screen of a pane shows some text."
-    with anyio.fail_after(seconds):
+    with fair_anyio.fail_after(seconds):
         while text not in pane.screen.page.text(0, 23):
             await anyio.sleep(0.01)
 

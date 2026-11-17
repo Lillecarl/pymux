@@ -5,8 +5,8 @@ far side, so the peer dials again. Lillecarl/pyterm#979.
 
 from __future__ import annotations
 
-import anyio
 import asyncssh
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from test_a_server_mirrors_a_server import the_probe_does_not_leave_this_machine, two_servers, until
 from test_forwards_through_a_peer import linked_over_ssh
 
@@ -15,7 +15,7 @@ __all__ = ["the_probe_does_not_leave_this_machine", "two_servers"]
 
 async def test_a_missed_keepalive_dials_again(two_servers, tmp_path):
     owner, peer, client = two_servers
-    with anyio.fail_after(20):
+    with fair_anyio.fail_after(20):
         async with linked_over_ssh(owner, peer, client, tmp_path) as (here, _there):
             (link,) = owner.peer_links()
             # What asyncssh does when the keepalives go unanswered.

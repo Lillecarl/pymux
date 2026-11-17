@@ -17,6 +17,7 @@ import anyio
 from libpymux.protocol import Field, Packet
 from libpymux.wire import encode_json
 from prompt_toolkit.application.current import set_app
+from pyterm_pytest.fairclock import anyio as fair_anyio
 
 from pymux.client.terminal import TerminalClient
 from pymux.connection.server import ServerConnection
@@ -81,7 +82,7 @@ async def _attach(pymux: Pymux, detach_others: bool = False) -> ServerConnection
 
     client_end.write_nowait(_start_gui(detach_others))
 
-    with anyio.fail_after(5.0):
+    with fair_anyio.fail_after(5.0):
         while connection.client is None and not connection.closed:
             await anyio.sleep(0.005)
 

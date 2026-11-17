@@ -17,6 +17,7 @@ import sys
 import anyio
 import pytest
 from prompt_toolkit.document import Document
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from session import in_this_process
 
 from pymux.commands import call_command_handler, completer, parser_tree
@@ -398,7 +399,7 @@ async def test_shell_asks_the_server_for_values(tmp_path):
     pymux = Pymux()
     pymux.serving.listen_on_socket(socket_name)
     async with in_this_process(pymux):
-        with anyio.fail_after(30):
+        with fair_anyio.fail_after(30):
             layouts = await completes("pymux -S %s select-layout even-" % socket_name)
             options = await completes("pymux -S %s set-option -g status-ju" % socket_name)
     assert layouts == {"even-horizontal", "even-vertical"}

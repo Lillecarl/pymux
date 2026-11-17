@@ -20,6 +20,7 @@ from __future__ import annotations
 import anyio
 import pytest
 from prompt_toolkit.application.current import set_app
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from run_commands import run_as
 from session import create_session
 
@@ -99,7 +100,7 @@ async def test_run_shell_with_b_does_not_make_the_caller_wait():
             dialog = state.layout_manager.popup_dialog
             return dialog is not None and dialog.title == "run-shell"
 
-        with anyio.fail_after(5):
+        with fair_anyio.fail_after(5):
             while not arrived():
                 await anyio.sleep(0.005)
 
@@ -171,7 +172,7 @@ async def test_if_shell_with_b_does_not_make_the_caller_wait():
         with set_app(state.app):
             assert handle_command(pymux, "if-shell -b true 'display later'") is None
 
-        with anyio.fail_after(5):
+        with fair_anyio.fail_after(5):
             while state.message != "later":
                 await anyio.sleep(0.005)
 

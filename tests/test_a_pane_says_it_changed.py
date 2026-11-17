@@ -27,6 +27,7 @@ import sys
 
 import anyio
 import pytest
+from pyterm_pytest.fairclock import anyio as fair_anyio
 
 from pymux.answer import Answer
 from pymux.commands import call_command_handler
@@ -200,7 +201,7 @@ async def test_the_end_of_the_program_moves_it():
 
         pane.terminal.terminal_control.on_content_changed += changed
         pane.process.kill()
-        with anyio.fail_after(5):
+        with fair_anyio.fail_after(5):
             await ended.wait()
 
 
@@ -236,7 +237,7 @@ async def test_a_pane_that_already_moved_answers_at_once(pymux):
     stale = pane.revision
     arrives(pane, "hello")
 
-    with anyio.fail_after(1):
+    with fair_anyio.fail_after(1):
         answer = await waited(
             pymux,
             "wait-pane-change",
@@ -279,7 +280,7 @@ async def test_a_wait_that_runs_out_answers_the_same_revision(pymux):
     await settled(pane)
     standing = pane.revision
 
-    with anyio.fail_after(2):
+    with fair_anyio.fail_after(2):
         answer = await waited(
             pymux,
             "wait-pane-change",

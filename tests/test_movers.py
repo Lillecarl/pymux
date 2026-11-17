@@ -12,9 +12,9 @@ from __future__ import annotations
 
 import argparse
 
-import anyio
 import pytest
 from prompt_toolkit.application.current import set_app
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from run_commands import run_as
 from session import create_session
 
@@ -108,7 +108,7 @@ async def _with_work(pymux, state):
 
 @pytest.mark.parametrize("stay", [False, True], ids=["follows", "-d stays"])
 async def test_a_window_moved_to_another_session_takes_the_client_along(stay):
-    with anyio.fail_after(10):
+    with fair_anyio.fail_after(10):
         async with create_session() as (pymux, state):
             home, work = await _with_work(pymux, state)
             with set_app(state.app):
@@ -126,7 +126,7 @@ async def test_a_window_moved_to_another_session_takes_the_client_along(stay):
 
 @pytest.mark.parametrize("stay", [False, True], ids=["follows", "-d stays"])
 async def test_a_pane_moved_to_another_session_leaves_its_window_and_takes_the_client_along(stay):
-    with anyio.fail_after(10):
+    with fair_anyio.fail_after(10):
         async with create_session() as (pymux, state):
             home, work = await _with_work(pymux, state)
             with set_app(state.app):
@@ -149,7 +149,7 @@ async def test_a_pane_moved_to_another_session_leaves_its_window_and_takes_the_c
 
 async def test_a_pane_from_a_session_the_client_is_not_on_leaves_its_window():
     "An arrangement takes a pane out only of its own windows: the pane stayed in both."
-    with anyio.fail_after(10):
+    with fair_anyio.fail_after(10):
         async with create_session() as (pymux, state):
             home, work = await _with_work(pymux, state)
             (source,) = work.arrangement.windows

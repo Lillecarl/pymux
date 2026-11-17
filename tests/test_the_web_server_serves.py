@@ -23,6 +23,7 @@ import sys
 
 import anyio
 import pytest
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from websockets.asyncio.client import connect
 
 from pymux.core.main import Pymux
@@ -81,7 +82,7 @@ async def _serving(mux, tasks, writable: bool) -> _Serving:
 
     tasks.start_soon(lambda: serve(mux.socket_name, "127.0.0.1", port, token, writable))
 
-    with anyio.fail_after(10):
+    with fair_anyio.fail_after(10):
         while True:
             try:
                 stream = await anyio.connect_tcp("127.0.0.1", port)
@@ -164,7 +165,7 @@ async def test_a_viewer_of_the_session_is_a_client_of_it(pymux):
                 assert welcome["writable"] is False
 
                 rows: dict = {}
-                with anyio.fail_after(10):
+                with fair_anyio.fail_after(10):
                     while not rows.get("9", "").strip():
                         frame = json.loads(await socket.recv())
                         for number, runs in frame.get("rows", {}).items():
@@ -205,7 +206,7 @@ async def test_a_writable_viewer_types_into_the_pane(pymux):
                 await socket.recv()
 
                 await socket.send(json.dumps({"type": "text", "text": "hi"}))
-                with anyio.fail_after(5):
+                with fair_anyio.fail_after(5):
                     while not written:
                         await anyio.sleep(0.02)
 

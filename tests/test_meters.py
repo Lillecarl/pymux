@@ -12,6 +12,7 @@ import re
 
 import anyio
 from prompt_toolkit.application.current import set_app
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from test_a_session_on_a_pyte_screen import attached, shows
 
 from pymux.core.main import Pymux
@@ -19,7 +20,7 @@ from pymux.core.main import Pymux
 
 async def drawn(app) -> None:
     "Wait until the frame the application asked for went out."
-    with anyio.fail_after(5):
+    with fair_anyio.fail_after(5):
         while app.invalidated:
             await anyio.sleep(0.01)
 

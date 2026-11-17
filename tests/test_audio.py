@@ -27,6 +27,7 @@ from contextlib import asynccontextmanager
 import anyio
 import pytest
 from prompt_toolkit.data_structures import Size
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from session import once, over_connection
 
 if not (shutil.which("pipewire") and shutil.which("wireplumber") and shutil.which("pw-play")):
@@ -221,7 +222,7 @@ async def serving(tmp_path, mode=AudioServerMode.PRIVATE, name="pymux.sock"):
     pymux.serving.listen_on_socket(str(tmp_path / name))
     async with pymux.running():
         try:
-            with anyio.fail_after(20):
+            with fair_anyio.fail_after(20):
                 await pymux.audio.running.wait()
             yield pymux
         finally:
@@ -450,7 +451,7 @@ async def test_the_microphone_opens_only_while_a_program_records(tmp_path):
                 link.microphone.dropped,
             )
             recorder.terminate()
-            with anyio.fail_after(10):
+            with fair_anyio.fail_after(10):
                 await recorder.wait()
 
         await once(lambda: not devices.microphone_open, 10.0, "the microphone stayed open")
@@ -558,7 +559,7 @@ async def test_a_linux_client_plays_and_records_through_its_own_pipewire(tmp_pat
             await once(lambda: ears.microphone_open, 15.0, "the person's microphone never opened")
             await heard_for(remote, 1.5)
             recorder.terminate()
-            with anyio.fail_after(10):
+            with fair_anyio.fail_after(10):
                 await recorder.wait()
         await once(lambda: not ears.microphone_open, 10.0, "the person's microphone stayed open")
 
@@ -578,13 +579,13 @@ async def test_a_client_that_plays_no_sound_is_sent_none(tmp_path):
     async with over_connection(pymux=pymux, read_packet=heard.append) as session:
         # Sound first: PipeWire starting beside an attach under load took
         # longer than the attach may.
-        with anyio.fail_after(20):
+        with fair_anyio.fail_after(20):
             await pymux.audio.running.wait()
         await session.attach("one", Size(rows=24, columns=80), frames=True)
         song = tmp_path / "a440.wav"
         write_wav(song, tone(440, 1.0, 2), 2)
         async with running(["pw-play", str(song)], pane_environment(pymux)) as player:
-            with anyio.fail_after(10):
+            with fair_anyio.fail_after(10):
                 await player.wait()
         assert not pymux.audio.links
         sound = {Packet.SOUND, Packet.AUDIO, Packet.ECHO, Packet.LATENCY, Packet.MICROPHONE}
@@ -623,7 +624,7 @@ async def test_a_pulse_program_plays_and_records(tmp_path):
             await once(lambda: devices.microphone_open, 10.0, "the microphone never opened for Pulse")
             await heard_for(pymux, 1.5)
             recorder.terminate()
-            with anyio.fail_after(10):
+            with fair_anyio.fail_after(10):
                 await recorder.wait()
 
     with wave.open(str(recorded)) as heard:

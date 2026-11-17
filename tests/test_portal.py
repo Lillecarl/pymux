@@ -16,6 +16,7 @@ from subprocess import DEVNULL, PIPE
 import anyio
 import pytest
 from anyio.streams.buffered import BufferedByteReceiveStream
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from session import once
 
 pytest.importorskip("dbus_fast")
@@ -63,7 +64,7 @@ async def a_host_bus(tmp_path, monkeypatch, real_portal=False):
     async with await anyio.open_process(argv, stdin=DEVNULL, stdout=PIPE, stderr=None) as daemon:
         try:
             assert daemon.stdout is not None
-            with anyio.fail_after(10):
+            with fair_anyio.fail_after(10):
                 address = (await BufferedByteReceiveStream(daemon.stdout).receive_until(b"\n", 4096)).decode()
             monkeypatch.setenv("DBUS_SESSION_BUS_ADDRESS", address)
             yield address

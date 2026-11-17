@@ -33,6 +33,7 @@ from collections import Counter
 import anyio
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from session import over_connection
 
 #: A pane that is still there when the test looks at it. A program that
@@ -76,7 +77,7 @@ async def settled(*states) -> None:
     Lillecarl/pyterm#671.
     """
     quiet = 0
-    with anyio.fail_after(10):
+    with fair_anyio.fail_after(10):
         while quiet < 2:
             await anyio.sleep(LONG_ENOUGH / 3)
             quiet = 0 if any(state.app.invalidated for state in states) else quiet + 1
@@ -91,7 +92,7 @@ async def shell_started(pymux) -> None:
     """
     first = pymux.arrangement.windows[0].panes[0]
     launcher = os.path.basename(sys.executable)
-    with anyio.fail_after(10):
+    with fair_anyio.fail_after(10):
         while first.name in ("", launcher):
             await anyio.sleep(0.02)
 

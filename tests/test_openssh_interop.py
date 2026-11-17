@@ -46,6 +46,7 @@ from pathlib import Path
 import anyio
 import pytest
 from anyio.abc import SocketAttribute
+from pyterm_pytest.fairclock import anyio as fair_anyio
 
 from pymux.client.forwards import Forwards
 from pymux.core.forwarding import ANY_PORT, Direction, Forward
@@ -302,7 +303,7 @@ async def _bounded():
 
     loop.set_exception_handler(named)
     try:
-        with anyio.fail_after(A_TEST_TAKES):
+        with fair_anyio.fail_after(A_TEST_TAKES):
             async with anyio.create_task_group() as tasks:
                 yield tasks
     finally:

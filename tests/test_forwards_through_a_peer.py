@@ -9,9 +9,9 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-import anyio
 from libpymux.objects import Server
 from libpymux.protocol import Capability
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from test_a_server_mirrors_a_server import run_as, shown_here, the_probe_does_not_leave_this_machine, two_servers, until
 from test_port_forwarding import _exactly, _socks5_to, echoing
 from test_ssh_client import create_ssh_server
@@ -64,7 +64,7 @@ async def test_a_program_there_asks_the_person_here_and_the_yes_forwards_socks(t
     SSH connection, and the owner's table shows the port it listens on.
     """
     owner, peer, client = two_servers
-    with anyio.fail_after(20):
+    with fair_anyio.fail_after(20):
         async with echoing() as echo_port, linked_over_ssh(owner, peer, client, tmp_path) as (_here, there):
             said = await asked_there(owner, there, "forward-port", "-R", "127.0.0.1:0")
             assert said.exit_code == 0, said
@@ -94,7 +94,7 @@ async def test_a_program_there_asks_the_person_here_and_the_yes_forwards_socks(t
 async def test_a_yes_from_a_program_here_counts_for_nothing(two_servers, tmp_path):
     "`-c` from a pane is no answer, here as on the owner: the person is asked anyway."
     owner, peer, client = two_servers
-    with anyio.fail_after(20):
+    with fair_anyio.fail_after(20):
         async with linked_over_ssh(owner, peer, client, tmp_path) as (here, _there):
             said = await Server(peer.socket_name).cmd(["forward-port", "-c", "-p", here.address, "-R", "127.0.0.1:0"])
             assert said.exit_code == 0, said
@@ -104,7 +104,7 @@ async def test_a_yes_from_a_program_here_counts_for_nothing(two_servers, tmp_pat
 
 async def test_the_owner_unforwards_through_the_peer(two_servers, tmp_path):
     owner, peer, client = two_servers
-    with anyio.fail_after(20):
+    with fair_anyio.fail_after(20):
         async with linked_over_ssh(owner, peer, client, tmp_path) as (here, there):
             await run_as(peer, client, "forward-port -c -p %s -R 127.0.0.1:0" % (here.address,))
             await until(lambda: owners_forwards(owner), "the forward is made")
@@ -119,7 +119,7 @@ async def test_the_owner_unforwards_through_the_peer(two_servers, tmp_path):
 async def test_a_forward_comes_back_with_the_link(two_servers, tmp_path):
     "A link that goes takes the listener with its connection; the next link opens it again and tells the owner."
     owner, peer, client = two_servers
-    with anyio.fail_after(20):
+    with fair_anyio.fail_after(20):
         async with linked_over_ssh(owner, peer, client, tmp_path) as (here, _there):
             await run_as(peer, client, "forward-port -c -p %s -R 127.0.0.1:0" % (here.address,))
             await until(lambda: owners_forwards(owner), "the forward is made")
@@ -142,7 +142,7 @@ async def test_a_forward_comes_back_with_the_link(two_servers, tmp_path):
 async def test_the_forwards_table_names_the_peer(two_servers, tmp_path):
     "`browser.open via=client` reads the table, so a peer's row is there as a client's is."
     owner, peer, client = two_servers
-    with anyio.fail_after(20):
+    with fair_anyio.fail_after(20):
         async with linked_over_ssh(owner, peer, client, tmp_path) as (here, _there):
             await run_as(peer, client, "forward-port -c -p %s -R 127.0.0.1:0" % (here.address,))
             await until(lambda: owners_forwards(owner), "the forward is made")

@@ -19,6 +19,7 @@ import anyio
 import pytest
 from PIL import Image
 from prompt_toolkit.data_structures import Size
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from session import once, over_connection
 
 pytest.importorskip("pysmithay")
@@ -519,7 +520,7 @@ async def test_a_window_that_never_stops_drawing_costs_a_capture_its_timeout(tmp
     async with with_a_window(tmp_path, kitty=False, animate=True) as (pymux, _state, pane, _recorder, log, _probe):
         toplevel = pane.terminal.toplevel
         await once(lambda: pymux.wayland.frame(toplevel), 10.0, "the window never drew")
-        with anyio.fail_after(5.0):
+        with fair_anyio.fail_after(5.0):
             await pymux.wayland.drawn_again([toplevel], 0.5)
         assert "frame" in logged(log)
 
@@ -677,7 +678,7 @@ async def test_text_no_key_types_reaches_the_window(tmp_path):
 async def test_kill_server_stops_with_a_window_open(tmp_path):
     "A window pane has no reap to wait for. Lillecarl/pyterm#681."
     async with with_a_window(tmp_path) as (pymux, _state, _pane, _recorder, _log, _probe):
-        with anyio.fail_after(10):
+        with fair_anyio.fail_after(10):
             await pymux.hang_up_and_stop()
         assert pymux.done.is_set()
 
@@ -850,7 +851,7 @@ async def test_the_pane_goes_when_the_window_closes(tmp_path):
         await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
         pymux.panes.kill_pane(pane)
         await once(lambda: "closed" in logged(log), 10.0, "the window was never asked to close")
-        with anyio.fail_after(10):
+        with fair_anyio.fail_after(10):
             await probe.wait()
         await once(lambda: not pymux.wayland.panes, 10.0, "the compositor still holds the window")
         window = state.session.arrangement.get_active_window()

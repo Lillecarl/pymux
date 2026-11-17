@@ -22,6 +22,7 @@ import anyio
 import pytest
 from libpymux.agentic import CallerContext
 from prompt_toolkit.application.current import set_app
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from run_commands import answered, run_as
 from session import create_session
 
@@ -49,7 +50,7 @@ async def test_run_answers_with_an_id_and_runs_behind():
         assert job is not None and job.command == "sleep 30" and not job.is_done
 
         pymux.jobs.kill(job)
-        with anyio.fail_after(5):
+        with fair_anyio.fail_after(5):
             await pymux.jobs.wait(job)
         assert job.is_done
 
@@ -179,7 +180,7 @@ async def test_show_job_reads_both_streams_of_a_running_job():
             state,
             "run sh -c 'echo out-line; echo err-line >&2; sleep 30'",
         )
-        with anyio.fail_after(5):
+        with fair_anyio.fail_after(5):
             while not pymux.jobs.get(1).kept("stderr"):
                 await anyio.sleep(0.01)
 
@@ -208,7 +209,7 @@ async def test_kill_job_ends_a_running_job_and_refuses_a_done_one():
         said = await _run_answering(pymux, state, "kill-job 1")
         assert any("job 1 stopping" in line for line in said)
 
-        with anyio.fail_after(5):
+        with fair_anyio.fail_after(5):
             await pymux.jobs.wait(pymux.jobs.get(1))
         assert pymux.jobs.get(1).returncode == -15
 

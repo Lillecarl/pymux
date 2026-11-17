@@ -8,6 +8,7 @@ from __future__ import annotations
 import anyio
 from prompt_toolkit.application.current import set_app
 from pyte.page import RowMark
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from test_a_session_on_a_pyte_screen import attached, pymux, shows  # noqa: F401 -- a fixture
 
 #: Two prompts, and the output of a command between them, each marked
@@ -24,7 +25,7 @@ async def test_copy_mode_jumps_between_the_marked_rows(pymux):
         await shows(session, "$")
         shell = pymux.arrangement.get_active_pane()
         shell.process.write_input(MARKED + "\r")
-        with anyio.fail_after(10):
+        with fair_anyio.fail_after(10):
             while _marked_rows(shell, RowMark.PROMPT) < 2:
                 await anyio.sleep(0.02)
 

@@ -22,6 +22,7 @@ import pytest
 from anyio.abc import SocketAttribute
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from session import once, over_connection
 from test_ssh_client import create_ssh_server, live_servers
 
@@ -1492,7 +1493,7 @@ async def test_a_forward_on_any_port_keeps_its_number_across_a_reconnect(make):
     where = Path(tempfile.mkdtemp())
     socket_path = str(where / "pymux.sock")
 
-    with anyio.fail_after(10):
+    with fair_anyio.fail_after(10):
         async with echoing() as echo_port, live_servers(socket_path) as (_pymux, port, client_key):
             client = SshClient(
                 "ssh://127.0.0.1:%d%s" % (port, socket_path),
@@ -1523,7 +1524,7 @@ async def test_a_forward_whose_number_was_taken_meanwhile_takes_another():
     where = Path(tempfile.mkdtemp())
     socket_path = str(where / "pymux.sock")
 
-    with anyio.fail_after(10):
+    with fair_anyio.fail_after(10):
         async with echoing() as echo_port, live_servers(socket_path) as (_pymux, port, client_key):
             client = SshClient(
                 "ssh://127.0.0.1:%d%s" % (port, socket_path),
@@ -2257,7 +2258,7 @@ async def test_a_socks_forward_carries_bytes_to_where_each_connection_asks(direc
     case answer says the bytes went to the echo and back: `-R` reaches
     it from this side of the link, `-D` from the sshd's.
     """
-    with anyio.fail_after(10):
+    with fair_anyio.fail_after(10):
         async with echoing() as echo_port, ssh_connection() as connection:
             forwards = Forwards()
             opened = await forwards.add(connection, parse_socks(direction, "127.0.0.1:0"))
@@ -2276,7 +2277,7 @@ async def test_a_socks_forward_carries_bytes_to_where_each_connection_asks(direc
 
 async def test_a_remote_socks_forward_says_when_the_destination_refuses():
     "A port nothing listens on is a SOCKS refusal, and the link carries on."
-    with anyio.fail_after(10):
+    with fair_anyio.fail_after(10):
         async with ssh_connection() as connection:
             forwards = Forwards()
             opened = await forwards.add(connection, parse_socks(Direction.REMOTE, "127.0.0.1:0"))
@@ -2290,7 +2291,7 @@ async def test_a_remote_socks_forward_says_when_the_destination_refuses():
 
 async def test_a_remote_socks_forward_refuses_a_command_it_does_not_carry():
     "BIND (2) is not CONNECT, and the answer says so rather than hanging."
-    with anyio.fail_after(10):
+    with fair_anyio.fail_after(10):
         async with ssh_connection() as connection:
             forwards = Forwards()
             opened = await forwards.add(connection, parse_socks(Direction.REMOTE, "127.0.0.1:0"))
@@ -2360,7 +2361,7 @@ async def test_a_program_asks_the_one_client_that_can_forward_among_several():
     nothing, so beside one SSH client it leaves nothing to choose.
     Lillecarl/pyterm#975.
     """
-    with anyio.fail_after(10):
+    with fair_anyio.fail_after(10):
         async with over_connection() as session:
             await session.attach("on the server", SIZE)
             await session.attach("over ssh", SIZE)
@@ -2379,7 +2380,7 @@ async def test_the_forwards_table_says_why_one_is_not_open():
     "pymux-mcp reads a failed SOCKS forward's reason there, rather than waiting it out."
     from pymux.query import ask
 
-    with anyio.fail_after(10):
+    with fair_anyio.fail_after(10):
         async with over_connection() as session:
             await session.attach("the client", SIZE)
             session.pymux.clients[0].client.forwards = [

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import anyio
 import pytest
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from test_a_server_mirrors_a_server import (  # noqa: F401 (fixtures)
     shown_here,
     the_probe_does_not_leave_this_machine,
@@ -64,7 +65,7 @@ async def linked(two_servers):
 
 async def test_each_end_asks_the_other(linked):
     at_owner, at_peer, peer_host, owner_address = linked
-    with anyio.fail_after(DEADLINE):
+    with fair_anyio.fail_after(DEADLINE):
         assert at_owner.host.peers() == [peer_host]
         assert await at_owner.host.ask_peer(peer_host, {"n": 1}, DEADLINE) == {
             "echo": {"n": 1},
@@ -84,7 +85,7 @@ async def test_a_server_without_the_plugin_says_so(linked):
     async with anyio.create_task_group() as tasks:
         missing = Host(at_owner.host.pymux, "missing", tasks)
         with (
-            anyio.fail_after(DEADLINE),
+            fair_anyio.fail_after(DEADLINE),
             pytest.raises(PeerUnanswered, match="%s: it runs no plugin missing" % peer_host),
         ):
             await missing.ask_peer(peer_host, None, DEADLINE)
@@ -100,14 +101,14 @@ async def test_a_plugin_without_a_handler_takes_no_message(linked):
         tasks.start_soon(at_peer.host.pymux.plugins.serve, "deaf", Deaf)
         await until(lambda: "deaf" in at_peer.host.pymux.plugins.slots, "the plugin runs")
         deaf = Host(at_owner.host.pymux, "deaf", tasks)
-        with anyio.fail_after(DEADLINE), pytest.raises(PeerUnanswered, match="takes no messages"):
+        with fair_anyio.fail_after(DEADLINE), pytest.raises(PeerUnanswered, match="takes no messages"):
             await deaf.ask_peer(peer_host, None, DEADLINE)
         tasks.cancel_scope.cancel()
 
 
 async def test_an_unknown_peer_is_refused_at_once(linked):
     at_owner, _, peer_host, _ = linked
-    with anyio.fail_after(DEADLINE), pytest.raises(PeerUnanswered, match="linked: %s" % peer_host):
+    with fair_anyio.fail_after(DEADLINE), pytest.raises(PeerUnanswered, match="linked: %s" % peer_host):
         await at_owner.host.ask_peer("elsewhere", None, DEADLINE)
 
 
@@ -116,13 +117,13 @@ async def test_a_link_without_the_capability_reaches_nothing(linked):
     (link,) = at_owner.host.pymux.peer_links()
     link.capabilities = frozenset()
     assert at_owner.host.peers() == []
-    with anyio.fail_after(DEADLINE), pytest.raises(PeerUnanswered, match="no linked server"):
+    with fair_anyio.fail_after(DEADLINE), pytest.raises(PeerUnanswered, match="no linked server"):
         await at_owner.host.ask_peer(peer_host, None, DEADLINE)
 
 
 async def test_a_plugin_that_raises_answers_why_and_runs_on(linked):
     at_owner, at_peer, peer_host, _ = linked
-    with anyio.fail_after(DEADLINE):
+    with fair_anyio.fail_after(DEADLINE):
         with pytest.raises(PeerUnanswered, match="the plugin echo failed: RuntimeError: asked to fail"):
             await at_owner.host.ask_peer(peer_host, "raise", DEADLINE)
         assert at_peer.host.pymux.plugins.slots["echo"].state is PluginState.RUNNING
@@ -131,7 +132,7 @@ async def test_a_plugin_that_raises_answers_why_and_runs_on(linked):
 
 async def test_the_asker_gives_up_at_its_deadline(linked):
     at_owner, _, peer_host, _ = linked
-    with anyio.fail_after(DEADLINE), pytest.raises(PeerUnanswered, match=r"no answer in 0\.2 seconds"):
+    with fair_anyio.fail_after(DEADLINE), pytest.raises(PeerUnanswered, match=r"no answer in 0\.2 seconds"):
         await at_owner.host.ask_peer(peer_host, "wait", 0.2)
 
 
@@ -143,7 +144,7 @@ async def test_a_link_that_goes_ends_the_wait(linked):
         await at_owner.waiting.wait()
         link.connection.close_connection()
 
-    with anyio.fail_after(DEADLINE):
+    with fair_anyio.fail_after(DEADLINE):
         async with anyio.create_task_group() as tasks:
             tasks.start_soon(close_when_it_waits)
             with pytest.raises(PeerUnanswered, match="the link went before it answered"):
@@ -152,7 +153,7 @@ async def test_a_link_that_goes_ends_the_wait(linked):
 
 async def test_a_message_that_waits_holds_no_event(linked):
     at_owner, at_peer, peer_host, _ = linked
-    with anyio.fail_after(DEADLINE):
+    with fair_anyio.fail_after(DEADLINE):
         async with anyio.create_task_group() as tasks:
 
             async def ask() -> None:

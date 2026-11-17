@@ -19,6 +19,7 @@ import pytest
 from libpymux.protocol import Field, Packet
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from session import in_this_process, once, over_connection
 
 from pymux import downloads, files
@@ -540,7 +541,7 @@ async def test_a_client_on_a_loop_draws_on_while_a_file_is_written(tmp_path, mon
         await anyio.sleep(0.05)
         assert client.sent == []
         written.set()
-        with anyio.fail_after(10):
+        with fair_anyio.fail_after(10):
             while not client.sent:
                 await anyio.sleep(0.01)
     assert client.sent == [{Field.CMD: Packet.FILE_SAVED, Field.MESSAGE: "Saved %s." % (tmp_path / NAME,)}]

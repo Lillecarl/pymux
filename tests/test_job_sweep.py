@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import anyio
 from prompt_toolkit.application.current import set_app
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from run_commands import run_as
 from session import create_session
 
@@ -95,7 +96,7 @@ async def test_a_running_job_idle_past_its_time_is_ended():
 
         assert pymux.jobs.get(1) is None
         assert await _ids_of(pymux) == []
-        with anyio.fail_after(5):
+        with fair_anyio.fail_after(5):
             await pymux.jobs.wait(job)
         assert job.is_done
 
@@ -118,7 +119,7 @@ async def test_a_waited_job_stays_however_idle():
                 waiters.cancel_scope.cancel()
         finally:
             pymux.jobs.kill(job)
-            with anyio.fail_after(5):
+            with fair_anyio.fail_after(5):
                 await pymux.jobs.wait(job)
 
 

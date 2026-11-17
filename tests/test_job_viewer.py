@@ -17,6 +17,7 @@ import argparse
 
 import anyio
 import pytest
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from run_commands import run_as
 from session import create_session
 
@@ -37,7 +38,7 @@ async def _run_answering(pymux, state, command) -> None:
 
 async def _shows(pane, text: str, seconds: float = 5) -> None:
     "Hold until the screen of a pane shows some text."
-    with anyio.fail_after(seconds):
+    with fair_anyio.fail_after(seconds):
         while text not in pane.screen.page.text(0, 23):
             await anyio.sleep(0.01)
 
@@ -115,7 +116,7 @@ async def test_closing_the_viewer_leaves_the_job():
         panes = [p for w in pymux.arrangement.windows for p in w.panes]
         assert pane not in panes
         job = pymux.jobs.get(1)
-        with anyio.fail_after(5):
+        with fair_anyio.fail_after(5):
             await pymux.jobs.wait(job)
         assert job.is_done and job.returncode == 0
 

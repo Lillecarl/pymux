@@ -11,10 +11,10 @@ fresh job the same way, and a zero timeout answers with the id.
 
 from __future__ import annotations
 
-import anyio
 import pytest
 from libpymux.agentic import CallerContext
 from prompt_toolkit.application.current import set_app
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from run_commands import answered, run_as
 from session import create_session
 
@@ -35,7 +35,7 @@ async def test_tail_replays_and_follows_to_the_job_s_exit():
     async with create_session() as (pymux, state):
         await run_as(pymux, state, "run --tag lines -- sh -c 'echo one; echo two; echo three'")
         job = pymux.jobs.get(1)
-        with anyio.fail_after(5):
+        with fair_anyio.fail_after(5):
             await pymux.jobs.wait(job)
         said, errors, code = await _tail(pymux, state, "tail --tag lines --lines 2")
         assert any("two" in line for line in said)
@@ -56,7 +56,7 @@ async def test_tail_with_zero_lines_follows_only():
     async with create_session() as (pymux, state):
         await run_as(pymux, state, "run --tag quiet -- echo said-long-ago")
         job = pymux.jobs.get(1)
-        with anyio.fail_after(5):
+        with fair_anyio.fail_after(5):
             await pymux.jobs.wait(job)
         said, errors, code = await _tail(pymux, state, "tail --tag quiet --lines 0")
         assert said == []
@@ -89,7 +89,7 @@ async def test_tail_past_timeout_stops_with_124_and_the_job_runs_on():
             assert job is not None and not job.is_done
         finally:
             pymux.jobs.kill(pymux.jobs.get(1))
-            with anyio.fail_after(5):
+            with fair_anyio.fail_after(5):
                 await pymux.jobs.wait(pymux.jobs.get(1))
 
 
@@ -97,7 +97,7 @@ async def test_tail_with_zero_timeout_replays_without_waiting():
     async with create_session() as (pymux, state):
         await run_as(pymux, state, "run --tag quick -- echo done-already")
         job = pymux.jobs.get(1)
-        with anyio.fail_after(5):
+        with fair_anyio.fail_after(5):
             await pymux.jobs.wait(job)
         said, errors, code = await _tail(pymux, state, "tail --tag quick --timeout 0")
         assert any("done-already" in line for line in said)
@@ -110,7 +110,7 @@ async def test_tail_with_zero_timeout_replays_without_waiting():
             assert code == 124
         finally:
             pymux.jobs.kill(pymux.jobs.get(2))
-            with anyio.fail_after(5):
+            with fair_anyio.fail_after(5):
                 await pymux.jobs.wait(pymux.jobs.get(2))
 
 
@@ -132,7 +132,7 @@ async def test_tail_without_a_timeout_refuses_for_an_agent():
             assert code is None
         finally:
             pymux.jobs.kill(pymux.jobs.get(1))
-            with anyio.fail_after(5):
+            with fair_anyio.fail_after(5):
                 await pymux.jobs.wait(pymux.jobs.get(1))
 
 
@@ -140,7 +140,7 @@ async def test_tail_without_a_timeout_waits_for_a_person():
     async with create_session() as (pymux, state):
         await run_as(pymux, state, "run --tag patient -- echo hi")
         job = pymux.jobs.get(1)
-        with anyio.fail_after(5):
+        with fair_anyio.fail_after(5):
             await pymux.jobs.wait(job)
         said, errors, code = await _tail(pymux, state, "tail --tag patient")
         assert any("hi" in line for line in said)
@@ -222,7 +222,7 @@ async def test_run_with_timeout_leaves_a_slow_job_running():
             assert code == 124
         finally:
             pymux.jobs.kill(pymux.jobs.get(1))
-            with anyio.fail_after(5):
+            with fair_anyio.fail_after(5):
                 await pymux.jobs.wait(pymux.jobs.get(1))
 
 
@@ -236,5 +236,5 @@ async def test_run_with_zero_timeout_answers_with_the_id():
             assert job is not None and not job.is_done
         finally:
             pymux.jobs.kill(pymux.jobs.get(1))
-            with anyio.fail_after(5):
+            with fair_anyio.fail_after(5):
                 await pymux.jobs.wait(pymux.jobs.get(1))

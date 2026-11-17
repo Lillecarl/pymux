@@ -29,6 +29,7 @@ from libpymux.protocol import Packet
 from libpymux.wire import encode_json
 from prompt_toolkit.application.current import set_app
 from pyte.png import decode_png
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from session import once
 
 from pymux.connection.server import ServerConnection
@@ -351,7 +352,7 @@ async def test_a_frame_carries_an_image_the_pane_shows(pymux):
 
         images: dict = {}
         placements: list = []
-        with anyio.fail_after(10):
+        with fair_anyio.fail_after(10):
             while not (images and placements):
                 frame = await session.frame()
                 if frame is not None:
@@ -433,7 +434,7 @@ async def wire_differs(session: SessionScreen, client_state) -> list[str]:
     met the title bar of the frame before. Lillecarl/pyterm#574.
     """
     app = client_state.app
-    with anyio.fail_after(10):
+    with fair_anyio.fail_after(10):
         while app.renderer._last_screen is None or session.taken != session.written:
             await anyio.sleep(0.01)
     # Nothing awaits from here on, so no frame comes between the two.
@@ -505,7 +506,7 @@ async def a_frame_after(session: SessionScreen, client_state, since: int) -> Non
     more, about 260 s of pymux-unit. Lillecarl/pyterm#581.
     """
     app = client_state.app
-    with anyio.fail_after(10):
+    with fair_anyio.fail_after(10):
         while app.render_counter <= since or session.taken != session.written:
             await anyio.sleep(0.005)
 
@@ -921,7 +922,7 @@ async def redraw_differs(pymux, session: SessionScreen, client_state) -> list[st
 
     async def drawn() -> None:
         app = client_state.app
-        with anyio.fail_after(10):
+        with fair_anyio.fail_after(10):
             while app.invalidated or app.renderer._last_screen is None or session.taken != session.written:
                 await anyio.sleep(0.01)
 

@@ -10,6 +10,7 @@ import socket
 import anyio
 from libpymux.protocol import READ_SIZE
 from libpymux.wire import MSGPACK, MSGPACK_ZSTD, Compressor, PacketReader, encode_json, encode_msgpack
+from pyterm_pytest.fairclock import anyio as fair_anyio
 
 from pymux.client.terminal import TerminalClient
 from pymux.connection.server import ServerConnection
@@ -69,7 +70,7 @@ START_GUI = {
 
 async def frames_until_out(client_end) -> list:
     said = []
-    with anyio.fail_after(10):
+    with fair_anyio.fail_after(10):
         while not any(packet.get("cmd") == "out" for packet in said):
             said.append(await client_end.read())
     return said
@@ -114,7 +115,7 @@ async def test_a_socket_compresses_for_a_client_that_asks():
 
         reader = PacketReader()
         said: list = []
-        with anyio.fail_after(10):
+        with fair_anyio.fail_after(10):
             while not any(packet.get("cmd") == "out" for packet in said):
                 await anyio.wait_readable(client_socket)
                 said += reader.feed(client_socket.recv(READ_SIZE))
@@ -145,7 +146,7 @@ async def test_a_frame_compressed_in_a_thread_keeps_its_place_in_the_stream():
             await anyio.wait_readable(client_socket)
             said.extend(reader.feed(client_socket.recv(READ_SIZE)))
 
-    with anyio.fail_after(10):
+    with fair_anyio.fail_after(10):
         async with anyio.create_task_group() as tasks:
             tasks.start_soon(read_all)
             await connection.write(encode_json(turn), compress_after=True)

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import anyio
 from prompt_toolkit.application.current import set_app
+from pyterm_pytest.fairclock import anyio as fair_anyio
 from test_a_session_on_a_pyte_screen import attached, pymux, shows  # noqa: F401 -- a fixture
 
 from pymux.core.arrangement import Arrangement
@@ -128,6 +129,6 @@ async def test_a_shell_that_rings_in_another_window_shows_in_the_status_line(pym
 
 
 async def _until(condition, seconds: float = 10.0) -> None:
-    with anyio.fail_after(seconds):
+    with fair_anyio.fail_after(seconds):
         while not condition():
             await anyio.sleep(0.02)
