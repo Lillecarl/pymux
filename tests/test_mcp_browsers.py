@@ -228,6 +228,23 @@ async def test_a_browser_opens_beside_the_agent_that_asked(server, monkeypatch):
     assert [pane.id for pane in await server.panes() if pane.window_id == agent.window_id] == [agent.id]
 
 
+#: A page's frame callback, and whether it ran within a second.
+ANIMATION_FRAME = """new Promise(done => {
+  let fired = false;
+  requestAnimationFrame(() => { fired = true; });
+  setTimeout(() => done(fired), 1000);
+})"""
+
+
+async def test_a_pane_browser_nobody_watches_still_animates(server):
+    "No client is attached, and a page that waits for a frame still gets one. Lillecarl/pyterm#998."
+    await call(server, "browser.open", name="probe", url=PAGE, arguments=ARGUMENTS)
+    try:
+        assert await call(server, "browser.evaluate", name="probe", expression=ANIMATION_FRAME) is True
+    finally:
+        await call(server, "browser.close", name="probe")
+
+
 async def test_a_browser_that_went_says_why(server, tmp_path, monkeypatch):
     "Lillecarl/pyterm#1014: which rule closed it, read where an agent finds it gone."
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))

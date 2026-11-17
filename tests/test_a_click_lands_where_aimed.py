@@ -108,11 +108,8 @@ async def _judge(server, misses: list[str], route: str, target: str, hit: dict, 
 
 #: Default `fit`, and one far smaller than the page.
 FITS = (1568, 300)
-#: Every route at every ratio: a browser in a pane answers each
-#: operation about ten times slower, 183s against 17s measured, so a
-#: pane takes one scroll and one `fit`. Lillecarl/pyterm#999.
-EVERY = ((0, SCROLL), FITS)
-FEWER = ((0,), FITS[:1])
+#: The scrolls each case aims at.
+SCROLLS = (0, SCROLL)
 
 
 async def _aim(server, misses: list[str], refs: dict[str, str], scroll: int, fits: tuple[int, ...]) -> None:
@@ -183,11 +180,11 @@ async def _mark(server, misses: list[str], refs: dict[str, str], scroll: int, fi
 
 
 @pytest.mark.parametrize(
-    ("seat", "ratio", "routes"),
-    [("headless", 1.0, EVERY), ("headless", 1.125, EVERY), ("headless", 2.0, EVERY), ("pane", 1.125, FEWER)],
+    ("seat", "ratio"),
+    [("headless", 1.0), ("headless", 1.125), ("headless", 2.0), ("pane", 1.125)],
     ids=["headless-1", "headless-1.125", "headless-2", "pane-1.125"],
 )
-async def test_a_click_lands_where_it_was_aimed(server, seat, ratio, routes):
+async def test_a_click_lands_where_it_was_aimed(server, seat, ratio):
     """
     At the top of the page and scrolled, where a document point and a
     viewport point part. One browser for every route, since a launch
@@ -201,10 +198,9 @@ async def test_a_click_lands_where_it_was_aimed(server, seat, ratio, routes):
         assert view["ratio"] == ratio, view
         refs = await _refs(server)
         misses: list[str] = []
-        scrolls, fits = routes
-        for scroll in scrolls:
-            await _mark(server, misses, refs, scroll, fits)
-            await _aim(server, misses, refs, scroll, fits)
+        for scroll in SCROLLS:
+            await _mark(server, misses, refs, scroll, FITS)
+            await _aim(server, misses, refs, scroll, FITS)
         assert not misses, "\n".join(misses)
     finally:
         await call(server, "browser.close", name="aim")

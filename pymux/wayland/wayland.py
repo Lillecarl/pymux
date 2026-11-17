@@ -130,8 +130,16 @@ class _Pacer:
         self.sent = False
         #: Set by the window's next commit, and then replaced.
         self.committed = anyio.Event()
+        #: How many captures let this window draw now: the unshown frames
+        #: wait, so a capture sees each frame it released answered.
+        self.capturing = 0
+        #: When an unshown frame was let go that the window has not yet
+        #: answered with a commit. A window that draws nothing never does,
+        #: so a capture waits for it only `1 / UNSHOWN_RATE`.
+        self.owed_since = -math.inf
 
     def commit(self) -> None:
+        self.owed_since = -math.inf
         self.committed.set()
         self.committed = anyio.Event()
 
@@ -150,6 +158,13 @@ LAUNCH_TAIL = 8192
 
 #: The refresh rate pysmithay's output advertises, in frames a second.
 OUTPUT_REFRESH = 60
+
+#: How many frames a second a window no client shows may draw, as a
+#: browser lets an occluded window draw a few. Chromium paces
+#: requestAnimationFrame, input and a DevTools screenshot by its frames,
+#: so an agent's browser that nobody watches stalled on each of them.
+#: Nothing is sent for these frames. Lillecarl/pyterm#998, Lillecarl/pyterm#999.
+UNSHOWN_RATE = 4
 
 
 def _how_it_ended(code: int | None) -> str:
@@ -711,14 +726,23 @@ class WaylandServer:
         it, and once that client's terminal has taken the bytes.
 
         A window no client shows -- in another pymux window, under a
-        popup, or on terminals without kitty graphics -- is never let go,
-        and waits as a hidden Wayland window does. Lillecarl/pyterm#631.
+        popup, or on terminals without kitty graphics -- is let go at
+        `UNSHOWN_RATE`, as an occluded window is, and none of its frames
+        are sent. Lillecarl/pyterm#631, Lillecarl/pyterm#998.
         """
         released = -math.inf
         while True:
-            await pacer.shown.wait()
+            with anyio.move_on_after(1 / UNSHOWN_RATE):
+                await pacer.shown.wait()
             if self._pacers.get(toplevel) is not pacer:
                 return
+            if not pacer.shown.is_set():
+                with contextlib.suppress(KeyError):
+                    if not pacer.capturing and compositor.wants_frame(toplevel):
+                        released = anyio.current_time()
+                        pacer.owed_since = released
+                        compositor.frame_done(toplevel, now())
+                continue
             rate = self._rate_of(toplevel)
             if not pacer.sent:
                 # No link paces a frame that sent nothing: the refresh
@@ -990,11 +1014,23 @@ class WaylandServer:
             return
 
         async def drawn(toplevel: int, pacer: _Pacer) -> None:
-            with contextlib.suppress(KeyError):
-                while compositor.wants_frame(toplevel):
-                    committed = pacer.committed
-                    compositor.frame_done(toplevel, now())
-                    await committed.wait()
+            pacer.capturing += 1
+            try:
+                with contextlib.suppress(KeyError):
+                    while True:
+                        committed = pacer.committed
+                        if compositor.wants_frame(toplevel):
+                            compositor.frame_done(toplevel, now())
+                            await committed.wait()
+                            continue
+                        # A frame `_pace` let go just before, not answered yet.
+                        left = pacer.owed_since + 1 / UNSHOWN_RATE - anyio.current_time()
+                        if left <= 0:
+                            return
+                        with anyio.move_on_after(left):
+                            await committed.wait()
+            finally:
+                pacer.capturing -= 1
 
         with anyio.move_on_after(timeout):
             async with anyio.create_task_group() as tasks:
