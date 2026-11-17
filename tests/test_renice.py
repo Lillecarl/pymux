@@ -102,9 +102,27 @@ def test_a_thread_started_during_the_renice_is_reached():
             threads.append(3)  # Thread 2 starts it, and 2 is not set yet.
             niceness[3] = 0
 
-    reach_every_thread(list(threads), lambda: list(threads), set_one)
+    reach_every_thread(list(threads), lambda: list(threads), set_one, pause=lambda: None)
 
     assert niceness == {1: 7, 2: 7, 3: 7}
+
+
+def test_a_thread_still_being_created_is_reached_after_the_pause():
+    """
+    Its clone began before its starter was set and ended after the last
+    listing, so it showed in /proc at the old niceness. Lillecarl/pyterm#1007.
+    """
+    threads = [1]
+    niceness = {}
+
+    def clone_ends():
+        if 2 not in threads:
+            threads.append(2)
+            niceness[2] = 0
+
+    reach_every_thread([1], lambda: list(threads), lambda thread: niceness.__setitem__(thread, 7), pause=clone_ends)
+
+    assert niceness == {1: 7, 2: 7}
 
 
 def test_renice_stops_listing_when_threads_never_stop_starting():

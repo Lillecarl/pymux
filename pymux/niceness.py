@@ -26,6 +26,7 @@ import contextlib
 import os
 import subprocess
 import sys
+import time
 from collections.abc import Callable, Iterable, Sequence
 from functools import partial
 from typing import TYPE_CHECKING, NamedTuple
@@ -156,13 +157,22 @@ def _with_children(targets: list[Target], psutil: ModuleType) -> list[Target]:
 #: starts a thread or two at a time, so this ends long before the limit.
 MOST_PASSES = 10
 
+#: How long `reach_every_thread` waits before the listing that ends it.
+#: A clone takes microseconds; this one has to outlast a clone stalled
+#: under load.
+SETTLE = 0.1
+
 
 def reach_every_thread(
-    first: Iterable[int], threads_now: Callable[[], Iterable[int]], set_one: Callable[[int], None]
+    first: Iterable[int],
+    threads_now: Callable[[], Iterable[int]],
+    set_one: Callable[[int], None],
+    pause: Callable[[], None] = partial(time.sleep, SETTLE),
 ) -> None:
     """
     Set each thread, then list them again and set the new ones, until a
-    list holds no thread it has not set.
+    list holds no thread it has not set, and one more after a pause
+    holds none either.
 
     **One list is not enough.** A thread takes the niceness of the
     thread that starts it, so one started between the list and the set
@@ -170,15 +180,29 @@ def reach_every_thread(
     `list-processes` starts worker threads just then, and under load the
     check saw one left at 0. Once every thread that exists is set, each
     new one inherits the niceness.
+
+    **Nor is a list with nothing new.** The kernel copies the starter's
+    niceness at the start of a clone, and the thread shows in /proc
+    only at its end. A clone in flight during that list ended after it,
+    at the old niceness: the gate saw `{0, 7}` once in 36 loaded runs.
+    The pause outlasts such a clone. A clone stalled for longer than
+    `SETTLE` still slips through, and no listing from outside can
+    close that. Lillecarl/pyterm#1007.
     """
     done: set[int] = set()
     pending = list(first)
+    settled = False
     for _ in range(MOST_PASSES):
         if not pending:
-            return
-        for thread in pending:
-            set_one(thread)
-            done.add(thread)
+            if settled:
+                return
+            pause()
+            settled = True
+        else:
+            settled = False
+            for thread in pending:
+                set_one(thread)
+                done.add(thread)
         pending = [thread for thread in threads_now() if thread not in done]
 
 
