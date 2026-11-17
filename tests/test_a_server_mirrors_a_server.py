@@ -933,9 +933,13 @@ async def test_a_command_that_changes_nothing_there_still_ends_a_disagreement(tw
     mirror_window = link.tree.windows[owner_window.window_id]
     owner_left, owner_right = owner_window.panes
     await until(lambda: mirror_window.active_pane is link.tree.panes[owner_right.pane_id], "both say the right pane")
+    # A name of its own: the automatic one was still empty under six
+    # suites, and the command went without its argument. Lillecarl/pyterm#1000.
+    owner.handle_command("rename-window -t @%d unchanged" % (owner_window.window_id,))
+    await until(lambda: mirror_window.name == "unchanged", "the tree brings the name")
 
     mirror_window._active_pane = link.tree.panes[owner_left.pane_id]
-    await run_as(peer, client, "rename-window -t @%d %s" % (mirror_window.window_id, owner_window.name))
+    await run_as(peer, client, "rename-window -t @%d unchanged" % (mirror_window.window_id,))
     await until(lambda: mirror_window.active_pane is link.tree.panes[owner_right.pane_id], "the owner's answer ends it")
 
 
