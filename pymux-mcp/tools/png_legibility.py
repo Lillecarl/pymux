@@ -212,6 +212,13 @@ def main() -> int:
         "--fonts-json", required=True, type=Path, help="pymux-mcp's fonts.json: its fallbacks, and its face."
     )
     parser.add_argument("--dry-run", action="store_true", help="Score the truth against itself; call no model.")
+    parser.add_argument(
+        "--sweep",
+        action="append",
+        default=[],
+        metavar="MODEL:FACE:WIDTHS:SAMPLES",
+        help="Read only these, in place of the plan; e.g. claude-opus-5-5:bundled:7,6:listing,code.",
+    )
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     held = json.loads(args.fonts_json.read_text())
@@ -223,9 +230,11 @@ def main() -> int:
     try:
         truths = {name: scratch.show(name, text) for name, text in _samples().items()}
 
-        def sweep(model: str, face: str, widths: list[int]) -> None:
+        def sweep(model: str, face: str, widths: list[int], samples: list[str] | None = None) -> None:
             for width in widths:
                 for name, truth in truths.items():
+                    if samples is not None and name not in samples:
+                        continue
                     png = scratch.picture(name, width, faces[face], held["fallbacks"])
                     (args.out / ("%s-%s-%d.png" % (face, name, width))).write_bytes(png)
                     started = time.monotonic()
@@ -248,12 +257,18 @@ def main() -> int:
                     scores.append(score)
                     print(json.dumps(asdict(score)), file=sys.stderr, flush=True)
 
-        for face in faces:
-            sweep(HAIKU, face, list(WIDTHS))
-        # The dearer models read only the face Haiku read better.
-        face = min(faces, key=lambda face: ((threshold(scores, HAIKU, face) or 99), total_wrong(scores, HAIKU, face)))
-        sweep(SONNET, face, below(threshold(scores, HAIKU, face), 3))
-        sweep(OPUS, face, below(threshold(scores, SONNET, face), 2))
+        for asked in args.sweep:
+            model, face, widths, samples = asked.split(":")
+            sweep(model, face, [int(width) for width in widths.split(",")], samples.split(","))
+        if not args.sweep:
+            for face in faces:
+                sweep(HAIKU, face, list(WIDTHS))
+            # The dearer models read only the face Haiku read better.
+            face = min(
+                faces, key=lambda face: ((threshold(scores, HAIKU, face) or 99), total_wrong(scores, HAIKU, face))
+            )
+            sweep(SONNET, face, below(threshold(scores, HAIKU, face), 3))
+            sweep(OPUS, face, below(threshold(scores, SONNET, face), 2))
     finally:
         scratch.close()
         (args.out / "scores.json").write_text(json.dumps([asdict(score) for score in scores], indent=1))
