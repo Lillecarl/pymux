@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 from libpymux.protocol import Field, Message, Packet
 
 from pymux.commands import CommandException, CommandParser, add_command
-from pymux.commands.forward_port import answered, peer_named
+from pymux.commands.forward_port import answered, mirrored_from, peer_named
 from pymux.core.forwarding import BadForward, Direction, parse_listen
 
 
@@ -48,8 +48,9 @@ def unforward_port(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None] | 
         Field.LISTEN_HOST: listen_host,
         Field.LISTEN_PORT: listen_port,
     }
-    if args.peer is not None:
-        return answered(pymux, peer_named(pymux, args.peer).unforward(packet))
+    peer = peer_named(pymux, args.peer) if args.peer is not None else mirrored_from(pymux)
+    if peer is not None:
+        return answered(pymux, peer.unforward(packet))
     # No question here, whatever `forward-mode` says. Taking a forward
     # away only ever removes something, so the reason to confirm one
     # does not apply. Lillecarl/pyterm#442.

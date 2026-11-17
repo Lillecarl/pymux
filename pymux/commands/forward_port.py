@@ -24,6 +24,7 @@ from pymux.core.forwarding import (
     question,
 )
 from pymux.enums import ForwardMode
+from pymux.mirror.program import RemoteProgram
 
 
 def forward_port(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None] | None:
@@ -53,7 +54,9 @@ def forward_port(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None] | No
     (`connect`) holds the SSH connection there. Then the request goes
     along the peer link, and that server asks them. There, `-p address`
     forwards through the link to the server `connect` named, with `-R`
-    listening on that server's machine. Lillecarl/pyterm#976.
+    listening on that server's machine. Lillecarl/pyterm#976. In a pane
+    mirrored from that server, a client that cannot forward needs no
+    `-p`: the pane names the server. Lillecarl/pyterm#977.
 
     `forward-mode` says whether it is confirmed first. A forward that
     binds off loopback, and one a program in a pane asked for, are
@@ -77,8 +80,9 @@ def forward_port(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None] | No
     if pymux.options.forward_mode == ForwardMode.OFF:
         raise CommandException("forward-mode is off, so pymux forwards nothing.")
 
-    if args.peer is not None:
-        return _through_link(pymux, peer_named(pymux, args.peer), forward, args.confirmed)
+    peer = peer_named(pymux, args.peer) if args.peer is not None else mirrored_from(pymux)
+    if peer is not None:
+        return _through_link(pymux, peer, forward, args.confirmed)
 
     asker = pymux.forward_requests.client()
     packet = _packet(forward)
@@ -114,6 +118,20 @@ def forward_port(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None] | No
 
     pymux.forward_requests.send(asker, packet)
     return None
+
+
+def mirrored_from(pymux: Pymux) -> Peer | None:
+    """
+    The peer a person's pane is mirrored from, when their own client
+    cannot forward: then `-R` means that peer's machine, as `-p` with
+    its address says. Lillecarl/pyterm#977.
+    """
+    if not pymux.a_person_asked() or pymux.get_client_state().client.can_forward:
+        return None
+    pane = find_pane(pymux, None)
+    if pane is None or not isinstance(pane.process, RemoteProgram):
+        return None
+    return pane.process.peer
 
 
 def peer_named(pymux: Pymux, address: str) -> Peer:

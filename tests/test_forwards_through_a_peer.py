@@ -116,6 +116,20 @@ async def test_the_owner_unforwards_through_the_peer(two_servers, tmp_path):
             assert not here.forwards.report()
 
 
+async def test_a_person_in_a_mirrored_pane_needs_no_address(two_servers, tmp_path):
+    "Their client here cannot forward, and the pane names the server -R means. Lillecarl/pyterm#977."
+    owner, peer, client = two_servers
+    with fair_anyio.fail_after(20):
+        async with linked_over_ssh(owner, peer, client, tmp_path) as (here, _there):
+            await run_as(peer, client, "forward-port -c -R 127.0.0.1:0")
+            await until(lambda: owners_forwards(owner), "the forward is made")
+            (one,) = owners_forwards(owner)
+
+            await run_as(peer, client, "unforward-port -R 127.0.0.1:%d" % (one["port"],))
+            await until(lambda: not owners_forwards(owner), "the owner hears it is gone")
+            assert not here.forwards.report()
+
+
 async def test_a_forward_comes_back_with_the_link(two_servers, tmp_path):
     "A link that goes takes the listener with its connection; the next link opens it again and tells the owner."
     owner, peer, client = two_servers
