@@ -245,6 +245,19 @@ class PymuxKeyBindings:
         #: `bind-key` under it left two handlers on one key.
         #: Lillecarl/pyterm#237.
         self.custom_bindings: dict[_ABinding, CustomBinding] = {}
+        #: The keys a person bound or unbound and no configuration file
+        #: did, each with the name it was written as. An upgrade takes
+        #: these from the snapshot, and the file says the rest.
+        #: Lillecarl/pyterm#970.
+        self.by_hand: dict[_ABinding, str] = {}
+
+    def note_who_bound(self, key_name: str, table: str, *, by_hand: bool) -> None:
+        "Raises `ValueError` when the name reads as no key at all."
+        key = (table, key_however_it_is_written(key_name))
+        if by_hand:
+            self.by_hand[key] = key_name
+        else:
+            self.by_hand.pop(key, None)
 
     def _load_prefix_binding(self) -> None:
         """

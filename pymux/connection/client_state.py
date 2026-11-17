@@ -1052,7 +1052,10 @@ class ClientState:
         layout = self.layout_manager
         with set_app(self.app):
             self.has_prefix = modes["has_prefix"]
-            self.key_tables = list(modes["key_tables"])
+            # A mode the new configuration file no longer binds has no
+            # table to leave. Lillecarl/pyterm#970.
+            tables = self.pymux.key_bindings_manager.mode_tables
+            self.key_tables = [name for name in modes["key_tables"] if name in tables]
             self.confirmations = [(text, command) for text, command in modes["confirmations"]]
 
             # A record from the build before holds none.

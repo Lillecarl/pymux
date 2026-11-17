@@ -43,6 +43,7 @@ from ...options.tables import (
     JobOutputRow,
     JobRow,
     JobTagRow,
+    KeyBindingByHandRow,
     KeyBindingRow,
     NamedBufferRow,
     NotificationRouteRow,
@@ -391,6 +392,10 @@ def rows_of(pymux: Pymux, *, mirrored: bool) -> Iterator[Row]:
         pymux.key_bindings_manager.custom_bindings.items(), key=lambda item: (item[0][0], item[1].written)
     ):
         yield KeyBindingRow(table, binding.written, binding.command, json.dumps(binding.arguments))
+    for table, written in sorted(
+        (table, written) for (table, _keys), written in pymux.key_bindings_manager.by_hand.items()
+    ):
+        yield KeyBindingByHandRow(table, written)
     # A finished record has its place in the hub; one still assembling
     # has the identifier its chunks name instead.
     center = pymux.notification_center

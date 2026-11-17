@@ -345,6 +345,43 @@ def test_an_upgrade_keeps_every_pane_and_its_program(server, tmp_path, new_build
     assert _leftovers(old) == []
 
 
+def test_an_upgrade_reads_the_changed_file_and_keeps_what_a_person_set(tmp_path):
+    "Lillecarl/pyterm#969, Lillecarl/pyterm#970."
+    sock = tmp_path / "configured.sock"
+    conf = tmp_path / "pymux.conf"
+    conf.write_text(
+        "bind-key a display-message old-a\n"
+        "bind-key b display-message old-b\n"
+        "set-hook pane-died 'display-message old-died'\n"
+        "set-option -g status-left old\n"
+        "set-option -g status-right old\n"
+    )
+    started = cli(sock, "-f", conf, "--log", tmp_path / LOG, "new-session", "-d", "-x", "80", "-y", "24", "sh")
+    assert started.returncode == 0, started.stderr.decode()
+    _wait_for_server(sock)
+    try:
+        _answer(sock, "bind-key", "b", "display-message", "mine")
+        _answer(sock, "set-option", "-g", "status-right", "mine")
+        conf.write_text(
+            "bind-key a display-message new-a\n"
+            "bind-key b display-message new-b\n"
+            "set-hook pane-died 'display-message new-died'\n"
+            "set-option -g status-left new\n"
+            "set-option -g status-right new\n"
+        )
+        said = cli(sock, "upgrade-server", shlex.join([sys.executable, "-m", "pymux"]))
+        assert said.returncode == 0, said.stderr.decode()
+
+        keys = _once_it_answers(sock, "list-keys")
+        assert "display-message new-a" in keys and "display-message mine" in keys, keys
+        assert "old-a" not in keys and "new-b" not in keys, keys
+        assert "new-died" in _once_it_answers(sock, "show-hooks")
+        assert _once_it_answers(sock, "show-options", "-g", "status-left").split() == ["new"]
+        assert _once_it_answers(sock, "show-options", "-g", "status-right").split() == ["mine"]
+    finally:
+        cli(sock, "kill-server")
+
+
 def test_a_build_that_crashes_after_the_exec_leaves_a_report(server, tmp_path):
     """
     It passed the check, so the server exec'd it, and it crashed loading

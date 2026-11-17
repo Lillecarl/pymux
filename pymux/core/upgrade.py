@@ -373,11 +373,9 @@ def resume(path: str) -> None:
     Serve again, in the new build, from the snapshot the old one wrote.
 
     The configuration file is read first, and it says the server's
-    options and the session defaults, but for those a person set while
-    the old server ran: the snapshot holds those, and they win.
-    Lillecarl/pyterm#969. For the bindings and the hooks the snapshot
-    still wins whole, because it cannot yet tell a person's from the
-    file's. Lillecarl/pyterm#970.
+    options, the session defaults, the key bindings and the hooks, but
+    for those a person set while the old server ran: the snapshot holds
+    those, and they win. Lillecarl/pyterm#969, Lillecarl/pyterm#970.
     """
     from .main import Pymux
 

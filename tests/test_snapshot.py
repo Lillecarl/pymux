@@ -315,6 +315,12 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     pymux.hooks.commands = {"after-new-window": ["display-message new", "display-panes"], "pane-died": ["kill-pane"]}
     pymux.key_bindings_manager.add_custom_binding("F5", "display-message", ["it's F5"], table="root")
     pymux.key_bindings_manager.add_custom_binding("x", "kill-pane", [])
+    pymux.set_by_hand["hooks"].update(pymux.hooks.commands)
+    pymux.key_bindings_manager.note_who_bound("F5", "root", by_hand=True)
+    pymux.key_bindings_manager.note_who_bound("x", "prefix", by_hand=True)
+    # The mode a client below sits in.
+    pymux.key_bindings_manager.add_custom_binding("Up", "resize-pane", ["-U"], table="resize")
+    pymux.key_bindings_manager.note_who_bound("Up", "resize", by_hand=True)
 
     # Copy mode, for this client. Not the shell, which the round trip
     # types into.
@@ -654,6 +660,8 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
         second = tmp_path / "second.sqlite"
         try:
             async with fresh.running():
+                # `resume` reads the defaults and the file first.
+                fresh.configure()
                 load(fresh, first, _Copied())
                 save(fresh, second)
                 await start(fresh)
@@ -940,7 +948,45 @@ def test_an_upgrade_takes_the_new_file_and_keeps_what_a_person_set(pymux, tmp_pa
     assert loaded.session_defaults.status_left == "mine"
     assert loaded.options.default_terminal == ServerOptions().default_terminal
     assert loaded.options.job_ttl == 30
-    assert loaded.set_by_hand == {"options": set(), "session_defaults": {"status_left"}}
+    assert loaded.set_by_hand == {"options": set(), "session_defaults": {"status_left"}, "hooks": set()}
+
+
+def test_an_upgrade_takes_the_new_file_and_keeps_what_a_person_bound(pymux, tmp_path):
+    "A person's key and hook, a binding or hook a person removed, and the file for the rest. Lillecarl/pyterm#970."
+    _configure(
+        pymux,
+        "bind-key a display-message old-a",
+        "bind-key b display-message old-b",
+        "bind-key c display-message old-c",
+        "set-hook after-new-window 'display-message old-window'",
+        "set-hook pane-died 'display-message old-died'",
+    )
+    pymux.handle_command("bind-key b display-message mine")
+    pymux.handle_command("unbind-key c")
+    pymux.handle_command("set-hook -u pane-died")
+    path = tmp_path / "bound.sqlite"
+    save(pymux, path)
+
+    loaded = Pymux()
+    _configure(
+        loaded,
+        "bind-key a display-message new-a",
+        "bind-key b display-message new-b",
+        "bind-key c display-message new-c",
+        "set-hook after-new-window 'display-message new-window'",
+        "set-hook pane-died 'display-message new-died'",
+    )
+    load(loaded, path)
+
+    def runs(key: str) -> list[str] | None:
+        binding = loaded.key_bindings_manager.binding_on(key)
+        return None if binding is None else binding.arguments
+
+    assert (runs("a"), runs("b"), runs("c")) == (["new-a"], ["mine"], None)
+    assert loaded.hooks.commands.get("after-new-window") == ["display-message new-window"]
+    assert "pane-died" not in loaded.hooks.commands
+    assert loaded.set_by_hand["hooks"] == {"pane-died"}
+    assert set(loaded.key_bindings_manager.by_hand.values()) == {"b", "c"}
 
 
 @pytest.mark.parametrize("pty", [True, False], ids=["on a terminal", "on pipes"])

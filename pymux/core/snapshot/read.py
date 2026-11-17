@@ -24,6 +24,7 @@ from ...ids import PaneId, SessionId, WindowId, WindowIndex
 from ...jobs.feed import JobFeed
 from ...jobs.job import Job, JobId
 from ...jobs.pipes import JobPipes
+from ...keys.key_spelling import key_however_it_is_written
 from ...notify.notifications import Notification, NotificationSource, Route
 from ...options.client_options import ClientOptions
 from ...options.option_fields import Options
@@ -44,6 +45,7 @@ from ...options.tables import (
     JobOutputRow,
     JobRow,
     JobTagRow,
+    KeyBindingByHandRow,
     KeyBindingRow,
     NamedBufferRow,
     NotificationRouteRow,
@@ -301,18 +303,26 @@ def _program(db: apsw.Connection, pane_id: PaneId) -> Program:
 
 def _read_bindings(pymux: Pymux, db: apsw.Connection) -> None:
     """
-    The hooks and key bindings, whole, over what the configuration set:
-    a person's `bind-key` and `set-hook` since the server started are in
-    these and not in it.
+    The hooks and the keys a person set, over what the configuration
+    file the new server read set: the file may have changed, and it
+    says the rest. A person's unbinding or `set-hook -u` holds too.
+    Lillecarl/pyterm#970.
     """
-    pymux.hooks.commands = {}
+    hooks = pymux.set_by_hand["hooks"]
+    for hook in hooks:
+        pymux.hooks.forget(hook)
     for row in select(db, HookRow, "ORDER BY hook, position"):
-        pymux.hooks.add(row.hook, row.command)
+        if row.hook in hooks:
+            pymux.hooks.add(row.hook, row.command)
     bindings = pymux.key_bindings_manager
-    for table, keys in list(bindings.custom_bindings):
-        bindings.remove_custom_binding(bindings.custom_bindings[table, keys].written, table=table)
+    bindings.by_hand = {}
+    for mark in select(db, KeyBindingByHandRow):
+        bindings.note_who_bound(mark.written, mark.key_table, by_hand=True)
+    for (table, _keys), written in bindings.by_hand.items():
+        bindings.remove_custom_binding(written, table=table)
     for row in select(db, KeyBindingRow):
-        bindings.add_custom_binding(row.written, row.command, json.loads(row.arguments), table=row.key_table)
+        if (row.key_table, key_however_it_is_written(row.written)) in bindings.by_hand:
+            bindings.add_custom_binding(row.written, row.command, json.loads(row.arguments), table=row.key_table)
 
 
 def _read_notifications(pymux: Pymux, db: apsw.Connection, counters: dict[str, int]) -> None:
@@ -367,7 +377,6 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
     pymux.peers.returning = [row.text for row in select(db, ServerListRow, "WHERE list = 'peers' ORDER BY position")]
     pymux.peers.returning_copies = select(db, PeerCopyRow)
     pymux.peers.returning_places = select(db, PeerPlaceRow)
-    _read_bindings(pymux, db)
     pymux.wait_channels = {}
     for row in select(db, WaitChannelRow):
         channel = WaitChannel()
@@ -391,6 +400,7 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
                 if attribute in by_hand[holder]:
                     setattr(getattr(pymux, holder), attribute, value)
     pymux.set_by_hand = by_hand
+    _read_bindings(pymux, db)
     pymux.global_environment = {row.name: row.value for row in select(db, GlobalEnvironmentRow)}
 
     panes: dict[int | None, Pane] = {}

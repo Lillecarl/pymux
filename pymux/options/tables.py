@@ -223,7 +223,7 @@ class CounterRow:
 
 @dataclass(frozen=True, slots=True)
 class SetByHandRow:
-    "A field of `server_options` or `session_defaults` a person set: `Pymux.set_by_hand`."
+    "A field of `server_options` or `session_defaults`, or a hook, that a person set: `Pymux.set_by_hand`."
 
     TABLE: ClassVar[str] = "set_by_hand"
     KEY: ClassVar[tuple[str, ...]] = ("holder", "attribute")
@@ -490,6 +490,16 @@ class KeyBindingRow:
 
 
 @dataclass(frozen=True, slots=True)
+class KeyBindingByHandRow:
+    "A key a person bound or unbound: `PymuxKeyBindings.by_hand`."
+
+    TABLE: ClassVar[str] = "key_bindings_by_hand"
+    KEY: ClassVar[tuple[str, ...]] = ("key_table", "written")
+    key_table: str
+    written: str
+
+
+@dataclass(frozen=True, slots=True)
 class NotificationRow:
     TABLE: ClassVar[str] = "notifications"
     KEY: ClassVar[tuple[str, ...]] = ("notification_id",)
@@ -716,6 +726,7 @@ ROWS = (
     PeerPlaceRow,
     HookRow,
     KeyBindingRow,
+    KeyBindingByHandRow,
     NotificationRow,
     NotificationRouteRow,
     WaitChannelRow,

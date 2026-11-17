@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import CommandException, CommandParser, add_command
+from pymux.options.options import a_file_speaks
 
 
 def set_hook(pymux: Pymux, args: argparse.Namespace) -> None:
@@ -28,12 +29,17 @@ def set_hook(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     if args.u:
         pymux.hooks.forget(args.hook)
-        return
-
-    if args.hook_command is None:
+    elif args.hook_command is None:
         raise CommandException("A hook runs a command; name one.")
-
-    pymux.hooks.add(args.hook, args.hook_command)
+    else:
+        pymux.hooks.add(args.hook, args.hook_command)
+    # A hook a person changed keeps their commands over an upgrade, and
+    # the file the new server reads says every other. Lillecarl/pyterm#970.
+    marked = pymux.set_by_hand["hooks"]
+    if a_file_speaks(pymux):
+        marked.discard(args.hook)
+    else:
+        marked.add(args.hook)
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):

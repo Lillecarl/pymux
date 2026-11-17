@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import CommandException, CommandParser, add_command
+from pymux.options.options import a_file_speaks
 
 
 def unbind_key(pymux: Pymux, args: argparse.Namespace) -> None:
@@ -21,6 +22,7 @@ def unbind_key(pymux: Pymux, args: argparse.Namespace) -> None:
 
     try:
         pymux.key_bindings_manager.remove_custom_binding(key, table=table)
+        pymux.key_bindings_manager.note_who_bound(key, table, by_hand=not a_file_speaks(pymux))
     except ValueError:
         raise CommandException("Invalid key: %r" % (key,))
 
