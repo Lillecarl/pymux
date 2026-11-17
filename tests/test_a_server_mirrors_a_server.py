@@ -1477,6 +1477,14 @@ async def test_connect_again_dials_a_link_that_never_came(two_servers, tmp_path)
     assert peer.message_log[-1] == "%s is linked already." % (later,)
 
 
+async def test_connect_names_the_form_a_machine_takes(two_servers):
+    "`user@host` is no path, so it never becomes a peer that fails as a missing file. Lillecarl/pyterm#1025."
+    owner, peer, client = two_servers
+    peer.handle_command("connect lillecarl@192.0.2.1")
+    assert "no socket at lillecarl@192.0.2.1; a machine is ssh://[user@]host" in peer.message_log[-1]
+    assert not peer.peers.by_address
+
+
 async def test_a_sleep_here_ends_the_link_and_dials_again(two_servers, tmp_path, monkeypatch):
     "The peer's loop clock stops while its machine sleeps; the wall clock does not. Lillecarl/pyterm#877."
     owner, peer, client = two_servers

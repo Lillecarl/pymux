@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import os
 from typing import TYPE_CHECKING
 
-from pymux.commands import CommandParser, add_command
+from pymux.client.defaults import is_ssh_url
+from pymux.commands import CommandException, CommandParser, add_command
 
 if TYPE_CHECKING:
     from pymux.core.main import Pymux
@@ -22,6 +24,7 @@ def connect(pymux: Pymux, args: argparse.Namespace):
 
     Run again on a link that is down, it dials at once. Lillecarl/pyterm#876.
     """
+    _refuse_a_machine_named_as_a_path(args.address)
     peer = pymux.peers.of(args.address)
     peer.watch()
     if peer.connected:
@@ -29,6 +32,17 @@ def connect(pymux: Pymux, args: argparse.Namespace):
         return
     peer.dial_now()
     pymux.show_message("Linking to %s." % (args.address,))
+
+
+def _refuse_a_machine_named_as_a_path(address: str) -> None:
+    """
+    `user@host` reads as a socket path and fails as "No such file or
+    directory". A path with a `/` stays, socket or not: its socket may
+    come later (Lillecarl/pyterm#876). Lillecarl/pyterm#1025.
+    """
+    if is_ssh_url(address) or "/" in address or os.path.exists(address):
+        return
+    raise CommandException("no socket at %s; a machine is ssh://[user@]host" % (address,))
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
