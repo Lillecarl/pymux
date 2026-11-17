@@ -26,6 +26,7 @@ if somebody takes the wake away rather than narrowing it.
 
 from __future__ import annotations
 
+import os
 import sys
 from collections import Counter
 
@@ -81,6 +82,20 @@ async def settled(*states) -> None:
             quiet = 0 if any(state.app.invalidated for state in states) else quiet + 1
 
 
+async def shell_started(pymux) -> None:
+    """
+    Until the server's first window runs its shell, and not the fork
+    before the exec. The exec renames the window, and every client draws
+    the window list: under six suites it came inside the writes, and a
+    client that looks elsewhere drew once. Lillecarl/pyterm#1000.
+    """
+    first = pymux.arrangement.windows[0].panes[0]
+    launcher = os.path.basename(sys.executable)
+    with anyio.fail_after(10):
+        while first.name in ("", launcher):
+            await anyio.sleep(0.02)
+
+
 def looks_at(pymux, state):
     with set_app(state.app):
         return pymux.arrangement.get_active_window()
@@ -115,6 +130,7 @@ async def test_pane_in_window_nobody_looks_at_draws_nothing():
         hidden = next(w for w in pymux.arrangement.windows if w is not shown)
 
         without_activity_marks(pymux)
+        await shell_started(pymux)
         await settled(state)
         drawn = state.app.render_counter
         await five_writes(hidden.panes[0], "nobody is looking\r\n")
@@ -145,6 +161,7 @@ async def test_pane_does_not_wake_client_looking_elsewhere():
         assert looks_at(pymux, b) is not window_of_a
 
         without_activity_marks(pymux)
+        await shell_started(pymux)
         await settled(a, b)
         drawn_by_a = a.app.render_counter
         drawn_by_b = b.app.render_counter
