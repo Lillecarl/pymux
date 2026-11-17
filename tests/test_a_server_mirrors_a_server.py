@@ -1398,10 +1398,16 @@ async def test_a_link_that_goes_is_dialled_again_with_copy_mode_where_it_was(two
     sink = here.process.sink
     here.terminal.enter_copy_mode()
     await until(lambda: sink.copying is not None, "copy mode opens on the owner")
-    opened_at = sink.copying[0]
+    # Each key's move before the next: a wait for any move took the place
+    # after one key of three under six suites. Lillecarl/pyterm#1000.
     for _ in range(3):
+        before = sink.copying[0]
         here.process.key("\x1b[A", DEFAULT_KEY_PROFILE)
-    await until(lambda: sink.copying is not None and sink.copying[0] < opened_at, "the caret moves up")
+        await until(
+            lambda before=before: sink.copying is not None and sink.copying[0] < before,
+            "the caret moves up",
+            seen=lambda: sink.copying,
+        )
     left_at = sink.copying
 
     (link,) = links_of(owner)
