@@ -14,6 +14,7 @@ import glob
 import os
 import shlex
 import stat
+import subprocess
 import sys
 import time
 
@@ -288,7 +289,11 @@ def test_an_upgrade_keeps_every_pane_and_its_program(server, tmp_path, new_build
         command = _new_build(tmp_path, CANNOT_IMPORT, extra=extra)
         reason = "pymux.broken_on_purpose does not import"
 
-    said = cli(server, "upgrade-server", shlex.join(command))
+    try:
+        said = cli(server, "upgrade-server", shlex.join(command))
+    except subprocess.TimeoutExpired as timed_out:
+        # The server logs each step's time. Lillecarl/pyterm#1000.
+        raise AssertionError("%s\n%s" % (timed_out, _server_side(server))) from timed_out
     if new_build == "same":
         # The server answers before the exec. A client that reads no
         # answer says so and fails. Lillecarl/pyterm#608.

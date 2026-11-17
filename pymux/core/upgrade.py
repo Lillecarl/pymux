@@ -105,24 +105,32 @@ async def upgrade(pymux: Pymux, command: list[str]) -> None:
     path = Path(socket_directory()) / ("pymux.core.upgrade.%d.sqlite" % os.getpid())
     written = Snapshot(path)
     paused = False
+    # Each step's time, logged as it ends: a loaded test's upgrade spent
+    # 14 s neither running nor waiting for a CPU. Lillecarl/pyterm#1000.
+    step = _Steps()
     try:
         # Sound stops too: the PipeWire is this server's child, and the
         # new image would not know it. Lillecarl/pyterm#659.
         await pymux.audio.pause()
         # And the portal's private bus, for the same reason.
         await pymux.portal.pause()
+        step("sound and portal paused")
         try:
             written.write(pymux)
+            step("snapshot written")
             await _check(command, written.partial)
+            step("new build checked")
             for connection in list(pymux.connections):
                 client = connection.client
                 # A peer's mirrors say it in each pane, as a client says it on its terminal.
                 if connection.peer is not None or (client is not None and not client.state.temporary):
                     await connection.say_restarting(RESTART_WAIT, UPGRADING)
+            step("clients told")
             # From the sweep on, a command that ends a pane would leave a
             # program neither image ends or reaps. Lillecarl/pyterm#742.
             pymux.refusing_commands = True
             await _end_the_hung_up(pymux)
+            step("hung-up programs ended")
 
             # The pause. Nothing from here to the write awaits.
             _refuse(pymux)
@@ -132,11 +140,13 @@ async def upgrade(pymux: Pymux, command: list[str]) -> None:
         except SnapshotError as e:
             raise CommandException(str(e))
         written.finish()
+        step("snapshot finished")
 
         logger.info("Upgrading to %s.", shlex.join(command))
         # Before the exec, which closes the connection: a client that
         # reads no answer says so and fails. Lillecarl/pyterm#608.
         await _answer_the_caller(pymux)
+        step("caller answered")
         _exec([*command, *log_arguments(), RESUME, str(path)], carried(pymux))
     except BaseException:
         written.abandon()
@@ -147,6 +157,19 @@ async def upgrade(pymux: Pymux, command: list[str]) -> None:
         pymux.audio.resume()
         pymux.portal.resume()
         raise
+
+
+class _Steps:
+    "Logs how long each step of an upgrade took, wall and CPU of this process."
+
+    def __init__(self) -> None:
+        self._wall = time.monotonic()
+        self._cpu = time.process_time()
+
+    def __call__(self, done: str) -> None:
+        wall, cpu = time.monotonic(), time.process_time()
+        logger.info("Upgrade: %s in %.2f s, %.2f s of it on a CPU.", done, wall - self._wall, cpu - self._cpu)
+        self._wall, self._cpu = wall, cpu
 
 
 async def _check(command: list[str], path: Path) -> None:
