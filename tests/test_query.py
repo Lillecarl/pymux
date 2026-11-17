@@ -5,10 +5,13 @@ as the question reads them, and nothing stored. Lillecarl/pyterm#724.
 
 from __future__ import annotations
 
+import gc
+
 import apsw
 from session import create_session
 
 import pymux.jobs.table as job_table
+from pymux import introspect
 from pymux.core.snapshot.write import rows_of
 from pymux.options import tables
 from pymux.options.options import Scope
@@ -40,9 +43,28 @@ async def test_a_question_sees_the_jobs_and_the_live_tables():
         "layouts",
         "key_names",
         "forwards",
+        "collector",
     }
     assert live == set(tables.LIVE_TABLES)
     assert not live & {*tables.SCREEN_TABLES, *tables.JOB_TABLES, *tables.CLIENT_MODE_TABLES}
+
+
+async def test_the_collector_table_says_what_each_generation_held(monkeypatch):
+    "A full collection is counted under its generation, with the objects each one tracks."
+    timing = introspect.Collector()
+    monkeypatch.setattr(introspect, "_collector", timing)
+    gc.callbacks.append(timing)
+    try:
+        gc.collect()
+    finally:
+        gc.callbacks.remove(timing)
+
+    async with create_session() as (pymux, _state):
+        rows = await _rows(pymux, "SELECT generation, collections, seconds, objects FROM collector ORDER BY generation")
+
+    assert [generation for generation, *_ in rows] == list(range(len(gc.get_stats())))
+    _generation, collections, seconds, objects = rows[-1]
+    assert collections >= 1 and seconds > 0 and objects > 0, rows
 
 
 async def test_the_live_tables_answer_what_the_objects_hold():

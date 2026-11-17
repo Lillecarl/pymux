@@ -34,6 +34,7 @@ here, and the dump says where "here" is.
 from __future__ import annotations
 
 import faulthandler
+import gc
 import os
 import signal
 import sys
@@ -42,6 +43,7 @@ import time
 import traceback
 from collections import Counter
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TextIO
 
@@ -57,10 +59,13 @@ if TYPE_CHECKING:
     from pymux.pipes.base import PipeConnection
 
 __all__ = [
+    "Collector",
     "Counters",
     "answer_signal",
+    "collector",
     "stacks_file",
     "stacks_stream",
+    "time_the_collector",
     "where_dump_goes",
     "write_dump",
 ]
@@ -121,6 +126,64 @@ class Counters:
     def client_left(self, pipe: PipeConnection) -> None:
         self.gone_bytes_out += pipe.bytes_out
         self.gone_bytes_in += pipe.bytes_in
+
+
+#: A pause at least this long costs a client a frame at 60 Hz.
+A_FRAME = 1 / 60
+
+
+@dataclass(slots=True)
+class Pauses:
+    "What the cycle collector's runs of one generation held the loop for."
+
+    collections: int = 0
+    seconds: float = 0.0
+    longest: float = 0.0
+    over_a_frame: int = 0
+
+
+class Collector:
+    """
+    How long the cycle collector held the process, by generation.
+
+    `gc.callbacks` runs this around every collection, which is
+    thousands an hour, so each call only adds. A full collection
+    scans every tracked object, and the server's import heap alone
+    is hundreds of thousands of them. Lillecarl/pyterm#1016.
+    """
+
+    def __init__(self) -> None:
+        self.pauses = [Pauses() for _ in gc.get_stats()]
+        self._started = 0.0
+
+    def __call__(self, phase: str, info: dict[str, int]) -> None:
+        if phase == "start":
+            self._started = time.perf_counter()
+            return
+        took = time.perf_counter() - self._started
+        pauses = self.pauses[info["generation"]]
+        pauses.collections += 1
+        pauses.seconds += took
+        pauses.longest = max(pauses.longest, took)
+        if took >= A_FRAME:
+            pauses.over_a_frame += 1
+
+
+_collector: Collector | None = None
+
+
+def time_the_collector() -> Collector:
+    "Start timing every collection of this process, once."
+    global _collector
+    if _collector is None:
+        _collector = Collector()
+        gc.callbacks.append(_collector)
+    return _collector
+
+
+def collector() -> Collector | None:
+    "The timing `time_the_collector` started, or None."
+    return _collector
 
 
 def where_dump_goes() -> Path:

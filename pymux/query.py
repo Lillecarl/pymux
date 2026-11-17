@@ -19,6 +19,7 @@ dataclasses, so that thread only reads values that cannot change.
 
 from __future__ import annotations
 
+import gc
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import nullcontext
 from dataclasses import dataclass, fields
@@ -29,7 +30,7 @@ import anyio
 import apsw
 import apsw.ext
 
-from pymux import async_sqlite
+from pymux import async_sqlite, introspect
 
 from .options.tables import LIVE_ROWS, JobTagRow, SavedQueryRow, affinity
 
@@ -63,9 +64,9 @@ if not apsw.using_amalgamation or not apsw.apsw_version().startswith(apsw.sqlite
 
 #: What this server answers with. Agents read it with `PRAGMA
 #: user_version` and re-read the tables when it differs from what they
-#: were told. 13: `live.sessions` says the servers a mirrored session
-#: lies behind, in `server` and `server_ids`.
-SCHEMA_VERSION = 13
+#: were told. 14: `collector` says how long the cycle collector held
+#: the server, by generation.
+SCHEMA_VERSION = 14
 
 #: The questions every boot starts with. A name an agent saves later
 #: replaces one of these for the rest of the boot; the next boot seeds
@@ -230,6 +231,25 @@ class ForwardView:
     error: str
 
 
+@dataclass(frozen=True, slots=True)
+class CollectorView:
+    """
+    One generation of the cycle collector: its runs since the server
+    started, the seconds they held the loop, the longest one, the
+    runs that cost a 60 Hz frame, and the objects it tracks now.
+    `frozen` is every generation's: `gc.freeze()` keeps those out of
+    every scan.
+    """
+
+    generation: int
+    collections: int
+    seconds: float
+    longest: float
+    over_a_frame: int
+    objects: int
+    frozen: int
+
+
 class Answer(NamedTuple):
     "The columns, up to the limit of rows, and whether rows were left over."
 
@@ -322,6 +342,23 @@ def _forwards(pymux: Pymux) -> Iterator[ForwardView]:
             )
 
 
+def _collector(pymux: Pymux) -> Iterator[CollectorView]:
+    timing = introspect.collector()
+    if timing is None:
+        return
+    frozen = gc.get_freeze_count()
+    for generation, pauses in enumerate(timing.pauses):
+        yield CollectorView(
+            generation,
+            pauses.collections,
+            pauses.seconds,
+            pauses.longest,
+            pauses.over_a_frame,
+            len(gc.get_objects(generation)),
+            frozen,
+        )
+
+
 def _live(pymux: Pymux, table: str) -> Iterator[Any]:
     # Here and not at the top: the snapshot reaches `pymux.core.main`.
     from .core.snapshot.write import rows_of
@@ -350,6 +387,7 @@ def tables_of(pymux: Pymux) -> dict[tuple[str, str], Table]:
         ("main", "layouts"): Table(LayoutView, partial(_layouts, pymux)),
         ("main", "key_names"): Table(KeyNameView, partial(_key_names, pymux)),
         ("main", "forwards"): Table(ForwardView, partial(_forwards, pymux)),
+        ("main", "collector"): Table(CollectorView, partial(_collector, pymux)),
     }
     for kind in LIVE_ROWS:
         tables["live", kind.TABLE] = Table(kind, partial(_live, pymux, kind.TABLE))

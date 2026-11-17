@@ -659,6 +659,7 @@ class Pymux:
             # Only a real server: the suite's hang guard is the same
             # single faulthandler timer, and the loop watch would take it.
             self.stall_stacks = introspect.stacks_stream()
+            introspect.time_the_collector()
         introspect.log_what_escapes()
         say_how_it_ends(logger)
 
