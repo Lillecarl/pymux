@@ -1576,7 +1576,21 @@ async def test_a_chain_of_three_encodes_input_once_on_the_owner(two_servers):
             (a_to_b,) = links_of(owner)
             (source,) = a_to_b.peer.sources.values()
             await until(lambda: source.copying is not None and source.copying.place is not None, "copy mode opens on A")
-            await until(lambda: last.copying is not None, "C learns where copy mode on A stands")
+            # Failed so under six suites with the source's place kept; what
+            # B held and sent says which hop lost it. Lillecarl/pyterm#1000.
+            await until(
+                lambda: last.copying is not None,
+                "C learns where copy mode on A stands",
+                seen=lambda: {
+                    "A": source.copying and source.copying.place,
+                    "B holds": middle.terminal.terminal_control.mirror.copying,
+                    "B to C": [
+                        (one.paused, one.queued, one.place)
+                        for b_link in links_of(peer)
+                        for one in b_link.peer.sources.values()
+                    ],
+                },
+            )
             assert a_to_b.peer.copied(source.copying.app, "copied at C")
             await until(
                 lambda: third.clipboard.get_data().text == "copied at C",
