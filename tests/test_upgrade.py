@@ -99,6 +99,22 @@ def _server_side(sock) -> str:
     return "processes of this test:\n%s\nthe server's log:\n%s" % ("\n".join(running) or "  none", said)
 
 
+#: An upgrade slower than this leaves the server's side in the run's
+#: output. Loaded passes took 54 s and left nothing to read, while a
+#: failure took 46 s and printed the log. Lillecarl/pyterm#1000.
+SLOW_UPGRADE = 20.0
+
+
+def _keep_if_slow(sock, case: str, took: float) -> None:
+    "Copy the server's side into `$out` of the check's run, which keeps it."
+    kept = os.environ.get("out")
+    if took < SLOW_UPGRADE or kept is None or not os.path.isdir(kept):
+        return
+    path = os.path.join(kept, "slow-upgrade-%s-%d.log" % (case, os.getpid()))
+    with open(path, "w") as f:
+        f.write("upgrade-server took %.1f s\n%s" % (took, _server_side(sock)))
+
+
 def _answer(sock, *args) -> str:
     done = cli(sock, *args)
     assert done.returncode == 0, "%s\n%s" % (done.stderr.decode(), _server_side(sock))
@@ -290,11 +306,13 @@ def test_an_upgrade_keeps_every_pane_and_its_program(server, tmp_path, new_build
         command = _new_build(tmp_path, CANNOT_IMPORT, extra=extra)
         reason = "pymux.broken_on_purpose does not import"
 
+    began = time.monotonic()
     try:
         said = cli(server, "upgrade-server", shlex.join(command))
     except subprocess.TimeoutExpired as timed_out:
         # The server logs each step's time. Lillecarl/pyterm#1000.
         raise AssertionError("%s\n%s" % (timed_out, _server_side(server))) from timed_out
+    _keep_if_slow(server, new_build, time.monotonic() - began)
     if new_build == "same":
         # The server answers before the exec. A client that reads no
         # answer says so and fails. Lillecarl/pyterm#608.
