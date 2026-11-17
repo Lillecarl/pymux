@@ -31,6 +31,7 @@ from pymux.core.main import Pymux
 from pymux.enums import WindowCodec, WindowScroll, Woke
 from pymux.graphics.window_frames import WINDOW_Z
 from pymux.options.window_options import DEFAULT_FRAME_RATE
+from pymux.wayland.wayland import _how_it_ended
 from pymux.wayland.window_pane import is_window_pane
 
 PROBE = Path(__file__).with_name("wayland_probe.py")
@@ -894,3 +895,12 @@ async def test_a_compositor_that_dies_under_a_drawing_window_takes_only_its_pane
         window = state.session.arrangement.get_active_window()
         assert pane not in window.panes
         assert not pymux.done.is_set()
+
+
+@pytest.mark.parametrize(
+    ("code", "said"),
+    [(0, "exit code 0"), (3, "exit code 3"), (-signal.SIGKILL, "signal SIGKILL"), (None, "no code")],
+)
+def test_the_log_says_how_a_window_program_ended(code, said):
+    "Lillecarl/pyterm#1014."
+    assert _how_it_ended(code).startswith(said)

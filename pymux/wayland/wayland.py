@@ -152,6 +152,18 @@ LAUNCH_TAIL = 8192
 OUTPUT_REFRESH = 60
 
 
+def _how_it_ended(code: int | None) -> str:
+    "An exit code as `os.waitstatus_to_exitcode` gives one, in words. Lillecarl/pyterm#1014."
+    if code is None:
+        return "no code, as it was not this process's child"
+    if code < 0:
+        try:
+            return "signal %s" % (signal.Signals(-code).name,)
+        except ValueError:
+            return "signal %d" % (-code,)
+    return "exit code %d" % (code,)
+
+
 class _Inherited:
     """
     The compositor's process after an upgrade's exec: still this pid's
@@ -777,6 +789,7 @@ class WaylandServer:
                 pumps.start_soon(pipes.pump, pipes.stdout, launch.heard)
                 pumps.start_soon(pipes.pump, pipes.stderr, launch.heard)
                 launch.returncode = await pipes.reap()
+            logger.info("The Wayland program %d ended: %s.", pipes.pid, _how_it_ended(launch.returncode))
         except anyio.get_cancelled_exc_class():
             # Its compositor ended, and its windows with it.
             pipes.send_signal(signal.SIGKILL)
