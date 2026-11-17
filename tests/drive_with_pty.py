@@ -61,6 +61,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from fairclock import Deadline, pids_naming
 from pyte.environment import terminal_name
 from pyte.modes import PrivateMode
 from pyte.osc import Osc
@@ -69,7 +70,6 @@ from pyte.sequences.csi import set_mode
 from pyte.sequences.strings import dcs, osc
 from pyte.sixel import decode_sixel
 from pyte.streams import Stream
-from pyterm_pytest.fairclock import Deadline, pids_naming
 
 from pymux.graphics.blocks import LOWER_HALF, UPPER_HALF
 from pymux.graphics.graphics import CELL_SIZE_QUERY

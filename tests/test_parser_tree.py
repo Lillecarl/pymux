@@ -16,8 +16,8 @@ import sys
 
 import anyio
 import pytest
+from fairclock import anyio as fair_anyio
 from prompt_toolkit.document import Document
-from pyterm_pytest.fairclock import anyio as fair_anyio
 from session import in_this_process
 
 from pymux.commands import call_command_handler, completer, parser_tree

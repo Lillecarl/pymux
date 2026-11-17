@@ -30,8 +30,8 @@ from pathlib import Path
 
 import anyio
 import pytest
+from fairclock import anyio as fair_anyio
 from prompt_toolkit.data_structures import Size
-from pyterm_pytest.fairclock import anyio as fair_anyio
 
 from pymux.answer import Answer
 

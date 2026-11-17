@@ -18,6 +18,7 @@ import anyio
 import apsw
 import ptterm.control
 import pytest
+from fairclock import anyio as fair_anyio
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.clipboard import ClipboardData
 from prompt_toolkit.data_structures import Size
@@ -26,7 +27,6 @@ from ptyhost.backends.posix import PosixBackend
 from pyte.freeze import freeze
 from pyte.keep import Keep
 from pyte.page import RowMark
-from pyterm_pytest.fairclock import anyio as fair_anyio
 from session import once
 from test_a_session_on_a_pyte_screen import attached, settled, shows
 from test_every_attribute_has_a_fate import declared, live_objects

@@ -5,8 +5,8 @@ Lillecarl/pyterm#984.
 
 from __future__ import annotations
 
+from fairclock import anyio as fair_anyio
 from libpymux.wire import encode_json
-from pyterm_pytest.fairclock import anyio as fair_anyio
 
 from pymux.connection.server import ServerConnection
 from pymux.core.main import Pymux

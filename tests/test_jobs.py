@@ -20,9 +20,9 @@ import sys
 
 import anyio
 import pytest
+from fairclock import anyio as fair_anyio
 from libpymux.agentic import CallerContext
 from prompt_toolkit.application.current import set_app
-from pyterm_pytest.fairclock import anyio as fair_anyio
 from run_commands import answered, run_as
 from session import create_session
 

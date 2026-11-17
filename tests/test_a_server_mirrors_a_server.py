@@ -23,6 +23,7 @@ import anyio
 import anyio.abc
 import apsw
 import pytest
+from fairclock import anyio as fair_anyio
 from libpymux.protocol import Capability, Field, Packet, capabilities_in_common
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
@@ -34,7 +35,6 @@ from pyte.mouse import MouseAction, MouseBits, MouseButton, MouseInput
 from pyte.osc import ColorBase
 from pyte.sequences.file_transfer import Action, TransferCommand
 from pyte.sequences.kitty_clipboard import ClipboardPacket
-from pyterm_pytest.fairclock import anyio as fair_anyio
 from session import Client
 from test_drag_a_border import DRAG, PRESS, _drawn, _mouse
 from test_kittys_clipboard import PNG as KITTY_PNG

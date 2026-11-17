@@ -14,10 +14,10 @@ import sys
 from contextlib import asynccontextmanager
 
 import anyio
+from fairclock import anyio as fair_anyio
 from libpymux.protocol import Field, Packet
 from libpymux.wire import encode_json
 from prompt_toolkit.application.current import set_app
-from pyterm_pytest.fairclock import anyio as fair_anyio
 
 from pymux.client.terminal import TerminalClient
 from pymux.connection.server import ServerConnection

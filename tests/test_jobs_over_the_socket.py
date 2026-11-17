@@ -24,9 +24,9 @@ import time
 from pathlib import Path
 
 import pytest
+from fairclock import Deadline, pids_naming
+from fairclock import subprocess as fair_subprocess
 from libpymux.agentic import AGENT_SESSION_VARS
-from pyterm_pytest.fairclock import Deadline, pids_naming
-from pyterm_pytest.fairclock import subprocess as fair_subprocess
 
 #: How long one CLI call may take. A detached command answers at
 #: once; anything slower is the server not answering at all.

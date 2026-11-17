@@ -9,8 +9,8 @@ import base64
 
 import anyio
 import pytest
+from fairclock import anyio as fair_anyio
 from libpymux.protocol import Field, Packet
-from pyterm_pytest.fairclock import anyio as fair_anyio
 from test_a_pane_asks_for_a_file import AskedClient
 
 from pymux.client import clipboard_image, terminal

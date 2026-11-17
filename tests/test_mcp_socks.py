@@ -11,8 +11,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from fairclock import anyio as fair_anyio
 from pymux_mcp import browser
-from pyterm_pytest.fairclock import anyio as fair_anyio
 
 PROXY = "127.0.0.1:41080"
 ASKED = ["forward-port", "-R", "127.0.0.1:0"]

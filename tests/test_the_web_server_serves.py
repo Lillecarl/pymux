@@ -23,7 +23,7 @@ import sys
 
 import anyio
 import pytest
-from pyterm_pytest.fairclock import anyio as fair_anyio
+from fairclock import anyio as fair_anyio
 from websockets.asyncio.client import connect
 
 from pymux.core.main import Pymux

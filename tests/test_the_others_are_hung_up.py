@@ -20,9 +20,9 @@ import sys
 from contextlib import asynccontextmanager
 
 import anyio
+from fairclock import anyio as fair_anyio
 from libpymux.wire import encode_json
 from prompt_toolkit.application.current import set_app
-from pyterm_pytest.fairclock import anyio as fair_anyio
 from test_the_link_comes_back import Terminal
 
 from pymux.client.base import Client

@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 
 import anyio
-from pyterm_pytest.fairclock import anyio as fair_anyio
+from fairclock import anyio as fair_anyio
 from websockets.asyncio.server import serve
 
 from pymux.wayland.browser_shim import bridge

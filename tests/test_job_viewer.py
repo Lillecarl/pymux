@@ -17,7 +17,7 @@ import argparse
 
 import anyio
 import pytest
-from pyterm_pytest.fairclock import anyio as fair_anyio
+from fairclock import anyio as fair_anyio
 from run_commands import run_as
 from session import create_session
 

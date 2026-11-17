@@ -36,13 +36,13 @@ from contextlib import asynccontextmanager
 from typing import Any, NamedTuple
 
 import anyio
+from fairclock import Deadline
 from libpymux.wire import encode_json
 from prompt_toolkit.application.current import create_app_session, set_app
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
-from pyterm_pytest.fairclock import Deadline
 
 from pymux.connection.known_terminals import Identity, identify
 from pymux.connection.server import ServerConnection

@@ -46,7 +46,7 @@ from pathlib import Path
 import anyio
 import pytest
 from anyio.abc import SocketAttribute
-from pyterm_pytest.fairclock import anyio as fair_anyio
+from fairclock import anyio as fair_anyio
 
 from pymux.client.forwards import Forwards
 from pymux.core.forwarding import ANY_PORT, Direction, Forward

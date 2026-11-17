@@ -19,8 +19,8 @@ from __future__ import annotations
 
 import anyio
 import pytest
+from fairclock import anyio as fair_anyio
 from prompt_toolkit.application.current import set_app
-from pyterm_pytest.fairclock import anyio as fair_anyio
 from run_commands import run_as
 from session import create_session
 

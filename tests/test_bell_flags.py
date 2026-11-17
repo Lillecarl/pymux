@@ -10,8 +10,8 @@ keys on the application and does nothing else with it.
 from __future__ import annotations
 
 import anyio
+from fairclock import anyio as fair_anyio
 from prompt_toolkit.application.current import set_app
-from pyterm_pytest.fairclock import anyio as fair_anyio
 from test_a_session_on_a_pyte_screen import attached, pymux, shows  # noqa: F401 -- a fixture
 
 from pymux.core.arrangement import Arrangement

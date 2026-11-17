@@ -10,10 +10,10 @@ import sys
 from types import SimpleNamespace
 
 import anyio
+from fairclock import anyio as fair_anyio
 from prompt_toolkit.application.current import set_app
 from pyte.osc import Osc
 from pyte.program_status import parse_report
-from pyterm_pytest.fairclock import anyio as fair_anyio
 from run_commands import answered
 from session import create_session
 

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import anyio
 from anyio.lowlevel import checkpoint
-from pyterm_pytest.fairclock import anyio as fair_anyio
+from fairclock import anyio as fair_anyio
 
 from pymux.pipes.base import Turns
 

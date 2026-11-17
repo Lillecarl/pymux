@@ -16,7 +16,7 @@ from subprocess import DEVNULL, PIPE
 import anyio
 import pytest
 from anyio.streams.buffered import BufferedByteReceiveStream
-from pyterm_pytest.fairclock import anyio as fair_anyio
+from fairclock import anyio as fair_anyio
 from session import once
 
 pytest.importorskip("dbus_fast")

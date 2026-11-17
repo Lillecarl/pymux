@@ -6,9 +6,9 @@ the rows a shell marked with "OSC 133", as tmux's do. Lillecarl/pyterm#502.
 from __future__ import annotations
 
 import anyio
+from fairclock import anyio as fair_anyio
 from prompt_toolkit.application.current import set_app
 from pyte.page import RowMark
-from pyterm_pytest.fairclock import anyio as fair_anyio
 from test_a_session_on_a_pyte_screen import attached, pymux, shows  # noqa: F401 -- a fixture
 
 #: Two prompts, and the output of a command between them, each marked

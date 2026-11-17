@@ -143,6 +143,8 @@ test = [
     "wcwidth",
     # The shared rig: the seats, the drivers, the budgets.
     "pyterm-pytest",
+    # Deadlines in fair time. Lillecarl/pyterm#1008.
+    "fairclock",
     # The wayland seat's keyboard holder runs under the python of the
     # suite that starts it. Linux's alone: wayland is, and macOS runs the
     # suites that need no seat.
@@ -517,4 +519,4 @@ select = [
 # `libpymux` with `pymux`, without it (and in the sandbox, which sets
 # none) it splits them.
 known-first-party = ["pymux"]
-known-third-party = ["libpymux", "prompt_toolkit_rs", "pymux_rs"]
+known-third-party = ["fairclock", "libpymux", "prompt_toolkit_rs", "pymux_rs"]

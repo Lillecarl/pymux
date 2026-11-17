@@ -14,8 +14,8 @@ import contextvars
 from contextlib import asynccontextmanager
 
 import anyio
+from fairclock import anyio as fair_anyio
 from libpymux.wire import encode_json
-from pyterm_pytest.fairclock import anyio as fair_anyio
 
 from pymux.config import client_options_in
 from pymux.connection.server import ServerConnection

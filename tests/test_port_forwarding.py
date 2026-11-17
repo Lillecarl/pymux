@@ -20,9 +20,9 @@ from pathlib import Path
 import anyio
 import pytest
 from anyio.abc import SocketAttribute
+from fairclock import anyio as fair_anyio
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
-from pyterm_pytest.fairclock import anyio as fair_anyio
 from session import once, over_connection
 from test_ssh_client import create_ssh_server, live_servers
 

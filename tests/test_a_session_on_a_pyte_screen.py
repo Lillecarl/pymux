@@ -25,11 +25,11 @@ from unittest.mock import patch
 
 import anyio
 import pytest
+from fairclock import anyio as fair_anyio
 from libpymux.protocol import Packet
 from libpymux.wire import encode_json
 from prompt_toolkit.application.current import set_app
 from pyte.png import decode_png
-from pyterm_pytest.fairclock import anyio as fair_anyio
 from session import once
 
 from pymux.connection.server import ServerConnection

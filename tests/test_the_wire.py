@@ -8,9 +8,9 @@ from __future__ import annotations
 import socket
 
 import anyio
+from fairclock import anyio as fair_anyio
 from libpymux.protocol import READ_SIZE
 from libpymux.wire import MSGPACK, MSGPACK_ZSTD, Compressor, PacketReader, encode_json, encode_msgpack
-from pyterm_pytest.fairclock import anyio as fair_anyio
 
 from pymux.client.terminal import TerminalClient
 from pymux.connection.server import ServerConnection

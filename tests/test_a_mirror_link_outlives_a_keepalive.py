@@ -6,7 +6,7 @@ far side, so the peer dials again. Lillecarl/pyterm#979.
 from __future__ import annotations
 
 import asyncssh
-from pyterm_pytest.fairclock import anyio as fair_anyio
+from fairclock import anyio as fair_anyio
 from test_a_server_mirrors_a_server import the_probe_does_not_leave_this_machine, two_servers, until
 from test_forwards_through_a_peer import linked_over_ssh
 

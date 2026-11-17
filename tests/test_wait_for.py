@@ -21,9 +21,9 @@ real over two connections. It is the test the issue asked for.
 from __future__ import annotations
 
 import anyio
+from fairclock import anyio as fair_anyio
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
-from pyterm_pytest.fairclock import anyio as fair_anyio
 from session import create_session, over_connection
 
 from pymux.answer import Answer

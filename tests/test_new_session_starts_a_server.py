@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import time
 
-from pyterm_pytest.fairclock import Deadline, pids_naming
+from fairclock import Deadline, pids_naming
 from test_jobs_over_the_socket import CLI_TIMEOUT, _wait_for_server, cli
 
 

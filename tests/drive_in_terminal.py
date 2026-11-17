@@ -98,11 +98,12 @@ import termios
 import time
 from pathlib import Path
 
+from fairclock import Deadline
+
 # The fence, its quiet window and its first-byte bound are
 # middleman's, and the relay adopts them: `middleman.py` says what
 # each one is for.
 from middleman import FENCE, FIRST_BYTE, QUIET, SHOWS_OSC_99, fence_sequence
-from pyterm_pytest.fairclock import Deadline
 
 #: How much to move at once.
 CHUNK = 65536

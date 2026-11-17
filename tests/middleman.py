@@ -68,7 +68,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from pyterm_pytest.fairclock import Deadline
+from fairclock import Deadline
 
 from tests.drive_with_pty import SHOWS_OSC_99, Terminal, run_cli
 

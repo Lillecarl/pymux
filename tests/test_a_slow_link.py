@@ -22,9 +22,9 @@ import time
 from typing import NamedTuple
 
 import anyio
+from fairclock import Stopwatch
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
-from pyterm_pytest.fairclock import Stopwatch
 from session import once, over_connection
 
 from pymux.connection.pacing import STATUS_REPORT

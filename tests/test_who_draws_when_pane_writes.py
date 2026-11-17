@@ -31,9 +31,9 @@ import sys
 from collections import Counter
 
 import anyio
+from fairclock import anyio as fair_anyio
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
-from pyterm_pytest.fairclock import anyio as fair_anyio
 from session import over_connection
 
 #: A pane that is still there when the test looks at it. A program that

@@ -28,7 +28,7 @@ import inspect
 import logging
 
 import anyio
-from pyterm_pytest.fairclock import anyio as fair_anyio
+from fairclock import anyio as fair_anyio
 
 from pymux.connection.attach import create_app
 from pymux.connection.server import FAILURES_THAT_END_A_CONNECTION, ServerConnection

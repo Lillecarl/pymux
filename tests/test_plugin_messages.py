@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import anyio
 import pytest
-from pyterm_pytest.fairclock import anyio as fair_anyio
+from fairclock import anyio as fair_anyio
 from test_a_server_mirrors_a_server import (  # noqa: F401 (fixtures)
     shown_here,
     the_probe_does_not_leave_this_machine,

@@ -15,6 +15,7 @@ from argparse import Namespace
 
 import anyio
 import pytest
+from fairclock import anyio as fair_anyio
 from libpymux.protocol import (
     CAPABILITY_SINCE,
     OLDEST_PEER_VERSION,
@@ -28,7 +29,6 @@ from libpymux.protocol import (
 from libpymux.wire import MSGPACK, encode_json
 from ptterm.control import TerminalControl
 from pyte.mouse import MouseAction
-from pyterm_pytest.fairclock import anyio as fair_anyio
 
 from pymux.answer import Answer, current_answer
 from pymux.commands.send_keys import send_keys

@@ -9,9 +9,9 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
+from fairclock import anyio as fair_anyio
 from libpymux.objects import Server
 from libpymux.protocol import Capability
-from pyterm_pytest.fairclock import anyio as fair_anyio
 from test_a_server_mirrors_a_server import run_as, shown_here, the_probe_does_not_leave_this_machine, two_servers, until
 from test_port_forwarding import _exactly, _socks5_to, echoing
 from test_ssh_client import create_ssh_server

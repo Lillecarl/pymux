@@ -20,8 +20,8 @@ import json
 import socket
 
 import anyio
+from fairclock import anyio as fair_anyio
 from libpymux.wire import encode_json
-from pyterm_pytest.fairclock import anyio as fair_anyio
 
 from pymux.connection.attach import CANNOT_ATTACH
 from pymux.connection.server import ServerConnection

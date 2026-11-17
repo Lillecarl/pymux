@@ -26,8 +26,8 @@ from contextlib import asynccontextmanager
 
 import anyio
 import pytest
+from fairclock import anyio as fair_anyio
 from prompt_toolkit.data_structures import Size
-from pyterm_pytest.fairclock import anyio as fair_anyio
 from session import once, over_connection
 
 if not (shutil.which("pipewire") and shutil.which("wireplumber") and shutil.which("pw-play")):

@@ -27,7 +27,7 @@ import sys
 
 import anyio
 import pytest
-from pyterm_pytest.fairclock import anyio as fair_anyio
+from fairclock import anyio as fair_anyio
 
 from pymux.answer import Answer
 from pymux.commands import call_command_handler

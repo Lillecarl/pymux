@@ -14,9 +14,9 @@ import socket
 
 import anyio
 import pytest
+from fairclock import anyio as fair_anyio
 from libpymux.wire import encode_json
 from prompt_toolkit.data_structures import Size
-from pyterm_pytest.fairclock import anyio as fair_anyio
 from session import once, over_connection
 
 from pymux.answer import Answer

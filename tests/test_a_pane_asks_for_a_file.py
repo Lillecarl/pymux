@@ -14,10 +14,10 @@ from pathlib import Path
 
 import anyio
 import pytest
+from fairclock import anyio as fair_anyio
 from libpymux.protocol import Field, Packet
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
-from pyterm_pytest.fairclock import anyio as fair_anyio
 from session import once, over_connection
 
 from pymux.client import uploads

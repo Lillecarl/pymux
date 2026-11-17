@@ -16,9 +16,9 @@ from pathlib import Path
 import anyio
 import pytest
 from clipboard_terminal import ClipboardTerminal
+from fairclock import anyio as fair_anyio
 from prompt_toolkit.clipboard import ClipboardData
 from prompt_toolkit.data_structures import Size
-from pyterm_pytest.fairclock import anyio as fair_anyio
 from session import once, over_connection
 
 pytest.importorskip("pysmithay")

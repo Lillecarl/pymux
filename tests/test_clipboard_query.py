@@ -12,8 +12,8 @@ from contextlib import asynccontextmanager
 
 import anyio
 from clipboard_terminal import ClipboardTerminal
+from fairclock import anyio as fair_anyio
 from prompt_toolkit.data_structures import Size
-from pyterm_pytest.fairclock import anyio as fair_anyio
 from session import over_connection
 
 from pymux.connection import clipboard_reads

@@ -19,8 +19,8 @@ import sys
 import time
 
 import pytest
+from fairclock import Deadline, pids_naming
 from libpymux.sockets import socket_directory
-from pyterm_pytest.fairclock import Deadline, pids_naming
 from test_jobs_over_the_socket import CLI_TIMEOUT, _wait_for_server, cli
 
 #: What the counted pane prints: one numbered line every 20 ms, past the

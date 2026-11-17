@@ -13,11 +13,11 @@ Lillecarl/pyterm#165.
 from __future__ import annotations
 
 import anyio
+from fairclock import anyio as fair_anyio
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.auto_suggest import Suggestion
 from prompt_toolkit.key_binding.key_processor import KeyPress
 from prompt_toolkit.keys import Keys
-from pyterm_pytest.fairclock import anyio as fair_anyio
 from session import create_session
 
 

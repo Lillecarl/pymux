@@ -11,7 +11,7 @@ import sys
 from types import SimpleNamespace
 
 import anyio
-from pyterm_pytest.fairclock import anyio as fair_anyio
+from fairclock import anyio as fair_anyio
 
 from pymux.core.forwarding import Direction
 from pymux.core.port_offers import PortOffers, listening_ports
