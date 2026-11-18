@@ -455,14 +455,14 @@ class Window:
         """
         The name for this window as it should be displayed in the status bar.
         """
-        # Name, explicitely set for the window.
         if self.chosen_name:
             return self.chosen_name
         pane = self.active_pane
-        if pane:
-            return pane.name
-
-        return ""
+        live = pane.name if pane else ""
+        if not self.options.automatic_rename:
+            # Off, the window keeps the name it has, as a name given.
+            self.chosen_name = live
+        return live
 
     def add_pane(self, pane: Pane, vsplit: bool = False, select: bool = True) -> None:
         """

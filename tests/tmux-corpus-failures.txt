@@ -1,6 +1,4 @@
 AdamWhittingham__tmux-config.conf line 115: pymux: Invalid option: xterm-keys
-AdamWhittingham__tmux-config.conf line 118: pymux: Invalid option: set-titles
-AdamWhittingham__tmux-config.conf line 119: pymux: Invalid option: set-titles-string
 AdamWhittingham__tmux-config.conf line 123: pymux: Invalid option: aggressive-resize
 AdamWhittingham__tmux-config.conf line 135: pymux: Invalid option: terminal-overrides
 AdamWhittingham__tmux-config.conf line 136: pymux: Invalid option: terminal-overrides
@@ -50,8 +48,6 @@ craftzdog__dotfiles-public.conf line 20: pymux: Invalid option: pane-active-bord
 craftzdog__dotfiles-public.conf line 21: pymux: Invalid option: window-style
 craftzdog__dotfiles-public.conf line 22: pymux: Invalid option: window-active-style
 craftzdog__dotfiles-public.conf line 25: pymux: Invalid option: allow-passthrough
-craftzdog__dotfiles-public.conf line 32: pymux: Invalid option: set-titles
-craftzdog__dotfiles-public.conf line 33: pymux: Invalid option: set-titles-string
 craftzdog__dotfiles-public.conf line 43: pymux: IOError: [Errno 2] No such file or directory: '$HOME/.config/tmux/bindings.conf'
 craftzdog__dotfiles-public.conf line 44: pymux: IOError: [Errno 2] No such file or directory: '$HOME/.config/tmux/theme.conf'
 craftzdog__dotfiles-public.conf line 45: pymux: IOError: [Errno 2] No such file or directory: '$HOME/.config/tmux/statusline.conf'
@@ -70,8 +66,6 @@ folke__dot.conf line 35: pymux: IOError: [Errno 2] No such file or directory: '$
 folke__dot.conf line 39: pymux: Invalid option: terminal-overrides
 folke__dot.conf line 40: pymux: Invalid option: terminal-overrides
 gpakosz__.tmux.conf line 32: pymux: Invalid option: prefix2
-gpakosz__.tmux.conf line 50: pymux: Invalid option: automatic-rename
-gpakosz__.tmux.conf line 53: pymux: Invalid option: set-titles
 gpakosz__.tmux.conf line 55: pymux: Invalid option: display-panes-time
 gpakosz__.tmux.conf line 56: pymux: Invalid option: display-time
 hamvocke__dotfiles.conf line 36: pymux: Invalid option: allow-rename
@@ -106,7 +100,6 @@ jbnicolai__tmux.conf line 56: pymux: Invalid option: clock-mode-colour
 jbnicolai__tmux.conf line 59: pymux: Invalid option: aggressive-resize
 jbnicolai__tmux.conf line 80: pymux: unrecognized arguments: -t
 jbnicolai__tmux.conf line 81: pymux: unrecognized arguments: -t
-jbnicolai__tmux.conf line 109: pymux: Invalid option: set-titles
 jmbuhr__tmux-kickstarter.conf line 16: pymux: Invalid option: terminal-overrides
 joshmedeski__dotfiles.conf line 22: pymux: Invalid option: display-time
 joshmedeski__dotfiles.conf line 26: pymux: Invalid option: terminal-overrides
@@ -130,7 +123,6 @@ leslie255__magicTmux.conf line 52: pymux: Invalid option: status-fg
 leslie255__magicTmux.conf line 65: pymux: Invalid option: status-position
 leslie255__magicTmux.conf line 73: pymux: Invalid option: message-style
 leslie255__magicTmux.conf line 88: pymux: Invalid option: window-status-separator
-leslie255__magicTmux.conf line 94: pymux: Invalid option: automatic-rename
 leslie255__magicTmux.conf line 115: pymux: Invalid option: terminal-overrides
 mislav__dotfiles.conf line 46: pymux: Invalid option: terminal-overrides
 mislav__dotfiles.conf line 49: pymux: Invalid option: allow-rename
@@ -151,19 +143,13 @@ nicknisi__dotfiles.conf line 46: pymux: Invalid option: allow-passthrough
 nicknisi__dotfiles.conf line 52: pymux: Invalid option: clear-on-attach
 nicknisi__dotfiles.conf line 55: pymux: Invalid option: pane-scrollbars
 nicknisi__dotfiles.conf line 58: pymux: Invalid option: copy-mode-line-numbers
-nicknisi__dotfiles.conf line 93: pymux: Invalid option: set-titles
-nicknisi__dotfiles.conf line 100: pymux: Invalid option: automatic-rename
 nicknisi__dotfiles.conf line 104: pymux: Invalid option: automatic-rename-format
-nicknisi__dotfiles.conf line 107: pymux: Invalid option: set-titles-string
 nicknisi__dotfiles.conf line 116: pymux: Invalid option: aggressive-resize
 nicknisi__dotfiles.conf line 155: pymux: Invalid option: command-alias[100]
 nviennot__tmux-config.conf line 40: pymux: Invalid option: allow-passthrough
 nviennot__tmux-config.conf line 41: pymux: Invalid option: terminal-features
 nviennot__tmux-config.conf line 45: pymux: Invalid option: status-bg
 nviennot__tmux-config.conf line 46: pymux: Invalid option: status-fg
-nviennot__tmux-config.conf line 54: pymux: Invalid option: set-titles
-nviennot__tmux-config.conf line 55: pymux: Invalid option: set-titles-string
-nviennot__tmux-config.conf line 56: pymux: Invalid option: automatic-rename
 nviennot__tmux-config.conf line 66: pymux: Invalid option: extended-keys-format
 omerxx__dotfiles.conf line 1: pymux: IOError: [Errno 2] No such file or directory: '$HOME/.config/tmux/tmux.reset.conf'
 omerxx__dotfiles.conf line 3: pymux: Invalid option: terminal-overrides
@@ -175,7 +161,6 @@ omerxx__dotfiles.conf line 18: pymux: unrecognized arguments: - 60%,30% --prompt
 samoshkin__tmux-config.conf line 41: pymux: syntax error
 shfshanyue__tmux-config.conf line 2: pymux: Invalid option: prefix2
 shfshanyue__tmux-config.conf line 12: pymux: Invalid option: allow-rename
-shfshanyue__tmux-config.conf line 13: pymux: Invalid option: automatic-rename
 shfshanyue__tmux-config.conf line 36: pymux: Invalid option: message-style
 shfshanyue__tmux-config.conf line 38: pymux: Invalid option: status-style
 shfshanyue__tmux-config.conf line 49: pymux: Invalid option: window-status-separator
@@ -184,8 +169,6 @@ shfshanyue__tmux-config.conf line 51: pymux: Invalid option: window-status-last-
 shfshanyue__tmux-config.conf line 53: pymux: Invalid option: pane-active-border-style
 shfshanyue__tmux-config.conf line 54: pymux: Invalid option: pane-border-style
 statico__dotfiles.conf line 13: pymux: Invalid option: display-panes-time
-statico__dotfiles.conf line 24: pymux: Invalid option: set-titles
-statico__dotfiles.conf line 25: pymux: Invalid option: set-titles-string
 statico__dotfiles.conf line 68: pymux: Invalid option: status-fg
 statico__dotfiles.conf line 69: pymux: Invalid option: status-bg
 statico__dotfiles.conf line 74: pymux: Invalid option: window-status-separator
@@ -248,7 +231,6 @@ tony__tmux-config.conf line 26: pymux: Invalid option: display-panes-colour
 tony__tmux-config.conf line 28: pymux: Invalid option: clock-mode-colour
 tony__tmux-config.conf line 32: pymux: Expecting one of: "left", "center", "right".
 tony__tmux-config.conf line 51: pymux: Invalid option: aggressive-resize
-tony__tmux-config.conf line 104: pymux: Invalid option: automatic-rename
 tony__tmux-config.conf line 108: pymux: Invalid option: terminal-overrides
 vmware-archive__tmux-config.conf line 12: pymux: Invalid option: mode-mouse
 vmware-archive__tmux-config.conf line 13: pymux: Invalid option: mouse-select-pane

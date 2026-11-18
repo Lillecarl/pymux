@@ -56,6 +56,13 @@ def _rescale(pymux: Pymux, window: Window) -> None:
     pymux.wayland.rescale()
 
 
+def _name_follows(pymux: Pymux, window: Window) -> None:
+    # As in tmux, turning it on takes the window back from a name rename-window gave.
+    if window.options.automatic_rename:
+        window.chosen_name = None
+    pymux.invalidate()
+
+
 def _redraw(pymux: Pymux, window: Window) -> None:
     # The next frame of each client goes the new way.
     pymux.invalidate()
@@ -90,6 +97,11 @@ class WindowOptions(Options):
         0,
         doc="The number of the first pane, as tmux has it: `#{pane_index}` and a target's `.N`. Lillecarl/pyterm#1035.",
         choices=[0, 1],
+    )
+    automatic_rename: bool = option(
+        True,
+        doc="Name the window after the program in its active pane. Off, it keeps the name it has. rename-window turns it off.",
+        on_set=_name_follows,
     )
     monitor_bell: bool = option(
         True,

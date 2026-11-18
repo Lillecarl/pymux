@@ -14,8 +14,12 @@ from pymux.commands.common import the_window
 def rename_window(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Rename a window: the active one when -t names none.
+
+    As in tmux, its `automatic-rename` goes off.
     """
-    the_window(pymux, args.target_window).chosen_name = args.name
+    window = the_window(pymux, args.target_window)
+    window.chosen_name = args.name
+    window.options.automatic_rename = False
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
