@@ -27,8 +27,8 @@ it could have gone on by itself.
 Each time it stops you get:
 - the pane's text: its screen and the lines above it, so the agent's
   last message is whole;
-- a picture of the pane's screen, for what text loses: colour, layout,
-  a dialog, a highlighted choice;
+- usually a picture of the pane's screen, for what text loses: colour,
+  layout, a dialog, a highlighted choice;
 - the jobs that still run in the agent's directory, if any;
 - the time.
 

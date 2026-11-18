@@ -88,8 +88,10 @@ class HaikuConversation:
     async def judge(self, observation: Observation) -> Verdict:
         if self.last_input > COMPACT_AT:
             await self.compact()
-        picture = await self._store.add(observation.png)
-        turn = await self._ask([UserPromptPart(describe(observation)), picture], Verdict)
+        prompt: list[Part] = [UserPromptPart(describe(observation))]
+        if observation.png is not None:
+            prompt.append(await self._store.add(observation.png))
+        turn = await self._ask(prompt, Verdict)
         self.history += turn.messages
         usage = turn.usage
         self.last_input = (usage.input_tokens or 0) + (usage.cache_read_tokens or 0) + (usage.cache_write_tokens or 0)

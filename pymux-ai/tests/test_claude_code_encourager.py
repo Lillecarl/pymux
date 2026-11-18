@@ -80,6 +80,16 @@ async def test_the_instructions_lead_and_the_prefix_never_changes(tmp_path):
     assert not any(isinstance(part, SystemPromptPart) for message in two[len(one) :] for part in message.parts)
 
 
+async def test_with_no_font_to_draw_with_the_text_is_judged_alone(tmp_path):
+    model = ListModel([_verdict(Decision.STOP)])
+    conversation = HaikuConversation("key", model, AttachmentStore(tmp_path))
+
+    await conversation.judge(Observation("%1", DONE, "/work", "> done", None, ()))
+
+    (sent,) = model.asked
+    assert not any(isinstance(part, AttachmentPart) for message in sent for part in message.parts)
+
+
 async def test_past_half_the_window_the_conversation_starts_from_a_summary(tmp_path):
     model = ListModel([_verdict(Decision.STOP), "It kept stopping after the build.", _verdict(Decision.STOP)])
     model.input_tokens = COMPACT_AT + 1

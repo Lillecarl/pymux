@@ -17,8 +17,6 @@ dependencies = [
     "pymux",
     "libpymux",
     "anyio>=4.7.0",
-    # The pane as a picture, drawn with the fonts pymux-mcp bundles.
-    "pymux-mcp",
     "pydantic>=2.0.0",
     # aid's model transports and messages, without aid. Lillecarl/aid#75.
     "aid-agent",
