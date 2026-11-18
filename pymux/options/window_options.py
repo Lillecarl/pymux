@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from pyte.keep import Keep
+
 from ..enums import MessageRow, WindowCodec, WindowSize
 from ..wayland.wayland_scale import DEFAULT_WAYLAND_SCALE, parse_scale
 from .option_fields import Options, option, options
@@ -56,6 +58,14 @@ def _rescale(pymux: Pymux, window: Window) -> None:
     pymux.wayland.rescale()
 
 
+def _only_on(value: str) -> bool:
+    if value.lower() != "on":
+        raise ValueError(
+            'Expecting "on": pymux always sizes a window by the clients that show it. `window-size` says which of them.'
+        )
+    return True
+
+
 def _name_follows(pymux: Pymux, window: Window) -> None:
     # As in tmux, turning it on takes the window back from a name rename-window gave.
     if window.options.automatic_rename:
@@ -102,6 +112,12 @@ class WindowOptions(Options):
         True,
         doc="Name the window after the program in its active pane. Off, it keeps the name it has. rename-window turns it off.",
         on_set=_name_follows,
+    )
+    aggressive_resize: bool = option(
+        True,
+        doc="tmux's switch; pymux is always on: a window takes the size of the clients that show it.",
+        parse=_only_on,
+        keep=Keep.REBUILT,
     )
     window_status_separator: str = option(
         " ", doc="What the status line writes after this window when another follows it on the row: a format."

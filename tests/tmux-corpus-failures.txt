@@ -1,5 +1,4 @@
 AdamWhittingham__tmux-config.conf line 115: pymux: Invalid option: xterm-keys
-AdamWhittingham__tmux-config.conf line 123: pymux: Invalid option: aggressive-resize
 AdamWhittingham__tmux-config.conf line 135: pymux: Invalid option: terminal-overrides
 AdamWhittingham__tmux-config.conf line 136: pymux: Invalid option: terminal-overrides
 AdamWhittingham__tmux-config.conf line 137: pymux: Invalid option: terminal-overrides
@@ -85,7 +84,6 @@ jbnicolai__tmux.conf line 49: pymux: Invalid option: message-fg
 jbnicolai__tmux.conf line 52: pymux: Invalid option: display-panes-active-colour
 jbnicolai__tmux.conf line 53: pymux: Invalid option: display-panes-colour
 jbnicolai__tmux.conf line 56: pymux: Invalid option: clock-mode-colour
-jbnicolai__tmux.conf line 59: pymux: Invalid option: aggressive-resize
 jbnicolai__tmux.conf line 80: pymux: unrecognized arguments: -t
 jbnicolai__tmux.conf line 81: pymux: unrecognized arguments: -t
 jmbuhr__tmux-kickstarter.conf line 16: pymux: Invalid option: terminal-overrides
@@ -124,7 +122,6 @@ nicknisi__dotfiles.conf line 52: pymux: Invalid option: clear-on-attach
 nicknisi__dotfiles.conf line 55: pymux: Invalid option: pane-scrollbars
 nicknisi__dotfiles.conf line 58: pymux: Invalid option: copy-mode-line-numbers
 nicknisi__dotfiles.conf line 104: pymux: Invalid option: automatic-rename-format
-nicknisi__dotfiles.conf line 116: pymux: Invalid option: aggressive-resize
 nicknisi__dotfiles.conf line 155: pymux: Invalid option: command-alias[100]
 nviennot__tmux-config.conf line 40: pymux: Invalid option: allow-passthrough
 nviennot__tmux-config.conf line 41: pymux: Invalid option: terminal-features
@@ -187,7 +184,6 @@ thoughtbot__dotfiles.conf line 23: pymux: Invalid option: status-style
 tmux__tmux.conf line 9: pymux: Invalid option: window-status-current-style
 tmux__tmux.conf line 17: pymux: Invalid option: terminal-features
 tmux__tmux.conf line 62: pymux: duplicate session: 0
-tmux__tmux.conf line 64: pymux: Invalid option: aggressive-resize
 tmux__tmux.conf line 66: pymux: unrecognized arguments: -t0:1
 tmux__tmux.conf line 68: pymux: unrecognized arguments: -t0:2
 tony__tmux-config.conf line 9: pymux: Invalid option: status-style
@@ -199,7 +195,6 @@ tony__tmux-config.conf line 22: pymux: Invalid option: message-style
 tony__tmux-config.conf line 25: pymux: Invalid option: display-panes-active-colour
 tony__tmux-config.conf line 26: pymux: Invalid option: display-panes-colour
 tony__tmux-config.conf line 28: pymux: Invalid option: clock-mode-colour
-tony__tmux-config.conf line 51: pymux: Invalid option: aggressive-resize
 tony__tmux-config.conf line 108: pymux: Invalid option: terminal-overrides
 vmware-archive__tmux-config.conf line 12: pymux: Invalid option: mode-mouse
 vmware-archive__tmux-config.conf line 13: pymux: Invalid option: mouse-select-pane
