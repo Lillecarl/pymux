@@ -391,6 +391,11 @@ def key_however_it_is_written(text: str) -> tuple[str, ...]:
     if text.lower() == "any":
         return (Keys.Any,)
 
+    # tmux's short ctrl, `set -g prefix ^A` (key-string.c): one letter
+    # after the caret is lowered, a longer name keeps its case.
+    if text.startswith("^") and len(text) > 1:
+        text = "C-" + (text[1].lower() if len(text) == 2 else text[1:])
+
     try:
         return chord(text)
     except ValueError:

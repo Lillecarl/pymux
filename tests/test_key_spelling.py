@@ -71,6 +71,12 @@ def test_names_tmux_gives_key_still_read(written, name):
     assert chord(written) == chord(name.replace("s-", "shift+"))
 
 
+@pytest.mark.parametrize(("written", "name"), [("^A", "C-a"), ("^a", "C-a"), ("^M-x", "C-M-x"), ("^", "^")])
+def test_a_caret_is_tmux_short_ctrl(written, name):
+    "`set -g prefix ^A`, as key-string.c reads it."
+    assert key_however_it_is_written(written) == key_however_it_is_written(name)
+
+
 def test_tmux_modifier_is_not_chord():
     """
     "C-a" does not read here, and it must not.
