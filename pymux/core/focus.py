@@ -56,6 +56,9 @@ class Focus:
         """
         self.pymux.notifier.close_seen_notifications()
         self.pymux.notifier.drop_seen_popups()
+        # Off, tmux tells no pane: `window_set_active_pane`, window.c.
+        if not self.pymux.options.focus_events:
+            return
         focused = set()
         for client_state in self.pymux._client_states.values():
             if client_state.terminal_focused and not client_state.temporary:

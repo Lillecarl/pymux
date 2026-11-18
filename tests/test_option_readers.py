@@ -304,8 +304,13 @@ async def test_focus_events_off_counts_every_terminal_as_focused():
         state.terminal_focused = False
         with set_app(state.app):
             pymux.handle_command("set-option -s focus-events off")
+            told = set(pymux.focus._focused_panes)
+            pymux.handle_command("split-window")
+            pymux.focus.sync_panes()
 
         assert state.terminal_focused is True
+        # tmux tells no pane its focus while the option is off.
+        assert pymux.focus._focused_panes == told
 
 
 async def test_a_window_command_names_set_client_option_for_a_client_option():
