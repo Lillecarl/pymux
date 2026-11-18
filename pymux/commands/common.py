@@ -25,7 +25,7 @@ from pyte.keys.unhearable import Unhearable
 
 from pymux.commands import CommandException, this_client
 from pymux.format import Language, format_pymux_string
-from pymux.ids import PaneId, PaneIndex, WindowId, WindowIndex
+from pymux.ids import PaneId, WindowId, WindowIndex
 from pymux.keys.key_spelling import why_pane_cannot_read
 from pymux.options.options import Option, Scope, SetOptionError
 
@@ -252,9 +252,7 @@ def find_pane(pymux: Pymux, target: str | None) -> Pane | None:
         return window.active_pane
 
     if pane_part.isdigit():
-        index = PaneIndex(int(pane_part))
-        if 0 <= index < len(window.panes):
-            return window.panes[index]
+        return window.pane_at_index(int(pane_part))
 
     return None
 

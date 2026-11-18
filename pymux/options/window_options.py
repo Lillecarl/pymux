@@ -86,6 +86,11 @@ class WindowOptions(Options):
         doc="What the message row says. It shows only while this draws something.",
         on_set=_redraw,
     )
+    pane_base_index: int = option(
+        0,
+        doc="The number of the first pane, as tmux has it: `#{pane_index}` and a target's `.N`. Lillecarl/pyterm#1035.",
+        choices=[0, 1],
+    )
     monitor_bell: bool = option(
         True,
         doc="Whether a bell nobody saw flags the window and the pane it rang in. Lillecarl/pyterm#503.",

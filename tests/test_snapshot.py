@@ -261,6 +261,7 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     stacked.options.monitor_activity = False
     stacked.options.monitor_silence = 30
     stacked.options.monitor_notification = False
+    stacked.options.pane_base_index = 1
     stacked.activity = stacked.silence = stacked.notified = True
     stacked.tags = {"role": "logs"}
     strip.tags = {"role": "build", "bare": None}

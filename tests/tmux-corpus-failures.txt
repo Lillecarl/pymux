@@ -1,5 +1,4 @@
 AdamWhittingham__tmux-config.conf line 40: pymux: invalid command: is_vim=echo "#{pane_current_command}" | grep -iqE "(^|\/)g?(view|n?vim?)(diff)?$"
-AdamWhittingham__tmux-config.conf line 91: pymux: Invalid option: pane-base-index
 AdamWhittingham__tmux-config.conf line 99: pymux: Invalid key: 'WheelUpPane'
 AdamWhittingham__tmux-config.conf line 100: pymux: Invalid key: 'WheelDownPane'
 AdamWhittingham__tmux-config.conf line 102: pymux: Invalid key: 'WheelUpPane'
@@ -86,8 +85,6 @@ craftzdog__dotfiles-public.conf line 44: pymux: IOError: [Errno 2] No such file 
 craftzdog__dotfiles-public.conf line 45: pymux: IOError: [Errno 2] No such file or directory: '$HOME/.config/tmux/statusline.conf'
 craftzdog__dotfiles-public.conf line 46: pymux: IOError: [Errno 2] No such file or directory: '$HOME/.config/tmux/utility.conf'
 dreamsofcode-io__tmux.conf line 1: pymux: Invalid option: terminal-overrides
-dreamsofcode-io__tmux.conf line 16: pymux: Invalid option: pane-base-index
-dreamsofcode-io__tmux.conf line 17: pymux: Invalid option: pane-base-index
 edouard-lopez__tmux-config.conf line 9: pymux: unrecognized arguments: # tmux 3.3a fix, see https://github.com/tinted-theming/base16-shell/issues/1
 edouard-lopez__tmux-config.conf line 24: pymux: nobody is attached to show a message to.
 edouard-lopez__tmux-config.conf line 26: pymux: IOError: [Errno 2] No such file or directory: '$HOME/.tmux/variables.tmux'
@@ -132,7 +129,6 @@ gpakosz__.tmux.conf line 157: pymux: invalid command: %if
 gpakosz__.tmux.conf line 159: pymux: invalid command: %endif
 gpakosz__.tmux.conf line 160: pymux: invalid command: %if
 gpakosz__.tmux.conf line 162: pymux: invalid command: %endif
-hamvocke__dotfiles.conf line 11: pymux: Invalid option: pane-base-index
 hamvocke__dotfiles.conf line 36: pymux: Invalid option: allow-rename
 hamvocke__dotfiles.conf line 55: pymux: Invalid option: terminal-overrides
 hamvocke__dotfiles.conf line 65: pymux: Invalid option: visual-activity
@@ -174,13 +170,11 @@ jbnicolai__tmux.conf line 80: pymux: unrecognized arguments: -t
 jbnicolai__tmux.conf line 81: pymux: unrecognized arguments: -t
 jbnicolai__tmux.conf line 97: pymux: Invalid key: 'WheelUpPane'
 jbnicolai__tmux.conf line 98: pymux: Invalid key: 'WheelDownPane'
-jbnicolai__tmux.conf line 103: pymux: Invalid option: pane-base-index
 jbnicolai__tmux.conf line 109: pymux: Invalid option: set-titles
 jbnicolai__tmux.conf line 116: pymux: invalid command: set -gq @osx-pasteboard true
 jbnicolai__tmux.conf line 119: pymux: invalid command: set -g default-command "reattach-to-user-namespace -l $SHELL"
 jbnicolai__tmux.conf line 125: pymux: invalid command: bind y run "tmux save-buffer - | reattach-to-user-namespace pbcopy"
 jmbuhr__tmux-kickstarter.conf line 16: pymux: Invalid option: terminal-overrides
-jmbuhr__tmux-kickstarter.conf line 21: pymux: Invalid option: pane-base-index
 jmbuhr__tmux-kickstarter.conf line 25: pymux: unrecognized arguments: # or primary secondary or clipboard
 jmbuhr__tmux-kickstarter.conf line 26: pymux: unrecognized arguments: # or clipboard primary or secondary
 joshmedeski__dotfiles.conf line 22: pymux: Invalid option: display-time
@@ -245,7 +239,6 @@ nicknisi__dotfiles.conf line 52: pymux: Invalid option: clear-on-attach
 nicknisi__dotfiles.conf line 55: pymux: Invalid option: pane-scrollbars
 nicknisi__dotfiles.conf line 58: pymux: Invalid option: copy-mode-line-numbers
 nicknisi__dotfiles.conf line 85: pymux: invalid command: select-pane -t = ; send-keys -M
-nicknisi__dotfiles.conf line 91: pymux: Invalid option: pane-base-index
 nicknisi__dotfiles.conf line 93: pymux: Invalid option: set-titles
 nicknisi__dotfiles.conf line 100: pymux: Invalid option: automatic-rename
 nicknisi__dotfiles.conf line 104: pymux: Invalid option: automatic-rename-format
@@ -303,7 +296,6 @@ samoshkin__tmux-config.conf line 13: pymux: Invalid option: automatic-rename
 samoshkin__tmux-config.conf line 14: pymux: Invalid option: aggressive-resize
 samoshkin__tmux-config.conf line 21: pymux: Invalid option: set-titles
 samoshkin__tmux-config.conf line 22: pymux: Invalid option: set-titles-string
-samoshkin__tmux-config.conf line 26: pymux: Invalid option: pane-base-index
 samoshkin__tmux-config.conf line 37: pymux: unrecognized arguments: # rename-session
 samoshkin__tmux-config.conf line 38: pymux: unrecognized arguments: # rename-window
 samoshkin__tmux-config.conf line 39: pymux: unrecognized arguments: # split-window -h
@@ -377,7 +369,6 @@ samoshkin__tmux-config.conf line 273: pymux: invalid command: wg_is_keys_off=#[f
 samoshkin__tmux-config.conf line 356: pymux: invalid command: source-file ~/.tmux/tmux.remote.conf
 samoshkin__tmux-config.conf line 381: pymux: unrecognized arguments: -S (pymux refresh-client)
 shfshanyue__tmux-config.conf line 2: pymux: Invalid option: prefix2
-shfshanyue__tmux-config.conf line 9: pymux: Invalid option: pane-base-index
 shfshanyue__tmux-config.conf line 12: pymux: Invalid option: allow-rename
 shfshanyue__tmux-config.conf line 13: pymux: Invalid option: automatic-rename
 shfshanyue__tmux-config.conf line 36: pymux: unrecognized arguments: # tomorrow night blue, base3
@@ -443,7 +434,6 @@ tedsluis__tmux.conf.conf line 104: pymux: Invalid option: status-bg
 tedsluis__tmux.conf.conf line 105: pymux: Invalid option: status-fg
 tedsluis__tmux.conf.conf line 106: pymux: Invalid option: status-attr
 thoughtbot__dotfiles.conf line 13: pymux: Invalid option: prefix2
-thoughtbot__dotfiles.conf line 17: pymux: Invalid option: pane-base-index
 thoughtbot__dotfiles.conf line 23: pymux: Invalid option: status-style
 tmux__tmux.conf line 9: pymux: Invalid option: window-status-current-style
 tmux__tmux.conf line 12: pymux: invalid command: %if

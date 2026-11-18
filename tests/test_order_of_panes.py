@@ -1,7 +1,7 @@
 """
 The order `Window.panes` is in, which is the order a person sees.
 
-`get_pane_index` is `panes.index(pane)`, and that number is what
+`get_pane_index` is `panes.index(pane)` plus `pane-base-index`, and that number is what
 `select-pane -t <n>` takes, what `display-panes` puts up, and what
 every title bar draws at its left edge. So the order is not an
 internal detail: it is on the screen all day.
@@ -53,6 +53,16 @@ def test_nested_split_is_numbered_where_it_sits():
     assert window.panes == [first, second]
     assert window.get_pane_index(first) == 0
     assert window.get_pane_index(second) == 1
+
+
+def test_pane_base_index_is_the_first_number():
+    "tmux's `pane-base-index`: what a pane shows and what `.N` takes. Lillecarl/pyterm#1035."
+    first, second = create_pane(), create_pane()
+    window = create_window(VSplit([first, second]))
+    window.options.pane_base_index = 1
+
+    assert [window.get_pane_index(pane) for pane in (first, second)] == [1, 2]
+    assert [window.pane_at_index(n) for n in (0, 1, 2, 3)] == [None, first, second, None]
 
 
 def test_strip_numbers_its_columns_from_left():

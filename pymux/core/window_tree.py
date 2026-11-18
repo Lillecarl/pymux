@@ -845,5 +845,10 @@ class Window:
         handle_side(HSplit, False, down)
 
     def get_pane_index(self, pane: Pane) -> PaneIndex:
-        "Return the index of the given pane. ValueError if not found."
-        return PaneIndex(self.panes.index(pane))
+        "The pane's number, from `pane-base-index`. ValueError if not found."
+        return PaneIndex(self.panes.index(pane) + self.options.pane_base_index)
+
+    def pane_at_index(self, index: int) -> Pane | None:
+        "The pane `get_pane_index` numbers `index`, or None."
+        position = index - self.options.pane_base_index
+        return self.panes[position] if 0 <= position < len(self.panes) else None
