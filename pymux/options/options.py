@@ -14,7 +14,7 @@ from ..core.session import OwnOptions
 from ..core.window_tree import Window
 from ..keys.actions import Origin, started_by_now
 from ..keys.key_mappings import PYMUX_TO_PROMPT_TOOLKIT_KEYS
-from ..keys.key_spelling import DEFAULT_PREFIX, key_however_it_is_written
+from ..keys.key_spelling import DEFAULT_PREFIX, NO_PREFIX, key_however_it_is_written
 from .client_options import ClientOptions
 from .option_fields import Declared, Options
 from .server_options import ServerOptions
@@ -335,6 +335,32 @@ class KeyPrefixOption(Option):
         self.set_value(pymux, DEFAULT_PREFIX)
 
 
+class SecondPrefixOption(Option):
+    "tmux's `prefix2`: a second key into the prefix table, or None."
+
+    @override
+    def get_all_values(self, pymux: Pymux) -> Iterable[str]:
+        return [NO_PREFIX, *PYMUX_TO_PROMPT_TOOLKIT_KEYS.keys()]
+
+    @override
+    def set_value(self, pymux: Pymux, value: str, target: Holder | None = None) -> None:
+        manager = pymux.key_bindings_manager
+        if value == NO_PREFIX:
+            manager.prefix2 = None
+            manager.prefix2_written = NO_PREFIX
+            return
+        try:
+            keys = key_however_it_is_written(value)
+        except ValueError:
+            raise SetOptionError("Invalid key: %r" % (value,))
+        manager.prefix2 = keys
+        manager.prefix2_written = value
+
+    @override
+    def unset(self, pymux: Pymux, target: Holder | None = None, *, default: bool = False) -> None:
+        self.set_value(pymux, NO_PREFIX)
+
+
 #: What the process holds, once for every session. Lillecarl/pyterm#759.
 ALL_SERVER_OPTIONS = {name: FieldOption(declared, Scope.SERVER) for name, declared in ServerOptions.DECLARED.items()}
 
@@ -344,6 +370,7 @@ ALL_OPTIONS: dict[str, Option] = {
 }
 # The prefix lives in the binding manager, which saves it with the keys.
 ALL_OPTIONS["prefix"] = KeyPrefixOption()
+ALL_OPTIONS["prefix2"] = SecondPrefixOption()
 
 
 #: What one attached terminal holds. A client announces the ones its

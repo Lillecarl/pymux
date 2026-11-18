@@ -102,7 +102,7 @@ async def test_prefix_alone_asks_for_frame():
         state.app.invalidate = lambda: (asked.append(True), real())[1]
 
         with set_app(state.app):
-            pymux.key_bindings_manager._prefix_binding(None)
+            pymux.key_bindings_manager._prefix_bindings[0](None)
 
         assert state.has_prefix
         assert asked
@@ -110,7 +110,7 @@ async def test_prefix_alone_asks_for_frame():
         asked.clear()
         pymux.session_defaults.which_key = False
         with set_app(state.app):
-            pymux.key_bindings_manager._prefix_binding(None)
+            pymux.key_bindings_manager._prefix_bindings[0](None)
 
         assert not asked
 

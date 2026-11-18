@@ -40,7 +40,7 @@ from ..grammar import print_arguments
 from ..notify.osc import PASSTHROUGH_VARIABLE, set_user_var
 from ..wayland.window_pane import WindowWidget
 from .actions import Kind, Origin, note, note_keys, started_by
-from .key_spelling import DEFAULT_PREFIX
+from .key_spelling import DEFAULT_PREFIX, NO_PREFIX
 from .mouse_keys import CLICK_TIMEOUT, MouseAt, MouseKey, MouseKind, MouseLocation, bound_key, key_of, mouse_at
 
 if TYPE_CHECKING:
@@ -240,7 +240,10 @@ class PymuxKeyBindings:
         self._prefix: tuple[str, ...] = ("c-b",)
         #: The prefix as the person wrote it, for the listings.
         self.prefix_written = DEFAULT_PREFIX
-        self._prefix_binding: Callable[[E], None] | None = None
+        #: tmux's `prefix2`: a second key that enters the prefix table, or None.
+        self._prefix2: tuple[str, ...] | None = None
+        self.prefix2_written = NO_PREFIX
+        self._prefix_bindings: list[Callable[[E], None]] = []
         self._prefix_again_binding: Callable[[E], None] | None = None
 
         # Load initial bindings.
@@ -276,8 +279,8 @@ class PymuxKeyBindings:
         pymux = self.pymux
 
         # Remove previous binding.
-        if self._prefix_binding:
-            self.custom_key_bindings.remove_binding(self._prefix_binding)
+        for binding in self._prefix_bindings:
+            self.custom_key_bindings.remove_binding(binding)
         if self._prefix_again_binding:
             self.custom_key_bindings.remove_binding(self._prefix_again_binding)
 
@@ -301,29 +304,35 @@ class PymuxKeyBindings:
 
         self._prefix_again_binding = send_prefix_handler
 
-        # Create new Python binding.
-        @self.custom_key_bindings.add(
-            *self._prefix,
-            filter=~(
-                HasPrefix(pymux)
-                | has_focus(COMMAND)
-                | has_focus(PROMPT)
-                | WaitsForConfirmation(pymux)
-                | ModeTakesPrefix(pymux)
-            ),
+        enters = ~(
+            HasPrefix(pymux)
+            | has_focus(COMMAND)
+            | has_focus(PROMPT)
+            | WaitsForConfirmation(pymux)
+            | ModeTakesPrefix(pymux)
         )
-        def enter_prefix_handler(event: E) -> None:
-            "Enter prefix mode."
-            client_state = pymux.get_client_state()
-            client_state.has_prefix = True
-            # The popup that lists what the prefix leads to draws only
-            # when something asks for a frame, and the prefix alone
-            # changes nothing else. `which-key` is the one thing that
-            # wants one here. Lillecarl/pyterm#31.
-            if client_state.session.options.which_key:
-                client_state.app.invalidate()
 
-        self._prefix_binding = enter_prefix_handler
+        # A handler of its own for each key: prompt_toolkit's
+        # `KeyBindings.remove` skips the second of two neighbouring
+        # bindings that share one.
+        self._prefix_bindings = []
+        for keys in (self._prefix, self._prefix2):
+            if keys is None:
+                continue
+
+            @self.custom_key_bindings.add(*keys, filter=enters)
+            def enter_prefix_handler(event: E) -> None:
+                "Enter prefix mode."
+                client_state = pymux.get_client_state()
+                client_state.has_prefix = True
+                # The popup that lists what the prefix leads to draws only
+                # when something asks for a frame, and the prefix alone
+                # changes nothing else. `which-key` is the one thing that
+                # wants one here. Lillecarl/pyterm#31.
+                if client_state.session.options.which_key:
+                    client_state.app.invalidate()
+
+            self._prefix_bindings.append(enter_prefix_handler)
 
     @property
     def prefix(self) -> tuple[str, ...]:
@@ -336,6 +345,15 @@ class PymuxKeyBindings:
         Set a new prefix key.
         """
         self._prefix = keys
+        self._load_prefix_binding()
+
+    @property
+    def prefix2(self) -> tuple[str, ...] | None:
+        return self._prefix2
+
+    @prefix2.setter
+    def prefix2(self, keys: tuple[str, ...] | None) -> None:
+        self._prefix2 = keys
         self._load_prefix_binding()
 
     def _load_builtins(self) -> KeyBindings:

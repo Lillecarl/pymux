@@ -25,9 +25,12 @@ def send_prefix(pymux: Pymux, args: argparse.Namespace) -> None:
     # one command that sends a key pymux keeps for itself goes the same
     # road as `send-keys`, and says the same thing when a pane cannot
     # hear it. Lillecarl/pyterm#239.
-    for key in pymux.key_bindings_manager.prefix:
+    manager = pymux.key_bindings_manager
+    keys = manager.prefix2 if args.second else manager.prefix
+    for key in keys or ():
         send_key(pane, event_however_it_is_written(key), key)
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    add_command(subparsers, send_prefix)
+    parser = add_command(subparsers, send_prefix)
+    parser.add_argument("-2", dest="second", action="store_true", help="Send `prefix2` in place of `prefix`.")

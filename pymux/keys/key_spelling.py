@@ -66,6 +66,7 @@ __all__ = [
     "ALIASES",
     "DEFAULT_PREFIX",
     "MODIFIERS_A_PERSON_WRITES",
+    "NO_PREFIX",
     "PREFIX",
     "SAME_MODIFIER",
     "TOGETHER",
@@ -110,6 +111,9 @@ PREFIX = "prefix"
 
 #: The prefix key a server starts with, and `set-option -u prefix` puts back.
 DEFAULT_PREFIX = "C-b"
+
+#: What `prefix2` holds when no second key enters the prefix table: tmux's word.
+NO_PREFIX = "None"
 
 
 #: The two modifiers that are not part of a key name.

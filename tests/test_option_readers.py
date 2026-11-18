@@ -29,6 +29,7 @@ from pymux.options.options import (
     ALL_WINDOW_OPTIONS,
     KeyPrefixOption,
     Scope,
+    SecondPrefixOption,
 )
 
 
@@ -114,13 +115,13 @@ def test_every_option_names_where_it_lives():
     """
     An option that keeps its value in an attribute names it, or the
     read side answers "not set" for a value that is set. The prefix
-    key is the one deliberate exception: it lives in the binding
+    keys are the deliberate exception: they live in the binding
     manager. Lillecarl/pyterm#496.
     """
     tables = (ALL_SERVER_OPTIONS, ALL_OPTIONS, ALL_WINDOW_OPTIONS, ALL_CLIENT_OPTIONS)
     for table in tables:
         for name, option in table.items():
-            assert option.attribute_name is not None or isinstance(option, KeyPrefixOption), name
+            assert option.attribute_name is not None or isinstance(option, (KeyPrefixOption, SecondPrefixOption)), name
 
 
 async def test_window_list_holds_window_options_only():
