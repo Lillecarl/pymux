@@ -78,13 +78,14 @@ def _one_line(error: str, path: Path, home: str) -> str:
     error = error.replace(str(path.parent) + "/", "").replace(home, "$HOME")
     # An object's address differs between runs, and the list must not.
     error = re.sub(r" at 0x[0-9a-f]+", "", error)
-    return " ".join(error.split())
+    # Nor the usage a refused line quotes: a new flag would change every
+    # line of that command.
+    return re.sub(r" \(pymux \S+ .*\)$", "", " ".join(error.split()))
 
 
 def reason(failure: str) -> str:
     "What a failure is about, without the file, the line or the usage."
-    reason = re.sub(r"^\S+ line \d+: (pymux: )?", "", failure)
-    return re.sub(r" \(pymux \S+ .*\)$", "", reason)
+    return re.sub(r"^\S+ line \d+: (pymux: )?", "", failure)
 
 
 async def main() -> int:

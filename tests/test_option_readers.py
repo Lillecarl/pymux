@@ -215,12 +215,25 @@ async def test_the_session_list_leaves_the_server_out():
         assert "status" in names
 
 
-async def test_a_window_command_names_set_option_for_a_server_option():
+async def test_a_known_option_is_set_in_its_own_scope_whichever_command_names_it():
+    "tmux's `options_scope_from_name`: `setw -g mode-keys vi` holds. Lillecarl/pyterm#1030."
     async with create_session() as (pymux, state):
         with set_app(state.app):
-            pymux.handle_command("set-window-option log-level debug")
+            pymux.handle_command("set-window-option -g mode-keys vi")
+            assert pymux.session_defaults.mode_keys == "vi"
+            pymux.handle_command("set-option -wg mode-keys emacs")
+            assert pymux.session_defaults.mode_keys == "emacs"
+            pymux.handle_command("set-option -g monitor-activity on")
+            assert pymux.window_defaults["monitor_activity"] is True
 
-        assert state.message == "log-level is a server option: use set-option"
+
+async def test_a_window_command_names_set_client_option_for_a_client_option():
+    "tmux has no client options, so the command that takes one is still named."
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("set-window-option theme grey")
+
+        assert state.message == "theme is a client option: use set-client-option"
 
 
 async def test_wrong_kind_of_option_is_unknown():

@@ -125,7 +125,15 @@ def set_option(
     option = find_option(pymux, name, scope)
 
     if option is None:
-        raise CommandException(_not_here(pymux, name, scope))
+        # A known option is set in its own scope, whichever command
+        # names it: `options_scope_from_name` in tmux's options.c, so
+        # `setw -g mode-keys vi` holds. A client option is pymux's
+        # alone, and its command is still named. Lillecarl/pyterm#1030.
+        home = next((each for each, table in pymux.option_tables.items() if name in table), None)
+        if home is None or home is Scope.CLIENT:
+            raise CommandException(_not_here(pymux, name, scope))
+        scope = home
+        option = pymux.option_tables[scope][name]
 
     if option.scope is Scope.SESSION:
         target = session_holder(pymux, args)
@@ -187,6 +195,9 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     )
     add_unset_argument(parser)
     parser.add_argument("-s", dest="s", action="store_true", help="A server option.")
+    parser.add_argument(
+        "-w", dest="w", action="store_true", help="A window option, as in tmux; the option's name says that too."
+    )
     add_target(parser, "-t", kind=Target.SESSION, dest="target_session", help="The session whose own value this is.")
     parser.add_argument("option", metavar="<option>")
     parser.add_argument("value", metavar="<value>", nargs="?")
