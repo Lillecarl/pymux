@@ -148,6 +148,13 @@ class _ShownWindow(NamedTuple):
     codec: str = ""
 
 
+class _Pending(NamedTuple):
+    "An update of one window pane on its way: how often the pane had left view, and its codec."
+
+    departures: int
+    codec: Codec | None
+
+
 class WindowFrames:
     """
     One client's window panes: what it holds of each, and the updates on their way.
@@ -174,9 +181,8 @@ class WindowFrames:
         #: The scrolls the renderer wrote since the window panes were
         #: last put: each may have moved one.
         self._scrolled: list[Scroll] = []
-        #: The window panes whose update is being encoded, and how often
-        #: each had left view when it started.
-        self._pending: dict[int, int] = {}
+        #: The window panes whose update is being encoded.
+        self._pending: dict[int, _Pending] = {}
         #: Pane id -> how often it left view. Leaving deletes this
         #: client's image, so an update encoded before is for an image
         #: that is gone. Lillecarl/pyterm#755.
@@ -269,14 +275,16 @@ class WindowFrames:
         if self.graphics.spawn is None:
             return
         departures = self._departures.get(view.pane_id, 0)
+        codec = self._codec_of(view)
         started = self._pending.get(view.pane_id)
         if started is not None:
             # Back in view while an update for the image it left is out:
-            # that one is dropped, and a whole frame follows it.
-            if started != departures:
+            # that one is dropped, and a whole frame follows it. A new
+            # `window-codec` draws nothing new, so its frame follows too.
+            if started != _Pending(departures, codec):
                 self._again[view.pane_id] = view
             return
-        self._pending[view.pane_id] = departures
+        self._pending[view.pane_id] = _Pending(departures, codec)
         outer_id = self.graphics.image_ids.id_of(view.pane_id, WINDOW_IMAGE)
         known = self._shown.get(view.pane_id)
         # Raw edits go on top of raw frames only: what a decoder made is
@@ -286,7 +294,12 @@ class WindowFrames:
 
     def _still_current(self, pane_id: int, generation: int) -> bool:
         "Is an update started at `generation` still for the image this client holds?"
-        return generation == self._generation and self._pending.get(pane_id) == self._departures.get(pane_id, 0)
+        pending = self._pending.get(pane_id)
+        return (
+            generation == self._generation
+            and pending is not None
+            and pending.departures == self._departures.get(pane_id, 0)
+        )
 
     async def _update(self, view: WindowView, outer_id: int, since: int | None, generation: int) -> None:
         "Await one window's update, and write it if the window still shows here."
