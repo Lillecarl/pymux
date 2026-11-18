@@ -28,6 +28,7 @@ from pyte.program_status import URGENCY
 from pymux import log
 from pymux.commands import CommandException
 from pymux.connection.rate import frames_per_second, per_second
+from pymux.options import user_options
 from pymux.tags import spelled
 
 if TYPE_CHECKING:
@@ -278,6 +279,9 @@ def _expand_variable(context: FormatContext, content: str) -> str:
         left, right = ([*_split_arguments(content[3:]), "", ""])[:2]
         same = _format_variables(context, left) == _format_variables(context, right)
         return "1" if same == equal else "0"
+
+    if user_options.is_user_option(content):
+        return user_options.find(context.pymux, content) or ""
 
     handler = tmux_variables.get(content)
     if handler is None:

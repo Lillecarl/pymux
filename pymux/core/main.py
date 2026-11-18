@@ -47,6 +47,7 @@ from ..notify.notifier import Notifier
 from ..options.options import ALL_CLIENT_OPTIONS, ALL_OPTIONS, ALL_SERVER_OPTIONS, ALL_WINDOW_OPTIONS, Scope
 from ..options.server_options import ServerOptions
 from ..options.session_options import SessionOptions
+from ..options.user_options import SCOPES as USER_OPTION_SCOPES
 from ..plugin_api.runner import Plugins
 from ..rc import STARTUP_COMMANDS
 from ..shims import Shims
@@ -203,6 +204,7 @@ class Pymux:
         "options": Keep.SAVED,
         "session_defaults": Keep.SAVED,
         "window_defaults": Keep.SAVED,
+        "user_options": Keep.SAVED,
         "set_by_hand": Keep.SAVED,
         "terminals": Keep.REBUILT,
         "outward": Keep.REBUILT,
@@ -263,14 +265,19 @@ class Pymux:
         #: `set-window-option -g` said: tmux's global window options. Each
         #: session's arrangement holds this same dict. Lillecarl/pyterm#971.
         self.window_defaults: dict[str, object] = {}
+        #: tmux's user options, `@name`, by the scope that holds them:
+        #: `pymux.options.user_options`. Lillecarl/pyterm#1032.
+        self.user_options: dict[Scope, dict[str, str]] = {scope: {} for scope in USER_OPTION_SCOPES}
         #: The fields of `options`, `session_defaults` and `window_defaults`,
-        #: and the names of the hooks, that a person set and no
-        #: configuration file did. Lillecarl/pyterm#969, Lillecarl/pyterm#970.
+        #: the names of the hooks, and `<scope> <name>` of the user
+        #: options, that a person set and no configuration file did.
+        #: Lillecarl/pyterm#969, Lillecarl/pyterm#970.
         self.set_by_hand: dict[str, set[str]] = {
             "options": set(),
             "session_defaults": set(),
             "window_defaults": set(),
             "hooks": set(),
+            "user_options": set(),
         }
         # `--log-level` told the logger before this server existed.
         self.options.hold("log_level", log.level())

@@ -238,6 +238,17 @@ class GlobalEnvironmentRow:
 
 
 @dataclass(frozen=True, slots=True)
+class UserOptionRow:
+    "A user option, `@name`, of one scope: `Pymux.user_options`. Lillecarl/pyterm#1032."
+
+    TABLE: ClassVar[str] = "user_options"
+    KEY: ClassVar[tuple[str, ...]] = ("scope", "name")
+    scope: str
+    name: str
+    value: str
+
+
+@dataclass(frozen=True, slots=True)
 class SessionRow:
     TABLE: ClassVar[str] = "sessions"
     KEY: ClassVar[tuple[str, ...]] = ("session_id",)
@@ -703,6 +714,7 @@ ROWS = (
     SessionDefaultRow,
     SetByHandRow,
     GlobalEnvironmentRow,
+    UserOptionRow,
     SessionRow,
     SessionEnvironmentRow,
     SessionTagRow,

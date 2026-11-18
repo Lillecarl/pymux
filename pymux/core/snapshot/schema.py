@@ -187,7 +187,7 @@ WRITES: dict[str, frozenset[str]] = {
         | {"created", "server_id", "socket_name", "listener", "original_cwd", "source_files", "_startup_done"}
         | {"clipboard", "named_buffers", "prompt_history", "message_log", "hooks", "key_bindings_manager"}
         | {"notifications", "notification_center", "wait_channels"}
-        | {"options", "session_defaults", "window_defaults", "set_by_hand"}
+        | {"options", "session_defaults", "window_defaults", "user_options", "set_by_hand"}
     ),
 }
 

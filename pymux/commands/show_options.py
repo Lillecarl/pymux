@@ -11,6 +11,7 @@ from pymux.commands import CommandException, CommandParser, Target, add_command,
 from pymux.commands.common import answer, option_as_written
 from pymux.commands.set_option import find_option, session_holder
 from pymux.core.session import OwnOptions
+from pymux.options import user_options
 from pymux.options.options import Option, Scope
 
 
@@ -26,7 +27,10 @@ def show_options(pymux: Pymux, args: argparse.Namespace) -> None:
     Lillecarl/pyterm#300, Lillecarl/pyterm#759.
 
     A session reads what `-t` names, or the caller's; `-g` reads the
-    defaults. `-A` marks a value the session did not set itself with
+    defaults. `-q` answers nothing for an option there is not, and `-v`
+    is accepted for tmux: a name already answers with the value alone.
+    A user option, `@name`, reads the one `set -g @name` wrote, or the
+    server's with `-s`. Lillecarl/pyterm#1032. `-A` marks a value the session did not set itself with
     `*` after its name, which is how tmux spells an inherited one.
     Lillecarl/pyterm#758.
     """
@@ -36,9 +40,18 @@ def show_options(pymux: Pymux, args: argparse.Namespace) -> None:
         return holder if option.scope is Scope.SESSION else None
 
     name = args.option
+    if name and user_options.is_user_option(name):
+        value = pymux.user_options[user_options.read_scope(args, Scope.SESSION)].get(name)
+        if value is None and not getattr(args, "q", False):
+            raise CommandException("Invalid option: %s" % (name,))
+        answer(pymux, value or "")
+        return
     if name:
         option = find_option(pymux, name, Scope.SESSION)
         if option is None:
+            if getattr(args, "q", False):
+                answer(pymux, "")
+                return
             raise CommandException("Unknown option: %s" % (name,))
         answer(pymux, option_as_written(pymux, option, args, target_of(option)))
         return
@@ -71,5 +84,7 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser.add_argument(
         "-A", dest="A", action="store_true", help="Mark with * a value the session reads from the default."
     )
+    parser.add_argument("-q", dest="q", action="store_true", help="Answer nothing for an option there is not.")
+    parser.add_argument("-v", dest="v", action="store_true", help="Accepted for tmux: a name answers with the value.")
     add_target(parser, "-t", kind=Target.SESSION, dest="target_session", help="The session to read.")
     parser.add_argument("option", metavar="<option>", nargs="?")

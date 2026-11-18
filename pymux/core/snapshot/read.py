@@ -28,6 +28,7 @@ from ...keys.key_spelling import key_however_it_is_written
 from ...notify.notifications import Notification, NotificationSource, Route
 from ...options.client_options import ClientOptions
 from ...options.option_fields import Options
+from ...options.options import Scope
 from ...options.server_options import ServerOptions
 from ...options.session_options import SessionOptions
 from ...options.tables import (
@@ -69,6 +70,7 @@ from ...options.tables import (
     SetByHandRow,
     SplitRow,
     SplitWeightRow,
+    UserOptionRow,
     ViewerRow,
     WaitChannelRow,
     WindowDefaultRow,
@@ -418,6 +420,9 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
         for attribute, value in loaded_options(WindowOptions, row).items():
             if attribute in by_hand["window_defaults"]:
                 pymux.window_defaults[attribute] = value
+    for row in select(db, UserOptionRow):
+        if "%s %s" % (row.scope, row.name) in by_hand["user_options"]:
+            pymux.user_options[Scope(row.scope)][row.name] = row.value
     pymux.set_by_hand = by_hand
     _read_bindings(pymux, db)
     pymux.global_environment = {row.name: row.value for row in select(db, GlobalEnvironmentRow)}

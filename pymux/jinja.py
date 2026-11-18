@@ -40,6 +40,7 @@ from jinja2.meta import find_undeclared_variables
 from jinja2.sandbox import SandboxedEnvironment
 
 from .log import logger
+from .options import user_options
 
 if TYPE_CHECKING:
     from pymux.format import FormatContext
@@ -70,6 +71,12 @@ EXTRA_FACTS: dict[str, Callable[[FormatContext], object]] = {
     "session_tags": lambda context: dict(context.session.tags),
     "window_tags": lambda context: dict(context.the_window().tags),
     "pane_tags": lambda context: dict(context.the_pane().tags),
+    # tmux's `@name`, read in `#{@name}`'s order: `{{ user_options['@theme'] }}`.
+    "user_options": lambda context: {
+        name: value
+        for scope in reversed(user_options.SCOPES)
+        for name, value in context.pymux.user_options[scope].items()
+    },
 }
 
 

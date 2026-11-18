@@ -105,6 +105,18 @@ async def test_a_name_nobody_knows_draws_nothing(pymux):
     assert format_pymux_string(pymux, "{{ not_a_variable.nor_this }}") == ""
 
 
+async def test_both_languages_read_a_user_option_in_tmuxs_order(pymux):
+    "`#{@name}` reads the server's, the windows', then the sessions'. Lillecarl/pyterm#1032."
+    pymux.handle_command("set-option -g @bar session")
+    pymux.handle_command("set-option -g @only session-only")
+    pymux.handle_command("set-window-option -g @bar window")
+
+    assert format_pymux_string(pymux, "#{@bar} #{@only}#{@nobody}") == "window session-only"
+    assert format_pymux_string(pymux, "{{ user_options['@bar'] }} {{ user_options['@only'] }}") == (
+        "window session-only"
+    )
+
+
 async def test_a_template_that_does_not_parse_says_so(pymux):
     """
     Not silence. The tmux path loses one variable when it cannot

@@ -66,6 +66,7 @@ from ...options.tables import (
     SetByHandRow,
     SplitRow,
     SplitWeightRow,
+    UserOptionRow,
     ViewerRow,
     WaitChannelRow,
     WindowDefaultRow,
@@ -435,6 +436,9 @@ def rows_of(pymux: Pymux, *, mirrored: bool) -> Iterator[Row]:
             yield SetByHandRow(holder, attribute)
     for name, value in sorted(pymux.global_environment.items()):
         yield GlobalEnvironmentRow(name, value)
+    for scope, values in pymux.user_options.items():
+        for name, value in sorted(values.items()):
+            yield UserOptionRow(str(scope), name, value)
 
     for position, session in enumerate(_sessions(pymux, mirrored)):
         yield from session_rows(session, position)

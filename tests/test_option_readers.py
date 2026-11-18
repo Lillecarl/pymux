@@ -243,6 +243,50 @@ async def test_a_appends_to_a_string_option_and_sets_any_other():
             assert pymux.session_defaults.base_index == 3
 
 
+async def test_a_user_option_is_kept_and_read_back():
+    "tmux's `@name`: a string pymux gives no meaning. Lillecarl/pyterm#1032."
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("set-option -g @plugin tmux-plugins/tpm")
+            pymux.handle_command("set-option -ag @plugin /sensible")
+            pymux.handle_command("show-options -gv @plugin")
+            assert state.message == "tmux-plugins/tpm/sensible"
+
+            pymux.handle_command("set-window-option -g @theme dark")
+            pymux.handle_command("set-option -s @where server")
+            assert pymux.user_options == {
+                Scope.SERVER: {"@where": "server"},
+                Scope.WINDOW: {"@theme": "dark"},
+                Scope.SESSION: {"@plugin": "tmux-plugins/tpm/sensible"},
+            }
+
+            pymux.handle_command("set-option -gu @plugin")
+            pymux.handle_command("show-options -gqv @plugin")
+            assert state.message == ""
+            with pytest.raises(CommandException, match="Invalid option: @plugin"):
+                show_options(pymux, argparse.Namespace(g=1, option="@plugin", target_session=None))
+
+
+async def test_a_user_option_has_one_value_for_every_session_window_and_pane():
+    "A value of one's own is Lillecarl/pyterm#1038, and the refusal says so."
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("set-option @mine x")
+            assert "Lillecarl/pyterm#1038" in state.message
+            pymux.handle_command("set-option -p @mine x")
+            assert "every pane" in state.message
+            assert pymux.user_options[Scope.SESSION] == {}
+
+
+async def test_q_sets_quietly_past_an_option_pymux_does_not_have():
+    "tmux's `set -q`, which configurations write for an option of another version."
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("set-option -gq no-such-option on")
+
+        assert state.message is None
+
+
 async def test_a_window_command_names_set_client_option_for_a_client_option():
     "tmux has no client options, so the command that takes one is still named."
     async with create_session() as (pymux, state):

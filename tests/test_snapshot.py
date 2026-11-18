@@ -57,6 +57,7 @@ from pymux.keys.actions import Origin, started_by
 from pymux.notify.notifications import Urgency
 from pymux.options import tables
 from pymux.options.client_options import ClientOptions
+from pymux.options.options import Scope
 from pymux.options.server_options import ServerOptions
 from pymux.options.session_options import SessionOptions
 from pymux.query import ask
@@ -297,6 +298,9 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     pymux.set_by_hand["window_defaults"].update(defaults)
     assert second.arrangement.window_defaults is pymux.window_defaults
     pymux.global_environment["UNSET"] = None
+    pymux.user_options[Scope.SESSION]["@plugin"] = "tmux-plugins/tpm"
+    pymux.user_options[Scope.WINDOW]["@theme"] = "dark"
+    pymux.set_by_hand["user_options"].update({"session @plugin", "window @theme"})
     pymux.options.set_clipboard = Clipboard.ON
     pymux.options.forward_mode = ForwardMode.ASK
     pymux.options.job_ttl = 60
@@ -938,23 +942,35 @@ def _configure(mux: Pymux, *lines: str) -> None:
 
 
 def test_an_upgrade_takes_the_new_file_and_keeps_what_a_person_set(pymux, tmp_path):
-    "Lillecarl/pyterm#969."
+    "Lillecarl/pyterm#969, and for a user option Lillecarl/pyterm#1032."
     _configure(
         pymux,
         "set-option -g status-right old",
         "set-option -g status-left old",
         "set-option -g default-terminal old",
         "set-option -g job-ttl 10",
+        "set-option -g @file old",
+        "set-option -g @person old",
     )
     pymux.handle_command("set-option -g status-left mine")
+    pymux.handle_command("set-option -g @person mine")
     pymux.handle_command("set-option -g job-ttl 20")
     pymux.handle_command("set-option -u -g job-ttl")
     path = tmp_path / "upgrade.sqlite"
     save(pymux, path)
 
     loaded = Pymux()
-    _configure(loaded, "set-option -g status-right new", "set-option -g status-left new", "set-option -g job-ttl 30")
+    _configure(
+        loaded,
+        "set-option -g status-right new",
+        "set-option -g status-left new",
+        "set-option -g job-ttl 30",
+        "set-option -g @file new",
+        "set-option -g @person new",
+    )
     load(loaded, path)
+
+    assert loaded.user_options[Scope.SESSION] == {"@file": "new", "@person": "mine"}
 
     assert loaded.session_defaults.status_right == "new"
     assert loaded.session_defaults.status_left == "mine"
@@ -965,6 +981,7 @@ def test_an_upgrade_takes_the_new_file_and_keeps_what_a_person_set(pymux, tmp_pa
         "session_defaults": {"status_left"},
         "window_defaults": set(),
         "hooks": set(),
+        "user_options": {"session @person"},
     }
 
 

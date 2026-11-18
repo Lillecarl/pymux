@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 
 from pymux.commands import CommandException, CommandParser, Target, add_command, add_target
 from pymux.commands.common import answer, option_as_written, session_of_target
+from pymux.options import user_options
 from pymux.options.options import FieldOption, Option, Scope, SetOptionError, a_file_speaks
 
 #: Which command sets an option of each scope.
@@ -126,6 +127,10 @@ def set_option(
     name = args.option
     value = args.value
 
+    if user_options.is_user_option(name):
+        _set_user_option(pymux, args, scope, name, value)
+        return
+
     option = find_option(pymux, name, scope)
 
     if option is None:
@@ -134,6 +139,8 @@ def set_option(
         # `setw -g mode-keys vi` holds. A client option is pymux's
         # alone, and its command is still named. Lillecarl/pyterm#1030.
         home = next((each for each, table in pymux.option_tables.items() if name in table), None)
+        if home is None and getattr(args, "q", False):
+            return
         if home is None or home is Scope.CLIENT:
             raise CommandException(_not_here(pymux, name, scope))
         scope = home
@@ -173,12 +180,41 @@ def set_option(
         raise CommandException(e.message)
 
 
+def _set_user_option(
+    pymux: Pymux, args: argparse.Namespace, command_scope: Scope, name: str, value: str | None
+) -> None:
+    """
+    `@name`: a string pymux keeps and gives no meaning, as tmux does.
+    `-a` on one that is not set sets it. Lillecarl/pyterm#1032.
+    """
+    if command_scope is Scope.CLIENT:
+        raise CommandException("A user option belongs to the server, a session or a window: use set-option")
+    try:
+        scope = user_options.scope_of(pymux, args, command_scope)
+    except ValueError as error:
+        raise CommandException(str(error)) from None
+    values = pymux.user_options[scope]
+    if args.unset:
+        values.pop(name, None)
+    elif value is None:
+        if name not in values:
+            raise CommandException("Invalid option: %s" % (name,))
+        answer(pymux, "%s %s" % (name, values[name]))
+        return
+    else:
+        values[name] = values.get(name, "") + value if getattr(args, "a", False) else value
+    user_options.mark(pymux, scope, name)
+    pymux.invalidate()
+
+
 def _appended(pymux: Pymux, option: Option, args: argparse.Namespace, target: Holder | None, value: str) -> str:
     """
     `-a`: what a string option holds, with `value` after it.
 
-    tmux's `options_set_string`: a style option puts a comma between the
-    two, and an option that is not a string takes `value` as it is.
+    tmux's `options_set_string`: an option that is not a string takes
+    `value` as it is. tmux puts a separator between the two only for an
+    option whose `options-table.c` entry names one, and pymux has none
+    of those.
     Lillecarl/pyterm#1031.
     """
     if not isinstance(option, FieldOption) or type(option.declared.default) is not str:
@@ -187,10 +223,7 @@ def _appended(pymux: Pymux, option: Option, args: argparse.Namespace, target: Ho
         old = pymux.window_defaults.get(option.declared.attribute, option.declared.default)
     else:
         old = option.read(option.held_by(pymux, target))
-    if not old:
-        return value
-    separator = "," if option.declared.name.endswith("-style") else ""
-    return "%s%s%s" % (old, separator, value)
+    return "%s%s" % (old or "", value)
 
 
 def _drop_every_own_value(pymux: Pymux, option: Option, args: argparse.Namespace) -> None:
@@ -235,6 +268,8 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser.add_argument(
         "-w", dest="w", action="store_true", help="A window option, as in tmux; the option's name says that too."
     )
+    parser.add_argument("-p", dest="p", action="store_true", help="A pane's own value, as in tmux; pymux keeps none.")
+    parser.add_argument("-q", dest="q", action="store_true", help="No error for an option pymux does not have.")
     add_target(parser, "-t", kind=Target.SESSION, dest="target_session", help="The session whose own value this is.")
     parser.add_argument("option", metavar="<option>")
     parser.add_argument("value", metavar="<value>", nargs="?")
