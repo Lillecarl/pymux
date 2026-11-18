@@ -46,7 +46,7 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
         action="store_true",
         help="Show stderr. Stdout otherwise.",
     )
-    add_target(parser, "job", kind=Target.JOB, type=int, nargs="?", help="The id `run` answered with.")
+    add_target(parser, "job", kind=Target.JOB, type=int, nargs="?", help="The id `run-job` answered with.")
     parser.add_argument(
         "--tag",
         "-T",

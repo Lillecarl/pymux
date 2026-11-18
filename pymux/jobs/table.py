@@ -129,7 +129,7 @@ class JobTable:
         """
         Record a job. Starting it is `supervise`, in the caller's task.
 
-        The environment falls back to the server's own: `run` passes what
+        The environment falls back to the server's own: `run-job` passes what
         the calling packet said, and anything else -- a key binding,
         an old client -- runs where the server stands.
         """

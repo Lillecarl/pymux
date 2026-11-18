@@ -66,7 +66,7 @@ def parse_env(word: str) -> tuple[str, str]:
 
 
 #: The tag a job's session is stamped as. The client never writes it
-#: into the command: the packet says who called, and `run` stamps what
+#: into the command: the packet says who called, and `run-job` stamps what
 #: it said. A hand-typed tag of this name filters like any other tag.
 SESSION_TAG = "session"
 
@@ -126,10 +126,10 @@ class Job:
         #: What the job is called by, as key to value: a bare key
         #: carries no value, and a repeated key keeps its last one.
         #: The `session` key names the agent session that ran it, when
-        #: one did: `run` stamps what the calling packet said.
+        #: one did: `run-job` stamps what the calling packet said.
         self.tags: Tags = dict(tags)
         #: What the process starts with: the caller's environment and
-        #: the `--env` of the `run`, or the server's own where no
+        #: the `--env` of the `run-job`, or the server's own where no
         #: caller said anything. In-memory only, like everything else
         #: here but the queryable columns.
         self.env: dict[str, str] = dict(env) if env else {}

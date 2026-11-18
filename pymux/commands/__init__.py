@@ -175,7 +175,7 @@ MODULES = [
     "forward_port",
     "unforward_port",
     "list_forwards",
-    "run",
+    "run_job",
     "wait_job",
     "list_jobs",
     "list_processes",
@@ -262,7 +262,7 @@ class Target(StrEnum):
     SLOT = "slot"
     #: A client of this server. Another server has no name for it.
     CLIENT = "client"
-    #: A job of this server, by the id `run` answered with. Another
+    #: A job of this server, by the id `run-job` answered with. Another
     #: server has no name for it.
     JOB = "job"
 

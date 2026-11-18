@@ -30,7 +30,7 @@ def kill_job(pymux: Pymux, args: argparse.Namespace):
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, kill_job, name="kill-job")
-    add_target(parser, "job", kind=Target.JOB, type=int, nargs="?", help="The id `run` answered with.")
+    add_target(parser, "job", kind=Target.JOB, type=int, nargs="?", help="The id `run-job` answered with.")
     parser.add_argument(
         "--tag",
         "-T",

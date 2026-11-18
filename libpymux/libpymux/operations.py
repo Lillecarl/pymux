@@ -698,10 +698,10 @@ def run_job(
     """
     Start `command` through the shell, as a job, and answer it.
 
-    The command goes as one word, which `run` reads as a whole command
+    The command goes as one word, which `run-job` reads as a whole command
     line, so `echo a; echo b` stays two commands of one shell.
     """
-    arguments = ["run"]
+    arguments = ["run-job"]
     for key, value in tags.items():
         arguments += ["--tag", _tag_word(key, value)]
     if directory is not None:

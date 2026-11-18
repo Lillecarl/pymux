@@ -5,13 +5,13 @@ description: Run background jobs with pymux instead of foreground commands, then
 
 # pymux jobs
 
-`pymux run` starts a command as a server-owned job and answers with
+`pymux run-job` starts a command as a server-owned job and answers with
 its id. The job runs without a pane -- pipes instead of a terminal,
-unless `run --pty` gives it one -- so submit it, go away, and follow
+unless `run-job --pty` gives it one -- so submit it, go away, and follow
 it later.
 
 ```sh
-pymux run --tag deploy -- ./build.sh
+pymux run-job --tag deploy -- ./build.sh
 ```
 
 `pymux tail` replays the last lines and follows the rest live, and
@@ -22,16 +22,16 @@ bound, and short ones cost nothing, since tailing again picks up
 where the last one stopped.
 
 ```sh
-pymux run --tag deploy -- ./build.sh
+pymux run-job --tag deploy -- ./build.sh
 pymux tail --tag deploy --timeout 90; echo rc=$?
 pymux tail --tag deploy --timeout 90 --lines 0; echo rc=$?
 ```
 
-Or skip the second turn: `run --timeout` streams a fresh job the
+Or skip the second turn: `run-job --timeout` streams a fresh job the
 same way, and past the timeout the job keeps running under its tag.
 
 ```sh
-pymux run --tag deploy --timeout 90 -- ./build.sh; echo rc=$?
+pymux run-job --tag deploy --timeout 90 -- ./build.sh; echo rc=$?
 ```
 
 The codes: 0 done, and anything else the job's own exit. 124 still
@@ -49,7 +49,7 @@ Two rules matter, and both bite after the id has scrolled past:
   different tags.
 
 ```sh
-pymux run --tag deploy --tag branch=main -- ./build.sh
+pymux run-job --tag deploy --tag branch=main -- ./build.sh
 ```
 
 A bare run inherits the caller's working directory and the caller's
@@ -57,7 +57,7 @@ full environment, so it behaves like the same command in the calling
 shell. Explicit `-d` wins over the inherited directory, and explicit
 `--env KEY=VALUE` wins over inherited variables; a bare `--env KEY`
 sets the empty string. Every job also carries `PYMUX_JOB` with its
-id. `run --pty` runs the command on a terminal of its own instead of
+id. `run-job --pty` runs the command on a terminal of its own instead of
 pipes, for the program that needs one to behave; tailing stays the
 same, with the whole terminal output in the stdout tail.
 
@@ -67,7 +67,7 @@ forgotten past `job-ttl` seconds, an hour unless set: a running one
 is ended first, a tailed one never goes, zero keeps everything. A
 lookup prefers the caller's session -- its jobs sort first -- and
 anything else is fallback rather than a miss; only an explicit
-`--session ID` scopes the search to that session alone, and `run
+`--session ID` scopes the search to that session alone, and `run-job
 --session ID` stamps that id instead. The session travels by itself
 with no flag to remember.
 
@@ -78,11 +78,11 @@ no exit code and no early return. `tail --timeout 90` holds,
 reports, and stops in time; that is what it is for.
 
 No `&`, `nohup`, or `setsid`: a backgrounded shell command is a job
-pymux cannot see, follow, or read back. `run` is the backgrounding.
+pymux cannot see, follow, or read back. `run-job` is the backgrounding.
 
 No `pkill` / `pgrep` for job control: name the job, don't hunt the
 process. `kill-job --tag deploy` ends one early with SIGTERM.
 
-No re-running to check: `run` again starts a second job, it does not
+No re-running to check: `run-job` again starts a second job, it does not
 look at the first. `tail --timeout 0` replays without waiting when
 one peek is enough.

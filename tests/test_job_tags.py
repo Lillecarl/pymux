@@ -1,13 +1,13 @@
 """
 Key-value tags on jobs.
 
-The rules this judges: `run --tag` takes a bare key or a key with a
+The rules this judges: `run-job --tag` takes a bare key or a key with a
 value, and a tag without a key refuses; the tags land in the database
 with the row, a repeated key keeping its last value and a bare key
 carrying NULL rather than an empty string; `list-jobs` names them;
 and the `by_tag` seed finds what a tag names.
 
-The session is one tag among them: `run` stamps what the calling
+The session is one tag among them: `run-job` stamps what the calling
 packet said, an explicit `--session` stamps instead, and lookups
 prefer the caller's session without ever hiding another's.
 """
@@ -26,7 +26,7 @@ from session import create_session
 
 from pymux.answer import Answer
 from pymux.commands import CommandException, handle_command
-from pymux.commands.run import run_job
+from pymux.commands.run_job import run_job
 from pymux.commands.show_job import show_job
 from pymux.jobs.job import parse_env
 from pymux.jobs.table import find_job
@@ -68,7 +68,7 @@ async def test_run_tags_a_job_end_to_end():
         pymux.answer = Answer()
         try:
             with set_app(state.app):
-                answer = handle_command(pymux, "run --tag deploy --tag branch=main -w true")
+                answer = handle_command(pymux, "run-job --tag deploy --tag branch=main -w true")
                 if answer is not None:
                     await answer
         finally:
@@ -150,7 +150,7 @@ async def test_jobs_default_to_no_session():
 
 async def test_run_stamps_the_callers_session():
     async with create_session() as (pymux, state):
-        for command in ("run --tag a -w true", "run --tag b --session s2 -w true"):
+        for command in ("run-job --tag a -w true", "run-job --tag b --session s2 -w true"):
             await answered(pymux, state, command, AGENT)
         by_tag = {tag: job.session for job in pymux.jobs.listing() for tag in job.tags}
         assert by_tag == {"a": "s1", "b": "s2", "session": "s2"}
@@ -158,7 +158,7 @@ async def test_run_stamps_the_callers_session():
 
 async def test_a_hand_typed_session_tag_is_left_alone():
     async with create_session() as (pymux, state):
-        await answered(pymux, state, "run --tag session=s9 -w true", AGENT)
+        await answered(pymux, state, "run-job --tag session=s9 -w true", AGENT)
         (job,) = pymux.jobs.listing()
         assert job.session == "s9"
 
@@ -224,7 +224,7 @@ async def test_find_job_prefers_the_caller_and_scopes_the_flag():
 async def test_run_inherits_the_callers_directory_and_environment():
     async with create_session() as (pymux, state):
         caller = CallerContext(session_id=None, environment={**dict(os.environ), "AGENT_MARKER": "here"}, cwd="/tmp")
-        command = "run --tag x --env EXTRA=yes -w sh -c 'echo $AGENT_MARKER:$EXTRA; pwd'"
+        command = "run-job --tag x --env EXTRA=yes -w sh -c 'echo $AGENT_MARKER:$EXTRA; pwd'"
         said = (await answered(pymux, state, command, caller)).output
         (job,) = pymux.jobs.listing()
         assert job.directory == "/tmp"
@@ -240,7 +240,7 @@ async def test_run_without_a_caller_runs_where_the_server_stands():
         pymux.answer = Answer()
         try:
             with set_app(state.app):
-                answer = handle_command(pymux, "run --tag x -w true")
+                answer = handle_command(pymux, "run-job --tag x -w true")
                 if answer is not None:
                     await answer
         finally:

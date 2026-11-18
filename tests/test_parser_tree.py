@@ -55,6 +55,16 @@ def test_tmux_spellings_from_real_configurations_resolve():
     assert "lextl" not in ALIASES
 
 
+def test_run_is_tmux_run_shell_and_the_job_command_is_run_job():
+    "TPM's `run '~/.tmux/plugins/tpm/tpm'` reaches `run-shell`. Lillecarl/pyterm#1028."
+    from pymux.commands.aliases import ALIASES
+
+    _parser, subparsers = parser_tree()
+    assert ALIASES["run"] == "run-shell"
+    assert "run" not in subparsers.choices
+    assert "run-job" in subparsers.choices
+
+
 def test_value_option_is_read_as_its_dest():
     """
     A handler asks for the value by the dest its declaration names:

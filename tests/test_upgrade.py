@@ -432,7 +432,7 @@ def _job_count(sock) -> str:
 @pytest.mark.parametrize("streams", [["--pty"], []], ids=["on a terminal", "on pipes"])
 def test_an_upgrade_keeps_a_running_job(server, streams):
     "The exec keeps it a child, so the new image reads it on and hears its end. Lillecarl/pyterm#738."
-    job = _answer(server, "run", *streams, _job_count(server)).strip()
+    job = _answer(server, "run-job", *streams, _job_count(server)).strip()
     said = cli(server, "upgrade-server", shlex.join([sys.executable, "-m", "pymux"]))
     assert said.returncode == 0, said.stderr.decode()
     (server.parent / GO).touch()
@@ -449,7 +449,7 @@ def _pane_ids(sock) -> set[str]:
 
 def test_an_upgrade_keeps_a_pane_that_views_a_job(server):
     "The new server views the job again, and says once how it ended. Lillecarl/pyterm#717."
-    job = _answer(server, "run", _job_count(server)).strip()
+    job = _answer(server, "run-job", _job_count(server)).strip()
     split = _answer(server, "split-window", "-d", "-P", "-F", "#{pane_id}").strip()
     before = _pane_ids(server)
     # The viewer takes the place of the split, under an id of its own.

@@ -169,9 +169,9 @@ def test_several_files_run_in_order_and_each_names_itself(tmp_path):
 
 
 async def test_a_job_from_a_file_starts_with_nobody_to_tell(tmp_path):
-    "`run` answers with the job's id, and a file has no client to show it to."
+    "`run-job` answers with the job's id, and a file has no client to show it to."
     path = tmp_path / "pymux.conf"
-    path.write_text("run true\n")
+    path.write_text("run-job true\n")
 
     pymux = Pymux()
     async with pymux.running():

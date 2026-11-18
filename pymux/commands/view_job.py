@@ -56,7 +56,7 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, view_job, name="view-job")
     parser.add_argument("-k", dest="k", action="store_true", help="Kill a program that still runs.")
     add_target(parser, "-t", kind=Target.PANE, dest="target_pane", help="The pane to replace.")
-    add_target(parser, "job", kind=Target.JOB, type=int, nargs="?", help="The id `run` answered with.")
+    add_target(parser, "job", kind=Target.JOB, type=int, nargs="?", help="The id `run-job` answered with.")
     parser.add_argument(
         "--tag",
         "-T",

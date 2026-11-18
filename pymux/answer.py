@@ -30,7 +30,7 @@ class Answer:
     """
 
     #: Who sent the command, and from where. The job commands read it:
-    #: `run` stamps the session and inherits the directory and the
+    #: `run-job` stamps the session and inherits the directory and the
     #: environment, and the lookups prefer the session.
     caller: CallerContext | None = None
     output: list[str] = field(default_factory=list)

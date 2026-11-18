@@ -47,7 +47,7 @@ async def _tags_of(pymux, job_id) -> dict:
 
 async def test_a_finished_job_idle_past_its_time_is_forgotten():
     async with create_session() as (pymux, state):
-        await _run_answering(pymux, state, "run -w --tag gone true")
+        await _run_answering(pymux, state, "run-job -w --tag gone true")
         job = pymux.jobs.get(1)
         assert job is not None and job.is_done
         job.last_active -= 7200
@@ -61,7 +61,7 @@ async def test_a_finished_job_idle_past_its_time_is_forgotten():
 
 async def test_a_fresh_finished_job_stays():
     async with create_session() as (pymux, state):
-        await _run_answering(pymux, state, "run -w true")
+        await _run_answering(pymux, state, "run-job -w true")
         job = pymux.jobs.get(1)
         assert job is not None and job.is_done
 
@@ -73,7 +73,7 @@ async def test_a_fresh_finished_job_stays():
 
 async def test_output_counts_as_activity():
     async with create_session() as (pymux, state):
-        await _run_answering(pymux, state, "run -w echo hi")
+        await _run_answering(pymux, state, "run-job -w echo hi")
         job = pymux.jobs.get(1)
         assert job is not None and job.is_done
         # Old start, but the output just landed.
@@ -87,7 +87,7 @@ async def test_output_counts_as_activity():
 
 async def test_a_running_job_idle_past_its_time_is_ended():
     async with create_session() as (pymux, state):
-        await run_as(pymux, state, "run sleep 30")
+        await run_as(pymux, state, "run-job sleep 30")
         job = pymux.jobs.get(1)
         assert job is not None and not job.is_done
         job.last_active -= 7200
@@ -103,7 +103,7 @@ async def test_a_running_job_idle_past_its_time_is_ended():
 
 async def test_a_waited_job_stays_however_idle():
     async with create_session() as (pymux, state):
-        await run_as(pymux, state, "run sleep 30")
+        await run_as(pymux, state, "run-job sleep 30")
         job = pymux.jobs.get(1)
         assert job is not None and not job.is_done
         job.last_active -= 7200
@@ -125,7 +125,7 @@ async def test_a_waited_job_stays_however_idle():
 
 async def test_zero_keeps_everything():
     async with create_session() as (pymux, state):
-        await _run_answering(pymux, state, "run -w true")
+        await _run_answering(pymux, state, "run-job -w true")
         job = pymux.jobs.get(1)
         assert job is not None and job.is_done
         job.last_active -= 7200

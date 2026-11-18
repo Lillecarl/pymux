@@ -50,7 +50,7 @@ def tail_job(pymux: Pymux, args: argparse.Namespace):
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, tail_job, name="tail")
-    add_target(parser, "job", kind=Target.JOB, type=int, nargs="?", help="The id `run` answered with.")
+    add_target(parser, "job", kind=Target.JOB, type=int, nargs="?", help="The id `run-job` answered with.")
     parser.add_argument(
         "--tag",
         "-T",

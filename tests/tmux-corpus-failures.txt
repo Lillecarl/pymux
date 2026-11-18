@@ -171,7 +171,6 @@ folke__dot.conf line 49: pymux: Invalid option: @continuum-restore
 folke__dot.conf line 50: pymux: Invalid option: @resurrect-capture-pane-contents
 folke__dot.conf line 51: pymux: Invalid option: @resurrect-strategy-nvim
 folke__dot.conf line 55: pymux: invalid command: run 'git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm && ~/.tmux/plugins/tpm/bin/install_plugins'
-folke__dot.conf line 57: pymux: unrecognized arguments: -b
 gpakosz__.tmux.conf line 19: pymux: invalid command: %if
 gpakosz__.tmux.conf line 20: pymux: unrecognized arguments: -F # needed by Control + Shift bindings
 gpakosz__.tmux.conf line 21: pymux: invalid command: %endif
@@ -306,7 +305,6 @@ joshmedeski__dotfiles.conf line 80: pymux: Invalid option: allow-passthrough
 joshmedeski__dotfiles.conf line 81: pymux: Invalid option: message-command-style
 joshmedeski__dotfiles.conf line 82: pymux: Invalid option: message-style
 joshmedeski__dotfiles.conf line 83: pymux: Invalid option: mode-style
-joshmedeski__dotfiles.conf line 91: pymux: unrecognized arguments: -b
 joshmedeski__dotfiles.conf line 92: pymux: invalid command: }
 joshmedeski__dotfiles.conf line 93: pymux: invalid command: }
 joshmedeski__dotfiles.conf line 97: pymux: unrecognized arguments: -N
@@ -358,7 +356,6 @@ leslie255__magicTmux.conf line 135: pymux: Invalid option: @plugin
 leslie255__magicTmux.conf line 136: pymux: Invalid option: @plugin
 leslie255__magicTmux.conf line 140: pymux: unrecognized arguments: # default is colour231
 leslie255__magicTmux.conf line 141: pymux: unrecognized arguments: # default is colour04
-leslie255__magicTmux.conf line 186: pymux: unrecognized arguments: -b
 mislav__dotfiles.conf line 39: pymux: Invalid option: escape-time
 mislav__dotfiles.conf line 46: pymux: unrecognized arguments: -a
 mislav__dotfiles.conf line 49: pymux: Invalid option: allow-rename

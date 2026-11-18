@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 
 from pymux.commands import CommandException, CommandParser, Target, add_command, add_target
 from pymux.commands.common import is_agent, refuse_without_a_waiter
-from pymux.commands.run import report_outcome
+from pymux.commands.run_job import report_outcome
 from pymux.jobs.table import find_job
 
 
@@ -17,9 +17,9 @@ def wait_job(pymux: Pymux, args: argparse.Namespace):
     """
     Wait for a job to end, and answer with what it said.
 
-    `run 'sleep 30'` says `1` and goes on; `wait-job 1` holds until
+    `run-job 'sleep 30'` says `1` and goes on; `wait-job 1` holds until
     the sleep ends and answers with the output, then fails when the
-    exit is nonzero, the way `run -w` does. `--tag` names the newest
+    exit is nonzero, the way `run-job -w` does. `--tag` names the newest
     job carrying every tag instead of an id. A job the table forgot
     says so instead of waiting forever.
     """
@@ -37,7 +37,7 @@ def wait_job(pymux: Pymux, args: argparse.Namespace):
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, wait_job, name="wait-job")
-    add_target(parser, "job", kind=Target.JOB, type=int, nargs="?", help="The id `run` answered with.")
+    add_target(parser, "job", kind=Target.JOB, type=int, nargs="?", help="The id `run-job` answered with.")
     parser.add_argument(
         "--tag",
         "-T",

@@ -28,7 +28,7 @@ from pymux.jobs.feed import JobFeed
 
 
 async def _run_answering(pymux, state, command) -> None:
-    "Run a command a client waits for: `run -w` refuses without one."
+    "Run a command a client waits for: `run-job -w` refuses without one."
     pymux.answer = Answer()
     try:
         await run_as(pymux, state, command)
@@ -52,7 +52,7 @@ def _viewer(pymux):
 
 async def test_view_job_replays_the_tail_and_says_how_it_ended():
     async with create_session() as (pymux, state):
-        await _run_answering(pymux, state, "run -w echo hello-from-the-job")
+        await _run_answering(pymux, state, "run-job -w echo hello-from-the-job")
         await run_as(pymux, state, "view-job -k 1")
         pane = _viewer(pymux)
 
@@ -66,7 +66,7 @@ async def test_view_job_replays_the_tail_and_says_how_it_ended():
 
 async def test_view_job_follows_a_running_job():
     async with create_session() as (pymux, state):
-        await run_as(pymux, state, "run sh -c 'sleep 1; echo late-line; sleep 30'")
+        await run_as(pymux, state, "run-job sh -c 'sleep 1; echo late-line; sleep 30'")
         await run_as(pymux, state, "view-job -k 1")
         pane = _viewer(pymux)
 
@@ -81,7 +81,7 @@ async def test_view_job_follows_a_running_job():
 
 async def test_view_job_shows_stderr_under_a_separator():
     async with create_session() as (pymux, state):
-        await _run_answering(pymux, state, "run -w sh -c 'echo out-line; echo err-line >&2'")
+        await _run_answering(pymux, state, "run-job -w sh -c 'echo out-line; echo err-line >&2'")
         await run_as(pymux, state, "view-job -k 1")
         pane = _viewer(pymux)
 
@@ -94,7 +94,7 @@ async def test_view_job_starts_every_line_at_the_first_column():
     # A pipe has no ONLCR: without the viewer translating newlines,
     # every line would start where the last one ended.
     async with create_session() as (pymux, state):
-        await _run_answering(pymux, state, "run -w printf 'aaa\\nbbbb\\n'")
+        await _run_answering(pymux, state, "run-job -w printf 'aaa\\nbbbb\\n'")
         await run_as(pymux, state, "view-job -k 1")
         pane = _viewer(pymux)
 
@@ -106,7 +106,7 @@ async def test_view_job_starts_every_line_at_the_first_column():
 
 async def test_closing_the_viewer_leaves_the_job():
     async with create_session() as (pymux, state):
-        await run_as(pymux, state, "run sh -c 'sleep 1; echo done-line'")
+        await run_as(pymux, state, "run-job sh -c 'sleep 1; echo done-line'")
         await run_as(pymux, state, "view-job -k 1")
         pane = _viewer(pymux)
         await _shows(pane, "done-line")
@@ -123,7 +123,7 @@ async def test_closing_the_viewer_leaves_the_job():
 
 async def test_keys_into_a_viewer_go_nowhere():
     async with create_session() as (pymux, state):
-        await _run_answering(pymux, state, "run -w echo hello-from-the-job")
+        await _run_answering(pymux, state, "run-job -w echo hello-from-the-job")
         await run_as(pymux, state, "view-job -k 1")
         pane = _viewer(pymux)
         await _shows(pane, "hello-from-the-job")
@@ -137,7 +137,7 @@ async def test_keys_into_a_viewer_go_nowhere():
 
 async def test_view_job_refuses_a_busy_pane_without_k():
     async with create_session() as (pymux, state):
-        await _run_answering(pymux, state, "run -w echo hello-from-the-job")
+        await _run_answering(pymux, state, "run-job -w echo hello-from-the-job")
         await run_as(pymux, state, "new-window sleep 30")
 
         with pytest.raises(CommandException, match="Pane is busy"):

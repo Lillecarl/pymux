@@ -7,7 +7,7 @@ by the server rather than by any view, so an agent can submit it, go
 away, and ask for the exit code and the output later. `run-shell`
 already runs a command this way, but it shows the output once and
 forgets it; a job keeps the tail of both streams, the exit, and the
-times, until the table forgets it. `run --pty` is the exception to
+times, until the table forgets it. `run-job --pty` is the exception to
 the pipes: the command runs on a terminal of its own, for the program
 that needs one to behave, and everything else stays the same.
 

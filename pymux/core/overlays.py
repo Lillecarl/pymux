@@ -158,7 +158,7 @@ class Overlays:
 
         A terminal the person can type in, from the job's directory:
         that is what taking over means for a job that holds no stdin
-        (`run` starts one on `/dev/null`). The recorded job is
+        (`run-job` starts one on `/dev/null`). The recorded job is
         untouched -- it runs on, and detaching never kills it -- and
         the new program answers to the session's environment, not the
         job's. Lillecarl/pyterm#530.

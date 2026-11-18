@@ -394,7 +394,7 @@ class Pymux:
         #: Lillecarl/pyterm#304.
         self.wait_channels: dict[str, WaitChannel] = {}
 
-        #: The jobs of `run`, by id. A job is a command with pipes
+        #: The jobs of `run-job`, by id. A job is a command with pipes
         #: instead of a terminal, owned by the server rather than by
         #: any pane, so it outlives every view onto it.
         self.jobs = JobTable()

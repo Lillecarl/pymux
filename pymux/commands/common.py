@@ -430,7 +430,7 @@ def answer(pymux: Pymux, text: str) -> None:
     pane gets the message line, because there is no stdout to write
     to. Lillecarl/pyterm#291.
 
-    A configuration file has neither, and nobody is told: `run` there
+    A configuration file has neither, and nobody is told: `run-job` there
     still starts its job.
     """
     if pymux.answer is not None:

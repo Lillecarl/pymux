@@ -1,9 +1,9 @@
 """
-`run --pty`: a job on a terminal instead of pipes.
+`run-job --pty`: a job on a terminal instead of pipes.
 
 The rules this judges: `--pty` runs the command with a terminal on
 every stream, so `test -t` passes where a piped job fails; the
-waiting and the reading stay the same -- `run -w` answers with the
+waiting and the reading stay the same -- `run-job -w` answers with the
 output, `wait-job` holds and reports, `show-job` reads it -- with
 the whole terminal output in the stdout tail and nothing in stderr;
 and `list-jobs` names which jobs hold a terminal. Lillecarl/pyterm#558.
@@ -21,7 +21,7 @@ from session import create_session
 
 from pymux.answer import Answer
 from pymux.commands import CommandException, handle_command
-from pymux.commands.run import run_job
+from pymux.commands.run_job import run_job
 from pymux.query import ask
 
 
@@ -48,7 +48,7 @@ async def _run_answering(pymux, state, command) -> list:
 async def test_a_pty_job_holds_a_terminal_on_every_stream(session):
     pymux, state = session
     # `-w` refuses without a waiter, so this answers.
-    await _run_answering(pymux, state, "run --pty -w 'test -t 0 && test -t 1 && test -t 2'")
+    await _run_answering(pymux, state, "run-job --pty -w 'test -t 0 && test -t 1 && test -t 2'")
     job = pymux.jobs.get(1)
     assert job is not None and job.pty and job.is_done and job.returncode == 0
 
@@ -79,7 +79,7 @@ async def test_a_piped_job_holds_no_terminal(session):
 
 async def test_a_pty_job_collects_into_stdout_with_stderr_empty(session):
     pymux, state = session
-    said = await _run_answering(pymux, state, "run --pty -w 'echo out; echo err >&2'")
+    said = await _run_answering(pymux, state, "run-job --pty -w 'echo out; echo err >&2'")
     assert any("out" in line for line in said)
     assert any("err" in line for line in said)
 
@@ -117,7 +117,7 @@ async def test_a_pty_job_in_a_directory_that_is_gone_never_starts(session):
 
 async def test_wait_and_show_read_a_pty_job_the_same_way(session):
     pymux, state = session
-    said = await _run_answering(pymux, state, "run --pty --tag term 'echo waited-for'")
+    said = await _run_answering(pymux, state, "run-job --pty --tag term 'echo waited-for'")
     assert said and said[0].strip() == "1"
 
     said = await _run_answering(pymux, state, "wait-job --tag term")
@@ -129,15 +129,15 @@ async def test_wait_and_show_read_a_pty_job_the_same_way(session):
 
 async def test_list_jobs_names_the_terminal(session):
     pymux, state = session
-    await _run_answering(pymux, state, "run --pty -w true")
-    await _run_answering(pymux, state, "run -w true")
+    await _run_answering(pymux, state, "run-job --pty -w true")
+    await _run_answering(pymux, state, "run-job -w true")
     said = await _run_answering(pymux, state, "list-jobs")
     assert len([line for line in said if " pty " in line]) == 1
 
 
 async def test_kill_ends_a_pty_job(session):
     pymux, state = session
-    said = await _run_answering(pymux, state, "run --pty sleep 30")
+    said = await _run_answering(pymux, state, "run-job --pty sleep 30")
     assert said and said[0].strip() == "1"
 
     job = pymux.jobs.get(1)

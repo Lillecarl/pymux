@@ -2,9 +2,9 @@
 Aliases for all commands.
 
 Every `.alias` of a `cmd_entry` in tmux's source whose command pymux
-has, so a tmux configuration reads here. `run` and `wait` are tmux's
-aliases of `run-shell` and `wait-for`, and pymux's own commands here:
-Lillecarl/pyterm#1028.
+has, so a tmux configuration reads here. pymux's job command is
+`run-job`, so `run` is free for `run-shell`: Lillecarl/pyterm#1028.
+`wait` is tmux's alias of `wait-for`, and pymux's own command here.
 """
 
 from __future__ import annotations
@@ -62,6 +62,7 @@ ALIASES = {
     "respawnp": "respawn-pane",
     "respawnw": "respawn-window",
     "rotatew": "rotate-window",
+    "run": "run-shell",
     "saveb": "save-buffer",
     "selectl": "select-layout",
     "selectp": "select-pane",

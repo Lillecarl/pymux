@@ -597,7 +597,7 @@ async def test_running_a_job_names_everything_it_was_given(fake):
         pty=True,
     )
     assert server.asked[0] == (
-        "run --tag deploy --tag branch=main -d /src --env CC=clang --pty -- 'make; make install'"
+        "run-job --tag deploy --tag branch=main -d /src --env CC=clang --pty -- 'make; make install'"
     )
     assert (job.id, job.running, job.tags) == (7, True, {"deploy": None})
 

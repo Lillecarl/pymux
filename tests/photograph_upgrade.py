@@ -100,8 +100,8 @@ switch-client -t test
 PANES = {"test": [3, 3, 2], "other": [1, 1]}
 
 JOBS = (
-    ["run", "-w", "--tag", "kind=one", "printf one"],
-    ["run", "-w", "--tag", "kind=two", "--tag", "loud", "printf two >&2; exit 4"],
+    ["run-job", "-w", "--tag", "kind=one", "printf one"],
+    ["run-job", "-w", "--tag", "kind=two", "--tag", "loud", "printf two >&2; exit 4"],
 )
 
 

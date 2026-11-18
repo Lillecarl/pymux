@@ -1,7 +1,7 @@
 """
 Who sent this command, and from where.
 
-An agent runs `pymux run ...` with its session id in its environment,
+An agent runs `pymux run-job ...` with its session id in its environment,
 under a name of its harness's choosing. The server cannot read that
 environment: it started once, long before, and its own variables name
 nothing about this caller. So the client sends its whole environment
@@ -124,7 +124,7 @@ class CallerContext(NamedTuple):
     Who sent one command, and from where.
 
     The server builds one per `run-command` packet and the commands
-    read it while they run: `run` stamps the session onto the job and
+    read it while they run: `run-job` stamps the session onto the job and
     starts it in this directory with this environment, and the lookups
     prefer this session's jobs. Anything but a packet -- a key
     binding, the command bar, a configuration file -- runs without

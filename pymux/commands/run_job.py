@@ -26,7 +26,7 @@ def run_job(pymux: Pymux, args: argparse.Namespace):
     terminal, the way `run-shell` runs one; but where `run-shell`
     shows the output once and forgets it, a job keeps the tail of
     both streams, the exit code and the times, until the table
-    forgets it past its cap. The answer is the id: `run 'sleep 30'`
+    forgets it past its cap. The answer is the id: `run-job 'sleep 30'`
     says `1`, and `wait-job 1` holds until it ends. `-w` waits here
     instead and answers with the output, for the agent that submits
     one command and reads the result. `--timeout` waits here too but
@@ -47,10 +47,10 @@ def run_job(pymux: Pymux, args: argparse.Namespace):
     # The command is the rest of the line, whatever words it holds.
     # Several words go back together, with the quoting the shell
     # read, the way `run-shell` beside this reads them; but one word
-    # is already a whole command line -- `run 'echo a; echo b'` --
+    # is already a whole command line -- `run-job 'echo a; echo b'` --
     # and joining would quote it once more, so the shell would look
     # for a program by that whole name and answer 127. A leading `--`
-    # separated the command from the options of `run` on the line;
+    # separated the command from the options of `run-job` on the line;
     # the command starts after it.
     words = args.shell_command
     if words and words[0] == "--":
@@ -88,7 +88,7 @@ async def _submit(pymux: Pymux, args: argparse.Namespace, shell_command: str) ->
         refuse_without_a_waiter(pymux, "wait")
         if is_agent(pymux):
             raise CommandException(
-                "run -w waits without bound, which an agent refuses: run --timeout 90 -- ... instead."
+                "run-job -w waits without bound, which an agent refuses: run-job --timeout 90 -- ... instead."
             )
         await _run_and_report(pymux, job)
         return
@@ -152,7 +152,7 @@ def report_outcome(pymux: Pymux, job: Job) -> None:
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    parser = add_command(subparsers, run_job, name="run")
+    parser = add_command(subparsers, run_job)
     parser.add_argument(
         "-w",
         dest="w",
