@@ -32,6 +32,8 @@ from libpymux.connection import CommandResult, Reply, command_packet
 from libpymux.operations import PANE_FIELDS, SEPARATOR, JobRecord, Waited, WaitFor, format_string
 from libpymux.protocol import Framer
 
+from pymux.grammar import parse
+
 # ----------------------------------------------------------------------
 # A server that says what a test tells it to say.
 
@@ -117,7 +119,7 @@ async def test_command_reaches_server(fake):
 async def test_list_of_arguments_is_quoted(fake):
     server = fake([("", "", 0)])
     await Server(server.path).cmd(["send-keys", "-l", "two words"])
-    assert server.asked == ["send-keys -l 'two words'"]
+    assert server.asked == ['send-keys -l "two words"']
 
 
 async def test_failing_command_raises(fake):
@@ -294,7 +296,7 @@ async def test_send_keys_sends_text_and_then_return(fake):
     server = fake([("", "", 0), ("", "", 0)])
     await Pane(Server(server.path), {"pane_id": "%5"}).send_keys("echo hi")
     assert server.asked == [
-        "send-keys -t %5 -l 'echo hi'",
+        'send-keys -t %5 -l "echo hi"',
         "send-keys -t %5 Enter",
     ]
 
@@ -378,7 +380,7 @@ async def test_send_and_wait_arms_the_wait_on_send_keys(fake):
     pane = Pane(Server(server.path), {"pane_id": "%5"})
     waited = await pane.send_and_wait("make", WaitFor(next_text="^ok", timeout=9), literal=True)
     assert waited == Waited(True, "ok")
-    assert server.asked == ["send-keys -t %5 --wait-next-text '^ok' --wait-timeout 9 -l make"]
+    assert server.asked == ["send-keys -t %5 --wait-next-text ^ok --wait-timeout 9 -l make"]
 
 
 async def test_a_wait_until_takes_one_condition(fake):
@@ -597,7 +599,7 @@ async def test_running_a_job_names_everything_it_was_given(fake):
         pty=True,
     )
     assert server.asked[0] == (
-        "run-job --tag deploy --tag branch=main -d /src --env CC=clang --pty -- 'make; make install'"
+        'run-job --tag deploy --tag branch=main -d /src --env CC=clang --pty -- "make; make install"'
     )
     assert (job.id, job.running, job.tags) == (7, True, {"deploy": None})
 
@@ -670,17 +672,10 @@ def _record(job_id, status):
 # Quoting.
 
 
-@pytest.mark.parametrize(
-    ("argument", "expected"),
-    [
-        ("plain", "plain"),
-        ("two words", "'two words'"),
-        ("it's", "'it'\"'\"'s'"),
-        ("$HOME", "'$HOME'"),
-    ],
-)
-def test_quote(argument, expected):
-    assert quote(argument) == expected
+@pytest.mark.parametrize("argument", ["plain", "two words", "it's", "$HOME", "~/x", "%foo", "a\n    b # c", ";", ""])
+def test_quote_reads_back_as_the_argument(argument):
+    "libpymux cannot import `pymux.grammar`, which the server reads with."
+    assert [command.words for command in parse("x " + quote(argument), environment={})] == [["x", argument]]
 
 
 def test_a_message_cut_across_reads_comes_out_whole_and_once():

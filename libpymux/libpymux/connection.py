@@ -15,7 +15,6 @@ Neither does I/O, so a test reaches them with no socket, and
 """
 
 import json
-import shlex
 from collections.abc import Mapping, Sequence
 from typing import NamedTuple
 
@@ -80,12 +79,29 @@ def quote(argument: str) -> str:
     """
     Make one argument safe to put in a command string.
 
-    The server splits a command with `shlex`, so an argument that holds
-    a space or a quote needs quoting. A bare ";" separates two commands
-    there, and quoting does not hide it: the server sees the token and
-    splits anyway. Send such an argument with `send-keys -l` instead.
+    The server reads a command with tmux's grammar, and this writes
+    one word of it: `pymux.grammar.quote`, which this package cannot
+    import. Not `shlex.quote`: inside quotes tmux drops the indent
+    after a newline, and expands `~` and `$`.
     """
-    return shlex.quote(argument)
+    if argument == "":
+        return "''"
+    special = any(ch in _SPECIAL or ord(ch) < 0x20 or ord(ch) == 0x7F for ch in argument)
+    if not special and not (argument[0] == "%" and argument.strip("%0123456789")):
+        return argument
+    out = ['"']
+    for ch in argument:
+        if ch in '"\\$~':
+            out.append("\\" + ch)
+        elif ord(ch) < 0x20 or ord(ch) == 0x7F:
+            out.append("\\%03o" % ord(ch))
+        else:
+            out.append(ch)
+    out.append('"')
+    return "".join(out)
+
+
+_SPECIAL = frozenset(" \t\n\r\"'\\$#;{}~")
 
 
 def as_command(command: str | Sequence[str]) -> str:
