@@ -6,13 +6,15 @@ The status line of one client: `status-left`, the list of windows and
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from prompt_toolkit.application.current import set_app
-from prompt_toolkit.formatted_text import StyleAndTextTuples
+from prompt_toolkit.formatted_text import AnyFormattedText, StyleAndTextTuples
+from prompt_toolkit.formatted_text.utils import split_lines
 from prompt_toolkit.layout.containers import (
     WindowAlign,
 )
+from prompt_toolkit.layout.controls import FormattedTextControl
 from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
 from prompt_toolkit.utils import get_cwidth
 
@@ -21,13 +23,78 @@ from pymux.core import window_tree
 from ..enums import Justify, Woke
 from ..format import format_pymux_string
 from ..keys.actions import Kind, Origin, note, started_by
+from ..keys.mouse_keys import MouseLocation
 
 if TYPE_CHECKING:
-    from prompt_toolkit.layout.controls import NotImplementedOrNone
+    from prompt_toolkit.key_binding.key_bindings import NotImplementedOrNone
 
     from .layout import LayoutManager
 
-__all__ = ["PASSTHROUGH_MARK", "StatusLine"]
+__all__ = ["PASSTHROUGH_MARK", "StatusLine", "StatusPart"]
+
+#: tmux's `mouse_status_range` for each place on the status line.
+_RANGES = {
+    MouseLocation.STATUS: "window",
+    MouseLocation.STATUS_LEFT: "left",
+    MouseLocation.STATUS_RIGHT: "right",
+}
+
+
+class _SelectWindow:
+    "A window's entry in the window list: a press selects it."
+
+    def __init__(self, status: StatusLine, window: window_tree.Window) -> None:
+        self.status = status
+        self.window = window
+
+    def __call__(self, mouse_event: MouseEvent) -> NotImplementedOrNone:
+        if mouse_event.event_type == MouseEventType.MOUSE_DOWN:
+            self.status.client_state.session.arrangement.set_active_window(self.window)
+            self.status.pymux.invalidate(Woke.CLICK_CHOSE_A_WINDOW)
+            with started_by(Origin.MOUSE):
+                note(self.status.pymux, Kind.CLICK, "select-window")
+            return None
+        return NotImplemented  # Event not handled here.
+
+
+class StatusPart(FormattedTextControl):
+    """
+    One part of the status line. A mouse event over it is a mouse key
+    first: over a window's entry `Status`, else this part's `location`.
+    Lillecarl/pyterm#1034.
+    """
+
+    def __init__(self, status: StatusLine, text: Callable[[], AnyFormattedText], location: MouseLocation) -> None:
+        super().__init__(text)
+        self.status = status
+        self.location = location
+
+    def _handler_at(self, mouse_event: MouseEvent) -> object:
+        "The handler of the fragment under the pointer, the way `FormattedTextControl.mouse_handler` finds it."
+        lines = list(split_lines(self._fragments or []))
+        if mouse_event.position.y >= len(lines):
+            return None
+        count = 0
+        for item in lines[mouse_event.position.y]:
+            count += len(item[1])
+            if count > mouse_event.position.x:
+                return item[2] if len(item) >= 3 else None
+        return None
+
+    @override
+    def mouse_handler(self, mouse_event: MouseEvent) -> NotImplementedOrNone:
+        window = getattr(self._handler_at(mouse_event), "window", None)
+        location = MouseLocation.STATUS if window is not None else self.location
+        if self.status.pymux.key_bindings_manager.mouse(
+            mouse_event,
+            location,
+            window=window,
+            status_range=_RANGES.get(location, ""),
+            replay=lambda: super(StatusPart, self).mouse_handler(mouse_event),
+        ):
+            return None
+        return super().mouse_handler(mouse_event)
+
 
 #: Before `status-right` while passthrough holds every key: a person
 #: who wonders why the prefix does nothing reads the answer by the
@@ -78,19 +145,9 @@ class StatusLine:
         self._frame_lines = None
         self._frame_sides = {}
 
-    def _select_window_handler(self, window: window_tree.Window) -> Callable[[MouseEvent], NotImplementedOrNone]:
+    def _select_window_handler(self, window: window_tree.Window) -> _SelectWindow:
         "Return a mouse handler that selects the given window when clicking."
-
-        def handler(mouse_event: MouseEvent) -> NotImplementedOrNone:
-            if mouse_event.event_type == MouseEventType.MOUSE_DOWN:
-                self.client_state.session.arrangement.set_active_window(window)
-                self.pymux.invalidate(Woke.CLICK_CHOSE_A_WINDOW)
-                with started_by(Origin.MOUSE):
-                    note(self.pymux, Kind.CLICK, "select-window")
-                return None
-            return NotImplemented  # Event not handled here.
-
-        return handler
+        return _SelectWindow(self, window)
 
     def window_list(self) -> StyleAndTextTuples:
         "The tokens for the status bar: the window list, a line per row."
@@ -262,6 +319,10 @@ class StatusLine:
             session=self.client_state.session,
             client=self.client_state,
         )
+
+    def part(self, text: Callable[[], AnyFormattedText], location: MouseLocation) -> StatusPart:
+        "The control of one part of the status line, whose mouse events are mouse keys at `location`."
+        return StatusPart(self, text, location)
 
     def align(self) -> WindowAlign:
         if self.client_state.session.options.status_justify == Justify.RIGHT:

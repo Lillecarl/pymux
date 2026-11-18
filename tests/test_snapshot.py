@@ -1044,6 +1044,19 @@ def test_an_upgrade_takes_the_new_file_and_keeps_what_a_person_bound(pymux, tmp_
     assert set(loaded.key_bindings_manager.by_hand.values()) == {"b", "c"}
 
 
+def test_an_upgrade_keeps_a_mouse_key_a_person_bound(pymux, tmp_path):
+    "Lillecarl/pyterm#1034."
+    pymux.handle_command("bind-key -n WheelUpPane select-pane -t=")
+    path = tmp_path / "mouse.sqlite"
+    save(pymux, path)
+
+    loaded = Pymux()
+    load(loaded, path)
+
+    binding = loaded.key_bindings_manager.binding_on("WheelUpPane", "root")
+    assert binding is not None and binding.arguments == ["-t="]
+
+
 @pytest.mark.parametrize("pty", [True, False], ids=["on a terminal", "on pipes"])
 async def test_a_running_job_this_server_forked_is_carried_by_its_fds(pymux, tmp_path, pty):
     "An exec keeps it a child of the server, on the fds the snapshot names. Lillecarl/pyterm#738."

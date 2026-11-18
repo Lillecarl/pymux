@@ -23,11 +23,14 @@ from collections.abc import Callable, Iterable
 from enum import Enum
 from typing import TYPE_CHECKING, NamedTuple
 
+from pyte.mouse import reports_mouse
 from pyte.program_status import URGENCY
+from pyte.screen import Screen
 
 from pymux import log
 from pymux.commands import CommandException
 from pymux.connection.rate import frames_per_second, per_second
+from pymux.keys.mouse_keys import the_mouse
 from pymux.options import user_options
 from pymux.tags import spelled
 
@@ -671,6 +674,12 @@ def _client_of(context: FormatContext) -> ClientRole | None:
     return client.client if client is not None else None
 
 
+def _mouse_any_flag(context: FormatContext) -> str:
+    "Whether the pane's program asked for mouse reports, of any kind."
+    screen = context.the_pane().screen
+    return "1" if isinstance(screen, Screen) and reports_mouse(screen) else "0"
+
+
 def _pane_mode(context: FormatContext) -> str:
     """
     The name of what is drawn over this pane's program, or nothing.
@@ -967,6 +976,11 @@ tmux_variables: dict[str, Callable[[FormatContext], str]] = {
     # clock is in a mode too.
     "pane_in_mode": lambda c: "1" if _pane_mode(c) else "0",
     "pane_mode": _pane_mode,
+    "alternate_on": lambda c: "1" if getattr(c.the_pane().screen, "in_alternate_screen", False) else "0",
+    # The mouse event a binding on a mouse key runs for. Lillecarl/pyterm#1034.
+    "mouse_any_flag": _mouse_any_flag,
+    "mouse_pane": lambda c: "%%%d" % m.pane.pane_id if (m := the_mouse()) is not None and m.pane is not None else "",
+    "mouse_status_range": lambda c: m.status_range if (m := the_mouse()) is not None else "",
     "pane_synchronized": lambda c: "1" if c.the_window().options.synchronize_panes else "0",
     # "Has anything happened in this pane?", as one number to compare.
     # It only goes up, and a difference says something may have changed

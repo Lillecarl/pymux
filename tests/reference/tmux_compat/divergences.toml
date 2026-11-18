@@ -67,3 +67,18 @@ pymux's global environment has no hidden flag, and storing the value
 there would hand a secret to every new pane. Lillecarl/pyterm#1043.
 """
 references = ["Lillecarl/pyterm#1043", "Lillecarl/pyterm#1029"]
+
+[[divergence]]
+name = "unbinding a mouse key leaves pymux's own mouse handling"
+command = "unbind-key"
+tmux = "the mouse is default bindings in the root table, so unbind -n MouseDrag1Pane stops a drag starting copy mode"
+pymux = "the mouse is built in, and a binding runs in its place; with none, pymux handles the event as before"
+test = "test_unbinding_a_mouse_key_leaves_the_built_in_product_divergence"
+evidence = "tmux 3.8 key-bindings.c key_bindings_init; pymux/keys/key_bindings.py PymuxKeyBindings.mouse"
+reason = """
+pymux's mouse does more than tmux's defaults can say: focus on
+release, the wheel over a program that wants no mouse, drags on a
+border. Moving all of it into default bindings is a change of its own.
+Lillecarl/pyterm#1034.
+"""
+references = ["Lillecarl/pyterm#1034"]

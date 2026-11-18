@@ -1,7 +1,3 @@
-AdamWhittingham__tmux-config.conf line 99: pymux: Invalid key: 'WheelUpPane'
-AdamWhittingham__tmux-config.conf line 100: pymux: Invalid key: 'WheelDownPane'
-AdamWhittingham__tmux-config.conf line 102: pymux: Invalid key: 'WheelUpPane'
-AdamWhittingham__tmux-config.conf line 103: pymux: Invalid key: 'WheelDownPane'
 AdamWhittingham__tmux-config.conf line 107: pymux: Invalid option: visual-activity
 AdamWhittingham__tmux-config.conf line 110: pymux: Invalid option: visual-bell
 AdamWhittingham__tmux-config.conf line 111: pymux: Invalid option: visual-silence
@@ -24,9 +20,6 @@ AdamWhittingham__tmux-config.conf line 152: pymux: Invalid option: pane-active-b
 AdamWhittingham__tmux-config.conf line 154: pymux: Invalid option: message-style
 AdamWhittingham__tmux-config.conf line 155: pymux: Invalid option: mode-style
 AdamWhittingham__tmux-config.conf line 162: pymux: Invalid option: status-position
-ShawnPana__smux.conf line 4: pymux: Invalid key: 'MouseDragEnd1Pane'
-ShawnPana__smux.conf line 4: pymux: Invalid key: 'MouseDragEnd1Pane'
-ShawnPana__smux.conf line 18: pymux: Invalid key: 'WheelUpPane'
 ShawnPana__smux.conf line 66: pymux: Invalid option: pane-border-style
 ShawnPana__smux.conf line 67: pymux: Invalid option: pane-active-border-style
 ShawnPana__smux.conf line 68: pymux: Invalid option: pane-border-lines
@@ -125,8 +118,6 @@ jbnicolai__tmux.conf line 56: pymux: Invalid option: clock-mode-colour
 jbnicolai__tmux.conf line 59: pymux: Invalid option: aggressive-resize
 jbnicolai__tmux.conf line 80: pymux: unrecognized arguments: -t
 jbnicolai__tmux.conf line 81: pymux: unrecognized arguments: -t
-jbnicolai__tmux.conf line 97: pymux: Invalid key: 'WheelUpPane'
-jbnicolai__tmux.conf line 98: pymux: Invalid key: 'WheelDownPane'
 jbnicolai__tmux.conf line 109: pymux: Invalid option: set-titles
 jmbuhr__tmux-kickstarter.conf line 16: pymux: Invalid option: terminal-overrides
 joshmedeski__dotfiles.conf line 22: pymux: Invalid option: display-time
@@ -172,7 +163,6 @@ nicknisi__dotfiles.conf line 46: pymux: Invalid option: allow-passthrough
 nicknisi__dotfiles.conf line 52: pymux: Invalid option: clear-on-attach
 nicknisi__dotfiles.conf line 55: pymux: Invalid option: pane-scrollbars
 nicknisi__dotfiles.conf line 58: pymux: Invalid option: copy-mode-line-numbers
-nicknisi__dotfiles.conf line 83: pymux: Invalid key: 'MouseDown1Pane'
 nicknisi__dotfiles.conf line 93: pymux: Invalid option: set-titles
 nicknisi__dotfiles.conf line 100: pymux: Invalid option: automatic-rename
 nicknisi__dotfiles.conf line 104: pymux: Invalid option: automatic-rename-format
@@ -180,12 +170,6 @@ nicknisi__dotfiles.conf line 107: pymux: Invalid option: set-titles-string
 nicknisi__dotfiles.conf line 111: pymux: Invalid option: visual-activity
 nicknisi__dotfiles.conf line 116: pymux: Invalid option: aggressive-resize
 nicknisi__dotfiles.conf line 155: pymux: Invalid option: command-alias[100]
-nicknisi__dotfiles.conf line 198: pymux: Invalid key: 'MouseDragEnd1Pane'
-nicknisi__dotfiles.conf line 199: pymux: Invalid key: 'DoubleClick1Pane'
-nicknisi__dotfiles.conf line 200: pymux: Invalid key: 'TripleClick1Pane'
-nicknisi__dotfiles.conf line 250: pymux: Invalid key: 'MouseDown1Status'
-nicknisi__dotfiles.conf line 261: pymux: Invalid key: 'MouseDown3Status'
-nicknisi__dotfiles.conf line 265: pymux: Invalid key: 'MouseDown1StatusLeft'
 nviennot__tmux-config.conf line 40: pymux: Invalid option: allow-passthrough
 nviennot__tmux-config.conf line 41: pymux: Invalid option: terminal-features
 nviennot__tmux-config.conf line 45: pymux: Invalid option: status-bg
@@ -198,7 +182,6 @@ nviennot__tmux-config.conf line 66: pymux: Invalid option: extended-keys-format
 nviennot__tmux-config.conf line 67: pymux: Invalid option: visual-activity
 omerxx__dotfiles.conf line 1: pymux: IOError: [Errno 2] No such file or directory: '$HOME/.config/tmux/tmux.reset.conf'
 omerxx__dotfiles.conf line 3: pymux: Invalid option: terminal-overrides
-omerxx__dotfiles.conf line 5: pymux: Invalid key: '^A'
 omerxx__dotfiles.conf line 7: pymux: Invalid option: detach-on-destroy
 omerxx__dotfiles.conf line 12: pymux: Invalid option: status-position
 omerxx__dotfiles.conf line 15: pymux: Invalid option: pane-active-border-style
@@ -220,8 +203,6 @@ statico__dotfiles.conf line 12: pymux: Invalid option: visual-bell
 statico__dotfiles.conf line 13: pymux: Invalid option: display-panes-time
 statico__dotfiles.conf line 24: pymux: Invalid option: set-titles
 statico__dotfiles.conf line 25: pymux: Invalid option: set-titles-string
-statico__dotfiles.conf line 31: pymux: Invalid key: 'MouseDown3Pane'
-statico__dotfiles.conf line 64: pymux: Invalid key: 'DoubleClick1Pane'
 statico__dotfiles.conf line 68: pymux: Invalid option: status-fg
 statico__dotfiles.conf line 69: pymux: Invalid option: status-bg
 statico__dotfiles.conf line 74: pymux: Invalid option: window-status-separator
@@ -274,8 +255,6 @@ thoughtbot__dotfiles.conf line 23: pymux: Invalid option: status-style
 tmux__tmux.conf line 9: pymux: Invalid option: window-status-current-style
 tmux__tmux.conf line 17: pymux: Invalid option: terminal-features
 tmux__tmux.conf line 23: pymux: Invalid option: bell-action
-tmux__tmux.conf line 35: pymux: Invalid key: 'MouseDrag1Pane'
-tmux__tmux.conf line 36: pymux: Invalid key: 'MouseDrag1Pane'
 tmux__tmux.conf line 62: pymux: duplicate session: 0
 tmux__tmux.conf line 64: pymux: Invalid option: aggressive-resize
 tmux__tmux.conf line 66: pymux: unrecognized arguments: -t0:1

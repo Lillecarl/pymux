@@ -40,6 +40,7 @@ from ..grammar import template_replace
 from ..graphics.graphics import PaneView
 from ..ids import PaneId
 from ..keys.actions import Origin, started_by
+from ..keys.mouse_keys import MouseClicks
 from ..layout.layout import LayoutManager, pane_covers, pane_write_positions
 from ..layout.plane import RESIZE_SHAPES
 from ..log import logger
@@ -163,6 +164,7 @@ class ClientState:
         "key_keeps_repeat": Keep.DROPPED,
         "url_mode": Keep.DROPPED,
         "border_drag": Keep.DROPPED,
+        "mouse_clicks": Keep.DROPPED,
         "pointer_left": Keep.DROPPED,
         "key_tables": Keep.SAVED,
         "message": Keep.SAVED,
@@ -283,6 +285,8 @@ class ClientState:
         #: The line between two panes this client is dragging, from the
         #: press to the release. Lillecarl/pyterm#774.
         self.border_drag: BorderDrag | None = None
+        #: Drags and clicks between this client's mouse events, for the mouse keys. Lillecarl/pyterm#1034.
+        self.mouse_clicks = MouseClicks()
 
         #: What to call when the pointer leaves what it is over: a
         #: window pane's `pointer_left`. Lillecarl/pyterm#901.

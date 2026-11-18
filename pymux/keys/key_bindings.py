@@ -9,9 +9,11 @@ import functools
 import logging
 import time
 from collections.abc import Callable
+from dataclasses import replace
 from typing import TYPE_CHECKING, override
 
-from prompt_toolkit.application.current import get_app
+import anyio
+from prompt_toolkit.application.current import get_app, set_app
 from prompt_toolkit.filters import (
     Condition,
     Filter,
@@ -25,6 +27,7 @@ from prompt_toolkit.key_binding.bindings.auto_suggest import (
 )
 from prompt_toolkit.key_binding.key_processor import KeyPressEvent as E
 from prompt_toolkit.keys import Keys
+from prompt_toolkit.mouse_events import MouseEvent
 from ptkhx import Mode
 from ptkhx.bindings import HelixBindings
 from ptterm import Terminal
@@ -37,10 +40,14 @@ from ..grammar import print_arguments
 from ..notify.osc import PASSTHROUGH_VARIABLE, set_user_var
 from ..wayland.window_pane import WindowWidget
 from .actions import Kind, Origin, note, note_keys, started_by
-from .key_spelling import DEFAULT_PREFIX, key_however_it_is_written
+from .key_spelling import DEFAULT_PREFIX
+from .mouse_keys import CLICK_TIMEOUT, MouseAt, MouseKey, MouseKind, MouseLocation, bound_key, key_of, mouse_at
 
 if TYPE_CHECKING:
+    from pymux.connection.client_state import ClientState
     from pymux.core.main import Pymux
+    from pymux.core.pane import Pane
+    from pymux.core.window_tree import Window
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +61,8 @@ PREFIX_TABLE = "prefix"
 
 #: One binding: the table its key is read from, and the keys
 #: themselves. The keys are prompt_toolkit's, so every spelling of one
-#: key gives the same one.
-_ABinding = tuple[str, tuple[str, ...]]
+#: key gives the same one; a mouse key is pymux's own.
+_ABinding = tuple[str, tuple[str, ...] | MouseKey]
 
 
 def _noted(pymux: Pymux, name: str, *, keyed: bool = True) -> Callable[[Callable[[E], object]], Callable[[E], object]]:
@@ -255,7 +262,7 @@ class PymuxKeyBindings:
 
     def note_who_bound(self, key_name: str, table: str, *, by_hand: bool) -> None:
         "Raises `ValueError` when the name reads as no key at all."
-        key = (table, key_however_it_is_written(key_name))
+        key = (table, bound_key(key_name))
         if by_hand:
             self.by_hand[key] = key_name
         else:
@@ -712,8 +719,8 @@ class PymuxKeyBindings:
         :param note: `bind-key -N`, which `list-keys -N` shows.
         """
         # Translate the name into a prompt_toolkit key sequence, in
-        # either spelling. (Can raise ValueError.)
-        keys_sequence = key_however_it_is_written(key_name)
+        # either spelling, or a mouse key. (Can raise ValueError.)
+        keys_sequence = bound_key(key_name)
 
         # Unbind the key, under whichever name it was bound.
         self.remove_custom_binding(key_name, table=table)
@@ -733,7 +740,7 @@ class PymuxKeyBindings:
             filter = filter | (Repeating(self.pymux) & KeyTableIs(self.pymux, ROOT_TABLE))
         filter = filter & ~(WaitsForConfirmation(self.pymux) | has_focus(COMMAND) | has_focus(PROMPT))
 
-        def key_handler(event: E) -> None:
+        def run() -> None:
             """
             Run the command, and take the prefix off this client.
 
@@ -754,15 +761,25 @@ class PymuxKeyBindings:
             if repeats and repeat_time > 0:
                 client_state.repeat_until = time.monotonic() + repeat_time / 1000
 
-        # An `Any` binding is eager, or it loses to an eager one below
-        # it: the pane's own keys and `_hide_numbers` are any-key
-        # bindings too, and waiting for a longer sequence that cannot
-        # come hands the key to them. The same lesson
-        # `_load_builtins` records on `_hide_numbers`.
-        self.custom_key_bindings.add(*keys_sequence, filter=filter, eager=(keys_sequence == (Keys.Any,)))(key_handler)
+        def key_handler(event: E) -> None:
+            run()
+
+        if isinstance(keys_sequence, MouseKey):
+            # No keyboard sends it: `mouse` below runs it, from the place the event happened.
+            handler = None
+        else:
+            # An `Any` binding is eager, or it loses to an eager one below
+            # it: the pane's own keys and `_hide_numbers` are any-key
+            # bindings too, and waiting for a longer sequence that cannot
+            # come hands the key to them. The same lesson
+            # `_load_builtins` records on `_hide_numbers`.
+            self.custom_key_bindings.add(*keys_sequence, filter=filter, eager=(keys_sequence == (Keys.Any,)))(
+                key_handler
+            )
+            handler = key_handler
 
         self.custom_bindings[table, keys_sequence] = CustomBinding(
-            key_handler, command, arguments, key_name, repeat=repeat, note=note
+            handler, run, command, arguments, key_name, repeat=repeat, note=note
         )
 
     def enter_mode(self, name: str) -> None:
@@ -840,7 +857,7 @@ class PymuxKeyBindings:
 
         Raises `ValueError` when the name reads as no key at all.
         """
-        return self.custom_bindings.get((table, key_however_it_is_written(key_name)))
+        return self.custom_bindings.get((table, bound_key(key_name)))
 
     def remove_custom_binding(self, key_name: str, table: str = PREFIX_TABLE) -> None:
         """
@@ -850,11 +867,82 @@ class PymuxKeyBindings:
 
         :param key_name: Pymux key name, for instance "C-A".
         """
-        k = (table, key_however_it_is_written(key_name))
+        k = (table, bound_key(key_name))
 
         if k in self.custom_bindings:
-            self.custom_key_bindings.remove(self.custom_bindings[k].handler)
+            handler = self.custom_bindings[k].handler
+            if handler is not None:
+                self.custom_key_bindings.remove(handler)
             del self.custom_bindings[k]
+
+    def mouse(
+        self,
+        event: MouseEvent,
+        location: MouseLocation,
+        *,
+        pane: Pane | None = None,
+        window: Window | None = None,
+        status_range: str = "",
+        replay: Callable[[], object] | None = None,
+    ) -> bool:
+        """
+        Run the binding on the mouse key this event makes, in place of
+        what pymux does with it: True when one ran, and the caller then
+        does nothing more.
+
+        Every mouse event over a pane or the status line comes here
+        first, bound or not: drags and clicks are counted across
+        events. `replay` is what the caller does otherwise, which
+        `send-keys -M` runs. Lillecarl/pyterm#1034.
+        """
+        try:
+            client_state = self.pymux.get_client_state()
+        except ValueError:
+            return False
+        clicks = client_state.mouse_clicks
+        found = clicks.kind_of(event, location, pane if pane is not None else (window, status_range))
+        if found is None:
+            return False
+        kind, button = found
+        replay_here: Callable[[], object] | None = None
+        if replay is not None:
+            done = replay
+
+            def under_this_client() -> object:
+                # `send-keys -M` runs later, in a task of its own.
+                with set_app(client_state.app):
+                    return done()
+
+            replay_here = under_this_client
+
+        at = MouseAt(key_of(event, kind, button, location), pane, window, status_range, replay_here)
+        if kind is MouseKind.SECOND_CLICK:
+            self._double_click_later(client_state, at, clicks.second_presses)
+        return self._run_mouse(client_state, at)
+
+    def _run_mouse(self, client_state: ClientState, at: MouseAt) -> bool:
+        binding = self.custom_bindings.get((client_state.active_key_table, at.key))
+        if binding is None:
+            return False
+        with mouse_at(at):
+            binding.run()
+        return True
+
+    def _double_click_later(self, client_state: ClientState, at: MouseAt, second_press: int) -> None:
+        "tmux's click timer: `DoubleClick` once `CLICK_TIMEOUT` passes with no third press."
+        tasks = self.pymux.tasks
+        if tasks is None or not any(
+            isinstance(key, MouseKey) and key.kind is MouseKind.DOUBLE_CLICK for _table, key in self.custom_bindings
+        ):
+            return
+
+        async def later() -> None:
+            await anyio.sleep(CLICK_TIMEOUT)
+            if client_state.mouse_clicks.double_click_due(second_press):
+                with set_app(client_state.app):
+                    self._run_mouse(client_state, replace(at, key=replace(at.key, kind=MouseKind.DOUBLE_CLICK)))
+
+        tasks.start_soon(later)
 
 
 class CustomBinding:
@@ -864,7 +952,8 @@ class CustomBinding:
 
     def __init__(
         self,
-        handler: Callable[[E], None],
+        handler: Callable[[E], None] | None,
+        run: Callable[[], None],
         command: str,
         arguments: list[str],
         written: str,
@@ -872,7 +961,9 @@ class CustomBinding:
         repeat: bool = False,
         note: str | None = None,
     ) -> None:
+        #: The prompt_toolkit handler, or None for a mouse key, which `PymuxKeyBindings.mouse` runs.
         self.handler = handler
+        self.run = run
         self.command = command
         self.arguments = arguments
         #: The name the person wrote. The binding is not held under it,

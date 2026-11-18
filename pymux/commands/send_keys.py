@@ -17,6 +17,7 @@ from pymux.commands import CommandException, CommandParser, Target, add_command,
 from pymux.commands.common import refuse_without_a_waiter, send_key, terminal_of, the_pane
 from pymux.commands.wait_pane import add_condition_arguments, armed, asks_for_a_wait
 from pymux.keys.key_spelling import event_however_it_is_written
+from pymux.keys.mouse_keys import the_mouse
 
 #: The copy mode commands `send-keys -X` runs, by tmux's names, and
 #: whether each goes down. `-o` after one jumps to where a command's
@@ -80,6 +81,15 @@ def send_keys(pymux: Pymux, args: argparse.Namespace) -> Coroutine[Any, Any, Non
         _copy_mode_command(pymux, args)
         return None
 
+    if args.M:
+        # The mouse event a binding runs for goes where it would have
+        # gone with no binding on its key. Lillecarl/pyterm#1034.
+        at = the_mouse()
+        if at is None or at.replay is None:
+            raise CommandException("no mouse target")
+        at.replay()
+        return None
+
     pane = the_pane(pymux, args.target_pane)
     if not asks_for_a_wait(args):
         _send(pane, args)
@@ -131,6 +141,9 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     add_target(parser, "-t", kind=Target.PANE, dest="target_pane", help="The pane to send to.")
     parser.add_argument("-l", dest="l", action="store_true", help="Send the keys as text, not key names.")
     parser.add_argument("-R", dest="R", action="store_true", help="Reset the terminal of the pane first.")
+    parser.add_argument(
+        "-M", dest="M", action="store_true", help="In a mouse key's binding: hand the event on, as with no binding."
+    )
     parser.add_argument(
         "-X",
         dest="X",

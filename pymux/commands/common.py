@@ -27,7 +27,11 @@ from pymux.commands import CommandException, this_client
 from pymux.format import Language, format_pymux_string
 from pymux.ids import PaneId, WindowId, WindowIndex
 from pymux.keys.key_spelling import why_pane_cannot_read
+from pymux.keys.mouse_keys import the_mouse
 from pymux.options.options import Option, Scope, SetOptionError
+
+#: tmux's names for where the mouse event a binding runs for happened: `-t =`, or `-t {mouse}`.
+MOUSE_TARGETS = frozenset({"=", "{mouse}"})
 
 
 def add_pane_command_argument(parser: argparse.ArgumentParser, help: str) -> None:
@@ -75,6 +79,14 @@ def find_window(pymux: Pymux, target: str | None) -> Window | None:
                 % (window.window_id, pymux.current_session.name)
             )
         return window
+
+    if target in MOUSE_TARGETS:
+        at = the_mouse()
+        if at is None:
+            return None
+        if at.window is not None:
+            return at.window
+        return pymux._window_holding(at.pane) if at.pane is not None else None
 
     # A pane ID target: `%<id>`. (Find the window that owns this pane.)
     if target.startswith("%"):
@@ -219,6 +231,14 @@ def find_pane(pymux: Pymux, target: str | None) -> Pane | None:
                 % (pane.pane_id, pymux.current_session.name)
             )
         return pane
+
+    if target in MOUSE_TARGETS:
+        at = the_mouse()
+        if at is None:
+            return None
+        if at.pane is not None:
+            return at.pane
+        return at.window.active_pane if at.window is not None else None
 
     # A pane ID target: `%<id>`. The server knows every pane by id, so
     # this reaches across the sessions.

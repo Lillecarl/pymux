@@ -48,3 +48,6 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     # tmux client that enters is stuck. Lillecarl/pyterm#472.
     parser = add_command(subparsers, copy_mode, read_only=True)
     parser.add_argument("-u", dest="u", action="store_true", help="Accepted for tmux. Pymux does not page up yet.")
+    parser.add_argument(
+        "-e", dest="e", action="store_true", help="Accepted for tmux: the wheel down leaves copy mode at the bottom."
+    )

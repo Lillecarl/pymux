@@ -24,6 +24,7 @@ from ..enums import EditingKeys, RenderMode, Woke
 from ..ids import PaneId, WindowIndex
 from ..keys.actions import Kind, Origin, note, note_keys, started_by
 from ..keys.key_spelling import why_pane_cannot_read
+from ..keys.mouse_keys import MouseLocation
 from ..log import logger
 from ..pane_command import PaneCommand, argv_of
 from ..plugin_api.events import BellRang, PaneEnded
@@ -35,6 +36,7 @@ from .session import Session
 from .window_tree import Window
 
 if TYPE_CHECKING:
+    from prompt_toolkit.mouse_events import MouseEvent
     from ptterm.control import TerminalControl
     from ptterm.program import Program
     from pyte.keys.events import KeyEvent
@@ -409,6 +411,21 @@ class PaneMaker:
         # for the reason `on_content_changed` gives above: a pane is
         # about the arrangement and knows nothing about a widget.
         terminal_control.on_mouse_focus = focus_pane_on_click
+
+        def mouse_first(mouse_event: MouseEvent) -> bool:
+            "A person's binding on the mouse key this makes, in place of the pane's own handling."
+            if not terminal_control.may_be_driven():
+                return False
+            found = self.pymux.place_of_pane_id(pane.pane_id)
+            return self.pymux.key_bindings_manager.mouse(
+                mouse_event,
+                MouseLocation.PANE,
+                pane=pane,
+                window=found[1] if found is not None else None,
+                replay=lambda: terminal_control.handle_mouse(mouse_event),
+            )
+
+        terminal_control.mouse_first = mouse_first
         terminal_control.placeholder_ids = lambda image_id: self.pymux.outer_image_ids.id_of(pane.pane_id, image_id)
 
         def pointer_fraction() -> tuple[float, float]:

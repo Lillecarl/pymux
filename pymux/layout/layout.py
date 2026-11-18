@@ -43,6 +43,7 @@ from ..chooser import ChooserView
 from ..enums import Chooser
 from ..filters import WaitsForConfirmation
 from ..format import format_pymux_string
+from ..keys.mouse_keys import MouseLocation
 from ..log import logger
 from ..wayland.window_pane import WindowWidget
 from .border_drag import DragCapture, holds_window_panes, press_on_line
@@ -570,14 +571,14 @@ class LayoutManager:
                                     height=1,
                                     width=(lambda: D(max=self.client_state.session.options.status_left_length)),
                                     dont_extend_width=True,
-                                    content=FormattedTextControl(self.status.left),
+                                    content=self.status.part(self.status.left, MouseLocation.STATUS_LEFT),
                                 ),
                                 # List of windows in the middle.
                                 Window(
                                     height=lambda: D.exact(max(1, self.status.rows())),
                                     char=" ",
                                     align=self.status.align,
-                                    content=FormattedTextControl(self.status.window_list),
+                                    content=self.status.part(self.status.window_list, MouseLocation.STATUS_DEFAULT),
                                 ),
                                 # Right.
                                 Window(
@@ -585,7 +586,7 @@ class LayoutManager:
                                     width=lambda: D(max=self.status.right_length()),
                                     dont_extend_width=True,
                                     align=WindowAlign.RIGHT,
-                                    content=FormattedTextControl(self.status.right),
+                                    content=self.status.part(self.status.right, MouseLocation.STATUS_RIGHT),
                                 ),
                             ],
                             z_index=Z_INDEX.STATUS_BAR,

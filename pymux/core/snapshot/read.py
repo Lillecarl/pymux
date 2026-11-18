@@ -24,7 +24,7 @@ from ...ids import PaneId, SessionId, WindowId, WindowIndex
 from ...jobs.feed import JobFeed
 from ...jobs.job import Job, JobId
 from ...jobs.pipes import JobPipes
-from ...keys.key_spelling import key_however_it_is_written
+from ...keys.mouse_keys import bound_key
 from ...notify.notifications import Notification, NotificationSource, Route
 from ...options.client_options import ClientOptions
 from ...options.option_fields import Options
@@ -337,7 +337,7 @@ def _read_bindings(pymux: Pymux, db: apsw.Connection) -> None:
     for (table, _keys), written in bindings.by_hand.items():
         bindings.remove_custom_binding(written, table=table)
     for row in select(db, KeyBindingRow):
-        if (row.key_table, key_however_it_is_written(row.written)) in bindings.by_hand:
+        if (row.key_table, bound_key(row.written)) in bindings.by_hand:
             bindings.add_custom_binding(
                 row.written,
                 row.command,
