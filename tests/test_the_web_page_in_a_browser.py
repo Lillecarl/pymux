@@ -358,7 +358,10 @@ async def test_a_click_on_the_page_reaches_a_program_that_asked_for_the_mouse(se
 
         await call(server, "browser.click", name="page", selector="pymux-pane")
 
+        # The press and the release arrive one after the other, so a
+        # capture can hold the press alone: wait for both.
         with anyio.fail_after(20):
-            while not re.search(r"\[<0;\d+;\d+M", shown := await call(server, "pane.capture", pane=pane)):
+            while not re.search(
+                r"\[<0;\d+;\d+M.*\[<0;\d+;\d+m", await call(server, "pane.capture", pane=pane), re.DOTALL
+            ):
                 await anyio.sleep(0.1)
-        assert re.search(r"\[<0;\d+;\d+m", shown), shown
