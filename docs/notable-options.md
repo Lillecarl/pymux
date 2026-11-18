@@ -62,6 +62,7 @@ A window that no client looks at carries a mark in `#F` (and so in the status li
 | `monitor-silence` | window | `0` | Seconds of quiet after output that mark the window with `silence-symbol`: the mark that says a build ended. Off, as in tmux, because the right time depends on the program. |
 | `monitor-bell` | window | on | A bell marks the window with `bell-symbol`, as in tmux. |
 | `activity-action` | session | `none` | A new activity mark rings no terminal. tmux has `other`, but with `monitor-activity` on a terminal would ring at every output. `bell-action` (`any`), `silence-action` (`other`) and `visual-bell`, `visual-activity`, `visual-silence` (`off`, so a terminal rings and no message shows) are tmux's. |
+| `display-time` | session | `0` | A message stays until a key is pressed. tmux takes it down after 750 milliseconds, but an error from the configuration at startup is a message too, and nobody reads it in that time. |
 | `activity-symbol`, `bell-symbol`, `silence-symbol`, `notification-symbol` | session | `#`, `!`, `~`, `?` | ASCII, so every font has them; the first three are tmux's. Each mark has its own symbol until use shows which programs send what. Set icons here for a font that has them. |
 
 ## A log of what you do

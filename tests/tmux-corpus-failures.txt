@@ -65,7 +65,6 @@ folke__dot.conf line 39: pymux: Invalid option: terminal-overrides
 folke__dot.conf line 40: pymux: Invalid option: terminal-overrides
 gpakosz__.tmux.conf line 32: pymux: Invalid option: prefix2
 gpakosz__.tmux.conf line 55: pymux: Invalid option: display-panes-time
-gpakosz__.tmux.conf line 56: pymux: Invalid option: display-time
 hamvocke__dotfiles.conf line 36: pymux: Invalid option: allow-rename
 hamvocke__dotfiles.conf line 55: pymux: Invalid option: terminal-overrides
 hamvocke__dotfiles.conf line 72: pymux: Invalid option: clock-mode-colour
@@ -97,7 +96,6 @@ jbnicolai__tmux.conf line 59: pymux: Invalid option: aggressive-resize
 jbnicolai__tmux.conf line 80: pymux: unrecognized arguments: -t
 jbnicolai__tmux.conf line 81: pymux: unrecognized arguments: -t
 jmbuhr__tmux-kickstarter.conf line 16: pymux: Invalid option: terminal-overrides
-joshmedeski__dotfiles.conf line 22: pymux: Invalid option: display-time
 joshmedeski__dotfiles.conf line 26: pymux: Invalid option: terminal-overrides
 joshmedeski__dotfiles.conf line 27: pymux: theme is a client option: use set-client-option
 joshmedeski__dotfiles.conf line 30: pymux: Invalid option: detach-on-destroy

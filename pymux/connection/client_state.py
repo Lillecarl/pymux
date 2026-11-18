@@ -169,6 +169,7 @@ class ClientState:
         "pointer_left": Keep.DROPPED,
         "key_tables": Keep.SAVED,
         "message": Keep.SAVED,
+        "message_timed": Keep.DROPPED,  # a restored message gets its whole time again
         "confirmations": Keep.SAVED,
         "_questions_changed": Keep.DROPPED,
         "prompt_text": Keep.SAVED,
@@ -331,6 +332,9 @@ class ClientState:
 
         #: Error/info message.
         self.message: str | None = None
+
+        #: The message whose `display-time` runs, so a frame arms each one once.
+        self.message_timed: str | None = None
 
         #: The title `set-titles` wrote last, so a frame writes only a new one.
         self.title_sent: str | None = None
@@ -495,6 +499,7 @@ class ClientState:
                 self._frame_waiters.set()
                 self._frame_waiters = None
 
+            self.time_message()
             try:
                 self.sync_title()
             except Exception:
@@ -564,6 +569,23 @@ class ClientState:
         self.app.after_render += after_render
         # Last, so the images above still read the frame's arrangement.
         self.app.after_render += self.layout_manager.frame_ended
+
+    def time_message(self) -> None:
+        "Take a message down `display-time` after the first frame that draws it, as tmux's status_message_set."
+        message = self.message
+        if message is None or message is self.message_timed:
+            self.message_timed = message
+            return
+        self.message_timed = message
+        milliseconds = self.session.options.display_time
+        if milliseconds > 0 and self.pymux.tasks is not None:
+            self.pymux.tasks.start_soon(self._take_message_down, message, milliseconds / 1000)
+
+    async def _take_message_down(self, message: str, seconds: float) -> None:
+        await anyio.sleep(seconds)
+        if self.message is message:
+            self.message = None
+            self.app.invalidate()
 
     def sync_title(self) -> None:
         "While `set-titles` is on, give the terminal `set-titles-string` as its title: tmux's server_client_set_title."

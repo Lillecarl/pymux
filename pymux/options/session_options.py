@@ -106,6 +106,13 @@ class SessionOptions(Options):
     set_titles_string: str = option(
         '#S:#I:#W - "#T" #{session_alerts}', doc="What `set-titles` makes the title: tmux's default."
     )
+    display_time: int = option(
+        0,
+        doc=(
+            "Milliseconds a message stays on the status line; 0 keeps it until a key is pressed. "
+            "Not tmux's 750, because an error from the configuration at startup is a message too."
+        ),
+    )
     open_url_target: OpenUrlTarget = option(
         OpenUrlTarget.LAST, doc="Which client's browser a URL opens in. `OpenUrlTarget` says."
     )
