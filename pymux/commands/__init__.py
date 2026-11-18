@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import argparse
 import inspect
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Iterator, Mapping, Sequence
 from enum import StrEnum
 from importlib import import_module
 from typing import TYPE_CHECKING, Any, Final, NoReturn, overload, override
@@ -252,6 +252,45 @@ class CommandParser(argparse.ArgumentParser):
     @override
     def error(self, message: str) -> NoReturn:
         raise BadLine(message)
+
+    @override
+    def parse_known_args(  # pyrefly: ignore[bad-override]
+        self, args: Sequence[str] | None = None, namespace: argparse.Namespace | None = None
+    ) -> tuple[argparse.Namespace | None, list[str]]:
+        if args is not None:
+            args = list(self._as_getopt_reads(args))
+        return super().parse_known_args(args, namespace)
+
+    def _as_getopt_reads(self, args: Sequence[str]) -> Iterator[str]:
+        """
+        Split a word of short options at its `=`, the way getopt does.
+
+        tmux reads `-t=` as -t with the value `=`, the pane under the
+        mouse. argparse splits an option at its `=` and reads `-t=` as
+        -t with an empty value, which is the current pane.
+        """
+        words = iter(args)
+        for word in words:
+            if word == "--":
+                yield word
+                yield from words
+                return
+            if not word.startswith("-") or word.startswith("--") or "=" not in word:
+                yield word
+                continue
+            for i, letter in enumerate(word[1:], 1):
+                action = self._option_string_actions.get("-" + letter)
+                if action is None:
+                    yield word
+                    break
+                if action.nargs != 0:
+                    if i > 1:
+                        yield word[:i]
+                    yield "-" + letter
+                    yield word[i + 1 :]
+                    break
+            else:
+                yield word
 
 
 class Target(StrEnum):
