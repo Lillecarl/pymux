@@ -179,6 +179,8 @@ class PaneMaker:
             if self.pymux.wayland.display and not environment.get("WAYLAND_DISPLAY"):
                 environment["WAYLAND_DISPLAY"] = self.pymux.wayland.display
 
+        if command is None and options.default_command:
+            command = options.default_command
         command_list = argv_of(command, options.default_shell)
 
         self.pymux.shims.make(options)

@@ -260,6 +260,9 @@ class SessionOptions(Options):
     silence_symbol: str = option("~", doc="What `#F` writes for silence. Lillecarl/pyterm#769.")
     notification_symbol: str = option("?", doc="What `#F` writes for a notification. Lillecarl/pyterm#769.")
     default_shell: str = option(factory=get_default_shell, doc="What a new pane runs when no command is given.")
+    default_command: str = option(
+        "", doc="What a new pane runs, with `default-shell -c`, when no command is given; empty starts the shell alone."
+    )
     status_position: StatusPosition = option(
         StatusPosition.BOTTOM, doc="Which end of the screen the status line takes.", on_set=_redraw_all
     )

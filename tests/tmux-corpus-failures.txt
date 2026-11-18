@@ -23,7 +23,6 @@ ShawnPana__smux.conf line 76: pymux: Invalid option: status-style
 ShawnPana__smux.conf line 79: pymux: Invalid option: window-status-current-style
 ThePrimeagen__.dotfiles.conf line 1: pymux: Invalid option: terminal-overrides
 ThePrimeagen__.dotfiles.conf line 8: pymux: Invalid option: status-style
-christoomey__dotfiles.conf line 6: pymux: Invalid option: default-command
 christoomey__dotfiles.conf line 20: pymux: Invalid option: allow-passthrough
 christoomey__dotfiles.conf line 22: pymux: Invalid option: terminal-features
 christoomey__dotfiles.conf line 60: pymux: Invalid option: status-fg
@@ -57,7 +56,6 @@ edouard-lopez__tmux-config.conf line 29: pymux: IOError: [Errno 2] No such file 
 edouard-lopez__tmux-config.conf line 30: pymux: IOError: [Errno 2] No such file or directory: '$HOME/.tmux/vi.tmux'
 edouard-lopez__tmux-config.conf line 31: pymux: IOError: [Errno 2] No such file or directory: '$HOME/.tmux/windows.tmux'
 edouard-lopez__tmux-config.conf line 33: pymux: IOError: [Errno 2] No such file or directory: '$HOME/.tmux/plugins.tmux'
-edouard-lopez__tmux-config.conf line 37: pymux: Invalid option: default-command
 folke__dot.conf line 35: pymux: IOError: [Errno 2] No such file or directory: '$HOME/projects/tokyonight.nvim/extras/tmux/tokyonight_moon.tmux'
 folke__dot.conf line 39: pymux: Invalid option: terminal-overrides
 folke__dot.conf line 40: pymux: Invalid option: terminal-overrides
