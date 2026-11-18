@@ -66,9 +66,8 @@ if not apsw.using_amalgamation or not apsw.apsw_version().startswith(apsw.sqlite
 
 #: What this server answers with. Agents read it with `PRAGMA
 #: user_version` and re-read the tables when it differs from what they
-#: were told. 18: `live.window_defaults` is one row for the server,
-#: keyed by `id`, and not one per session.
-SCHEMA_VERSION = 18
+#: were told. 19: `live.key_bindings` has `repeat` and `note`.
+SCHEMA_VERSION = 19
 
 #: The questions every boot starts with. A name an agent saves later
 #: replaces one of these for the rest of the boot; the next boot seeds

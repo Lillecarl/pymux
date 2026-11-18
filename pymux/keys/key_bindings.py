@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import functools
 import logging
+import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING, override
 
@@ -31,7 +32,7 @@ from ptterm.copy_mode import copy_mode_key_bindings
 from ..commands import call_command_handler
 from ..commands.utils import wrap_argument
 from ..enums import COMMAND, PROMPT, Chooser, EditingKeys
-from ..filters import HasPrefix, KeyTableIs, ModeActive, ModeTakesPrefix, WaitsForConfirmation
+from ..filters import HasPrefix, KeyTableIs, ModeActive, ModeTakesPrefix, Repeating, WaitsForConfirmation
 from ..notify.osc import PASSTHROUGH_VARIABLE, set_user_var
 from ..wayland.window_pane import WindowWidget
 from .actions import Kind, Origin, note, note_keys, started_by
@@ -682,7 +683,16 @@ class PymuxKeyBindings:
 
         return kb
 
-    def add_custom_binding(self, key_name: str, command: str, arguments: list[str], table: str = PREFIX_TABLE) -> None:
+    def add_custom_binding(
+        self,
+        key_name: str,
+        command: str,
+        arguments: list[str],
+        table: str = PREFIX_TABLE,
+        *,
+        repeat: bool = False,
+        note: str | None = None,
+    ) -> None:
         """
         Add custom binding (for the "bind-key" command.)
         Raises ValueError if the give `key_name` is an invalid name.
@@ -693,6 +703,10 @@ class PymuxKeyBindings:
             binding that answers without the prefix (`-n`), the name
             of a mode for `bind-key -T`. The default is the prefix
             table, what a bare `bind-key` has always meant.
+        :param repeat: `bind-key -r`: for `repeat-time` after this key
+            runs, the next key bound with `-r` in the prefix table
+            works without the prefix.
+        :param note: `bind-key -N`, which `list-keys -N` shows.
         """
         # Translate the name into a prompt_toolkit key sequence, in
         # either spelling. (Can raise ValueError.)
@@ -711,6 +725,9 @@ class PymuxKeyBindings:
         # masking: while a mode is on top, the root table and the
         # prefix table hold nothing the mode does not.
         filter: Filter = KeyTableIs(self.pymux, table)
+        repeats = repeat and table == PREFIX_TABLE
+        if repeats:
+            filter = filter | (Repeating(self.pymux) & KeyTableIs(self.pymux, ROOT_TABLE))
         filter = filter & ~(WaitsForConfirmation(self.pymux) | has_focus(COMMAND) | has_focus(PROMPT))
 
         def key_handler(event: E) -> None:
@@ -730,6 +747,9 @@ class PymuxKeyBindings:
             with started_by(Origin.KEY, table, key_name):
                 self.pymux.spawn_command(call_command_handler(command, self.pymux, arguments))
             client_state.has_prefix = False
+            repeat_time = client_state.session.options.repeat_time
+            if repeats and repeat_time > 0:
+                client_state.repeat_until = time.monotonic() + repeat_time / 1000
 
         # An `Any` binding is eager, or it loses to an eager one below
         # it: the pane's own keys and `_hide_numbers` are any-key
@@ -738,7 +758,9 @@ class PymuxKeyBindings:
         # `_load_builtins` records on `_hide_numbers`.
         self.custom_key_bindings.add(*keys_sequence, filter=filter, eager=(keys_sequence == (Keys.Any,)))(key_handler)
 
-        self.custom_bindings[table, keys_sequence] = CustomBinding(key_handler, command, arguments, key_name)
+        self.custom_bindings[table, keys_sequence] = CustomBinding(
+            key_handler, command, arguments, key_name, repeat=repeat, note=note
+        )
 
     def enter_mode(self, name: str) -> None:
         """
@@ -846,6 +868,9 @@ class CustomBinding:
         command: str,
         arguments: list[str],
         written: str,
+        *,
+        repeat: bool = False,
+        note: str | None = None,
     ) -> None:
         self.handler = handler
         self.command = command
@@ -853,3 +878,5 @@ class CustomBinding:
         #: The name the person wrote. The binding is not held under it,
         #: so this is what `list-keys` shows and nothing more.
         self.written = written
+        self.repeat = repeat
+        self.note = note

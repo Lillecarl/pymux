@@ -496,6 +496,8 @@ class KeyBindingRow:
     written: str
     command: str
     arguments: str
+    repeat: bool = False
+    note: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

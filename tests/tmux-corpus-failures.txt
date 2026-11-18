@@ -1,15 +1,3 @@
-AdamWhittingham__tmux-config.conf line 20: pymux: unrecognized arguments: -r
-AdamWhittingham__tmux-config.conf line 21: pymux: unrecognized arguments: -r
-AdamWhittingham__tmux-config.conf line 22: pymux: unrecognized arguments: -r
-AdamWhittingham__tmux-config.conf line 23: pymux: unrecognized arguments: -r
-AdamWhittingham__tmux-config.conf line 28: pymux: unrecognized arguments: -r
-AdamWhittingham__tmux-config.conf line 29: pymux: unrecognized arguments: -r
-AdamWhittingham__tmux-config.conf line 30: pymux: unrecognized arguments: -r
-AdamWhittingham__tmux-config.conf line 31: pymux: unrecognized arguments: -r
-AdamWhittingham__tmux-config.conf line 34: pymux: unrecognized arguments: -r
-AdamWhittingham__tmux-config.conf line 35: pymux: unrecognized arguments: -r
-AdamWhittingham__tmux-config.conf line 36: pymux: unrecognized arguments: -r
-AdamWhittingham__tmux-config.conf line 37: pymux: unrecognized arguments: -r
 AdamWhittingham__tmux-config.conf line 40: pymux: invalid command: is_vim=echo "#{pane_current_command}" | grep -iqE "(^|\/)g?(view|n?vim?)(diff)?$"
 AdamWhittingham__tmux-config.conf line 68: pymux: Invalid option: escape-time
 AdamWhittingham__tmux-config.conf line 87: pymux: Invalid option: escape-time
@@ -64,22 +52,6 @@ ShawnPana__smux.conf line 79: pymux: Invalid option: window-status-current-style
 ThePrimeagen__.dotfiles.conf line 1: pymux: Invalid option: terminal-overrides
 ThePrimeagen__.dotfiles.conf line 3: pymux: Invalid option: escape-time
 ThePrimeagen__.dotfiles.conf line 8: pymux: Invalid option: status-style
-ThePrimeagen__.dotfiles.conf line 18: pymux: unrecognized arguments: -r
-ThePrimeagen__.dotfiles.conf line 19: pymux: unrecognized arguments: -r
-ThePrimeagen__.dotfiles.conf line 20: pymux: unrecognized arguments: -r
-ThePrimeagen__.dotfiles.conf line 21: pymux: unrecognized arguments: -r
-ThePrimeagen__.dotfiles.conf line 22: pymux: unrecognized arguments: -r
-ThePrimeagen__.dotfiles.conf line 24: pymux: unrecognized arguments: -r
-ThePrimeagen__.dotfiles.conf line 27: pymux: unrecognized arguments: -r
-ThePrimeagen__.dotfiles.conf line 29: pymux: unrecognized arguments: -r
-ThePrimeagen__.dotfiles.conf line 30: pymux: unrecognized arguments: -r
-ThePrimeagen__.dotfiles.conf line 31: pymux: unrecognized arguments: -r
-ThePrimeagen__.dotfiles.conf line 32: pymux: unrecognized arguments: -r
-ThePrimeagen__.dotfiles.conf line 34: pymux: unrecognized arguments: -r
-ThePrimeagen__.dotfiles.conf line 35: pymux: unrecognized arguments: -r
-ThePrimeagen__.dotfiles.conf line 36: pymux: unrecognized arguments: -r
-ThePrimeagen__.dotfiles.conf line 37: pymux: unrecognized arguments: -r
-christoomey__dotfiles.conf line 4: pymux: unrecognized arguments: -r
 christoomey__dotfiles.conf line 6: pymux: Invalid option: default-command
 christoomey__dotfiles.conf line 11: pymux: Invalid option: display-panes-time
 christoomey__dotfiles.conf line 20: pymux: Invalid option: allow-passthrough
@@ -107,7 +79,6 @@ christoomey__dotfiles.conf line 167: pymux: Invalid option: window-active-style
 christoomey__dotfiles.conf line 170: pymux: Invalid option: pane-border-style
 christoomey__dotfiles.conf line 171: pymux: Invalid option: pane-active-border-style
 craftzdog__dotfiles-public.conf line 3: pymux: Invalid option: terminal-overrides
-craftzdog__dotfiles-public.conf line 7: pymux: Invalid option: repeat-time
 craftzdog__dotfiles-public.conf line 8: pymux: Invalid option: focus-events
 craftzdog__dotfiles-public.conf line 18: pymux: Invalid option: status-fg
 craftzdog__dotfiles-public.conf line 19: pymux: Invalid option: status-bg
@@ -162,18 +133,6 @@ gpakosz__.tmux.conf line 55: pymux: unrecognized arguments: # slightly longer pa
 gpakosz__.tmux.conf line 56: pymux: unrecognized arguments: # slightly longer status messages display time
 gpakosz__.tmux.conf line 58: pymux: unrecognized arguments: # redraw status line every 10 seconds
 gpakosz__.tmux.conf line 65: pymux: Invalid option: visual-activity
-gpakosz__.tmux.conf line 85: pymux: unrecognized arguments: -r
-gpakosz__.tmux.conf line 86: pymux: unrecognized arguments: -r
-gpakosz__.tmux.conf line 87: pymux: unrecognized arguments: -r
-gpakosz__.tmux.conf line 88: pymux: unrecognized arguments: -r
-gpakosz__.tmux.conf line 96: pymux: unrecognized arguments: -r
-gpakosz__.tmux.conf line 97: pymux: unrecognized arguments: -r
-gpakosz__.tmux.conf line 98: pymux: unrecognized arguments: -r
-gpakosz__.tmux.conf line 99: pymux: unrecognized arguments: -r
-gpakosz__.tmux.conf line 104: pymux: unrecognized arguments: -r
-gpakosz__.tmux.conf line 105: pymux: unrecognized arguments: -r
-gpakosz__.tmux.conf line 106: pymux: unrecognized arguments: -r
-gpakosz__.tmux.conf line 107: pymux: unrecognized arguments: -r
 gpakosz__.tmux.conf line 151: pymux: invalid command: %if
 gpakosz__.tmux.conf line 153: pymux: invalid command: %endif
 gpakosz__.tmux.conf line 154: pymux: invalid command: %if
@@ -262,18 +221,6 @@ joshmedeski__dotfiles.conf line 82: pymux: Invalid option: message-style
 joshmedeski__dotfiles.conf line 83: pymux: Invalid option: mode-style
 joshmedeski__dotfiles.conf line 92: pymux: invalid command: }
 joshmedeski__dotfiles.conf line 93: pymux: invalid command: }
-joshmedeski__dotfiles.conf line 97: pymux: unrecognized arguments: -N
-joshmedeski__dotfiles.conf line 98: pymux: unrecognized arguments: -N
-joshmedeski__dotfiles.conf line 99: pymux: unrecognized arguments: -N
-joshmedeski__dotfiles.conf line 100: pymux: unrecognized arguments: -N
-joshmedeski__dotfiles.conf line 101: pymux: unrecognized arguments: -N
-joshmedeski__dotfiles.conf line 102: pymux: unrecognized arguments: -N
-joshmedeski__dotfiles.conf line 103: pymux: unrecognized arguments: -N
-joshmedeski__dotfiles.conf line 104: pymux: unrecognized arguments: -N
-joshmedeski__dotfiles.conf line 106: pymux: unrecognized arguments: -N
-joshmedeski__dotfiles.conf line 108: pymux: unrecognized arguments: -N
-joshmedeski__dotfiles.conf line 109: pymux: unrecognized arguments: -N
-joshmedeski__dotfiles.conf line 110: pymux: unrecognized arguments: -N
 joshmedeski__dotfiles.conf line 143: pymux: unrecognized arguments: - 60%,30% --prompt=" " --border-label=" Open URL "
 joshmedeski__dotfiles.conf line 145: pymux: unrecognized arguments: # copy to clipboard
 joshmedeski__dotfiles.conf line 166: pymux: unrecognized arguments: # <ctrl>+hjkl
@@ -324,12 +271,6 @@ nicknisi__dotfiles.conf line 104: pymux: Invalid option: automatic-rename-format
 nicknisi__dotfiles.conf line 107: pymux: Invalid option: set-titles-string
 nicknisi__dotfiles.conf line 111: pymux: Invalid option: visual-activity
 nicknisi__dotfiles.conf line 116: pymux: Invalid option: aggressive-resize
-nicknisi__dotfiles.conf line 143: pymux: unrecognized arguments: -r
-nicknisi__dotfiles.conf line 144: pymux: unrecognized arguments: -r
-nicknisi__dotfiles.conf line 147: pymux: unrecognized arguments: -r
-nicknisi__dotfiles.conf line 148: pymux: unrecognized arguments: -r
-nicknisi__dotfiles.conf line 149: pymux: unrecognized arguments: -r
-nicknisi__dotfiles.conf line 150: pymux: unrecognized arguments: -r
 nicknisi__dotfiles.conf line 155: pymux: Invalid option: command-alias[100]
 nicknisi__dotfiles.conf line 174: pymux: unrecognized arguments: -f ignore-size }
 nicknisi__dotfiles.conf line 175: pymux: invalid command: }
@@ -353,10 +294,6 @@ nicknisi__dotfiles.conf line 261: pymux: Invalid key: 'MouseDown3Status'
 nicknisi__dotfiles.conf line 263: pymux: invalid command: }
 nicknisi__dotfiles.conf line 265: pymux: Invalid key: 'MouseDown1StatusLeft'
 nviennot__tmux-config.conf line 7: pymux: Invalid option: escape-time
-nviennot__tmux-config.conf line 21: pymux: unrecognized arguments: -r
-nviennot__tmux-config.conf line 22: pymux: unrecognized arguments: -r
-nviennot__tmux-config.conf line 23: pymux: unrecognized arguments: -r
-nviennot__tmux-config.conf line 24: pymux: unrecognized arguments: -r
 nviennot__tmux-config.conf line 40: pymux: Invalid option: allow-passthrough
 nviennot__tmux-config.conf line 41: pymux: Invalid option: terminal-features
 nviennot__tmux-config.conf line 45: pymux: Invalid option: status-bg
@@ -383,7 +320,6 @@ omerxx__dotfiles.conf line 18: pymux: unrecognized arguments: - 60%,30% --prompt
 samoshkin__tmux-config.conf line 7: pymux: Invalid option: buffer-limit
 samoshkin__tmux-config.conf line 8: pymux: Invalid option: escape-time
 samoshkin__tmux-config.conf line 9: pymux: Invalid option: display-time
-samoshkin__tmux-config.conf line 11: pymux: Invalid option: repeat-time
 samoshkin__tmux-config.conf line 12: pymux: Invalid option: allow-rename
 samoshkin__tmux-config.conf line 13: pymux: Invalid option: automatic-rename
 samoshkin__tmux-config.conf line 14: pymux: Invalid option: aggressive-resize
@@ -412,12 +348,7 @@ samoshkin__tmux-config.conf line 56: pymux: unrecognized arguments: # resize 5 r
 samoshkin__tmux-config.conf line 57: pymux: unrecognized arguments: # resize 5 rows down
 samoshkin__tmux-config.conf line 58: pymux: unrecognized arguments: # resize 5 rows right
 samoshkin__tmux-config.conf line 59: pymux: unrecognized arguments: # resize 5 rows left
-samoshkin__tmux-config.conf line 83: pymux: unrecognized arguments: -r
-samoshkin__tmux-config.conf line 84: pymux: unrecognized arguments: -r
-samoshkin__tmux-config.conf line 85: pymux: unrecognized arguments: -r
-samoshkin__tmux-config.conf line 86: pymux: unrecognized arguments: -r
-samoshkin__tmux-config.conf line 87: pymux: unrecognized arguments: -r
-samoshkin__tmux-config.conf line 88: pymux: unrecognized arguments: -r
+samoshkin__tmux-config.conf line 83: pymux: Invalid key: 'C-['
 samoshkin__tmux-config.conf line 100: pymux: invalid command: select-pane -t:.1 ; swap-pane -d -t 1 -s "!"
 samoshkin__tmux-config.conf line 113: pymux: invalid command: run-shell 'yes | head -n #{session_windows} | xargs -I {} -n 1 tmux movew -t %%'
 samoshkin__tmux-config.conf line 119: pymux: invalid command: display "Session has only 1 client attached"
@@ -472,9 +403,6 @@ shfshanyue__tmux-config.conf line 5: pymux: Invalid option: escape-time
 shfshanyue__tmux-config.conf line 9: pymux: Invalid option: pane-base-index
 shfshanyue__tmux-config.conf line 12: pymux: Invalid option: allow-rename
 shfshanyue__tmux-config.conf line 13: pymux: Invalid option: automatic-rename
-shfshanyue__tmux-config.conf line 30: pymux: unrecognized arguments: -r
-shfshanyue__tmux-config.conf line 32: pymux: unrecognized arguments: -r
-shfshanyue__tmux-config.conf line 33: pymux: unrecognized arguments: -r
 shfshanyue__tmux-config.conf line 36: pymux: unrecognized arguments: # tomorrow night blue, base3
 shfshanyue__tmux-config.conf line 38: pymux: unrecognized arguments: # tomorrow night blue, base3
 shfshanyue__tmux-config.conf line 39: pymux: unrecognized arguments: # blue
@@ -489,10 +417,6 @@ statico__dotfiles.conf line 13: pymux: Invalid option: display-panes-time
 statico__dotfiles.conf line 24: pymux: Invalid option: set-titles
 statico__dotfiles.conf line 25: pymux: Invalid option: set-titles-string
 statico__dotfiles.conf line 31: pymux: Invalid key: 'MouseDown3Pane'
-statico__dotfiles.conf line 50: pymux: unrecognized arguments: -r
-statico__dotfiles.conf line 51: pymux: unrecognized arguments: -r
-statico__dotfiles.conf line 52: pymux: unrecognized arguments: -r
-statico__dotfiles.conf line 53: pymux: unrecognized arguments: -r
 statico__dotfiles.conf line 64: pymux: Invalid key: 'DoubleClick1Pane'
 statico__dotfiles.conf line 68: pymux: Invalid option: status-fg
 statico__dotfiles.conf line 69: pymux: Invalid option: status-bg
@@ -541,8 +465,6 @@ tedsluis__tmux.conf.conf line 103: pymux: Invalid option: status-position
 tedsluis__tmux.conf.conf line 104: pymux: Invalid option: status-bg
 tedsluis__tmux.conf.conf line 105: pymux: Invalid option: status-fg
 tedsluis__tmux.conf.conf line 106: pymux: Invalid option: status-attr
-thoughtbot__dotfiles.conf line 10: pymux: unrecognized arguments: -r
-thoughtbot__dotfiles.conf line 11: pymux: unrecognized arguments: -r
 thoughtbot__dotfiles.conf line 13: pymux: Invalid option: prefix2
 thoughtbot__dotfiles.conf line 17: pymux: Invalid option: pane-base-index
 thoughtbot__dotfiles.conf line 23: pymux: Invalid option: status-style
@@ -571,28 +493,11 @@ tony__tmux-config.conf line 32: pymux: unrecognized arguments: # center align wi
 tony__tmux-config.conf line 46: pymux: Invalid option: escape-time
 tony__tmux-config.conf line 51: pymux: Invalid option: aggressive-resize
 tony__tmux-config.conf line 59: pymux: Invalid option: visual-activity
-tony__tmux-config.conf line 71: pymux: unrecognized arguments: -N
-tony__tmux-config.conf line 72: pymux: unrecognized arguments: -N
-tony__tmux-config.conf line 73: pymux: unrecognized arguments: -N
-tony__tmux-config.conf line 74: pymux: unrecognized arguments: -N
-tony__tmux-config.conf line 75: pymux: unrecognized arguments: -N
-tony__tmux-config.conf line 78: pymux: unrecognized arguments: -N
-tony__tmux-config.conf line 79: pymux: unrecognized arguments: -N
-tony__tmux-config.conf line 80: pymux: unrecognized arguments: -N
-tony__tmux-config.conf line 81: pymux: unrecognized arguments: -N
-tony__tmux-config.conf line 84: pymux: unrecognized arguments: -N
-tony__tmux-config.conf line 85: pymux: unrecognized arguments: -N
-tony__tmux-config.conf line 87: pymux: unrecognized arguments: -N
-tony__tmux-config.conf line 90: pymux: unrecognized arguments: -N
 tony__tmux-config.conf line 101: pymux: invalid command: Kill Window
 tony__tmux-config.conf line 104: pymux: Invalid option: automatic-rename
 tony__tmux-config.conf line 108: pymux: Invalid option: terminal-overrides
 tony__tmux-config.conf line 109: pymux: Invalid option: focus-events
 tony__tmux-config.conf line 116: pymux: Invalid option: terminal-features
-tony__tmux-config.conf line 118: pymux: unrecognized arguments: -N
-tony__tmux-config.conf line 119: pymux: unrecognized arguments: -N
-tony__tmux-config.conf line 120: pymux: unrecognized arguments: -N
-tony__tmux-config.conf line 121: pymux: unrecognized arguments: -N
 tony__tmux-config.conf line 122: pymux: Invalid option: copy-mode-match-style
 tony__tmux-config.conf line 123: pymux: Invalid option: copy-mode-current-match-style
 tony__tmux-config.conf line 126: pymux: Invalid option: copy-command

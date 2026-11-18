@@ -392,7 +392,9 @@ def rows_of(pymux: Pymux, *, mirrored: bool) -> Iterator[Row]:
     for (table, _keys), binding in sorted(
         pymux.key_bindings_manager.custom_bindings.items(), key=lambda item: (item[0][0], item[1].written)
     ):
-        yield KeyBindingRow(table, binding.written, binding.command, json.dumps(binding.arguments))
+        yield KeyBindingRow(
+            table, binding.written, binding.command, json.dumps(binding.arguments), binding.repeat, binding.note
+        )
     for table, written in sorted(
         (table, written) for (table, _keys), written in pymux.key_bindings_manager.by_hand.items()
     ):

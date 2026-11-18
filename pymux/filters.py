@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING
 
 from prompt_toolkit.filters import Filter
@@ -13,6 +14,7 @@ __all__ = [
     "KeyTableIs",
     "ModeActive",
     "ModeTakesPrefix",
+    "Repeating",
     "WaitsForConfirmation",
     "WaitsForPrompt",
 ]
@@ -51,6 +53,24 @@ class KeyTableIs(Filter):
     def __call__(self):
         try:
             return self.pymux.get_client_state().active_key_table == self.table
+        except ValueError:
+            return False
+
+
+class Repeating(Filter):
+    """
+    When a key bound with `bind-key -r` ran less than `repeat-time`
+    ago, and no other key came since. tmux's `CLIENT_REPEAT`.
+    Lillecarl/pyterm#1033.
+    """
+
+    def __init__(self, pymux: Pymux) -> None:
+        self.pymux = pymux
+        super().__init__()
+
+    def __call__(self):
+        try:
+            return self.pymux.get_client_state().repeat_until > time.monotonic()
         except ValueError:
             return False
 

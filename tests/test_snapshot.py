@@ -322,6 +322,8 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     pymux.hooks.commands = {"after-new-window": ["display-message new", "display-panes"], "pane-died": ["kill-pane"]}
     pymux.key_bindings_manager.add_custom_binding("F5", "display-message", ["it's F5"], table="root")
     pymux.key_bindings_manager.add_custom_binding("x", "kill-pane", [])
+    pymux.key_bindings_manager.add_custom_binding("H", "resize-pane", ["-L", "5"], repeat=True, note="Wider left")
+    pymux.key_bindings_manager.note_who_bound("H", "prefix", by_hand=True)
     pymux.set_by_hand["hooks"].update(pymux.hooks.commands)
     pymux.key_bindings_manager.note_who_bound("F5", "root", by_hand=True)
     pymux.key_bindings_manager.note_who_bound("x", "prefix", by_hand=True)
@@ -492,7 +494,7 @@ def _copy_modes_of(pymux) -> list:
 
 def _bindings_of(pymux) -> dict:
     return {
-        key: (binding.written, binding.command, binding.arguments)
+        key: (binding.written, binding.command, binding.arguments, binding.repeat, binding.note)
         for key, binding in pymux.key_bindings_manager.custom_bindings.items()
     }
 

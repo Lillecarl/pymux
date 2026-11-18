@@ -131,6 +131,14 @@ class SessionOptions(Options):
         doc="How many lines above the screen a pane keeps: tmux's two thousand. Lillecarl/pyterm#10.",
         choices=[200, 500, 1000, 2000, 5000, 10000],
     )
+    repeat_time: int = option(
+        500,
+        doc=(
+            "How long after a key bound with `bind-key -r` the next such key works without the prefix, "
+            "in milliseconds; zero turns it off. tmux's own default. Lillecarl/pyterm#1033."
+        ),
+        choices=[0, 250, 500, 1000],
+    )
     strip_animation_time: int = option(
         150,
         doc="How long a strip's view glides to the column a person moved to, in milliseconds. Zero jumps.",

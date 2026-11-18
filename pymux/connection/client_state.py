@@ -158,6 +158,7 @@ class ClientState:
         # Where the person was: a prefix held, a key table, a prompt,
         # a question, a menu, a chooser.
         "has_prefix": Keep.SAVED,
+        "repeat_until": Keep.DROPPED,  # half a second
         "url_mode": Keep.DROPPED,
         "border_drag": Keep.DROPPED,
         "pointer_left": Keep.DROPPED,
@@ -266,6 +267,10 @@ class ClientState:
 
         #: True when the prefix key (Ctrl-B) has been pressed.
         self.has_prefix = False
+        #: Until when, on `time.monotonic()`, a key bound with
+        #: `bind-key -r` works without the prefix. tmux's
+        #: `CLIENT_REPEAT`. Lillecarl/pyterm#1033.
+        self.repeat_until = 0.0
 
         #: The labels `show-urls` put over a pane, while they are up.
         self.url_mode: UrlMode | None = None
@@ -934,6 +939,21 @@ class ClientState:
             pymux.client_was_used(self)
 
         app.key_processor.before_key_press += key_pressed
+
+        # A key that did not renew the repeat ends it, as tmux goes back
+        # to the root table. Lillecarl/pyterm#1033.
+        repeat_before_key = self.repeat_until
+
+        def remember_repeat(_):
+            nonlocal repeat_before_key
+            repeat_before_key = self.repeat_until
+
+        def end_repeat(_):
+            if self.repeat_until == repeat_before_key:
+                self.repeat_until = 0.0
+
+        app.key_processor.before_key_press += remember_repeat
+        app.key_processor.after_key_press += end_repeat
 
         # A frame this client asked for is already stale when input
         # arrived after it was scheduled: the renderer skips it and

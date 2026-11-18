@@ -338,7 +338,14 @@ def _read_bindings(pymux: Pymux, db: apsw.Connection) -> None:
         bindings.remove_custom_binding(written, table=table)
     for row in select(db, KeyBindingRow):
         if (row.key_table, key_however_it_is_written(row.written)) in bindings.by_hand:
-            bindings.add_custom_binding(row.written, row.command, json.loads(row.arguments), table=row.key_table)
+            bindings.add_custom_binding(
+                row.written,
+                row.command,
+                json.loads(row.arguments),
+                table=row.key_table,
+                repeat=bool(row.repeat),
+                note=row.note,
+            )
 
 
 def _read_notifications(pymux: Pymux, db: apsw.Connection, counters: dict[str, int]) -> None:

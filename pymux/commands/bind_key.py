@@ -16,9 +16,16 @@ def bind_key(pymux: Pymux, args: argparse.Namespace) -> None:
     Bind a key sequence to a command.
     -n: Not necessary to use the prefix.
     -T: The key table to bind into, a mode's by name.
+    -r: For `repeat-time` after the key runs, the next key bound with
+        -r works without the prefix: `bind -r H resize-pane -L 5`.
+    -N: A note on the key, which `list-keys -N` shows.
+
+    With no command, -N and -r change a binding the key has, and make
+    none: tmux's `key_bindings_add`. Lillecarl/pyterm#1033.
     """
     key = args.key
     table = "root" if args.n else (args.table or "prefix")
+    manager = pymux.key_bindings_manager
 
     # The bound command is the first word of the remainder, and its
     # arguments are the rest. A leading `--` separated the two from
@@ -27,12 +34,23 @@ def bind_key(pymux: Pymux, args: argparse.Namespace) -> None:
     arguments = list(args.arguments)
     if arguments and arguments[0] == "--":
         arguments = arguments[1:]
-    command = arguments[0] if arguments else ""
-    bound_arguments = arguments[1:]
 
     try:
-        pymux.key_bindings_manager.add_custom_binding(key, command, bound_arguments, table=table)
-        pymux.key_bindings_manager.note_who_bound(key, table, by_hand=not a_file_speaks(pymux))
+        if arguments:
+            manager.add_custom_binding(key, arguments[0], arguments[1:], table=table, repeat=args.r, note=args.note)
+        else:
+            binding = manager.binding_on(key, table)
+            if binding is None:
+                return
+            manager.add_custom_binding(
+                key,
+                binding.command,
+                binding.arguments,
+                table=table,
+                repeat=binding.repeat or args.r,
+                note=binding.note if args.note is None else args.note,
+            )
+        manager.note_who_bound(key, table, by_hand=not a_file_speaks(pymux))
     except ValueError:
         raise CommandException("Invalid key: %r" % (key,))
 
@@ -47,6 +65,8 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
         metavar="<key-table>",
         help="Bind into this key table: a mode's name, which the first `bind-key -T` names.",
     )
+    parser.add_argument("-r", dest="r", action="store_true", help="The key repeats without the prefix.")
+    parser.add_argument("-N", dest="note", metavar="<note>", help="A note on the key, for `list-keys -N`.")
     parser.add_argument("key", metavar="<key>", help="The key to bind.")
     # Everything from the bound command on is a remainder, so an
     # option of the bound command is never read as an option of
