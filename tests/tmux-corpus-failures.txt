@@ -184,8 +184,8 @@ thoughtbot__dotfiles.conf line 23: pymux: Invalid option: status-style
 tmux__tmux.conf line 9: pymux: Invalid option: window-status-current-style
 tmux__tmux.conf line 17: pymux: Invalid option: terminal-features
 tmux__tmux.conf line 62: pymux: duplicate session: 0
-tmux__tmux.conf line 66: pymux: unrecognized arguments: -t0:1
-tmux__tmux.conf line 68: pymux: unrecognized arguments: -t0:2
+tmux__tmux.conf line 63: pymux: can't find window: 0:0
+tmux__tmux.conf line 64: pymux: can't find window: 0:0
 tony__tmux-config.conf line 9: pymux: Invalid option: status-style
 tony__tmux-config.conf line 12: pymux: Invalid option: window-status-style
 tony__tmux-config.conf line 15: pymux: Invalid option: window-status-current-style

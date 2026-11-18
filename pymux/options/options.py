@@ -25,9 +25,9 @@ if TYPE_CHECKING:
     from pymux.connection.client_state import ClientState
     from pymux.core.main import Pymux
 
-    #: What an option is written on and read from: a client, one
-    #: session's own values, or the server's, which hold the defaults.
-    type Holder = ClientState | OwnOptions | Pymux
+    #: What an option is written on and read from: a client, a window,
+    #: one session's own values, or the server's, which hold the defaults.
+    type Holder = ClientState | OwnOptions | Pymux | Window
 
 __all__ = [
     "ALL_CLIENT_OPTIONS",
@@ -93,7 +93,7 @@ class Option(ABC):
     #: not set. Lillecarl/pyterm#300.
     attribute_name: str | None = None
 
-    def held_by(self, pymux: Pymux, target: Holder | None = None) -> Holder | Window | None:
+    def held_by(self, pymux: Pymux, target: Holder | None = None) -> Holder | None:
         """
         The object this option is written on and read from.
 

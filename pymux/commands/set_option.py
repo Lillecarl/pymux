@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import CommandException, CommandParser, Target, add_command, add_target
-from pymux.commands.common import answer, option_as_written, session_of_target
+from pymux.commands.common import answer, find_window, option_as_written, session_of_target
 from pymux.options import user_options
 from pymux.options.options import FieldOption, Option, Scope, SetOptionError, a_file_speaks
 
@@ -99,8 +99,9 @@ def set_option(
         this as `-g` and a tmux configuration keeps working.
         Lillecarl/pyterm#758.
 
-    -t: the session whose own value this is. Without `-t` or `-g`, the
-        caller's session.
+    -t: the session whose own value this is, or for a window option the
+        window, as in tmux. Without `-t` or `-g`, the caller's session
+        or window.
 
     -s: the option is the server's. A server option's name finds it
         without the flag too, as in tmux; Tab with it offers only
@@ -148,6 +149,13 @@ def set_option(
 
     if option.scope is Scope.SESSION:
         target = session_holder(pymux, args)
+    elif option.scope is Scope.WINDOW and target is None and not getattr(args, "g", 0):
+        # tmux's -t names a pane, a window or a session, by the option's scope.
+        named = getattr(args, "target_window", None) or getattr(args, "target_session", None)
+        if named is not None:
+            target = find_window(pymux, named)
+            if target is None:
+                raise CommandException("can't find window: %s" % (named,))
 
     if args.unset:
         if value is not None:
