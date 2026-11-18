@@ -161,6 +161,9 @@ _GOTO: Final = (
   const stopped = new Promise(resolve => {
     listener = {
       onStateChange(changed, progress, request, flags, status) {
+        // A load this one supersedes stops first, as NS_BINDING_ABORTED:
+        // that stop is the old load's. Lillecarl/pyterm#1037.
+        if (status === Cr.NS_BINDING_ABORTED) return;
         if (changed === browser && progress.isTopLevel && (flags & STOP) === STOP) resolve(status);
       },
     };
