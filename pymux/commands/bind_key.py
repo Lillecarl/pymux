@@ -7,7 +7,8 @@ if TYPE_CHECKING:
     from pymux.core.main import Pymux
 
 
-from pymux.commands import CommandException, CommandParser, add_command
+from pymux import grammar
+from pymux.commands import CommandException, CommandParser, add_command, read_commands
 from pymux.options.options import a_file_speaks
 
 
@@ -34,6 +35,14 @@ def bind_key(pymux: Pymux, args: argparse.Namespace) -> None:
     arguments = list(args.arguments)
     if arguments and arguments[0] == "--":
         arguments = arguments[1:]
+    if len(arguments) == 1:
+        # One word is command text, as tmux reads it: `bind x "a ; b"`,
+        # and the `{ }` block that arrives here written back as text.
+        try:
+            commands = read_commands(pymux, arguments[0])
+        except grammar.ParseError as e:
+            raise CommandException(e.message)
+        arguments = grammar.to_arguments([command.strings() for command in commands])
 
     try:
         if arguments:

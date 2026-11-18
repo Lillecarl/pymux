@@ -1,4 +1,3 @@
-AdamWhittingham__tmux-config.conf line 40: pymux: invalid command: is_vim=echo "#{pane_current_command}" | grep -iqE "(^|\/)g?(view|n?vim?)(diff)?$"
 AdamWhittingham__tmux-config.conf line 99: pymux: Invalid key: 'WheelUpPane'
 AdamWhittingham__tmux-config.conf line 100: pymux: Invalid key: 'WheelDownPane'
 AdamWhittingham__tmux-config.conf line 102: pymux: Invalid key: 'WheelUpPane'
@@ -11,10 +10,10 @@ AdamWhittingham__tmux-config.conf line 115: pymux: Invalid option: xterm-keys
 AdamWhittingham__tmux-config.conf line 118: pymux: Invalid option: set-titles
 AdamWhittingham__tmux-config.conf line 119: pymux: Invalid option: set-titles-string
 AdamWhittingham__tmux-config.conf line 123: pymux: Invalid option: aggressive-resize
-AdamWhittingham__tmux-config.conf line 135: pymux: unrecognized arguments: # true color support
-AdamWhittingham__tmux-config.conf line 136: pymux: unrecognized arguments: # true color support
-AdamWhittingham__tmux-config.conf line 137: pymux: unrecognized arguments: # undercurl support
-AdamWhittingham__tmux-config.conf line 138: pymux: unrecognized arguments: # underscore colours - needs tmux-3.0
+AdamWhittingham__tmux-config.conf line 135: pymux: Invalid option: terminal-overrides
+AdamWhittingham__tmux-config.conf line 136: pymux: Invalid option: terminal-overrides
+AdamWhittingham__tmux-config.conf line 137: pymux: Invalid option: terminal-overrides
+AdamWhittingham__tmux-config.conf line 138: pymux: Invalid option: terminal-overrides
 AdamWhittingham__tmux-config.conf line 140: pymux: Invalid option: status-style
 AdamWhittingham__tmux-config.conf line 143: pymux: Invalid option: window-status-style
 AdamWhittingham__tmux-config.conf line 144: pymux: Invalid option: window-status-activity-style
@@ -25,16 +24,8 @@ AdamWhittingham__tmux-config.conf line 152: pymux: Invalid option: pane-active-b
 AdamWhittingham__tmux-config.conf line 154: pymux: Invalid option: message-style
 AdamWhittingham__tmux-config.conf line 155: pymux: Invalid option: mode-style
 AdamWhittingham__tmux-config.conf line 162: pymux: Invalid option: status-position
-ShawnPana__smux.conf line 5: pymux: Invalid key: 'MouseDragEnd1Pane'
-ShawnPana__smux.conf line 6: pymux: Invalid key: 'MouseDragEnd1Pane'
-ShawnPana__smux.conf line 7: pymux: invalid command: }
-ShawnPana__smux.conf line 9: pymux: Invalid key: 'MouseDragEnd1Pane'
-ShawnPana__smux.conf line 10: pymux: Invalid key: 'MouseDragEnd1Pane'
-ShawnPana__smux.conf line 11: pymux: invalid command: }
-ShawnPana__smux.conf line 12: pymux: Invalid key: 'MouseDragEnd1Pane'
-ShawnPana__smux.conf line 13: pymux: Invalid key: 'MouseDragEnd1Pane'
-ShawnPana__smux.conf line 14: pymux: invalid command: }
-ShawnPana__smux.conf line 15: pymux: invalid command: }
+ShawnPana__smux.conf line 4: pymux: Invalid key: 'MouseDragEnd1Pane'
+ShawnPana__smux.conf line 4: pymux: Invalid key: 'MouseDragEnd1Pane'
 ShawnPana__smux.conf line 18: pymux: Invalid key: 'WheelUpPane'
 ShawnPana__smux.conf line 66: pymux: Invalid option: pane-border-style
 ShawnPana__smux.conf line 67: pymux: Invalid option: pane-active-border-style
@@ -53,14 +44,6 @@ christoomey__dotfiles.conf line 20: pymux: Invalid option: allow-passthrough
 christoomey__dotfiles.conf line 22: pymux: Invalid option: terminal-features
 christoomey__dotfiles.conf line 60: pymux: Invalid option: status-fg
 christoomey__dotfiles.conf line 61: pymux: Invalid option: status-bg
-christoomey__dotfiles.conf line 116: pymux: invalid command: is_vim=ps -o state=,tty=,comm= | grep -iqE '^[^TXZ ]+ +#{s|/dev/||:pane_tty}\s+(\S+\/)?g?(view|n?vim?x?)(diff)?$'
-christoomey__dotfiles.conf line 129: pymux: invalid command: is_overmind=tmux display-message -p '#{pane_current_command}' | grep overmind
-christoomey__dotfiles.conf line 147: pymux: invalid command: gray_light=#D8DEE9
-christoomey__dotfiles.conf line 148: pymux: invalid command: gray_medium=#ABB2BF
-christoomey__dotfiles.conf line 149: pymux: invalid command: gray_dark=#3B4252
-christoomey__dotfiles.conf line 150: pymux: invalid command: green_soft=#A3BE8C
-christoomey__dotfiles.conf line 151: pymux: invalid command: blue_muted=#81A1C1
-christoomey__dotfiles.conf line 152: pymux: invalid command: cyan_soft=#88C0D0
 christoomey__dotfiles.conf line 154: pymux: Invalid option: status-position
 christoomey__dotfiles.conf line 156: pymux: Invalid option: status-style
 christoomey__dotfiles.conf line 160: pymux: Invalid option: message-style
@@ -85,8 +68,7 @@ craftzdog__dotfiles-public.conf line 44: pymux: IOError: [Errno 2] No such file 
 craftzdog__dotfiles-public.conf line 45: pymux: IOError: [Errno 2] No such file or directory: '$HOME/.config/tmux/statusline.conf'
 craftzdog__dotfiles-public.conf line 46: pymux: IOError: [Errno 2] No such file or directory: '$HOME/.config/tmux/utility.conf'
 dreamsofcode-io__tmux.conf line 1: pymux: Invalid option: terminal-overrides
-edouard-lopez__tmux-config.conf line 9: pymux: unrecognized arguments: # tmux 3.3a fix, see https://github.com/tinted-theming/base16-shell/issues/1
-edouard-lopez__tmux-config.conf line 24: pymux: nobody is attached to show a message to.
+edouard-lopez__tmux-config.conf line 9: pymux: Invalid option: allow-passthrough
 edouard-lopez__tmux-config.conf line 26: pymux: IOError: [Errno 2] No such file or directory: '$HOME/.tmux/variables.tmux'
 edouard-lopez__tmux-config.conf line 27: pymux: IOError: [Errno 2] No such file or directory: '$HOME/.tmux/panes.tmux'
 edouard-lopez__tmux-config.conf line 28: pymux: IOError: [Errno 2] No such file or directory: '$HOME/.tmux/status-bar.tmux'
@@ -94,41 +76,16 @@ edouard-lopez__tmux-config.conf line 29: pymux: IOError: [Errno 2] No such file 
 edouard-lopez__tmux-config.conf line 30: pymux: IOError: [Errno 2] No such file or directory: '$HOME/.tmux/vi.tmux'
 edouard-lopez__tmux-config.conf line 31: pymux: IOError: [Errno 2] No such file or directory: '$HOME/.tmux/windows.tmux'
 edouard-lopez__tmux-config.conf line 33: pymux: IOError: [Errno 2] No such file or directory: '$HOME/.tmux/plugins.tmux'
-edouard-lopez__tmux-config.conf line 37: pymux: unrecognized arguments: # fish+tmux+ssh https://superuser.com/a/486577/174465
+edouard-lopez__tmux-config.conf line 37: pymux: Invalid option: default-command
 folke__dot.conf line 35: pymux: IOError: [Errno 2] No such file or directory: '$HOME/projects/tokyonight.nvim/extras/tmux/tokyonight_moon.tmux'
-folke__dot.conf line 39: pymux: unrecognized arguments: # undercurl support
-folke__dot.conf line 40: pymux: unrecognized arguments: # underscore colours - needs tmux-3.0
-folke__dot.conf line 55: pymux: invalid command: run 'git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm && ~/.tmux/plugins/tpm/bin/install_plugins'
-gpakosz__.tmux.conf line 19: pymux: invalid command: %if
-gpakosz__.tmux.conf line 20: pymux: unrecognized arguments: -F # needed by Control + Shift bindings
-gpakosz__.tmux.conf line 21: pymux: invalid command: %endif
-gpakosz__.tmux.conf line 22: pymux: invalid command: %if
-gpakosz__.tmux.conf line 23: pymux: unrecognized arguments: -F # needed by Control + Shift bindings
-gpakosz__.tmux.conf line 24: pymux: invalid command: %endif
-gpakosz__.tmux.conf line 25: pymux: invalid command: %if
-gpakosz__.tmux.conf line 26: pymux: Invalid option: extended-keys-format
-gpakosz__.tmux.conf line 27: pymux: invalid command: %endif
-gpakosz__.tmux.conf line 28: pymux: unrecognized arguments: # faster command sequences
-gpakosz__.tmux.conf line 29: pymux: unrecognized arguments: # increase repeat timeout
-gpakosz__.tmux.conf line 32: pymux: unrecognized arguments: # GNU-Screen compatible prefix
-gpakosz__.tmux.conf line 35: pymux: unrecognized arguments: # boost history
-gpakosz__.tmux.conf line 46: pymux: unrecognized arguments: # start windows numbering at 1
-gpakosz__.tmux.conf line 48: pymux: unrecognized arguments: # make pane numbering consistent with windows
-gpakosz__.tmux.conf line 50: pymux: unrecognized arguments: # rename window to reflect current program
-gpakosz__.tmux.conf line 51: pymux: unrecognized arguments: # renumber windows when a window is closed
-gpakosz__.tmux.conf line 53: pymux: unrecognized arguments: # set terminal title
-gpakosz__.tmux.conf line 55: pymux: unrecognized arguments: # slightly longer pane indicators display time
-gpakosz__.tmux.conf line 56: pymux: unrecognized arguments: # slightly longer status messages display time
-gpakosz__.tmux.conf line 58: pymux: unrecognized arguments: # redraw status line every 10 seconds
+folke__dot.conf line 39: pymux: Invalid option: terminal-overrides
+folke__dot.conf line 40: pymux: Invalid option: terminal-overrides
+gpakosz__.tmux.conf line 32: pymux: Invalid option: prefix2
+gpakosz__.tmux.conf line 50: pymux: Invalid option: automatic-rename
+gpakosz__.tmux.conf line 53: pymux: Invalid option: set-titles
+gpakosz__.tmux.conf line 55: pymux: Invalid option: display-panes-time
+gpakosz__.tmux.conf line 56: pymux: Invalid option: display-time
 gpakosz__.tmux.conf line 65: pymux: Invalid option: visual-activity
-gpakosz__.tmux.conf line 151: pymux: invalid command: %if
-gpakosz__.tmux.conf line 153: pymux: invalid command: %endif
-gpakosz__.tmux.conf line 154: pymux: invalid command: %if
-gpakosz__.tmux.conf line 156: pymux: invalid command: %endif
-gpakosz__.tmux.conf line 157: pymux: invalid command: %if
-gpakosz__.tmux.conf line 159: pymux: invalid command: %endif
-gpakosz__.tmux.conf line 160: pymux: invalid command: %if
-gpakosz__.tmux.conf line 162: pymux: invalid command: %endif
 hamvocke__dotfiles.conf line 36: pymux: Invalid option: allow-rename
 hamvocke__dotfiles.conf line 55: pymux: Invalid option: terminal-overrides
 hamvocke__dotfiles.conf line 65: pymux: Invalid option: visual-activity
@@ -151,74 +108,51 @@ jbnicolai__tmux.conf line 19: pymux: Invalid option: visual-silence
 jbnicolai__tmux.conf line 20: pymux: Invalid option: visual-bell
 jbnicolai__tmux.conf line 21: pymux: Invalid option: bell-action
 jbnicolai__tmux.conf line 26: pymux: Expecting one of: "left", "center", "right".
-jbnicolai__tmux.conf line 31: pymux: unrecognized arguments: #base02
-jbnicolai__tmux.conf line 32: pymux: unrecognized arguments: #yellow
+jbnicolai__tmux.conf line 31: pymux: Invalid option: status-bg
+jbnicolai__tmux.conf line 32: pymux: Invalid option: status-fg
 jbnicolai__tmux.conf line 33: pymux: Invalid option: status-attr
-jbnicolai__tmux.conf line 36: pymux: unrecognized arguments: #base0
+jbnicolai__tmux.conf line 36: pymux: Invalid option: window-status-fg
 jbnicolai__tmux.conf line 37: pymux: Invalid option: window-status-bg
-jbnicolai__tmux.conf line 40: pymux: unrecognized arguments: #orange
+jbnicolai__tmux.conf line 40: pymux: Invalid option: window-status-current-fg
 jbnicolai__tmux.conf line 41: pymux: Invalid option: window-status-current-bg
-jbnicolai__tmux.conf line 44: pymux: unrecognized arguments: #base02
-jbnicolai__tmux.conf line 45: pymux: unrecognized arguments: #base01
-jbnicolai__tmux.conf line 48: pymux: unrecognized arguments: #base02
-jbnicolai__tmux.conf line 49: pymux: unrecognized arguments: #orange
-jbnicolai__tmux.conf line 52: pymux: unrecognized arguments: #blue
-jbnicolai__tmux.conf line 53: pymux: unrecognized arguments: #orange
-jbnicolai__tmux.conf line 56: pymux: unrecognized arguments: #green
+jbnicolai__tmux.conf line 44: pymux: Invalid option: pane-border-fg
+jbnicolai__tmux.conf line 45: pymux: Invalid option: pane-active-border-fg
+jbnicolai__tmux.conf line 48: pymux: Invalid option: message-bg
+jbnicolai__tmux.conf line 49: pymux: Invalid option: message-fg
+jbnicolai__tmux.conf line 52: pymux: Invalid option: display-panes-active-colour
+jbnicolai__tmux.conf line 53: pymux: Invalid option: display-panes-colour
+jbnicolai__tmux.conf line 56: pymux: Invalid option: clock-mode-colour
 jbnicolai__tmux.conf line 59: pymux: Invalid option: aggressive-resize
 jbnicolai__tmux.conf line 80: pymux: unrecognized arguments: -t
 jbnicolai__tmux.conf line 81: pymux: unrecognized arguments: -t
 jbnicolai__tmux.conf line 97: pymux: Invalid key: 'WheelUpPane'
 jbnicolai__tmux.conf line 98: pymux: Invalid key: 'WheelDownPane'
 jbnicolai__tmux.conf line 109: pymux: Invalid option: set-titles
-jbnicolai__tmux.conf line 116: pymux: invalid command: set -gq @osx-pasteboard true
-jbnicolai__tmux.conf line 119: pymux: invalid command: set -g default-command "reattach-to-user-namespace -l $SHELL"
-jbnicolai__tmux.conf line 125: pymux: invalid command: bind y run "tmux save-buffer - | reattach-to-user-namespace pbcopy"
 jmbuhr__tmux-kickstarter.conf line 16: pymux: Invalid option: terminal-overrides
-jmbuhr__tmux-kickstarter.conf line 25: pymux: unrecognized arguments: # or primary secondary or clipboard
-jmbuhr__tmux-kickstarter.conf line 26: pymux: unrecognized arguments: # or clipboard primary or secondary
 joshmedeski__dotfiles.conf line 22: pymux: Invalid option: display-time
 joshmedeski__dotfiles.conf line 26: pymux: Invalid option: terminal-overrides
 joshmedeski__dotfiles.conf line 27: pymux: theme is a client option: use set-client-option
-joshmedeski__dotfiles.conf line 29: pymux: unrecognized arguments: # start indexing windows at 1 instead of 0
-joshmedeski__dotfiles.conf line 31: pymux: unrecognized arguments: # zero-out escape time delay
-joshmedeski__dotfiles.conf line 32: pymux: unrecognized arguments: # enable extended keys (e.g., ctrl+shift+letter)
-joshmedeski__dotfiles.conf line 33: pymux: unrecognized arguments: # encode modified keys using CSI u format
-joshmedeski__dotfiles.conf line 34: pymux: unrecognized arguments: # increase history size (from 2,000)
-joshmedeski__dotfiles.conf line 35: pymux: unrecognized arguments: # enable mouse support
-joshmedeski__dotfiles.conf line 36: pymux: unrecognized arguments: # renumber all windows when any window is closed
-joshmedeski__dotfiles.conf line 37: pymux: unrecognized arguments: # use system clipboard
-joshmedeski__dotfiles.conf line 64: pymux: unrecognized arguments: # increase length (from 10)
-joshmedeski__dotfiles.conf line 65: pymux: unrecognized arguments: # macOS / darwin style
-joshmedeski__dotfiles.conf line 67: pymux: unrecognized arguments: # transparent
+joshmedeski__dotfiles.conf line 30: pymux: Invalid option: detach-on-destroy
+joshmedeski__dotfiles.conf line 33: pymux: Invalid option: extended-keys-format
+joshmedeski__dotfiles.conf line 65: pymux: Invalid option: status-position
+joshmedeski__dotfiles.conf line 67: pymux: Invalid option: status-style
 joshmedeski__dotfiles.conf line 68: pymux: Invalid option: popup-style
 joshmedeski__dotfiles.conf line 69: pymux: Invalid option: popup-border-style
-joshmedeski__dotfiles.conf line 76: pymux: unrecognized arguments: # draw borders with spaces (no glyphs) for a minimal look
+joshmedeski__dotfiles.conf line 76: pymux: Invalid option: pane-border-lines
 joshmedeski__dotfiles.conf line 80: pymux: Invalid option: allow-passthrough
 joshmedeski__dotfiles.conf line 81: pymux: Invalid option: message-command-style
 joshmedeski__dotfiles.conf line 82: pymux: Invalid option: message-style
 joshmedeski__dotfiles.conf line 83: pymux: Invalid option: mode-style
-joshmedeski__dotfiles.conf line 92: pymux: invalid command: }
-joshmedeski__dotfiles.conf line 93: pymux: invalid command: }
 joshmedeski__dotfiles.conf line 143: pymux: unrecognized arguments: - 60%,30% --prompt=" " --border-label=" Open URL "
-joshmedeski__dotfiles.conf line 145: pymux: unrecognized arguments: # copy to clipboard
-joshmedeski__dotfiles.conf line 166: pymux: unrecognized arguments: # <ctrl>+hjkl
-joshmedeski__dotfiles.conf line 172: pymux: unrecognized arguments: # load tpm
-leslie255__magicTmux.conf line 25: pymux: unrecognized arguments: # foreground
-leslie255__magicTmux.conf line 29: pymux: unrecognized arguments: # foreground
-leslie255__magicTmux.conf line 51: pymux: unrecognized arguments: # background
-leslie255__magicTmux.conf line 52: pymux: unrecognized arguments: # foreground
-leslie255__magicTmux.conf line 56: pymux: unrecognized arguments: # refresh every second
-leslie255__magicTmux.conf line 57: pymux: unrecognized arguments: # maximum length for the right content of the status bar
-leslie255__magicTmux.conf line 60: pymux: unrecognized arguments: # show the current session
-leslie255__magicTmux.conf line 61: pymux: unrecognized arguments: # maximum length for the left content of the status bar
+leslie255__magicTmux.conf line 25: pymux: Invalid option: pane-active-border-style
+leslie255__magicTmux.conf line 29: pymux: Invalid option: pane-border-style
+leslie255__magicTmux.conf line 51: pymux: Invalid option: status-bg
+leslie255__magicTmux.conf line 52: pymux: Invalid option: status-fg
 leslie255__magicTmux.conf line 65: pymux: Invalid option: status-position
 leslie255__magicTmux.conf line 73: pymux: Invalid option: message-style
 leslie255__magicTmux.conf line 88: pymux: Invalid option: window-status-separator
 leslie255__magicTmux.conf line 94: pymux: Invalid option: automatic-rename
 leslie255__magicTmux.conf line 115: pymux: Invalid option: terminal-overrides
-leslie255__magicTmux.conf line 140: pymux: unrecognized arguments: # default is colour231
-leslie255__magicTmux.conf line 141: pymux: unrecognized arguments: # default is colour04
 mislav__dotfiles.conf line 46: pymux: Invalid option: terminal-overrides
 mislav__dotfiles.conf line 49: pymux: Invalid option: allow-rename
 mislav__dotfiles.conf line 52: pymux: Invalid option: status-fg
@@ -238,7 +172,7 @@ nicknisi__dotfiles.conf line 46: pymux: Invalid option: allow-passthrough
 nicknisi__dotfiles.conf line 52: pymux: Invalid option: clear-on-attach
 nicknisi__dotfiles.conf line 55: pymux: Invalid option: pane-scrollbars
 nicknisi__dotfiles.conf line 58: pymux: Invalid option: copy-mode-line-numbers
-nicknisi__dotfiles.conf line 85: pymux: invalid command: select-pane -t = ; send-keys -M
+nicknisi__dotfiles.conf line 83: pymux: Invalid key: 'MouseDown1Pane'
 nicknisi__dotfiles.conf line 93: pymux: Invalid option: set-titles
 nicknisi__dotfiles.conf line 100: pymux: Invalid option: automatic-rename
 nicknisi__dotfiles.conf line 104: pymux: Invalid option: automatic-rename-format
@@ -246,26 +180,11 @@ nicknisi__dotfiles.conf line 107: pymux: Invalid option: set-titles-string
 nicknisi__dotfiles.conf line 111: pymux: Invalid option: visual-activity
 nicknisi__dotfiles.conf line 116: pymux: Invalid option: aggressive-resize
 nicknisi__dotfiles.conf line 155: pymux: Invalid option: command-alias[100]
-nicknisi__dotfiles.conf line 174: pymux: unrecognized arguments: -f ignore-size }
-nicknisi__dotfiles.conf line 175: pymux: invalid command: }
 nicknisi__dotfiles.conf line 198: pymux: Invalid key: 'MouseDragEnd1Pane'
 nicknisi__dotfiles.conf line 199: pymux: Invalid key: 'DoubleClick1Pane'
 nicknisi__dotfiles.conf line 200: pymux: Invalid key: 'TripleClick1Pane'
-nicknisi__dotfiles.conf line 209: pymux: invalid command: {
-nicknisi__dotfiles.conf line 211: pymux: invalid command: }
-nicknisi__dotfiles.conf line 215: pymux: invalid command: }
-nicknisi__dotfiles.conf line 221: pymux: No active window to format for.
-nicknisi__dotfiles.conf line 223: pymux: invalid command: }
-nicknisi__dotfiles.conf line 224: pymux: invalid command: }
 nicknisi__dotfiles.conf line 250: pymux: Invalid key: 'MouseDown1Status'
-nicknisi__dotfiles.conf line 252: pymux: invalid command: }
-nicknisi__dotfiles.conf line 253: pymux: No active window to format for.
-nicknisi__dotfiles.conf line 254: pymux: no current window
-nicknisi__dotfiles.conf line 255: pymux: invalid command: }
-nicknisi__dotfiles.conf line 257: pymux: invalid command: }
-nicknisi__dotfiles.conf line 258: pymux: invalid command: }
 nicknisi__dotfiles.conf line 261: pymux: Invalid key: 'MouseDown3Status'
-nicknisi__dotfiles.conf line 263: pymux: invalid command: }
 nicknisi__dotfiles.conf line 265: pymux: Invalid key: 'MouseDown1StatusLeft'
 nviennot__tmux-config.conf line 40: pymux: Invalid option: allow-passthrough
 nviennot__tmux-config.conf line 41: pymux: Invalid option: terminal-features
@@ -280,105 +199,22 @@ nviennot__tmux-config.conf line 67: pymux: Invalid option: visual-activity
 omerxx__dotfiles.conf line 1: pymux: IOError: [Errno 2] No such file or directory: '$HOME/.config/tmux/tmux.reset.conf'
 omerxx__dotfiles.conf line 3: pymux: Invalid option: terminal-overrides
 omerxx__dotfiles.conf line 5: pymux: Invalid key: '^A'
-omerxx__dotfiles.conf line 6: pymux: unrecognized arguments: # start indexing windows at 1 instead of 0
-omerxx__dotfiles.conf line 8: pymux: unrecognized arguments: # zero-out escape time delay
-omerxx__dotfiles.conf line 9: pymux: unrecognized arguments: # increase history size (from 2,000)
-omerxx__dotfiles.conf line 10: pymux: unrecognized arguments: # renumber all windows when any window is closed
-omerxx__dotfiles.conf line 11: pymux: unrecognized arguments: # use system clipboard
-omerxx__dotfiles.conf line 12: pymux: unrecognized arguments: # macOS / darwin style
+omerxx__dotfiles.conf line 7: pymux: Invalid option: detach-on-destroy
+omerxx__dotfiles.conf line 12: pymux: Invalid option: status-position
 omerxx__dotfiles.conf line 15: pymux: Invalid option: pane-active-border-style
 omerxx__dotfiles.conf line 16: pymux: Invalid option: pane-border-style
 omerxx__dotfiles.conf line 18: pymux: unrecognized arguments: - 60%,30% --prompt=" " --border-label=" Open URL "
-samoshkin__tmux-config.conf line 7: pymux: Invalid option: buffer-limit
-samoshkin__tmux-config.conf line 9: pymux: Invalid option: display-time
-samoshkin__tmux-config.conf line 12: pymux: Invalid option: allow-rename
-samoshkin__tmux-config.conf line 13: pymux: Invalid option: automatic-rename
-samoshkin__tmux-config.conf line 14: pymux: Invalid option: aggressive-resize
-samoshkin__tmux-config.conf line 21: pymux: Invalid option: set-titles
-samoshkin__tmux-config.conf line 22: pymux: Invalid option: set-titles-string
-samoshkin__tmux-config.conf line 37: pymux: unrecognized arguments: # rename-session
-samoshkin__tmux-config.conf line 38: pymux: unrecognized arguments: # rename-window
-samoshkin__tmux-config.conf line 39: pymux: unrecognized arguments: # split-window -h
-samoshkin__tmux-config.conf line 40: pymux: unrecognized arguments: # split-window
-samoshkin__tmux-config.conf line 41: pymux: unrecognized arguments: # swap-pane -D
-samoshkin__tmux-config.conf line 42: pymux: unrecognized arguments: # swap-pane -U
-samoshkin__tmux-config.conf line 43: pymux: unrecognized arguments: # paste-buffer
-samoshkin__tmux-config.conf line 45: pymux: unrecognized arguments: # select-window
-samoshkin__tmux-config.conf line 46: pymux: unrecognized arguments: # next-window
-samoshkin__tmux-config.conf line 47: pymux: unrecognized arguments: # previous-window
-samoshkin__tmux-config.conf line 48: pymux: unrecognized arguments: # last-window
-samoshkin__tmux-config.conf line 49: pymux: unrecognized arguments: # next window with alert
-samoshkin__tmux-config.conf line 50: pymux: unrecognized arguments: # next window with alert
-samoshkin__tmux-config.conf line 51: pymux: unrecognized arguments: # focus thru panes
-samoshkin__tmux-config.conf line 52: pymux: unrecognized arguments: # kill-window
-samoshkin__tmux-config.conf line 53: pymux: unrecognized arguments: # list-buffer
-samoshkin__tmux-config.conf line 54: pymux: unrecognized arguments: # choose-buffer
-samoshkin__tmux-config.conf line 55: pymux: unrecognized arguments: # zoom-pane
-samoshkin__tmux-config.conf line 56: pymux: unrecognized arguments: # resize 5 rows up
-samoshkin__tmux-config.conf line 57: pymux: unrecognized arguments: # resize 5 rows down
-samoshkin__tmux-config.conf line 58: pymux: unrecognized arguments: # resize 5 rows right
-samoshkin__tmux-config.conf line 59: pymux: unrecognized arguments: # resize 5 rows left
-samoshkin__tmux-config.conf line 83: pymux: Invalid key: 'C-['
-samoshkin__tmux-config.conf line 100: pymux: invalid command: select-pane -t:.1 ; swap-pane -d -t 1 -s "!"
-samoshkin__tmux-config.conf line 113: pymux: invalid command: run-shell 'yes | head -n #{session_windows} | xargs -I {} -n 1 tmux movew -t %%'
-samoshkin__tmux-config.conf line 119: pymux: invalid command: display "Session has only 1 client attached"
-samoshkin__tmux-config.conf line 132: pymux: invalid command: command-prompt -p "Monitor silence: interval (s)" "setw monitor-silence %%"
-samoshkin__tmux-config.conf line 135: pymux: Invalid option: visual-activity
-samoshkin__tmux-config.conf line 167: pymux: Invalid key: 'WheelUpPane'
-samoshkin__tmux-config.conf line 168: pymux: Invalid key: 'WheelDownPane'
-samoshkin__tmux-config.conf line 174: pymux: invalid command: run 'tmux set -g default-command "exec $(tmux show -gv default-shell) 2>/dev/null & reattach-to-user-namespace -l $(tmux show -gv default-shell)"'
-samoshkin__tmux-config.conf line 176: pymux: invalid command: yank=~/.tmux/yank.sh
-samoshkin__tmux-config.conf line 192: pymux: unknown command: copy-pipe
-samoshkin__tmux-config.conf line 194: pymux: unknown command: clear-selection
-samoshkin__tmux-config.conf line 206: pymux: invalid command: color_orange=colour166
-samoshkin__tmux-config.conf line 207: pymux: invalid command: color_purple=colour134
-samoshkin__tmux-config.conf line 208: pymux: invalid command: color_green=colour076
-samoshkin__tmux-config.conf line 209: pymux: invalid command: color_blue=colour39
-samoshkin__tmux-config.conf line 210: pymux: invalid command: color_yellow=colour220
-samoshkin__tmux-config.conf line 211: pymux: invalid command: color_red=colour160
-samoshkin__tmux-config.conf line 212: pymux: invalid command: color_black=colour232
-samoshkin__tmux-config.conf line 213: pymux: invalid command: color_white=white
-samoshkin__tmux-config.conf line 217: pymux: invalid command: color_dark=$color_black
-samoshkin__tmux-config.conf line 218: pymux: invalid command: color_light=$color_white
-samoshkin__tmux-config.conf line 219: pymux: invalid command: color_session_text=$color_blue
-samoshkin__tmux-config.conf line 220: pymux: invalid command: color_status_text=colour245
-samoshkin__tmux-config.conf line 221: pymux: invalid command: color_main=$color_orange
-samoshkin__tmux-config.conf line 222: pymux: invalid command: color_secondary=$color_purple
-samoshkin__tmux-config.conf line 223: pymux: invalid command: color_level_ok=$color_green
-samoshkin__tmux-config.conf line 224: pymux: invalid command: color_level_warn=$color_yellow
-samoshkin__tmux-config.conf line 225: pymux: invalid command: color_level_stress=$color_red
-samoshkin__tmux-config.conf line 226: pymux: invalid command: color_window_off_indicator=colour088
-samoshkin__tmux-config.conf line 227: pymux: invalid command: color_window_off_status_bg=colour238
-samoshkin__tmux-config.conf line 228: pymux: invalid command: color_window_off_status_current_bg=colour254
-samoshkin__tmux-config.conf line 234: pymux: Invalid option: mode-style
-samoshkin__tmux-config.conf line 237: pymux: Invalid option: message-style
-samoshkin__tmux-config.conf line 240: pymux: Invalid option: status-style
-samoshkin__tmux-config.conf line 243: pymux: Invalid option: window-status-separator
-samoshkin__tmux-config.conf line 244: pymux: invalid command: separator_powerline_left=
-samoshkin__tmux-config.conf line 245: pymux: invalid command: separator_powerline_right=
-samoshkin__tmux-config.conf line 249: pymux: Invalid option: window-status-current-style
-samoshkin__tmux-config.conf line 253: pymux: Invalid option: window-status-activity-style
-samoshkin__tmux-config.conf line 256: pymux: Invalid option: pane-active-border-style
-samoshkin__tmux-config.conf line 261: pymux: Invalid option: status-position
-samoshkin__tmux-config.conf line 267: pymux: invalid command: wg_session=#[fg=$color_session_text] #S #[default]
-samoshkin__tmux-config.conf line 268: pymux: invalid command: wg_battery=#{battery_status_fg} #{battery_icon} #{battery_percentage}
-samoshkin__tmux-config.conf line 269: pymux: invalid command: wg_date=#[fg=$color_secondary]%h %d %H:%M#[default]
-samoshkin__tmux-config.conf line 270: pymux: invalid command: wg_user_host=#[fg=$color_secondary]#(whoami)#[default]@#H
-samoshkin__tmux-config.conf line 271: pymux: invalid command: wg_is_zoomed=#[fg=$color_dark,bg=$color_secondary]#{?window_zoomed_flag,[Z],}#[default]
-samoshkin__tmux-config.conf line 273: pymux: invalid command: wg_is_keys_off=#[fg=$color_light,bg=$color_window_off_indicator]#([ $(tmux show-option -qv key-table) = 'off' ] && echo 'OFF')#[default]
-samoshkin__tmux-config.conf line 356: pymux: invalid command: source-file ~/.tmux/tmux.remote.conf
-samoshkin__tmux-config.conf line 381: pymux: unrecognized arguments: -S (pymux refresh-client)
+samoshkin__tmux-config.conf line 41: pymux: syntax error
 shfshanyue__tmux-config.conf line 2: pymux: Invalid option: prefix2
 shfshanyue__tmux-config.conf line 12: pymux: Invalid option: allow-rename
 shfshanyue__tmux-config.conf line 13: pymux: Invalid option: automatic-rename
-shfshanyue__tmux-config.conf line 36: pymux: unrecognized arguments: # tomorrow night blue, base3
-shfshanyue__tmux-config.conf line 38: pymux: unrecognized arguments: # tomorrow night blue, base3
-shfshanyue__tmux-config.conf line 39: pymux: unrecognized arguments: # blue
+shfshanyue__tmux-config.conf line 36: pymux: Invalid option: message-style
+shfshanyue__tmux-config.conf line 38: pymux: Invalid option: status-style
 shfshanyue__tmux-config.conf line 49: pymux: Invalid option: window-status-separator
-shfshanyue__tmux-config.conf line 50: pymux: unrecognized arguments: # red
+shfshanyue__tmux-config.conf line 50: pymux: Invalid option: window-status-current-style
 shfshanyue__tmux-config.conf line 51: pymux: Invalid option: window-status-last-style
 shfshanyue__tmux-config.conf line 53: pymux: Invalid option: pane-active-border-style
-shfshanyue__tmux-config.conf line 54: pymux: unrecognized arguments: # base01
+shfshanyue__tmux-config.conf line 54: pymux: Invalid option: pane-border-style
 statico__dotfiles.conf line 11: pymux: Invalid option: bell-action
 statico__dotfiles.conf line 12: pymux: Invalid option: visual-bell
 statico__dotfiles.conf line 13: pymux: Invalid option: display-panes-time
@@ -436,9 +272,6 @@ tedsluis__tmux.conf.conf line 106: pymux: Invalid option: status-attr
 thoughtbot__dotfiles.conf line 13: pymux: Invalid option: prefix2
 thoughtbot__dotfiles.conf line 23: pymux: Invalid option: status-style
 tmux__tmux.conf line 9: pymux: Invalid option: window-status-current-style
-tmux__tmux.conf line 12: pymux: invalid command: %if
-tmux__tmux.conf line 13: pymux: Invalid option: status-bg
-tmux__tmux.conf line 14: pymux: invalid command: %endif
 tmux__tmux.conf line 17: pymux: Invalid option: terminal-features
 tmux__tmux.conf line 23: pymux: Invalid option: bell-action
 tmux__tmux.conf line 35: pymux: Invalid key: 'MouseDrag1Pane'
@@ -447,39 +280,20 @@ tmux__tmux.conf line 62: pymux: duplicate session: 0
 tmux__tmux.conf line 64: pymux: Invalid option: aggressive-resize
 tmux__tmux.conf line 66: pymux: unrecognized arguments: -t0:1
 tmux__tmux.conf line 68: pymux: unrecognized arguments: -t0:2
-tony__tmux-config.conf line 9: pymux: unrecognized arguments: # base02, yellow
-tony__tmux-config.conf line 12: pymux: unrecognized arguments: # fg=base0
-tony__tmux-config.conf line 15: pymux: unrecognized arguments: # fg=orange
-tony__tmux-config.conf line 18: pymux: unrecognized arguments: #violet
-tony__tmux-config.conf line 19: pymux: unrecognized arguments: #green
-tony__tmux-config.conf line 22: pymux: unrecognized arguments: # bg=base02, fg=orange
-tony__tmux-config.conf line 25: pymux: unrecognized arguments: #blue
-tony__tmux-config.conf line 26: pymux: unrecognized arguments: #orange
-tony__tmux-config.conf line 28: pymux: unrecognized arguments: #green
-tony__tmux-config.conf line 32: pymux: unrecognized arguments: # center align window list
+tony__tmux-config.conf line 9: pymux: Invalid option: status-style
+tony__tmux-config.conf line 12: pymux: Invalid option: window-status-style
+tony__tmux-config.conf line 15: pymux: Invalid option: window-status-current-style
+tony__tmux-config.conf line 18: pymux: Invalid option: pane-border-style
+tony__tmux-config.conf line 19: pymux: Invalid option: pane-active-border-style
+tony__tmux-config.conf line 22: pymux: Invalid option: message-style
+tony__tmux-config.conf line 25: pymux: Invalid option: display-panes-active-colour
+tony__tmux-config.conf line 26: pymux: Invalid option: display-panes-colour
+tony__tmux-config.conf line 28: pymux: Invalid option: clock-mode-colour
+tony__tmux-config.conf line 32: pymux: Expecting one of: "left", "center", "right".
 tony__tmux-config.conf line 51: pymux: Invalid option: aggressive-resize
 tony__tmux-config.conf line 59: pymux: Invalid option: visual-activity
-tony__tmux-config.conf line 101: pymux: invalid command: Kill Window
 tony__tmux-config.conf line 104: pymux: Invalid option: automatic-rename
 tony__tmux-config.conf line 108: pymux: Invalid option: terminal-overrides
-tony__tmux-config.conf line 116: pymux: Invalid option: terminal-features
-tony__tmux-config.conf line 122: pymux: Invalid option: copy-mode-match-style
-tony__tmux-config.conf line 123: pymux: Invalid option: copy-mode-current-match-style
-tony__tmux-config.conf line 126: pymux: Invalid option: copy-command
-tony__tmux-config.conf line 127: pymux: invalid command: }
-tony__tmux-config.conf line 129: pymux: Invalid option: copy-command
-tony__tmux-config.conf line 130: pymux: invalid command: }
-tony__tmux-config.conf line 132: pymux: Invalid option: copy-command
-tony__tmux-config.conf line 133: pymux: invalid command: }
-tony__tmux-config.conf line 134: pymux: invalid command: }
-tony__tmux-config.conf line 135: pymux: invalid command: }
-tony__tmux-config.conf line 136: pymux: invalid command: }
-tony__tmux-config.conf line 139: pymux: No active window to format for.
-tony__tmux-config.conf line 140: pymux: Invalid option: pane-border-indicators
-tony__tmux-config.conf line 141: pymux: invalid command: }
-tony__tmux-config.conf line 144: pymux: No active window to format for.
-tony__tmux-config.conf line 145: pymux: Invalid option: extended-keys-format
-tony__tmux-config.conf line 146: pymux: invalid command: }
 vmware-archive__tmux-config.conf line 12: pymux: Invalid option: mode-mouse
 vmware-archive__tmux-config.conf line 13: pymux: Invalid option: mouse-select-pane
 vmware-archive__tmux-config.conf line 14: pymux: Invalid option: mouse-resize-pane

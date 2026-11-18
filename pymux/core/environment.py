@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from ..connection.client_state import ClientState
     from .main import Pymux
 
-__all__ = ["pane_environment", "take_environment_from"]
+__all__ = ["global_environment", "pane_environment", "take_environment_from"]
 
 
 def take_environment_from(pymux: Pymux, client_state: ClientState) -> None:
@@ -54,6 +54,21 @@ def take_environment_from(pymux: Pymux, client_state: ClientState) -> None:
             environment.pop(pattern, None)
 
 
+def global_environment(pymux: Pymux) -> dict[str, str]:
+    "tmux's global environment: the server's own, under what `set-environment -g` set."
+    return _over(dict(os.environ), pymux.global_environment)
+
+
+def _over(merged: dict[str, str], scope: dict[str, str | None]) -> dict[str, str]:
+    "`merged` with what `scope` sets and unsets."
+    for name, value in scope.items():
+        if value is None:
+            merged.pop(name, None)
+        else:
+            merged[name] = value
+    return merged
+
+
 def pane_environment(pymux: Pymux, base: dict[str, str] | None = None) -> dict[str, str]:
     """
     The environment a new pane runs under, merged: `base`, or the
@@ -63,12 +78,7 @@ def pane_environment(pymux: Pymux, base: dict[str, str] | None = None) -> dict[s
     falls through to the global value, and a name no scope says
     anything about leaves entirely. Lillecarl/pyterm#272.
     """
-    merged = dict(os.environ if base is None else base)
-    for name, value in pymux.global_environment.items():
-        if value is None:
-            merged.pop(name, None)
-        else:
-            merged[name] = value
+    merged = _over(dict(os.environ if base is None else base), pymux.global_environment)
     for name, value in pymux.session_environment.items():
         if value is None:
             # A session unset does not reach past the global

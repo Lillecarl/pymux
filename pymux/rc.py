@@ -6,7 +6,7 @@ from __future__ import annotations
 
 __all__ = ["STARTUP_COMMANDS"]
 
-STARTUP_COMMANDS = """
+STARTUP_COMMANDS = r"""
 bind-key '"' split-window -v
 bind-key % split-window -h
 bind-key c new-window
@@ -18,7 +18,7 @@ bind-key C-l select-pane -R
 bind-key C-h select-pane -L
 bind-key C-j select-pane -D
 bind-key C-k select-pane -U
-bind-key ; last-pane
+bind-key \; last-pane
 bind-key ! break-pane
 bind-key d detach-client
 bind-key t clock-mode
@@ -64,8 +64,8 @@ bind-key J choose-job
 # tmux cycles the panes on o. Here it labels the links of the pane, as
 # foot's Ctrl+Shift+o does; pane-management keeps o for the cycle.
 bind-key o show-urls
-bind-key { swap-pane -U
-bind-key } swap-pane -D
+bind-key \{ swap-pane -U
+bind-key \} swap-pane -D
 bind-key x confirm-before -p "kill-pane #P?" kill-pane
 bind-key & confirm-before -p "kill-window #W?" kill-window
 bind-key C-o rotate-window
@@ -110,8 +110,8 @@ bind-key M-4 select-layout main-vertical
 bind-key M-5 select-layout tiled
 
 # Renaming stuff.
-bind-key , command-prompt -I #W "rename-window '%%'"
-#bind-key "'" command-prompt -I #W "rename-pane '%%'"
+bind-key , command-prompt -I '#W' "rename-window '%%'"
+#bind-key "'" command-prompt -I '#W' "rename-pane '%%'"
 bind-key "'" command-prompt -p index "select-window -t ':%%'"
 
 # The pane-management mode. One `M` enters it, and while it lasts the

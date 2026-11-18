@@ -32,6 +32,7 @@ from pymux.core import window_tree
 
 from .enums import Chooser, Woke
 from .format import marks_of, window_marks
+from .grammar import quote, template_replace
 from .keys.actions import Kind, Origin, note, started_by
 from .layout.boxes import BOX_BOTTOM, BOX_TOP, PALETTE_HEADER
 
@@ -493,7 +494,7 @@ class ChooserView:
 
         if template and session is not None:
             self.leave_chooser(restore=True)
-            self.pymux.handle_command(template.replace("%%", "%s:%i" % (session.name, window.index)))
+            self.pymux.handle_command(template_replace(template, "%s:%i" % (session.name, window.index)))
             return
 
         self.leave_chooser(restore=False)
@@ -512,9 +513,15 @@ class ChooserView:
         if name is None:
             return
         command = option_command_of(name)
+        # `'%%'`: the answer is one word, whatever it holds. `#ff0000`
+        # bare would read as a comment, and the set as a read.
         self.pymux.handle_command(
-            "command-prompt -p '%s %s' -I '%s' '%s %s %%'"
-            % (command, name, option_value_of(self.pymux, name), command, name)
+            "command-prompt -p %s -I %s %s"
+            % (
+                quote("%s %s" % (command, name)),
+                quote(option_value_of(self.pymux, name)),
+                quote("%s %s '%%%%'" % (command, name)),
+            )
         )
 
     def choose_pointed_notification(self) -> None:

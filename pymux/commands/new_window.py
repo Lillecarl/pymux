@@ -51,7 +51,7 @@ def word_window(session: Session, target: str | None):
     stack, which is the order the status line shows and
     `focus_next_window` walks. They name a window and not a number,
     so they never take the bare-target rule that creates at an index:
-    `-a -t {end}` is how a person asks for a window at the end of the
+    `-a -t '{end}'` is how a person asks for a window at the end of the
     stack. Lillecarl/pyterm#383.
     """
     windows = session.arrangement.windows
@@ -98,7 +98,7 @@ def where_new_window_goes(
       looking at.
 
     The target may be a number, a name, or one of tmux's words. A
-    word names an end of the stack, so `-a -t {end}` puts a window
+    word names an end of the stack, so `-a -t '{end}'` puts a window
     after the last one whatever window a person is on -- the answer
     the default gives only while the numbering has no gaps.
     Lillecarl/pyterm#383.

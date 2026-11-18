@@ -61,7 +61,6 @@ import contextlib
 import getpass
 import logging
 import os
-import shlex
 import socket
 import sys
 import tempfile
@@ -74,6 +73,7 @@ from pymux.client import command_client, create_client, is_ssh_url, list_clients
 from pymux.config import find_configs
 from pymux.entry_points.arguments import Mode, how_much_to_log, parse_arguments
 from pymux.entry_points.completion import answer_completion
+from pymux.grammar import quote, words_of
 from pymux.options.scope import rerun_in_a_scope
 from pymux.pane_command import pane_command
 from pymux.utils import daemonize
@@ -340,7 +340,7 @@ def run() -> None:
                     newest = answered.socket_name
                     answered.socket.close()
                     break
-                if newest is None and shlex.split(command)[:1] != ["new-session"]:
+                if newest is None and words_of(command)[:1] != ["new-session"]:
                     print("No pymux instance found.")
                     sys.exit(1)
                 sys.exit(_send_command(newest, command, pane_id, attaching))
@@ -619,7 +619,7 @@ def _send_command(socket_name: str | None, command: str, pane_id: str | None, at
       fresh socket when `socket_name` is None.
     - `kill-session` and `kill-server`: stop the server.
     """
-    args = shlex.split(command)
+    args = words_of(command)
     name = args[0] if args else ""
 
     if name == "new-session":
@@ -831,7 +831,7 @@ def _new_session(
     if print_info:
         # Ask the server to format the session information.
         client = command_client(socket_name)
-        query = "list-sessions -F %s" % shlex.quote(format_str or "#{session_id}")
+        query = "list-sessions -F %s" % quote(format_str or "#{session_id}")
         return client.run_command(query)
 
     if attach:

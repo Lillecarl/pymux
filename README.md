@@ -76,6 +76,13 @@ pymux reads `$XDG_CONFIG_HOME/pymux/pymux.conf`, or `~/.pymux.conf`,
 or the file `-f` names. It holds commands, as typed at the command
 line. `examples/example-config.conf` is one.
 
+pymux reads the file with tmux's grammar, `pymux/grammar.py`: a `#`
+after a command starts a comment, `\` at the end of a line continues
+it, `{ }` holds commands, `%if` picks lines, and `$NAME` and `~`
+expand. So a word that starts with `#`, `{`, `~` or `$` needs quotes:
+`-F '#{pane_id}'`, `-t '{end}'`, `set -g @colour '#ff0000'`. A key named `;`, `{`
+or `}` is written `\;`, `\{`, `\}`.
+
 To try pymux on a tmux configuration, run `pymux --tmux-compat`. It
 reads tmux's files instead, every one of them that is there, in tmux's
 order: `/etc/tmux.conf`, `~/.tmux.conf`,

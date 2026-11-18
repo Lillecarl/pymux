@@ -11,11 +11,11 @@ import argparse
 import contextlib
 import json
 import os
-import shlex
 from functools import partial
 
 from pymux.client import is_ssh_url
 from pymux.entry_points.arguments import Mode, add_options
+from pymux.grammar import join
 
 __all__ = ["ASK_SECONDS"]
 
@@ -108,7 +108,7 @@ def _ask_server(words: list[str], socket_name: str | None = None, timeout: float
     try:
         client = CommandClient(socket_name)
         with contextlib.redirect_stdout(printed), contextlib.redirect_stderr(io.StringIO()):
-            code = client.run_command(shlex.join(words), pane_id or None, timeout=timeout)
+            code = client.run_command(join(words), pane_id or None, timeout=timeout)
     except OSError:
         return []
     if code != 0:

@@ -10,7 +10,6 @@ client's terminal, and none goes out unchecked.
 from __future__ import annotations
 
 import base64
-import shlex
 from typing import TYPE_CHECKING, Any
 
 from libpymux.protocol import Capability, Field, Message, Packet
@@ -22,6 +21,7 @@ from pyte.program_status import parse_report
 
 from ..downloads import FILE_KEYS, DownloadRefused, FinishedDownload, file_packets, route_of, sequences_of
 from ..enums import Clipboard, FileTransfer, ForwardMode, OpenUrlMode, OpenUrlTarget, Woke
+from ..grammar import quote
 from ..graphics.inline_images import as_png, cells_of
 from ..log import logger
 from ..mirror.program import RemoteProgram
@@ -175,7 +175,7 @@ class Outward:
         )
 
         if asking and not confirmed:
-            command = "open-url -c %s" % (shlex.quote(url),)
+            command = "open-url -c %s" % (quote(url),)
             for client_state, forward in zip(clients, forwards):
                 client_state.ask(_open_question(url, forward), command)
             return
@@ -253,7 +253,7 @@ class Outward:
         if self.pymux.options.forward_mode == ForwardMode.ASK and not confirmed:
             client_state.ask(
                 "Forward %s:%d here for the URL you copied? (y/n)" % (forward["host"], forward["port"]),
-                "open-url -n -c %s" % (shlex.quote(url),),
+                "open-url -n -c %s" % (quote(url),),
             )
             return
         client_state.client.connection.send_packet(

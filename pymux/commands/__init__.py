@@ -12,12 +12,12 @@ from __future__ import annotations
 
 import argparse
 import inspect
-import shlex
 from collections.abc import Awaitable, Callable, Mapping
 from enum import StrEnum
 from importlib import import_module
 from typing import TYPE_CHECKING, Any, Final, NoReturn, overload, override
 
+from pymux import grammar
 from pymux.commands.aliases import ALIASES
 from pymux.enums import Woke
 from pymux.keys.actions import Kind, arguments_of, note, words_of
@@ -39,7 +39,9 @@ __all__ = [
     "handle_command",
     "not_past_this_client",
     "parser_tree",
+    "read_commands",
     "refuse_undeclared_targets",
+    "run_arguments",
     "target_of",
     "targets_of",
     "this_client",
@@ -462,39 +464,63 @@ def handle_command(pymux: Pymux, input_string: str, targets: Mapping[str, str] |
     then this answers with one that finishes the whole line.
     Lillecarl/pyterm#89.
     """
-    input_string = input_string.strip()
     logger.debug("handle command: %s", input_string)
+    try:
+        commands = read_commands(pymux, input_string)
+    except grammar.ParseError as e:
+        pymux.show_message("Invalid command %s: %s" % (input_string.strip(), e.message))
+        pymux.add_command_error("pymux: %s" % (e.message,))
+        return None
+    return _run_in_order(pymux, [command.strings() for command in commands], targets)
 
-    if input_string and not input_string.startswith("#"):  # Ignore comments.
-        try:
-            parts = shlex.split(input_string)
-        except ValueError as e:
-            # E.g. missing closing quote.
-            pymux.show_message("Invalid command %s: %s" % (input_string, e))
-        else:
-            # Split into separate commands on bare ';' tokens.
-            # (Exception: for bind-key/unbind-key, a ';' can be the name of
-            # the key that is bound. Like tmux, we don't split there.)
-            #
-            # The alias is resolved here and not left to
-            # `call_command_handler`, because `bind` is what a tmux
-            # configuration writes, and a split there would cut
-            # `bind \; last-pane` on the key it binds: the bind would run
-            # with no arguments and last-pane would move the focus, with
-            # no message saying why.
-            # Lillecarl/pyterm#315.
-            first = ALIASES.get(parts[0], parts[0])
-            no_semicolon_split = first in ("bind-key", "unbind-key")
-            commands: list[list[str]] = [[]]
-            for part in parts:
-                if part == ";" and not no_semicolon_split:
-                    commands.append([])
-                else:
-                    commands[-1].append(part)
 
-            return _run_in_order(pymux, commands, targets)
+def read_commands(pymux: Pymux, text: str, line: int = 1) -> list[grammar.Command]:
+    """
+    The commands of `text`, read with tmux's grammar against this server.
 
-    return None
+    `$NAME` reads the global environment over the server's own, as in
+    tmux. `NAME=value` sets it there. `%hidden NAME=value` is seen by
+    the rest of this text only: pymux has no hidden scope for it to
+    live in. A `%if` asks a tmux format.
+    """
+    from pymux.core.environment import global_environment
+    from pymux.format import Language, format_pymux_string
+
+    def condition(text: str) -> bool:
+        # A configuration is read before the first window: tmux formats
+        # with what there is.
+        return format_pymux_string(pymux, text, language=Language.TMUX, windowless=True) not in ("", "0")
+
+    def assign(name: str, value: str, hidden: bool) -> None:
+        if not hidden:
+            pymux.global_environment[name] = value
+
+    commands = grammar.parse(text, environment=global_environment(pymux), condition=condition, assign=assign, line=line)
+    _known_in_blocks(commands)
+    return commands
+
+
+def _known_in_blocks(commands: list[grammar.Command]) -> None:
+    """
+    Refuse a block whose command does not exist, as tmux does while it
+    reads one. `-t {end}` unquoted is a block that runs `end`, and it
+    would otherwise reach the command as the word `end`, in silence.
+    """
+    _parser, subparsers = parser_tree()
+    for command in commands:
+        for word in command.words:
+            if not isinstance(word, grammar.Block):
+                continue
+            for inner in word.commands:
+                name = inner.words[0]
+                if isinstance(name, str) and ALIASES.get(name, name) not in subparsers.choices:
+                    raise grammar.ParseError(inner.line, "unknown command: %s" % (name,))
+            _known_in_blocks(word.commands)
+
+
+def run_arguments(pymux: Pymux, words: list[str], targets: Mapping[str, str] | None = None):
+    "Run words split as tmux's command line splits them: a word ending in `;` ends a command."
+    return _run_in_order(pymux, grammar.from_arguments(words), targets)
 
 
 def _run_in_order(pymux: Pymux, commands: list[list[str]], targets: Mapping[str, str] | None = None):

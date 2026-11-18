@@ -8,10 +8,10 @@ from __future__ import annotations
 
 import argparse
 import logging
-import shlex
 from enum import StrEnum
 
 from pymux import __version__, log
+from pymux.grammar import join
 from pymux.pane_command import pane_command
 
 __all__ = ["Mode", "parse_arguments"]
@@ -255,7 +255,7 @@ def parse_arguments(
 
     Returns the options, the mode word (`None` when there is none) and
     the command for a server as one string (`None` when there is none),
-    which `shlex.quote` keeps each argument of in one piece. What
+    in tmux's grammar (`pymux.grammar.join`). What
     `integrated` runs in its first pane is not a server command: it is
     `options.pane_command`, by `pymux.pane_command`'s rule.
 
@@ -340,10 +340,11 @@ def parse_arguments(
     elif mode is not None and rest:
         # A mode with extra arguments: e.g. `pymux list-sessions -F ...`.
         # The whole thing is sent to the server as one command.
-        command = " ".join(shlex.quote(x) for x in (mode, *rest))
+        command = join((mode, *rest))
         mode = None
     elif rest:
-        # Not a mode: all arguments form one pymux command.
-        command = " ".join(shlex.quote(x) for x in rest)
+        # Not a mode: all arguments form one pymux command, or several:
+        # a word that ends in `;` ends one, as on tmux's command line.
+        command = join(rest)
 
     return a, mode, command

@@ -1022,7 +1022,7 @@ async def test_a_command_goes_over_ssh_beside_the_link(two_servers, tmp_path):
         server.close()
 
 
-@pytest.mark.parametrize("line", ["new-window", "new-window -a -t {end}"])
+@pytest.mark.parametrize("line", ["new-window", "new-window -a -t '{end}'"])
 async def test_a_new_window_there_takes_the_client_along(two_servers, line):
     "With a target named too: the owner runs it as from the person's pane, and the client follows and focuses."
     owner, peer, client = two_servers

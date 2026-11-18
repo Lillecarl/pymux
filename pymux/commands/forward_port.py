@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import shlex
 from collections.abc import Awaitable, Coroutine
 from typing import TYPE_CHECKING, Any
 
@@ -24,6 +23,7 @@ from pymux.core.forwarding import (
     question,
 )
 from pymux.enums import ForwardMode
+from pymux.grammar import join, quote
 from pymux.mirror.program import RemoteProgram
 
 
@@ -113,7 +113,7 @@ def forward_port(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None] | No
 
     if not confirmed and pymux.forward_requests.needs_asking(forward, asker.in_person):
         # A yes runs this same command with -c, so it is asked once.
-        asker.client_state.ask(question(forward), "forward-port -c %s %s" % (forward.flag, shlex.quote(spec)))
+        asker.client_state.ask(question(forward), "forward-port -c %s %s" % (forward.flag, quote(spec)))
         return None
 
     pymux.forward_requests.send(asker, packet)
@@ -155,7 +155,7 @@ def _through_link(pymux: Pymux, peer: Peer, forward: Forward, confirmed: bool) -
 
 def confirm_through(peer: Peer, forward: Forward) -> str:
     "The command a yes runs, to make `forward` through the link to `peer`."
-    return shlex.join(["forward-port", "-c", "-p", peer.address, *forward.spell().split()])
+    return join(["forward-port", "-c", "-p", peer.address, *forward.spell().split()])
 
 
 def answered(pymux: Pymux, said: Coroutine[Any, Any, str]) -> Awaitable[None]:

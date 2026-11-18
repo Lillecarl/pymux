@@ -51,6 +51,9 @@
   swaybg,
   foot,
   kitty,
+  # The oracle of the command grammar: `source-file -nv` prints what
+  # tmux parsed. Lillecarl/pyterm#1029.
+  tmux,
   mesa,
   vttest,
   # What the scenario check drives, and the model API claude-code talks to.
@@ -702,6 +705,7 @@ in
           # The kitten that speaks kitty's file transfer to the pymux
           # client. Lillecarl/pyterm#914.
           PYMUX_KITTEN = "${kitty}/bin/kitten";
+          PYMUX_TMUX = lib.getExe tmux;
         };
       }
       # `--durations` names what the suite spends its time on, and

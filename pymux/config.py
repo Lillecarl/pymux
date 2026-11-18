@@ -12,10 +12,10 @@ Lillecarl/pyterm#225.
 from __future__ import annotations
 
 import os
-import shlex
 from collections.abc import Mapping, Sequence
 
 from pymux.commands.aliases import ALIASES
+from pymux.grammar import ParseError, parse
 
 __all__ = [
     "client_options_in",
@@ -125,49 +125,26 @@ def client_options_in(paths: Sequence[str]) -> list[tuple[str, str]]:
     **This reads the file and does not run it.** The file is the
     server's, and the server runs all of it; a client takes the two or
     three lines that are about itself and leaves the rest alone.
-    Splitting the same way `handle_command` splits is what keeps the
-    two readings of one line the same: `shlex`, a leading `#` for a
-    comment, a bare `;` between commands, and the aliases.
+    The server's grammar, `pymux.grammar`, reads it here too, so the
+    two readings of one file are the same. A `%if` here is false: a
+    format needs the server to answer it.
 
     Nothing here says a file is wrong. The server reads the same file
     and says it once, where a person is looking; saying it twice, from
     two processes, on two machines, is worse than not saying it.
     """
-    lines: list[str] = []
+    found = []
     for path in paths:
         try:
             with open(path) as opened:
-                lines.extend(opened.readlines())
-        except OSError:
+                commands = parse(opened.read(), condition=lambda _format: False)
+        except OSError, ParseError:
             continue
-
-    found = []
-    for line in lines:
-        for parts in _commands_in(line):
-            one = _client_option(parts)
+        for command in commands:
+            one = _client_option(command.strings())
             if one is not None:
                 found.append(one)
     return found
-
-
-def _commands_in(line: str) -> list[list[str]]:
-    "The commands of one line, split the way `handle_command` splits."
-    line = line.strip()
-    if not line or line.startswith("#"):
-        return []
-
-    try:
-        parts = shlex.split(line)
-    except ValueError:
-        return []
-
-    commands: list[list[str]] = [[]]
-    for part in parts:
-        if part == ";":
-            commands.append([])
-        else:
-            commands[-1].append(part)
-    return commands
 
 
 def _client_option(parts: list[str]) -> tuple[str, str] | None:

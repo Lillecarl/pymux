@@ -39,3 +39,31 @@ way prefix passes into panes by default is pressing it twice, that
 should be a feature".
 """
 references = ["Lillecarl/pyterm#387"]
+
+[[divergence]]
+name = "an unclosed quote is an error on the line it opens"
+command = "source-file"
+tmux = "a quote nobody closes takes the rest of the file into one word, newlines and all"
+pymux = "the file does not parse, and the error names the line the quote opened on"
+test = "test_an_unclosed_quote_is_an_error_product_divergence"
+evidence = "pymux/grammar.py _Lexer.token; tmux 3.6 cmd-parse.y yylex_token ends a word at EOF in any state"
+reason = """
+A file whose last forty lines are one argument runs as something
+nobody wrote, and tmux names no line. Refusing the file and naming
+where the quote opened is the answer a person can act on.
+Lillecarl/pyterm#1029.
+"""
+references = ["Lillecarl/pyterm#1029"]
+
+[[divergence]]
+name = "%hidden NAME=value lives for the text that sets it"
+command = "source-file"
+tmux = "the variable goes into the global environment, hidden from panes and show-environment"
+pymux = "the variable expands $NAME in the rest of that text only"
+test = "test_hidden_lives_for_one_text_product_divergence"
+evidence = "tmux 3.6 cmd-parse.y hidden_assignment, environ_put with ENVIRON_HIDDEN"
+reason = """
+pymux's global environment has no hidden flag, and storing the value
+there would hand a secret to every new pane. Lillecarl/pyterm#1043.
+"""
+references = ["Lillecarl/pyterm#1043", "Lillecarl/pyterm#1029"]

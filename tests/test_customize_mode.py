@@ -13,6 +13,7 @@ from prompt_toolkit.application.current import set_app
 from session import create_session
 
 from pymux.enums import Chooser
+from pymux.grammar import template_replace
 
 
 async def test_options_list_with_their_values():
@@ -49,7 +50,7 @@ async def test_taking_row_asks_for_value():
 
         assert state.chooser is not Chooser.OPTIONS
         assert state.prompt_command.startswith("set-option ")
-        assert state.prompt_command.endswith(" %")
+        assert state.prompt_command.endswith(" '%%'")
 
 
 async def test_value_shown_is_what_option_holds():
@@ -94,7 +95,7 @@ async def test_a_client_option_is_set_by_its_own_command():
             state.layout_manager.chooser.choose_pointed_option()
 
         assert state.prompt_command.startswith("set-client-option theme ")
-        assert state.prompt_command.endswith(" %")
+        assert state.prompt_command.endswith(" '%%'")
 
 
 async def test_taking_a_client_row_changes_this_client():
@@ -111,7 +112,7 @@ async def test_taking_a_client_row_changes_this_client():
 
             state.choose_window_index = 0
             state.layout_manager.chooser.choose_pointed_option()
-            pymux.handle_command(state.prompt_command.replace("%", "on"))
+            pymux.handle_command(template_replace(state.prompt_command, "on"))
 
             assert pymux.the_client_to_tell().options.full_screen is True
 
@@ -131,4 +132,4 @@ async def test_a_window_option_is_set_by_its_own_command():
             state.layout_manager.chooser.choose_pointed_option()
 
         assert state.prompt_command.startswith("set-window-option window-size ")
-        assert state.prompt_command.endswith(" %")
+        assert state.prompt_command.endswith(" '%%'")

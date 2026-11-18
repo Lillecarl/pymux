@@ -30,10 +30,10 @@ from ptkhx.bindings import HelixBindings
 from ptterm import Terminal
 from ptterm.copy_mode import copy_mode_key_bindings
 
-from ..commands import call_command_handler
-from ..commands.utils import wrap_argument
+from ..commands import run_arguments
 from ..enums import COMMAND, PROMPT, Chooser, EditingKeys
 from ..filters import HasPrefix, KeyTableIs, ModeActive, ModeTakesPrefix, Repeating, WaitsForConfirmation
+from ..grammar import print_arguments
 from ..notify.osc import PASSTHROUGH_VARIABLE, set_user_var
 from ..wayland.window_pane import WindowWidget
 from .actions import Kind, Origin, note, note_keys, started_by
@@ -748,7 +748,7 @@ class PymuxKeyBindings:
             """
             client_state = self.pymux.get_client_state()
             with started_by(Origin.KEY, table, key_name):
-                self.pymux.spawn_command(call_command_handler(command, self.pymux, arguments))
+                self.pymux.spawn_command(run_arguments(self.pymux, [command, *arguments]))
             client_state.has_prefix = False
             repeat_time = client_state.session.options.repeat_time
             if repeats and repeat_time > 0:
@@ -825,10 +825,7 @@ class PymuxKeyBindings:
         for (table, _keys), binding in self.custom_bindings.items():
             if table != PREFIX_TABLE:
                 continue
-            meaning = binding.command
-            if binding.arguments:
-                meaning += " " + " ".join(map(wrap_argument, binding.arguments))
-            rows.append((binding.written, meaning))
+            rows.append((binding.written, print_arguments([binding.command, *binding.arguments])))
         if self.prefix_sends_itself():
             rows.append((self.prefix_written, "send-prefix"))
         return sorted(rows)

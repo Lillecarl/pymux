@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 from pymux.commands import CommandParser, add_command
 from pymux.commands.common import show_listing
-from pymux.commands.utils import wrap_argument
+from pymux.grammar import print_arguments
 
 
 def list_keys(pymux: Pymux, args: argparse.Namespace) -> None:
@@ -29,7 +29,7 @@ def list_keys(pymux: Pymux, args: argparse.Namespace) -> None:
     ]
 
     def command_of(binding: CustomBinding) -> str:
-        return " ".join([binding.command, *map(wrap_argument, binding.arguments)])
+        return print_arguments([binding.command, *binding.arguments])
 
     result = []
     if args.N:

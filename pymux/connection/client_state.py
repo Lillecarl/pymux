@@ -36,6 +36,7 @@ from ..core.pane import Pane
 from ..core.session import Session
 from ..core.window_tree import Window
 from ..enums import CHOOSE, COMMAND, PROMPT, Chooser, EditingKeys, Woke
+from ..grammar import template_replace
 from ..graphics.graphics import PaneView
 from ..ids import PaneId
 from ..keys.actions import Origin, started_by
@@ -865,7 +866,7 @@ class ClientState:
         if prompt_command is None:
             return False
         with started_by(Origin.PROMPT):
-            self.pymux.handle_command(prompt_command.replace("%%", text))
+            self.pymux.handle_command(template_replace(prompt_command, text))
         return False
 
     def _accept_chooser(self, buffer: Buffer) -> bool:

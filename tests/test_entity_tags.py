@@ -80,14 +80,14 @@ async def test_a_listing_keeps_what_carries_every_tag():
         await say(pymux, state, "new-window -d --tag role=build --tag mine")
         await say(pymux, state, "new-window -d --tag role=logs")
         await say(pymux, state, "new-session -d -s other --tag owner=agent")
-        printed, errors = await say(pymux, state, "list-windows --tag role -F #{window_tags}")
+        printed, errors = await say(pymux, state, "list-windows --tag role -F '#{window_tags}'")
         assert not errors, errors
         assert sorted(printed) == ["role=build,mine", "role=logs"]
-        printed, _errors = await say(pymux, state, "list-windows --tag role=build --tag mine -F #{window_tags}")
+        printed, _errors = await say(pymux, state, "list-windows --tag role=build --tag mine -F '#{window_tags}'")
         assert printed == ["role=build,mine"]
-        printed, _errors = await say(pymux, state, "list-sessions --tag owner=agent -F #{session_name}")
+        printed, _errors = await say(pymux, state, "list-sessions --tag owner=agent -F '#{session_name}'")
         assert printed == ["other"]
-        printed, _errors = await say(pymux, state, "list-sessions --tag owner=person -F #{session_name}")
+        printed, _errors = await say(pymux, state, "list-sessions --tag owner=person -F '#{session_name}'")
         assert printed == []
 
 
@@ -104,7 +104,7 @@ async def test_a_pane_tag_finds_it_in_any_session():
 
 async def test_split_window_tags_the_new_pane():
     async with create_session() as (pymux, state):
-        printed, errors = await say(pymux, state, "split-window -d -P -F #{pane_tags} --tag agent=a1")
+        printed, errors = await say(pymux, state, "split-window -d -P -F '#{pane_tags}' --tag agent=a1")
         assert not errors, errors
         assert printed == ["agent=a1"]
 
