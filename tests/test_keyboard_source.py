@@ -12,7 +12,7 @@ keyboard that sends its own key release may not get a second one.
 from __future__ import annotations
 
 import pytest
-from pyte.keys.events import KeyboardFlag
+from pyte.keys.events import FormatOtherKeys, KeyboardFlag
 from session import Client
 
 from pymux.core.main import Pymux
@@ -67,7 +67,8 @@ class FakeScreen:
         self.synthesize_key_events = False
         self.extended_keys_allowed = True
 
-    def set_keyboard_source(self, flags: int, synthesize: bool, extended_allowed: bool) -> None:
+    def set_keyboard_source(self, flags: int, synthesize: bool, extended_allowed: bool, other_keys_form: int) -> None:
+        self.other_keys_form = other_keys_form
         self.keyboard_source_flags = flags
         self.synthesize_key_events = synthesize
         self.extended_keys_allowed = extended_allowed
@@ -309,6 +310,17 @@ def test_turning_it_back_on_reaches_panes():
 
     assert pane.screen.extended_keys_allowed is True
     assert pymux.terminals.keyboard_flags_for_client() == KeyboardFlag.DISAMBIGUATE
+
+
+def test_extended_keys_format_reaches_every_pane():
+    "tmux's `extended-keys-format`: the form a program that never said gets."
+    pymux, _ = make_pymux(0b11111)
+    pane = FakePane(1)
+    pymux.panes_by_id[pane.pane_id] = pane
+
+    ALL_SERVER_OPTIONS["extended-keys-format"].set_value(pymux, "csi-u")
+
+    assert pane.screen.other_keys_form == FormatOtherKeys.CSI_U
 
 
 def test_always_still_asks_terminal():

@@ -14,7 +14,7 @@ from pyte.modes import PrivateMode
 from pyte.sequences.csi import reset_mode, set_mode
 
 from .. import introspect, log
-from ..enums import AudioServerMode, Clipboard, ExtendedKeys, ForwardMode, RenderMode, WaylandPortal
+from ..enums import AudioServerMode, Clipboard, ExtendedKeys, ExtendedKeysFormat, ForwardMode, RenderMode, WaylandPortal
 from ..log import logger
 from .option_fields import Options, option, options
 
@@ -200,6 +200,14 @@ class ServerOptions(Options):
             'How much of the keyboard this server uses. "off" is the way out for a program that '
             "misbehaves under the extended encodings, and for a terminal that claims more than it "
             "does. Lillecarl/pyterm#175."
+        ),
+        on_set=_keyboard_changed,
+    )
+    extended_keys_format: ExtendedKeysFormat = option(
+        ExtendedKeysFormat.XTERM,
+        doc=(
+            "How a key with a modifier reaches a program that turned on modifyOtherKeys and did not "
+            "say how with XTFMTKEYS: xterm's CSI 27 ; m ; k ~, or CSI k ; m u. tmux's default."
         ),
         on_set=_keyboard_changed,
     )

@@ -21,10 +21,10 @@ from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
 from libpymux.protocol import Field, Packet
 from pyte.images import ASSUMED_CELL_HEIGHT, ASSUMED_CELL_WIDTH
 from pyte.keep import Keep
-from pyte.keys.events import KeyboardFlag
+from pyte.keys.events import FormatOtherKeys, KeyboardFlag
 from pyte.program_status import valid_id
 
-from .enums import ExtendedKeys
+from .enums import ExtendedKeys, ExtendedKeysFormat
 from .log import logger
 from .mirror.program import RemoteProgram
 from .notify.osc import NO_PROGRESS
@@ -44,6 +44,23 @@ if TYPE_CHECKING:
     from .mirror.link import PeerLink
 
 __all__ = ["PeerTerminal", "Terminals", "pointer_shape_of"]
+
+#: What `extended-keys-format` tells a pane's screen.
+OTHER_KEYS_FORMS = {
+    ExtendedKeysFormat.XTERM: FormatOtherKeys.TILDE,
+    ExtendedKeysFormat.CSI_U: FormatOtherKeys.CSI_U,
+}
+
+
+class KeyboardTold(NamedTuple):
+    "What the panes were last told about the keyboard, so a sync that changes nothing walks no pane."
+
+    #: The kitty flags every client's terminal reports (`Terminals.keyboard_source_flags`).
+    source_flags: int
+    #: Each session's `synthesize-key-events`.
+    synthesize: tuple[tuple[SessionId, bool], ...]
+    extended_keys: ExtendedKeys
+    extended_keys_format: ExtendedKeysFormat
 
 
 class PeerTerminal(NamedTuple):
@@ -89,7 +106,7 @@ class Terminals:
     KEEP: ClassVar[dict[str, Keep]] = {
         "pymux": Keep.REBUILT,
         "_kitty_flags_sent": Keep.REBUILT,
-        "_keyboard_state_sent": Keep.REBUILT,
+        "_keyboard_told": Keep.REBUILT,
         "_cell_size_sent": Keep.REBUILT,
         "_scheme_from": Keep.REBUILT,
     }
@@ -102,10 +119,8 @@ class Terminals:
         #: their outer terminals accordingly.)
         self._kitty_flags_sent: int | None = None
 
-        # What the panes were last told about the keyboards of the
-        # clients: the flags, each session's `synthesize-key-events` and
-        # `extended-keys`. (None: nothing was told yet.)
-        self._keyboard_state_sent: tuple[int, tuple[tuple[SessionId, bool], ...], ExtendedKeys] | None = None
+        #: None: nothing was told yet.
+        self._keyboard_told: KeyboardTold | None = None
 
         # The cell size the panes were last told. (None: nothing yet.)
         self._cell_size_sent: tuple[int, int] | None = None
@@ -262,14 +277,17 @@ class Terminals:
         really gets, and that answer needs this. (Only walks the panes
         when something changed.)
         """
-        state = (
-            self.keyboard_source_flags(),
-            tuple((session.session_id, session.options.synthesize_key_events) for session in self.pymux.sessions),
-            self.pymux.options.extended_keys,
+        told = KeyboardTold(
+            source_flags=self.keyboard_source_flags(),
+            synthesize=tuple(
+                (session.session_id, session.options.synthesize_key_events) for session in self.pymux.sessions
+            ),
+            extended_keys=self.pymux.options.extended_keys,
+            extended_keys_format=self.pymux.options.extended_keys_format,
         )
-        if state == self._keyboard_state_sent:
+        if told == self._keyboard_told:
             return
-        self._keyboard_state_sent = state
+        self._keyboard_told = told
         for pane in list(self.pymux.panes_by_id.values()):
             self.tell_pane_about_keyboard(pane)
         self.tell_peers()
@@ -413,6 +431,7 @@ class Terminals:
                 self.keyboard_source_flags(),
                 self.pymux.options_of_pane(pane).synthesize_key_events,
                 self.pymux.options.extended_keys is not ExtendedKeys.OFF,
+                OTHER_KEYS_FORMS[self.pymux.options.extended_keys_format],
             )
 
     def tell_pane_about_colours(self, pane: Pane) -> None:

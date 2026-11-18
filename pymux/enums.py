@@ -368,6 +368,13 @@ class ExtendedKeys(StrEnum):
     ALWAYS = "always"
 
 
+class ExtendedKeysFormat(StrEnum):
+    "The form a key leaves the legacy encoding in, when the program in a pane never said: tmux's two."
+
+    XTERM = "xterm"
+    CSI_U = "csi-u"
+
+
 class Clipboard(StrEnum):
     """
     Who may write the clipboard of the person at the keyboard.
