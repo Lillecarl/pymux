@@ -23,7 +23,7 @@ from pyte.parameters import EraseExtent
 from pyte.sequences.csi import csi
 from pyte.sequences.rendition import Sgr, sgr
 
-from pymux.config import client_options_in, find_config
+from pymux.config import client_options_in, find_configs
 from pymux.graphics.graphics import RESTORE_CURSOR, SAVE_CURSOR
 
 from .uploads import (
@@ -130,7 +130,10 @@ class SendingFiles:
 
     def settings(self) -> UploadSettings:
         "What this client's own configuration file says. **It blocks.**"
-        return upload_settings(client_options_in(self.client.config_file or find_config()), Path.home())
+        return upload_settings(
+            client_options_in(find_configs() if self.client.config_files is None else self.client.config_files),
+            Path.home(),
+        )
 
     def granted(self) -> bool:
         return self.grant_until is not None and self.clock() < self.grant_until

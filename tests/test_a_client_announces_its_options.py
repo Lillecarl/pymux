@@ -35,8 +35,8 @@ def _written(tmp_path, text: str) -> str:
 
 
 def test_no_file_says_nothing():
-    assert client_options_in(None) == []
-    assert client_options_in("/nowhere/pymux.conf") == []
+    assert client_options_in([]) == []
+    assert client_options_in(["/nowhere/pymux.conf"]) == []
 
 
 def test_it_takes_the_client_lines(tmp_path):
@@ -48,7 +48,7 @@ def test_it_takes_the_client_lines(tmp_path):
         "set-client-option swap-light-and-dark-colors on\n",
     )
 
-    assert client_options_in(path) == [
+    assert client_options_in([path]) == [
         ("theme", "grey"),
         ("swap-light-and-dark-colors", "on"),
     ]
@@ -58,7 +58,7 @@ def test_the_rest_of_the_file_is_the_servers(tmp_path):
     "A client reads the file and does not run it."
     path = _written(tmp_path, "set-option status off\nnew-window\n")
 
-    assert client_options_in(path) == []
+    assert client_options_in([path]) == []
 
 
 def test_a_comment_is_a_comment(tmp_path):
@@ -67,26 +67,26 @@ def test_a_comment_is_a_comment(tmp_path):
         "# set-client-option theme grey\n   # and this one\nset-client-option theme default\n",
     )
 
-    assert client_options_in(path) == [("theme", "default")]
+    assert client_options_in([path]) == [("theme", "default")]
 
 
 def test_a_quoted_value_arrives_whole(tmp_path):
     "`shlex`, the way `handle_command` splits it."
     path = _written(tmp_path, 'set-client-option theme "base16:gruvbox-dark-hard"\n')
 
-    assert client_options_in(path) == [("theme", "base16:gruvbox-dark-hard")]
+    assert client_options_in([path]) == [("theme", "base16:gruvbox-dark-hard")]
 
 
 def test_the_alias_counts(tmp_path):
     path = _written(tmp_path, "setc theme grey\n")
 
-    assert client_options_in(path) == [("theme", "grey")]
+    assert client_options_in([path]) == [("theme", "grey")]
 
 
 def test_two_commands_on_one_line(tmp_path):
     path = _written(tmp_path, "setc theme grey ; setc swap-light-and-dark-colors on\n")
 
-    assert client_options_in(path) == [
+    assert client_options_in([path]) == [
         ("theme", "grey"),
         ("swap-light-and-dark-colors", "on"),
     ]
@@ -99,21 +99,21 @@ def test_a_target_in_a_file_names_nobody(tmp_path):
     """
     path = _written(tmp_path, "set-client-option -t somewhere:/dev/pts/3 theme grey\n")
 
-    assert client_options_in(path) == []
+    assert client_options_in([path]) == []
 
 
 def test_a_read_sets_nothing(tmp_path):
     "One word is `set-client-option theme` with no value, which is a read."
     path = _written(tmp_path, "set-client-option theme\n")
 
-    assert client_options_in(path) == []
+    assert client_options_in([path]) == []
 
 
 def test_a_line_that_does_not_parse_is_left_to_the_server(tmp_path):
     "The server reads the same file and says it once, where a person looks."
     path = _written(tmp_path, 'set-client-option theme "unclosed\n')
 
-    assert client_options_in(path) == []
+    assert client_options_in([path]) == []
 
 
 # ----------------------------------------------------------------------

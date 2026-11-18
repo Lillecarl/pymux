@@ -33,7 +33,7 @@ from test_every_attribute_has_a_fate import declared, live_objects
 
 from pymux.commands.wait_for import WaitChannel
 from pymux.core.main import Pymux
-from pymux.core.snapshot.read import Program, Takeover, load, start
+from pymux.core.snapshot.read import Program, Takeover, load, source_files_of, start
 from pymux.core.snapshot.schema import SNAPSHOT_VERSION, WRITES, SnapshotError, panes_of
 from pymux.core.snapshot.write import Snapshot, fds_of, save, values_of
 from pymux.core.upgrade import welcome_back
@@ -1095,3 +1095,10 @@ async def test_a_snapshot_is_refused_while_a_command_waits(pymux, tmp_path):
     pymux.wait_channels["done"] = channel
     with pytest.raises(SnapshotError, match="channel done"):
         save(pymux, tmp_path / "waiting.sqlite")
+
+
+def test_a_snapshot_with_one_configuration_file_still_loads():
+    "A server built before Lillecarl/pyterm#1027 wrote one path, or none, as `source_file`."
+    assert source_files_of({"source_file": "/home/me/.pymux.conf"}) == ["/home/me/.pymux.conf"]
+    assert source_files_of({"source_file": None}) == []
+    assert source_files_of({"source_files": '["/a", "/b"]'}) == ["/a", "/b"]

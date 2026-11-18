@@ -106,6 +106,15 @@ def add_options(parser: argparse.ArgumentParser, suppress_defaults: bool) -> Non
         "'$XDG_CONFIG_HOME/pymux/pymux.conf' and '~/.pymux.conf' that is there.",
     )
     parser.add_argument(
+        "--tmux-compat",
+        dest="tmux_compat",
+        action="store_true",
+        default=false,
+        help="Read tmux's configuration files instead of pymux's: every one of "
+        "'/etc/tmux.conf', '~/.tmux.conf', '$XDG_CONFIG_HOME/tmux/tmux.conf' and "
+        "'~/.config/tmux/tmux.conf' that is there, as tmux does.",
+    )
+    parser.add_argument(
         "-d",
         "--detach-others",
         dest="detach_others",

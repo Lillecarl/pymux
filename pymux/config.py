@@ -13,15 +13,16 @@ from __future__ import annotations
 
 import os
 import shlex
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 
 from pymux.commands.aliases import ALIASES
 
 __all__ = [
     "client_options_in",
     "config_paths",
-    "find_config",
+    "find_configs",
     "plugin_dir",
+    "tmux_config_paths",
 ]
 
 #: The command that names a client option. Everything else in the file
@@ -37,7 +38,8 @@ def config_paths(environ: Mapping[str, str] | None = None) -> list[str]:
     file belongs and where every terminal this collection is measured
     against now looks. `~/.pymux.conf` comes second and stays: it is
     the only path pymux ever read, so dropping it would break every
-    configuration that exists. tmux reads its two in the same order.
+    configuration that exists. pymux reads the first that is there;
+    tmux reads all of its own, `tmux_config_paths`.
 
     `$XDG_CONFIG_HOME` has to be an absolute path. The specification
     says an implementation ignores a relative one, and this does.
@@ -70,27 +72,52 @@ def _config_home(environ: Mapping[str, str] | None = None) -> str:
     return config_home
 
 
-def find_config(environ: Mapping[str, str] | None = None) -> str | None:
+def tmux_config_paths(environ: Mapping[str, str] | None = None) -> list[str]:
     """
-    The first configuration file that is there, or `None`.
+    Where tmux looks for its configuration, in the order it reads them.
+
+    `TMUX_CONF` in tmux's `Makefile.am`: `/etc/tmux.conf`,
+    `~/.tmux.conf`, `$XDG_CONFIG_HOME/tmux/tmux.conf`,
+    `~/.config/tmux/tmux.conf`. `expand_paths` in `tmux.c` drops the
+    XDG one when the variable is not set, and a path named twice.
+    Lillecarl/pyterm#1027.
+    """
+    if environ is None:
+        environ = os.environ
+
+    paths = ["/etc/tmux.conf", os.path.expanduser("~/.tmux.conf")]
+    config_home = environ.get("XDG_CONFIG_HOME")
+    if config_home:
+        paths.append(os.path.join(config_home, "tmux", "tmux.conf"))
+    paths.append(os.path.expanduser("~/.config/tmux/tmux.conf"))
+    return list(dict.fromkeys(paths))
+
+
+def find_configs(environ: Mapping[str, str] | None = None, *, tmux: bool = False) -> list[str]:
+    """
+    The configuration files to read: the first of pymux's own that is
+    there, or with `tmux`, every one of tmux's that is there, as
+    `start_cfg` in tmux's `cfg.c` reads them.
 
     This is separate from `run` for the reason `parse_arguments` is: a
     test can ask which file an environment names without starting a
     server.
     """
+    # A file, and not only something with that name. A directory called
+    # `pymux.conf` would answer `os.path.exists` and then fail to open,
+    # which reads as a broken configuration rather than as no
+    # configuration.
+    if tmux:
+        return [os.path.abspath(path) for path in tmux_config_paths(environ) if os.path.isfile(path)]
     for path in config_paths(environ):
-        # A file, and not only something with that name. A directory
-        # called `pymux.conf` would answer `os.path.exists` and then
-        # fail to open, which reads as a broken configuration rather
-        # than as no configuration.
         if os.path.isfile(path):
-            return os.path.abspath(path)
-    return None
+            return [os.path.abspath(path)]
+    return []
 
 
-def client_options_in(path: str | None) -> list[tuple[str, str]]:
+def client_options_in(paths: Sequence[str]) -> list[tuple[str, str]]:
     """
-    The client options a configuration file names, in its own order.
+    The client options configuration files name, in their own order.
 
     A client announces these when it attaches, so that a person can
     say in configuration what their terminal is. Lillecarl/pyterm#225.
@@ -106,14 +133,13 @@ def client_options_in(path: str | None) -> list[tuple[str, str]]:
     and says it once, where a person is looking; saying it twice, from
     two processes, on two machines, is worse than not saying it.
     """
-    if not path:
-        return []
-
-    try:
-        with open(path) as opened:
-            lines = opened.readlines()
-    except OSError:
-        return []
+    lines: list[str] = []
+    for path in paths:
+        try:
+            with open(path) as opened:
+                lines.extend(opened.readlines())
+        except OSError:
+            continue
 
     found = []
     for line in lines:

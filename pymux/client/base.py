@@ -24,7 +24,7 @@ class Client(ABC):
     #: Over SSH the server's configuration file is another machine's,
     #: and the terminal a person is sitting at is here.
     #: Lillecarl/pyterm#225.
-    config_file: str | None = None
+    config_files: list[str] | None = None
 
     #: What `pymux attach -n` called this terminal, when it named one.
     #: It is announced as a client option like any other, after the

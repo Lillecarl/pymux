@@ -76,6 +76,14 @@ pymux reads `$XDG_CONFIG_HOME/pymux/pymux.conf`, or `~/.pymux.conf`,
 or the file `-f` names. It holds commands, as typed at the command
 line. `examples/example-config.conf` is one.
 
+To try pymux on a tmux configuration, run `pymux --tmux-compat`. It
+reads tmux's files instead, every one of them that is there, in tmux's
+order: `/etc/tmux.conf`, `~/.tmux.conf`,
+`$XDG_CONFIG_HOME/tmux/tmux.conf`, `~/.config/tmux/tmux.conf`. pymux
+shows each line it cannot honour once, to the first client that
+attaches. `checks.pymux-tmux-corpus` reads 26 well known tmux
+configurations, and its log ranks what pymux does not take yet.
+
 A Python file in `$XDG_CONFIG_HOME/pymux/plugins` adds commands. It has
 the shape of the example plugin, `pymux/plugins/count_panes.py`: a
 function that takes the server and the parsed arguments, and a

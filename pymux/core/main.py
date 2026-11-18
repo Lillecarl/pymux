@@ -154,7 +154,7 @@ class Pymux:
         "socket_name": Keep.SAVED,
         "listener": Keep.SAVED,
         "original_cwd": Keep.SAVED,
-        "source_file": Keep.SAVED,
+        "source_files": Keep.SAVED,
         # Read once, for the first window, and a server only upgrades
         # after that window is open.
         "startup_command": Keep.DROPPED,
@@ -241,7 +241,7 @@ class Pymux:
 
     def __init__(
         self,
-        source_file: str | None = None,
+        source_files: list[str] | None = None,
         startup_command: PaneCommand | None = None,
         session_name: str | None = None,
         size_with_no_client: Size | None = None,
@@ -408,7 +408,8 @@ class Pymux:
 
         self._startup_done = False
         self._first_window: anyio.Event | None = None
-        self.source_file = source_file
+        #: The configuration files startup reads, in order.
+        self.source_files = list(source_files or [])
         self.startup_command = startup_command
         self.startup_window_name = startup_window_name
 
@@ -875,8 +876,8 @@ class Pymux:
             for cmd in STARTUP_COMMANDS.splitlines():
                 self.handle_command(cmd)
 
-            if self.source_file:
-                answer = call_command_handler("source-file", self, [self.source_file])
+            if self.source_files:
+                answer = call_command_handler("source-file", self, self.source_files)
                 return None if answer is None else awaited_as(Origin.CONFIG, answer)
         return None
 

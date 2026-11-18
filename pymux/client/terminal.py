@@ -39,7 +39,7 @@ from pyte.sequences.csi import ask_mode, csi
 from pyte.sequences.kitty_graphics import GRAPHICS_START, Action, Delete, GraphicsCommand, GraphicsKey, Quiet
 from pyte.sequences.kitty_keyboard import ask_flags, pop_flags, push_flags, set_flags
 
-from pymux.config import client_options_in, find_config
+from pymux.config import client_options_in, find_configs
 from pymux.files import ArrivingFiles, Whole
 from pymux.graphics.graphics import CELL_SIZE_QUERY, RESTORE_CURSOR, SAVE_CURSOR, VERSION_QUERY
 from pymux.graphics.graphics import QUERY_SEQUENCE as GRAPHICS_QUERY
@@ -511,7 +511,9 @@ class TerminalClient(Client):
         # The upload options stay here: they are this client's to read,
         # and the server is not to learn the allow-list.
         announced = [
-            one for one in client_options_in(self.config_file or find_config()) if one[0] not in LOCAL_CLIENT_OPTIONS
+            one
+            for one in client_options_in(find_configs() if self.config_files is None else self.config_files)
+            if one[0] not in LOCAL_CLIENT_OPTIONS
         ]
         if self.chosen_name:
             announced.append(("name", self.chosen_name))

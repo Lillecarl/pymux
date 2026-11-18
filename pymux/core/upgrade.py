@@ -57,7 +57,7 @@ from ..commands.kill_server import RESTART_WAIT
 from ..enums import Woke
 from ..log import logger
 from ..pipes.posix import PosixSocketListener
-from .snapshot.read import Inherited, load, read_server, start
+from .snapshot.read import Inherited, load, read_server, source_files_of, start
 from .snapshot.schema import SnapshotError, panes_of
 from .snapshot.write import Snapshot, fds_of
 
@@ -390,7 +390,7 @@ def resume(path: str) -> None:
         # for the path the carried one holds.
         pymux.wayland.paused = True
         server = read_server(path)
-        pymux.source_file = server["source_file"]
+        pymux.source_files = source_files_of(server)
         pymux.socket_name = server["socket_name"]
     except Exception as error:
         _crashed(error, started)

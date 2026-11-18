@@ -10,7 +10,7 @@ So `$XDG_CONFIG_HOME/pymux/pymux.conf` is read first, and
 path pymux ever read: dropping it would break every configuration that
 exists today.
 
-`find_config` is separate from `run` for the reason `parse_arguments`
+`find_configs` is separate from `run` for the reason `parse_arguments`
 is. Everything after it starts a server, so this is the last place
 where a mistake is still cheap.
 
@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import pytest
 
-from pymux.config import config_paths, find_config
+from pymux.config import config_paths, find_configs, tmux_config_paths
 
 
 @pytest.fixture
@@ -75,20 +75,20 @@ def test_empty_xdg_config_home_is_ignored(home, monkeypatch):
 
 
 def test_no_configuration_at_all_is_no_file(home):
-    assert find_config() is None
+    assert find_configs() == []
 
 
 def test_dotfile_is_still_read(home):
     "Every configuration that exists today is this one."
     wanted = write(home / ".pymux.conf")
 
-    assert find_config() == str(wanted)
+    assert find_configs() == [str(wanted)]
 
 
 def test_xdg_file_is_read(home):
     wanted = write(home / ".config" / "pymux" / "pymux.conf")
 
-    assert find_config() == str(wanted)
+    assert find_configs() == [str(wanted)]
 
 
 def test_xdg_file_wins_over_dotfile(home):
@@ -96,7 +96,7 @@ def test_xdg_file_wins_over_dotfile(home):
     wanted = write(home / ".config" / "pymux" / "pymux.conf")
     write(home / ".pymux.conf")
 
-    assert find_config() == str(wanted)
+    assert find_configs() == [str(wanted)]
 
 
 def test_directory_with_name_is_not_configuration(home):
@@ -108,4 +108,42 @@ def test_directory_with_name_is_not_configuration(home):
     (home / ".config" / "pymux" / "pymux.conf").mkdir(parents=True)
     wanted = write(home / ".pymux.conf")
 
-    assert find_config() == str(wanted)
+    assert find_configs() == [str(wanted)]
+
+
+# ----------------------------------------------------------------------
+# tmux's files, for `--tmux-compat`. Lillecarl/pyterm#1027.
+
+
+def test_tmux_reads_the_dotfile_before_xdg(home, tmp_path, monkeypatch):
+    "`TMUX_CONF` in tmux's Makefile.am, with `$XDG_CONFIG_HOME` set."
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "elsewhere"))
+
+    assert tmux_config_paths() == [
+        "/etc/tmux.conf",
+        str(home / ".tmux.conf"),
+        str(tmp_path / "elsewhere" / "tmux" / "tmux.conf"),
+        str(home / ".config" / "tmux" / "tmux.conf"),
+    ]
+
+
+def test_tmux_names_a_path_once(home, monkeypatch):
+    "`$XDG_CONFIG_HOME` that is `~/.config` names the last path again."
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(home / ".config"))
+
+    assert tmux_config_paths() == [
+        "/etc/tmux.conf",
+        str(home / ".tmux.conf"),
+        str(home / ".config" / "tmux" / "tmux.conf"),
+    ]
+
+
+def test_tmux_reads_every_file_that_is_there(home):
+    "Not the first only: `start_cfg` loads them all."
+    dotfile = write(home / ".tmux.conf")
+    xdg = write(home / ".config" / "tmux" / "tmux.conf")
+    write(home / ".pymux.conf")
+
+    found = [path for path in find_configs(tmux=True) if path != "/etc/tmux.conf"]
+
+    assert found == [str(dotfile), str(xdg)]

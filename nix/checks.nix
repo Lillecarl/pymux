@@ -144,6 +144,8 @@ let
   # models, and here it is the program that gets photographed.
   inherit (ptterm) vttestWalker;
 
+  tmuxCorpus = callPackage ./tmux-corpus.nix { };
+
   # Knobs that reach the evaluation through the environment. They work
   # because a build from a file evaluates impurely; a flake would see none of
   # them.
@@ -1762,5 +1764,19 @@ in
         export PYMUX_ALACRITTY_TMP="$TMPDIR"
         export PYMUX_ALACRITTY_OUT="$out"
         python tests/drive_with_alacritty.py
+      '';
+
+  # Real tmux configuration files, read by pymux. The run is judged
+  # against `tests/tmux-corpus-failures.txt`, and its log ranks what
+  # fails by how many files hit it. Lillecarl/pyterm#1027.
+  tmux-corpus =
+    runInSandbox
+      {
+        name = "pymux-tmux-corpus";
+      }
+      ''
+        export PYMUX_TMUX_CORPUS=${tmuxCorpus}
+        export PYMUX_TMUX_CORPUS_OUT="$out"
+        python tests/drive_with_tmux_corpus.py
       '';
 }

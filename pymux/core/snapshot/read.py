@@ -108,6 +108,7 @@ __all__ = [
     "load",
     "loaded_options",
     "read_server",
+    "source_files_of",
     "start",
 ]
 
@@ -266,6 +267,16 @@ def read_server(path: str | os.PathLike[str]) -> dict[str, Any]:
         db.close()
 
 
+def source_files_of(server: dict[str, Any]) -> list[str]:
+    """
+    The configuration files a server read. A snapshot of a build before
+    Lillecarl/pyterm#1027 holds one path or none, as `source_file`.
+    """
+    if "source_files" in server:
+        return json.loads(server["source_files"])
+    return [server["source_file"]] if server.get("source_file") else []
+
+
 def load(pymux: Pymux, path: str | os.PathLike[str], takeover: Takeover | None = None) -> int | None:
     """
     Replace what a fresh `pymux` holds with a snapshot's.
@@ -368,7 +379,7 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
     pymux.server_id = server.get("server_id", pymux.server_id)
     pymux.socket_name = server["socket_name"]
     pymux.original_cwd = server["original_cwd"]
-    pymux.source_file = server["source_file"]
+    pymux.source_files = source_files_of(server)
     pymux._startup_done = bool(server["startup_done"])
     pymux.clipboard.set_data(ClipboardData(server["clipboard"], SelectionType(server["clipboard_type"])))
     pymux.named_buffers = {row.name: row.text for row in select(db, NamedBufferRow)}

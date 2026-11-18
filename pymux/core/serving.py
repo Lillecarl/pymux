@@ -325,7 +325,7 @@ class Serving:
         # One process reads the file twice: as the server, for
         # everything, and as the client, for the lines that are about
         # this terminal. Lillecarl/pyterm#225.
-        client.config_file = self.pymux.source_file
+        client.config_files = self.pymux.source_files
         client.chosen_name = chosen_name
         client.hang_up_others = hang_up_others
         # `-r` here is a watcher of a session nobody else can reach,

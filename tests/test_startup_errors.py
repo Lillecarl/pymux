@@ -151,3 +151,28 @@ def test_missing_file_is_still_error_of_its_own(tmp_path):
         raise AssertionError("the handler should catch this itself")
     assert len(pymux.startup_errors) == 1
     assert "IOError" in pymux.startup_errors[0]
+
+
+def test_several_files_run_in_order_and_each_names_itself(tmp_path):
+    "tmux's `source-file` takes several, and `--tmux-compat` reads several. Lillecarl/pyterm#1027."
+    first, second = tmp_path / "first.conf", tmp_path / "second.conf"
+    first.write_text("set status maybe\n")
+    second.write_text("set status off\nnot-a-command\n")
+
+    pymux = Pymux()
+    call_command_handler("source-file", pymux, [str(first), str(second)])
+
+    assert pymux.session_defaults.status is False
+    assert [error.split(": ")[0] for error in pymux.startup_errors] == ["%s line 1" % first, "%s line 2" % second]
+
+
+def test_quiet_passes_over_a_missing_file(tmp_path):
+    "As `source-file -q` in tmux."
+    there = tmp_path / "there.conf"
+    there.write_text("set status off\n")
+
+    pymux = Pymux()
+    call_command_handler("source-file", pymux, ["-q", str(tmp_path / "not-there.conf"), str(there)])
+
+    assert pymux.startup_errors == []
+    assert pymux.session_defaults.status is False

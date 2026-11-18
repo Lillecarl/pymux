@@ -65,7 +65,7 @@ class AskedClient(TerminalClient):
 
     def __init__(self, config: Path, send=None) -> None:
         super().__init__()
-        self.config_file = str(config)
+        self.config_files = [str(config)]
         self.sent: list[dict] = []
         self.drawn: list[bytes] = []
         self._send = send

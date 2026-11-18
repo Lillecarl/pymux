@@ -221,11 +221,16 @@ def test_every_route_attaches_with_the_flags_a_person_gave():
             pass
 
     client = Client()
-    attaching = Attaching(config_file="rc", chosen_name="me", read_only=True, hang_up_others=True, true_color=True)
+    attaching = Attaching(config_files=["rc"], chosen_name="me", read_only=True, hang_up_others=True, true_color=True)
 
     with pytest.raises(SystemExit) as left:
         attaching.attach(client)
 
     assert left.value.code == 4
-    assert (client.config_file, client.chosen_name, client.read_only, client.hang_up_others) == ("rc", "me", True, True)
+    assert (client.config_files, client.chosen_name, client.read_only, client.hang_up_others) == (
+        ["rc"],
+        "me",
+        True,
+        True,
+    )
     assert client.attached == {"detach_other_clients": True, "color_depth": ColorDepth.DEPTH_24_BIT}

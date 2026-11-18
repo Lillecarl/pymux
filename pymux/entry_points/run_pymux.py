@@ -71,7 +71,7 @@ from typing import TYPE_CHECKING, NoReturn, assert_never
 
 from pymux import log
 from pymux.client import command_client, create_client, is_ssh_url, list_clients
-from pymux.config import find_config
+from pymux.config import find_configs
 from pymux.entry_points.arguments import Mode, how_much_to_log, parse_arguments
 from pymux.entry_points.completion import answer_completion
 from pymux.options.scope import rerun_in_a_scope
@@ -145,16 +145,13 @@ def run() -> None:
             socket_name,
         )
 
-    # Configuration filename. `-f` names one; without it, the first of
-    # `config_paths` that is there.
-    if not filename:
-        filename = find_config()
-
-    if filename:
-        filename = os.path.abspath(os.path.expanduser(filename))
+    # The configuration files. `-f` names one; without it, the first of
+    # `config_paths` that is there, or with `--tmux-compat`, every one of
+    # tmux's. Lillecarl/pyterm#1027.
+    filenames = [os.path.abspath(os.path.expanduser(filename))] if filename else find_configs(tmux=a.tmux_compat)
 
     attaching = Attaching(
-        config_file=filename,
+        config_files=filenames,
         chosen_name=a.client_name,
         read_only=a.read_only,
         hang_up_others=a.hang_up_others,
@@ -186,7 +183,7 @@ def run() -> None:
             # A server and one client in this process. The client reads a
             # queue that this server writes, so it reaches this server and
             # no other one.
-            mux = _new_pymux(source_file=filename, startup_command=a.pane_command)
+            mux = _new_pymux(source_files=filenames, startup_command=a.pane_command)
 
             # Only when a socket was asked for. The user interface never
             # reads it; it is there so that `pymux -S <socket> <command>`
@@ -257,7 +254,7 @@ def run() -> None:
             # the report are stdlib only. Lillecarl/pyterm#393.
             from pymux.diagnose import as_json, diagnose, human
 
-            report = diagnose(socket_name=socket_name, config_file=filename)
+            report = diagnose(socket_name=socket_name, config_files=filenames)
             print(as_json(report) if a.diagnose_json else human(report))
 
         case Mode.RENICE:
@@ -283,7 +280,7 @@ def run() -> None:
 
             # Create 'Pymux'. (Do this after the logging setup, so that crashes
             # in Pymux() can be logged.)
-            mux = _new_pymux(source_file=filename)
+            mux = _new_pymux(source_files=filenames)
 
             # Run server.
             socket_name = mux.serving.listen_on_socket(socket_name)
@@ -355,7 +352,7 @@ def run() -> None:
                 # who typed `pymux` twice meant. Lillecarl/pyterm#419.
                 for newest in list_clients():
                     attaching.attach(newest)
-                _start_and_attach(None, filename, attaching)
+                _start_and_attach(None, filenames, attaching)
 
             elif socket_name_from_env:
                 _refuse_nesting(socket_name_from_env)
@@ -373,16 +370,16 @@ def run() -> None:
                     named = None
                 if named is not None:
                     attaching.attach(named)
-                _start_and_attach(socket_name, filename, attaching)
+                _start_and_attach(socket_name, filenames, attaching)
 
         case _:
             assert_never(mode)
 
 
-def _start_and_attach(socket_name: str | None, filename: str | None, attaching: Attaching) -> NoReturn:
+def _start_and_attach(socket_name: str | None, filenames: list[str], attaching: Attaching) -> NoReturn:
     "Start a server on `socket_name`, or on a new one with None, and attach to it."
     rerun_in_a_scope()
-    mux = _new_pymux(source_file=filename)
+    mux = _new_pymux(source_files=filenames)
     socket_name = mux.serving.listen_on_socket(socket_name)
     pid = daemonize()
 
@@ -396,7 +393,7 @@ def _start_and_attach(socket_name: str | None, filename: str | None, attaching: 
 
 
 def _new_pymux(
-    source_file: str | None,
+    source_files: list[str],
     startup_command: PaneCommand | None = None,
     session_name: str | None = None,
     size_with_no_client: tuple[int, int] | None = None,
@@ -418,7 +415,7 @@ def _new_pymux(
     from pymux.core.main import Pymux
 
     return Pymux(
-        source_file=source_file,
+        source_files=source_files,
         startup_command=startup_command,
         startup_window_name=startup_window_name,
         session_name=session_name,
@@ -563,7 +560,7 @@ class Attaching:
     a detached command must not import the toolkit. Lillecarl/pyterm#394.
     """
 
-    config_file: str | None = None
+    config_files: list[str] | None = None
     chosen_name: str | None = None
     read_only: bool = False
     hang_up_others: bool = False
@@ -578,7 +575,7 @@ class Attaching:
         a server that will not serve this client says so in an `exit`
         packet. Lillecarl/pyterm#334.
         """
-        client.config_file = self.config_file
+        client.config_files = self.config_files
         client.chosen_name = self.chosen_name
         client.hang_up_others = self.hang_up_others
         client.read_only = self.read_only
@@ -812,7 +809,7 @@ def _new_session(
             os.chdir(os.path.abspath(os.path.expanduser(start_directory)))
 
     mux = _new_pymux(
-        source_file=attaching.config_file,
+        source_files=attaching.config_files or [],
         startup_command=startup_command,
         startup_window_name=window_name,
         session_name=session_name,

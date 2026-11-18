@@ -26,12 +26,12 @@ def test_a_report_without_a_server(tmp_path):
     "The honest answer when nothing is running, in both shapes."
     missing = str(tmp_path / "nothing.sock")
 
-    report = diagnose(socket_name=missing, config_file=None)
+    report = diagnose(socket_name=missing, config_files=[])
 
     assert report["socket"]["exists"] is False
     assert report["socket"]["connectable"] is False
     assert "no server running" in report["socket"]["error"]
-    assert report["configuration"]["file"] is None
+    assert report["configuration"]["files"] == []
     # A run in a test has no terminal of its own to ask.
     assert report["outer_terminal"]["asked"] is False
 
@@ -59,7 +59,7 @@ def test_a_report_of_a_running_server(tmp_path):
         # took longer than diagnose's 2 s. Lillecarl/pyterm#1002.
         _once_it_answers(Path(sock), "list-sessions")
 
-        report = diagnose(socket_name=sock, config_file=None)
+        report = diagnose(socket_name=sock, config_files=[])
 
         assert report["socket"]["connectable"] is True
         assert report["socket"]["sessions"], "the server listed no session"
@@ -87,6 +87,6 @@ def test_a_socket_that_refuses_is_an_error_and_not_a_crash(tmp_path):
         listener.bind(sock)
         listener.listen(1)
 
-        report = diagnose(socket_name=sock, config_file=None)
+        report = diagnose(socket_name=sock, config_files=[])
 
         assert report["socket"]["connectable"] is True

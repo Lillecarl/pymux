@@ -89,7 +89,7 @@ def test_the_flag_is_announced_after_the_file(tmp_path):
     path.write_text("set-client-option name from-the-file\n")
 
     client = TerminalClient()
-    client.config_file = str(path)
+    client.config_files = [str(path)]
     client.chosen_name = "from-the-flag"
 
     assert client._client_options() == [
@@ -103,7 +103,7 @@ def test_a_client_with_no_flag_announces_only_the_file(tmp_path):
     path.write_text("set-client-option name from-the-file\n")
 
     client = TerminalClient()
-    client.config_file = str(path)
+    client.config_files = [str(path)]
 
     assert client._client_options() == [("name", "from-the-file")]
 
@@ -136,7 +136,7 @@ async def a_real_client(monkeypatch, config_file, chosen_name):
         pymux.connections.append(connection)
 
         client = MemoryClient(client_end)
-        client.config_file = str(config_file)
+        client.config_files = [str(config_file)]
         client.chosen_name = chosen_name
 
         scope = anyio.CancelScope()

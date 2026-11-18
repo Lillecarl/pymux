@@ -37,7 +37,7 @@ __all__ = ["as_json", "diagnose", "human"]
 REPLY_TIMEOUT = 0.4
 
 
-def diagnose(socket_name: str | None, config_file: str | None) -> dict[str, Any]:
+def diagnose(socket_name: str | None, config_files: list[str]) -> dict[str, Any]:
     """
     The facts, as one dict of plain values.
     """
@@ -54,8 +54,8 @@ def diagnose(socket_name: str | None, config_file: str | None) -> dict[str, Any]
             "locale": _locale_report(),
         },
         "configuration": {
-            "file": config_file,
-            "exists": bool(config_file) and os.path.exists(config_file),
+            "files": config_files,
+            "exist": [os.path.exists(one) for one in config_files],
         },
         "socket": _socket_report(socket_name),
         "outer_terminal": _terminal_report(),

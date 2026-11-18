@@ -369,7 +369,7 @@ def rows_of(pymux: Pymux, *, mirrored: bool) -> Iterator[Row]:
         # The new server gets it under this number (`upgrade._hand_over`).
         ("listener_fd", listener.socket.fileno() if isinstance(listener, PosixSocketListener) else None),
         ("original_cwd", pymux.original_cwd),
-        ("source_file", pymux.source_file),
+        ("source_files", json.dumps(pymux.source_files)),
         ("startup_done", pymux._startup_done),
         ("clipboard", clipboard.text),
         ("clipboard_type", clipboard.type.value),

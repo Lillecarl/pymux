@@ -297,7 +297,7 @@ async def test_a_real_client_asks_for_it(monkeypatch, tmp_path):
                 pymux.connections.append(connection)
 
                 client = MemoryClient(client_end)
-                client.config_file = str(empty)
+                client.config_files = [str(empty)]
                 client.hang_up_others = True
                 tasks.start_soon(client.attach, True)
 

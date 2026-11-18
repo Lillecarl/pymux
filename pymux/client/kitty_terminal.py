@@ -26,7 +26,7 @@ from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStre
 from libpymux.protocol import Field, Message, Packet
 from pyte.sequences.file_transfer import TransferCommand
 
-from pymux.config import client_options_in, find_config
+from pymux.config import client_options_in, find_configs
 
 from .kitty_transfer import Effect, Question, Transfers, Unasked, absolute
 from .uploads import Answer, UploadSettings, all_under, fitted, grant_answers, home_as_tilde, upload_settings
@@ -160,7 +160,10 @@ class KittyTerminal:
         return transfers.has_data and self._waiting is None
 
     def _settings(self) -> UploadSettings:
-        return upload_settings(client_options_in(self.client.config_file or find_config()), Path.home())
+        return upload_settings(
+            client_options_in(find_configs() if self.client.config_files is None else self.client.config_files),
+            Path.home(),
+        )
 
     def _apply(self, effects: list[Effect], pumped: bool = False) -> None:
         for effect in effects:

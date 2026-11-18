@@ -14,21 +14,28 @@ from pymux.commands import CommandException, CommandParser, add_command, handle_
 
 def source_file(pymux: Pymux, args: argparse.Namespace):
     """
-    Read a configuration file.
+    Read configuration files, in order.
+
+    With `-q`, a file that is not there is no error, as in tmux.
     """
-    filename = os.path.expanduser(args.filename)
-    try:
-        with open(filename) as f:
-            lines = list(f)
-    except OSError as e:
-        raise CommandException("IOError: %s" % (e,))
+    lines: list[tuple[str, int, str]] = []
+    for filename in args.filenames:
+        filename = os.path.expanduser(filename)
+        try:
+            with open(filename) as f:
+                lines.extend((filename, number, line) for number, line in enumerate(f, start=1))
+        except FileNotFoundError as e:
+            if not args.quiet:
+                raise CommandException("IOError: %s" % (e,))
+        except OSError as e:
+            raise CommandException("IOError: %s" % (e,))
 
-    return _read_lines(pymux, filename, list(enumerate(lines, start=1)))
+    return _read_lines(pymux, lines)
 
 
-def _read_lines(pymux: Pymux, filename: str, lines: list[tuple[int, str]]):
+def _read_lines(pymux: Pymux, lines: list[tuple[str, int, str]]):
     """
-    Run the lines of the file, top to bottom.
+    Run the lines of the files, top to bottom.
 
     A line that waits takes the lines under it with it, so a
     configuration file means the same thing whether or not one of its
@@ -37,7 +44,7 @@ def _read_lines(pymux: Pymux, filename: str, lines: list[tuple[int, str]]):
     # A line that fails names the file and the line it is on. Without
     # that a person reads "Invalid option: -g" and has to find which of
     # forty lines said it.
-    for index, (number, line) in enumerate(lines):
+    for index, (filename, number, line) in enumerate(lines):
         pymux.sourcing = "%s line %i" % (filename, number)
         try:
             answer = handle_command(pymux, line)
@@ -45,25 +52,24 @@ def _read_lines(pymux: Pymux, filename: str, lines: list[tuple[int, str]]):
             pymux.sourcing = None
 
         if answer is not None:
-            return _then_the_rest(pymux, filename, number, answer, lines[index + 1 :])
+            return _then_the_rest(pymux, "%s line %i" % (filename, number), answer, lines[index + 1 :])
 
     return None
 
 
-async def _then_the_rest(
-    pymux: Pymux, filename: str, number: int, answer: Awaitable[Any], rest: list[tuple[int, str]]
-) -> None:
-    pymux.sourcing = "%s line %i" % (filename, number)
+async def _then_the_rest(pymux: Pymux, where: str, answer: Awaitable[Any], rest: list[tuple[str, int, str]]) -> None:
+    pymux.sourcing = where
     try:
         await answer
     finally:
         pymux.sourcing = None
 
-    more = _read_lines(pymux, filename, rest)
+    more = _read_lines(pymux, rest)
     if more is not None:
         await more
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, source_file)
-    parser.add_argument("filename", metavar="<filename>", help="The configuration file to read.")
+    parser.add_argument("-q", dest="quiet", action="store_true", help="No error for a file that is not there.")
+    parser.add_argument("filenames", metavar="<filename>", nargs="+", help="The configuration files to read.")
