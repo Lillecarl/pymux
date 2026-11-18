@@ -6,10 +6,10 @@ The status line of one client: `status-left`, the list of windows and
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING, NamedTuple, override
 
 from prompt_toolkit.application.current import set_app
-from prompt_toolkit.formatted_text import AnyFormattedText, StyleAndTextTuples
+from prompt_toolkit.formatted_text import AnyFormattedText, OneStyleAndTextTuple, StyleAndTextTuples
 from prompt_toolkit.formatted_text.utils import split_lines
 from prompt_toolkit.layout.containers import (
     WindowAlign,
@@ -117,6 +117,20 @@ def _tab_style(window: window_tree.Window) -> str:
     return " bg:#%02x%02x%02x fg:%s" % (red, green, blue, ink)
 
 
+class Entry(NamedTuple):
+    "One thing the window list shows, and what goes after it when another follows on the row."
+
+    fragment: OneStyleAndTextTuple
+    separator: str
+
+    @property
+    def width(self) -> int:
+        return get_cwidth(self.fragment[1])
+
+
+type Row = list[Entry]
+
+
 class StatusLine:
     "What the status line of one client shows."
 
@@ -128,7 +142,7 @@ class StatusLine:
         #: `_lines`'s answer, while this client renders. The
         #: room for the body asks it for every float and the plane
         #: asks it again, and each answer formats every window.
-        self._frame_lines: list[StyleAndTextTuples] | None = None
+        self._frame_lines: list[Row] | None = None
         #: `left` and `right`, while this client renders. The room for
         #: the window list reads both, the status line draws them, and
         #: `what_time_moves` reads them after: three formats a frame of
@@ -156,18 +170,18 @@ class StatusLine:
             if row > 0:
                 result.append(("", "\n"))
             for i, entry in enumerate(line):
-                if i > 0:
-                    result.append(("", " "))
-                result.append(entry)
+                result.append(entry.fragment)
+                if i < len(line) - 1:
+                    result.append(("", entry.separator))
         return result
 
-    def _entries(self) -> StyleAndTextTuples:
-        "Each thing the window list shows, one fragment each."
-        result: StyleAndTextTuples = []
+    def _entries(self) -> list[Entry]:
+        "Each thing the window list shows, one fragment each, with what goes after it when another follows."
+        result: list[Entry] = []
 
         recording = self.client_state.client.recording
         if recording is not None:
-            result.append(("class:recording", " ● REC %s " % recording.name))
+            result.append(Entry(("class:recording", " ● REC %s " % recording.name), " "))
 
         for w in self.client_state.session.arrangement.windows:
             if w == self.client_state.session.arrangement.get_active_window():
@@ -183,23 +197,16 @@ class StatusLine:
                     style = "class:window"
                 format_str = self.client_state.session.options.window_status_format
 
-            result.append(
-                (
-                    style + _tab_style(w),
-                    format_pymux_string(
-                        self.pymux,
-                        format_str,
-                        window=w,
-                        session=self.client_state.session,
-                        client=self.client_state,
-                    ),
-                    self._select_window_handler(w),
-                )
+            session = self.client_state.session
+            text = format_pymux_string(self.pymux, format_str, window=w, session=session, client=self.client_state)
+            separator = format_pymux_string(
+                self.pymux, w.options.window_status_separator, window=w, session=session, client=self.client_state
             )
+            result.append(Entry((style + _tab_style(w), text, self._select_window_handler(w)), separator))
 
         return result
 
-    def _lines(self) -> list[StyleAndTextTuples]:
+    def _lines(self) -> list[Row]:
         """
         The window list, broken into the rows it takes.
 
@@ -217,11 +224,11 @@ class StatusLine:
 
         with set_app(self.client_state.app):
             room = self._room_for_window_list()
-            lines: list[StyleAndTextTuples] = [[]]
+            lines: list[Row] = [[]]
             used = 0
             for entry in self._entries():
-                width = get_cwidth(entry[1])
-                wanted = used + 1 + width if lines[-1] else width
+                width = entry.width
+                wanted = used + get_cwidth(lines[-1][-1].separator) + width if lines[-1] else width
                 if lines[-1] and wanted > room and len(lines) < self.client_state.session.options.status_max_rows:
                     lines.append([entry])
                     used = width

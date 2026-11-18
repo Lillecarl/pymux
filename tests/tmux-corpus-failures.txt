@@ -8,7 +8,6 @@ AdamWhittingham__tmux-config.conf line 140: pymux: Invalid option: status-style
 AdamWhittingham__tmux-config.conf line 143: pymux: Invalid option: window-status-style
 AdamWhittingham__tmux-config.conf line 144: pymux: Invalid option: window-status-activity-style
 AdamWhittingham__tmux-config.conf line 145: pymux: Invalid option: window-status-current-style
-AdamWhittingham__tmux-config.conf line 148: pymux: Invalid option: window-status-separator
 AdamWhittingham__tmux-config.conf line 151: pymux: Invalid option: pane-border-style
 AdamWhittingham__tmux-config.conf line 152: pymux: Invalid option: pane-active-border-style
 AdamWhittingham__tmux-config.conf line 154: pymux: Invalid option: message-style
@@ -75,7 +74,6 @@ hamvocke__dotfiles.conf line 82: pymux: Invalid option: status-style
 hamvocke__dotfiles.conf line 88: pymux: Invalid option: status-right-style
 hamvocke__dotfiles.conf line 91: pymux: Invalid option: window-status-current-style
 hamvocke__dotfiles.conf line 94: pymux: Invalid option: window-status-style
-hamvocke__dotfiles.conf line 95: pymux: Invalid option: window-status-separator
 hamvocke__dotfiles.conf line 98: pymux: Invalid option: window-status-bell-style
 hamvocke__dotfiles.conf line 101: pymux: Invalid option: message-style
 jbnicolai__tmux.conf line 31: pymux: Invalid option: status-bg
@@ -114,13 +112,11 @@ leslie255__magicTmux.conf line 29: pymux: Invalid option: pane-border-style
 leslie255__magicTmux.conf line 51: pymux: Invalid option: status-bg
 leslie255__magicTmux.conf line 52: pymux: Invalid option: status-fg
 leslie255__magicTmux.conf line 73: pymux: Invalid option: message-style
-leslie255__magicTmux.conf line 88: pymux: Invalid option: window-status-separator
 leslie255__magicTmux.conf line 115: pymux: Invalid option: terminal-overrides
 mislav__dotfiles.conf line 46: pymux: Invalid option: terminal-overrides
 mislav__dotfiles.conf line 49: pymux: Invalid option: allow-rename
 mislav__dotfiles.conf line 52: pymux: Invalid option: status-fg
 mislav__dotfiles.conf line 53: pymux: Invalid option: status-bg
-mislav__dotfiles.conf line 62: pymux: Invalid option: window-status-separator
 nicknisi__dotfiles.conf line 8: pymux: Invalid option: terminal-features
 nicknisi__dotfiles.conf line 11: pymux: Invalid option: terminal-features
 nicknisi__dotfiles.conf line 18: pymux: Invalid option: terminal-overrides
@@ -154,7 +150,6 @@ shfshanyue__tmux-config.conf line 2: pymux: Invalid option: prefix2
 shfshanyue__tmux-config.conf line 12: pymux: Invalid option: allow-rename
 shfshanyue__tmux-config.conf line 36: pymux: Invalid option: message-style
 shfshanyue__tmux-config.conf line 38: pymux: Invalid option: status-style
-shfshanyue__tmux-config.conf line 49: pymux: Invalid option: window-status-separator
 shfshanyue__tmux-config.conf line 50: pymux: Invalid option: window-status-current-style
 shfshanyue__tmux-config.conf line 51: pymux: Invalid option: window-status-last-style
 shfshanyue__tmux-config.conf line 53: pymux: Invalid option: pane-active-border-style
@@ -162,7 +157,6 @@ shfshanyue__tmux-config.conf line 54: pymux: Invalid option: pane-border-style
 statico__dotfiles.conf line 13: pymux: Invalid option: display-panes-time
 statico__dotfiles.conf line 68: pymux: Invalid option: status-fg
 statico__dotfiles.conf line 69: pymux: Invalid option: status-bg
-statico__dotfiles.conf line 74: pymux: Invalid option: window-status-separator
 statico__dotfiles.conf line 78: pymux: Invalid option: display-panes-colour
 statico__dotfiles.conf line 79: pymux: Invalid option: display-panes-active-colour
 statico__dotfiles.conf line 80: pymux: Invalid option: clock-mode-colour

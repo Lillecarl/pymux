@@ -103,6 +103,9 @@ class WindowOptions(Options):
         doc="Name the window after the program in its active pane. Off, it keeps the name it has. rename-window turns it off.",
         on_set=_name_follows,
     )
+    window_status_separator: str = option(
+        " ", doc="What the status line writes after this window when another follows it on the row: a format."
+    )
     monitor_bell: bool = option(
         True,
         doc="Whether a bell nobody saw flags the window and the pane it rang in. Lillecarl/pyterm#503.",
