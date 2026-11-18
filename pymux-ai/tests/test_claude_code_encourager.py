@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 import anyio
 import pytest
 from aid_agent.attachments import AttachmentStore
-from aid_agent.messages import AttachmentPart, SystemPromptPart, TextPart
+from aid_agent.messages import AttachmentPart, SystemPromptPart, TextPart, UserPromptPart
 from aid_agent.model import RequestUsage, StreamDelta
 from pymux_ai.claude_code_encourager import encourager as module
 from pymux_ai.claude_code_encourager.encourager import Encourager
@@ -74,9 +74,9 @@ async def test_the_instructions_lead_and_the_prefix_never_changes(tmp_path):
     assert (first.decision, first.message, second.decision) == (Decision.CONTINUE, "Go on with the tests.", "stop")
     one, two = model.asked
     assert one[0].parts[0] == SystemPromptPart(INSTRUCTIONS)
-    assert [type(part) for part in one[0].parts[1:]] == [type(one[0].parts[1]), AttachmentPart]
+    assert [type(part) for part in one[-1].parts[-2:]] == [UserPromptPart, AttachmentPart]
     assert two[: len(one)] == one
-    assert not any(isinstance(part, SystemPromptPart) for part in two[len(one)].parts)
+    assert not any(isinstance(part, SystemPromptPart) for message in two[len(one) :] for part in message.parts)
 
 
 async def test_past_half_the_window_the_conversation_starts_from_a_summary(tmp_path):
