@@ -184,6 +184,36 @@ class WindowMark(StrEnum):
     SILENCE = "silence"
 
 
+class Alert(StrEnum):
+    "What happened in a window, as tmux's alert message names it: `Bell in window 2`."
+
+    BELL = "Bell"
+    ACTIVITY = "Activity"
+    SILENCE = "Silence"
+
+
+class AlertAction(StrEnum):
+    """
+    For which clients an alert rings and shows: `bell-action`,
+    `activity-action`, `silence-action`. "current" covers a client
+    that looks at the window, "other" one that looks at another
+    window of the session.
+    """
+
+    ANY = "any"
+    NONE = "none"
+    CURRENT = "current"
+    OTHER = "other"
+
+
+class Visual(StrEnum):
+    "What an alert does: `visual-bell`, `visual-activity`, `visual-silence`. off rings, on shows a message."
+
+    OFF = "off"
+    ON = "on"
+    BOTH = "both"
+
+
 class WindowScroll(StrEnum):
     """
     What one scroll event from a client's terminal does to a Wayland

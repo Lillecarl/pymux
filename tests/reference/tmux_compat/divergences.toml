@@ -82,3 +82,16 @@ border. Moving all of it into default bindings is a change of its own.
 Lillecarl/pyterm#1034.
 """
 references = ["Lillecarl/pyterm#1034"]
+
+[[divergence]]
+name = "activity in a window a client shows alerts nobody"
+command = "set-option"
+tmux = "activity-action any or current rings or tells on output in the window a client shows, at every burst"
+pymux = "only a window nobody looks at takes the activity mark, and only a new mark alerts"
+test = "test_activity_in_a_watched_window_alerts_nobody_product_divergence"
+evidence = "tmux 3.6 alerts.c alerts_check_activity; pymux/core/window_tree.py Window.check_output"
+reason = """
+pymux counts activity as a change nobody saw. An alert for output the
+person is reading is noise. Lillecarl/pyterm#1035.
+"""
+references = ["Lillecarl/pyterm#1035", "Lillecarl/pyterm#769"]

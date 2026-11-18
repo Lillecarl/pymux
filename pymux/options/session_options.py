@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 from pyte.keys.events import KEY_PROFILES
 
-from ..enums import EditingKeys, Justify, OpenUrlMode, OpenUrlTarget, PaneBrowser
+from ..enums import AlertAction, EditingKeys, Justify, OpenUrlMode, OpenUrlTarget, PaneBrowser, Visual
 from ..utils import editor_keys, get_default_shell
 from .option_fields import Options, option, options
 
@@ -81,7 +81,23 @@ class SessionOptions(Options):
         ),
         on_set=_renumber,
     )
-    bell: bool = option(True, doc="Whether a bell in a pane rings the terminal of the person.")
+    bell_action: AlertAction = option(
+        AlertAction.ANY,
+        doc="For which clients of the session a bell in a pane rings, as tmux has it. Lillecarl/pyterm#1035.",
+    )
+    activity_action: AlertAction = option(
+        AlertAction.NONE,
+        doc=(
+            "For which clients output in a window nobody looks at rings. tmux has other; pymux watches "
+            "activity unasked (`monitor-activity`), and a terminal that rings at every output is noise."
+        ),
+    )
+    silence_action: AlertAction = option(
+        AlertAction.OTHER, doc="For which clients a window that went quiet (`monitor-silence`) rings."
+    )
+    visual_bell: Visual = option(Visual.OFF, doc="Whether a bell rings the terminal, shows a message, or both.")
+    visual_activity: Visual = option(Visual.OFF, doc="The same for activity.")
+    visual_silence: Visual = option(Visual.OFF, doc="The same for silence.")
     open_url_target: OpenUrlTarget = option(
         OpenUrlTarget.LAST, doc="Which client's browser a URL opens in. `OpenUrlTarget` says."
     )

@@ -20,7 +20,7 @@ from pyte.keep import Keep
 
 from .. import hacks_and_lies
 from ..commands import CommandException
-from ..enums import EditingKeys, RenderMode, Woke
+from ..enums import Alert, EditingKeys, RenderMode, Woke
 from ..ids import PaneId, WindowIndex
 from ..keys.actions import Kind, Origin, note, note_keys, started_by
 from ..keys.key_spelling import why_pane_cannot_read
@@ -29,6 +29,7 @@ from ..log import logger
 from ..pane_command import PaneCommand, argv_of
 from ..plugin_api.events import BellRang, PaneEnded
 from ..wayland.window_pane import WindowWidget
+from .alerts import alert
 from .environment import pane_environment
 from .pane import Pane
 from .planes import remember_the_size_made_at
@@ -287,15 +288,13 @@ class PaneMaker:
             self.pymux.invalidate(Woke.PANE_ENDED)
 
         def bell():
-            "Sound bell on all clients, and flag it where nobody saw it."
+            "Ring the clients `bell-action` names, and flag the bell where nobody saw it."
             self.pymux.plugins.emit(BellRang(pane.pane_id), pane)
             place = self.pymux._place_of(pane)
-            if (self.pymux.session_defaults if place is None else place[0].options).bell:
-                for c in self.pymux.apps:
-                    c.output.bell()
             if place is not None:
                 session, window = place
-                if session.arrangement.ring(window, pane, self.pymux.apps):
+                told = alert(self.pymux.clients, session, window, Alert.BELL)
+                if session.arrangement.ring(window, pane, self.pymux.apps) or told:
                     self.pymux.invalidate(Woke.PANE_RANG)
 
         def forward_osc(code: str, param: str) -> None:
