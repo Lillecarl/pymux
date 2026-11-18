@@ -82,7 +82,6 @@ hamvocke__dotfiles.conf line 94: pymux: Invalid option: window-status-style
 hamvocke__dotfiles.conf line 95: pymux: Invalid option: window-status-separator
 hamvocke__dotfiles.conf line 98: pymux: Invalid option: window-status-bell-style
 hamvocke__dotfiles.conf line 101: pymux: Invalid option: message-style
-jbnicolai__tmux.conf line 26: pymux: Expecting one of: "left", "center", "right".
 jbnicolai__tmux.conf line 31: pymux: Invalid option: status-bg
 jbnicolai__tmux.conf line 32: pymux: Invalid option: status-fg
 jbnicolai__tmux.conf line 33: pymux: Invalid option: status-attr
@@ -172,7 +171,6 @@ statico__dotfiles.conf line 13: pymux: Invalid option: display-panes-time
 statico__dotfiles.conf line 68: pymux: Invalid option: status-fg
 statico__dotfiles.conf line 69: pymux: Invalid option: status-bg
 statico__dotfiles.conf line 74: pymux: Invalid option: window-status-separator
-statico__dotfiles.conf line 75: pymux: Expecting one of: "left", "center", "right".
 statico__dotfiles.conf line 78: pymux: Invalid option: display-panes-colour
 statico__dotfiles.conf line 79: pymux: Invalid option: display-panes-active-colour
 statico__dotfiles.conf line 80: pymux: Invalid option: clock-mode-colour
@@ -229,7 +227,6 @@ tony__tmux-config.conf line 22: pymux: Invalid option: message-style
 tony__tmux-config.conf line 25: pymux: Invalid option: display-panes-active-colour
 tony__tmux-config.conf line 26: pymux: Invalid option: display-panes-colour
 tony__tmux-config.conf line 28: pymux: Invalid option: clock-mode-colour
-tony__tmux-config.conf line 32: pymux: Expecting one of: "left", "center", "right".
 tony__tmux-config.conf line 51: pymux: Invalid option: aggressive-resize
 tony__tmux-config.conf line 108: pymux: Invalid option: terminal-overrides
 vmware-archive__tmux-config.conf line 12: pymux: Invalid option: mode-mouse

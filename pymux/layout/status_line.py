@@ -327,6 +327,6 @@ class StatusLine:
     def align(self) -> WindowAlign:
         if self.client_state.session.options.status_justify == Justify.RIGHT:
             return WindowAlign.RIGHT
-        if self.client_state.session.options.status_justify == Justify.CENTER:
+        if self.client_state.session.options.status_justify == Justify.CENTRE:
             return WindowAlign.CENTER
         return WindowAlign.LEFT

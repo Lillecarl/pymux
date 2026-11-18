@@ -449,5 +449,5 @@ class Justify(StrEnum):
     "Where the window list sits in the status line: `status-justify`."
 
     LEFT = "left"
-    CENTER = "center"
+    CENTRE = "centre"
     RIGHT = "right"

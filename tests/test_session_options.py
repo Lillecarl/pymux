@@ -15,7 +15,7 @@ import pytest
 from pymux.answer import Answer
 from pymux.commands import call_command_handler
 from pymux.core.main import Pymux
-from pymux.enums import Clipboard
+from pymux.enums import Clipboard, Justify
 from pymux.keys.actions import Origin, started_by
 from pymux.keys.key_spelling import DEFAULT_PREFIX
 from pymux.options.session_options import SessionOptions
@@ -212,3 +212,10 @@ def test_the_window_order_reads_through_the_session():
     arrangement.base_index = 0
     assert pymux.sessions[0].options.own() == {"base_index": 0}
     assert pymux.session_defaults.base_index == 1
+
+
+async def test_status_justify_takes_tmux_s_spelling(two):
+    "tmux takes centre and refuses center. Lillecarl/pyterm#1035."
+    await run(two, "set-option", "-g", "status-justify", "centre")
+
+    assert two.session_defaults.status_justify is Justify.CENTRE
