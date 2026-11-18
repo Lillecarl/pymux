@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 from pyte.keys.events import KEY_PROFILES
 
-from ..enums import AlertAction, EditingKeys, Justify, OpenUrlMode, OpenUrlTarget, PaneBrowser, Visual
+from ..enums import AlertAction, EditingKeys, Justify, OpenUrlMode, OpenUrlTarget, PaneBrowser, StatusPosition, Visual
 from ..utils import editor_keys, get_default_shell
 from .option_fields import Options, option, options
 
@@ -54,6 +54,10 @@ def _renumber(pymux: Pymux, owner: object) -> None:
     for session in pymux.sessions:
         if session.arrangement.renumber_windows:
             session.arrangement.renumber()
+
+
+def _redraw_all(pymux: Pymux, owner: object) -> None:
+    pymux.invalidate()
 
 
 def _recolor(pymux: Pymux, owner: object) -> None:
@@ -249,6 +253,9 @@ class SessionOptions(Options):
     silence_symbol: str = option("~", doc="What `#F` writes for silence. Lillecarl/pyterm#769.")
     notification_symbol: str = option("?", doc="What `#F` writes for a notification. Lillecarl/pyterm#769.")
     default_shell: str = option(factory=get_default_shell, doc="What a new pane runs when no command is given.")
+    status_position: StatusPosition = option(
+        StatusPosition.BOTTOM, doc="Which end of the screen the status line takes.", on_set=_redraw_all
+    )
     status_justify: Justify = option(Justify.LEFT, doc="Where the window list sits in the status line.")
     status_interval: int = option(
         4,

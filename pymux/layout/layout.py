@@ -40,7 +40,7 @@ from pymux.core import window_tree
 from pymux.core.pane import Pane
 
 from ..chooser import ChooserView
-from ..enums import Chooser
+from ..enums import Chooser, StatusPosition
 from ..filters import WaitsForConfirmation
 from ..format import format_pymux_string
 from ..keys.mouse_keys import MouseLocation
@@ -525,6 +525,43 @@ class LayoutManager:
             ),
         ]
 
+    def _status_bar(self, where: StatusPosition) -> Container:
+        """
+        The status line, drawn when `status-position` says `where`. One
+        for each end, because a container has one parent.
+        """
+        return ConditionalContainer(
+            content=VSplit(
+                [
+                    Window(
+                        height=1,
+                        width=(lambda: D(max=self.client_state.session.options.status_left_length)),
+                        dont_extend_width=True,
+                        content=self.status.part(self.status.left, MouseLocation.STATUS_LEFT),
+                    ),
+                    # The list of windows.
+                    Window(
+                        height=lambda: D.exact(max(1, self.status.rows())),
+                        char=" ",
+                        align=self.status.align,
+                        content=self.status.part(self.status.window_list, MouseLocation.STATUS_DEFAULT),
+                    ),
+                    Window(
+                        height=1,
+                        width=lambda: D(max=self.status.right_length()),
+                        dont_extend_width=True,
+                        align=WindowAlign.RIGHT,
+                        content=self.status.part(self.status.right, MouseLocation.STATUS_RIGHT),
+                    ),
+                ],
+                z_index=Z_INDEX.STATUS_BAR,
+                style="class:statusbar",
+            ),
+            filter=Condition(
+                lambda: self.pymux.show_status and self.client_state.session.options.status_position is where
+            ),
+        )
+
     def _create_layout(self) -> Container:
         """
         Generate the main prompt_toolkit layout.
@@ -544,6 +581,7 @@ class LayoutManager:
         return FloatContainer(
             content=HSplit(
                 [
+                    self._status_bar(StatusPosition.TOP),
                     # The main window.
                     # **The floats that sit above the status line are
                     # here, and not on the outer container.** A float's
@@ -562,38 +600,7 @@ class LayoutManager:
                             *self._floats_above_the_status_line(waits_for_confirmation, which_key_shows),
                         ],
                     ),
-                    # Status bar.
-                    ConditionalContainer(
-                        content=VSplit(
-                            [
-                                # Left.
-                                Window(
-                                    height=1,
-                                    width=(lambda: D(max=self.client_state.session.options.status_left_length)),
-                                    dont_extend_width=True,
-                                    content=self.status.part(self.status.left, MouseLocation.STATUS_LEFT),
-                                ),
-                                # List of windows in the middle.
-                                Window(
-                                    height=lambda: D.exact(max(1, self.status.rows())),
-                                    char=" ",
-                                    align=self.status.align,
-                                    content=self.status.part(self.status.window_list, MouseLocation.STATUS_DEFAULT),
-                                ),
-                                # Right.
-                                Window(
-                                    height=1,
-                                    width=lambda: D(max=self.status.right_length()),
-                                    dont_extend_width=True,
-                                    align=WindowAlign.RIGHT,
-                                    content=self.status.part(self.status.right, MouseLocation.STATUS_RIGHT),
-                                ),
-                            ],
-                            z_index=Z_INDEX.STATUS_BAR,
-                            style="class:statusbar",
-                        ),
-                        filter=Condition(lambda: self.pymux.show_status),
-                    ),
+                    self._status_bar(StatusPosition.BOTTOM),
                 ]
             ),
             floats=[

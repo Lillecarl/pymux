@@ -445,6 +445,13 @@ class RenderMode(StrEnum):
     REFERENCE = "reference"
 
 
+class StatusPosition(StrEnum):
+    "Which end of the screen the status line takes: `status-position`."
+
+    TOP = "top"
+    BOTTOM = "bottom"
+
+
 class Justify(StrEnum):
     "Where the window list sits in the status line: `status-justify`."
 

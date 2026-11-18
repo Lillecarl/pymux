@@ -13,7 +13,6 @@ AdamWhittingham__tmux-config.conf line 151: pymux: Invalid option: pane-border-s
 AdamWhittingham__tmux-config.conf line 152: pymux: Invalid option: pane-active-border-style
 AdamWhittingham__tmux-config.conf line 154: pymux: Invalid option: message-style
 AdamWhittingham__tmux-config.conf line 155: pymux: Invalid option: mode-style
-AdamWhittingham__tmux-config.conf line 162: pymux: Invalid option: status-position
 ShawnPana__smux.conf line 66: pymux: Invalid option: pane-border-style
 ShawnPana__smux.conf line 67: pymux: Invalid option: pane-active-border-style
 ShawnPana__smux.conf line 68: pymux: Invalid option: pane-border-lines
@@ -31,7 +30,6 @@ christoomey__dotfiles.conf line 20: pymux: Invalid option: allow-passthrough
 christoomey__dotfiles.conf line 22: pymux: Invalid option: terminal-features
 christoomey__dotfiles.conf line 60: pymux: Invalid option: status-fg
 christoomey__dotfiles.conf line 61: pymux: Invalid option: status-bg
-christoomey__dotfiles.conf line 154: pymux: Invalid option: status-position
 christoomey__dotfiles.conf line 156: pymux: Invalid option: status-style
 christoomey__dotfiles.conf line 160: pymux: Invalid option: message-style
 christoomey__dotfiles.conf line 161: pymux: Invalid option: mode-style
@@ -74,7 +72,6 @@ hamvocke__dotfiles.conf line 72: pymux: Invalid option: clock-mode-colour
 hamvocke__dotfiles.conf line 73: pymux: Invalid option: mode-style
 hamvocke__dotfiles.conf line 76: pymux: Invalid option: pane-border-style
 hamvocke__dotfiles.conf line 77: pymux: Invalid option: pane-active-border-style
-hamvocke__dotfiles.conf line 80: pymux: Invalid option: status-position
 hamvocke__dotfiles.conf line 82: pymux: Invalid option: status-style
 hamvocke__dotfiles.conf line 88: pymux: Invalid option: status-right-style
 hamvocke__dotfiles.conf line 91: pymux: Invalid option: window-status-current-style
@@ -105,7 +102,6 @@ joshmedeski__dotfiles.conf line 26: pymux: Invalid option: terminal-overrides
 joshmedeski__dotfiles.conf line 27: pymux: theme is a client option: use set-client-option
 joshmedeski__dotfiles.conf line 30: pymux: Invalid option: detach-on-destroy
 joshmedeski__dotfiles.conf line 33: pymux: Invalid option: extended-keys-format
-joshmedeski__dotfiles.conf line 65: pymux: Invalid option: status-position
 joshmedeski__dotfiles.conf line 67: pymux: Invalid option: status-style
 joshmedeski__dotfiles.conf line 68: pymux: Invalid option: popup-style
 joshmedeski__dotfiles.conf line 69: pymux: Invalid option: popup-border-style
@@ -119,7 +115,6 @@ leslie255__magicTmux.conf line 25: pymux: Invalid option: pane-active-border-sty
 leslie255__magicTmux.conf line 29: pymux: Invalid option: pane-border-style
 leslie255__magicTmux.conf line 51: pymux: Invalid option: status-bg
 leslie255__magicTmux.conf line 52: pymux: Invalid option: status-fg
-leslie255__magicTmux.conf line 65: pymux: Invalid option: status-position
 leslie255__magicTmux.conf line 73: pymux: Invalid option: message-style
 leslie255__magicTmux.conf line 88: pymux: Invalid option: window-status-separator
 leslie255__magicTmux.conf line 115: pymux: Invalid option: terminal-overrides
@@ -153,7 +148,6 @@ nviennot__tmux-config.conf line 66: pymux: Invalid option: extended-keys-format
 omerxx__dotfiles.conf line 1: pymux: IOError: [Errno 2] No such file or directory: '$HOME/.config/tmux/tmux.reset.conf'
 omerxx__dotfiles.conf line 3: pymux: Invalid option: terminal-overrides
 omerxx__dotfiles.conf line 7: pymux: Invalid option: detach-on-destroy
-omerxx__dotfiles.conf line 12: pymux: Invalid option: status-position
 omerxx__dotfiles.conf line 15: pymux: Invalid option: pane-active-border-style
 omerxx__dotfiles.conf line 16: pymux: Invalid option: pane-border-style
 omerxx__dotfiles.conf line 18: pymux: unrecognized arguments: - 60%,30% --prompt=" " --border-label=" Open URL "
@@ -206,7 +200,6 @@ tedsluis__tmux.conf.conf line 97: pymux: Invalid option: pane-border-bg
 tedsluis__tmux.conf.conf line 98: pymux: Invalid option: pane-border-fg
 tedsluis__tmux.conf.conf line 99: pymux: Invalid option: pane-active-border-bg
 tedsluis__tmux.conf.conf line 100: pymux: Invalid option: pane-active-border-fg
-tedsluis__tmux.conf.conf line 103: pymux: Invalid option: status-position
 tedsluis__tmux.conf.conf line 104: pymux: Invalid option: status-bg
 tedsluis__tmux.conf.conf line 105: pymux: Invalid option: status-fg
 tedsluis__tmux.conf.conf line 106: pymux: Invalid option: status-attr

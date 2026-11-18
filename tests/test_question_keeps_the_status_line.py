@@ -29,7 +29,8 @@ SIZE = Size(rows=24, columns=80)
 
 def body_floats(state):
     "The floats of the container that holds the windows, above the status line."
-    body = state.layout_manager.layout.content.children[0]
+    # Between the status line at the top and the one at the bottom.
+    body = state.layout_manager.layout.content.children[1]
     assert isinstance(body, FloatContainer)
     return body.floats
 

@@ -34,7 +34,7 @@ def which_key_floats(state) -> list[Float]:
     # The corner above the status line is the body's float, so it
     # rises with a status line that wraps. Lillecarl/pyterm#725.
     layout = state.layout_manager.layout
-    for one in layout.floats + layout.content.children[0].floats:
+    for one in layout.floats + layout.content.children[1].floats:
         inner = getattr(one.content, "content", None)
         builder = getattr(inner, "get_container", None)
         if builder is not None and builder == state.layout_manager.which_key.box:
