@@ -44,6 +44,17 @@ def test_every_alias_points_at_registered_command():
         assert command in subparsers.choices, alias
 
 
+def test_tmux_spellings_from_real_configurations_resolve():
+    "`checks.pymux-tmux-corpus` found these. Lillecarl/pyterm#1036."
+    from pymux.commands.aliases import ALIASES
+
+    assert ALIASES["if"] == "if-shell"
+    assert ALIASES["new"] == "new-session"
+    assert ALIASES["setenv"] == "set-environment"
+    assert ALIASES["nextl"] == "next-layout"
+    assert "lextl" not in ALIASES
+
+
 def test_value_option_is_read_as_its_dest():
     """
     A handler asks for the value by the dest its declaration names:

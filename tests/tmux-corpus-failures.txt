@@ -179,7 +179,6 @@ folke__dot.conf line 40: pymux: unrecognized arguments: -as # underscore colours
 folke__dot.conf line 49: pymux: Invalid option: @continuum-restore
 folke__dot.conf line 50: pymux: Invalid option: @resurrect-capture-pane-contents
 folke__dot.conf line 51: pymux: Invalid option: @resurrect-strategy-nvim
-folke__dot.conf line 53: pymux: invalid command: setenv
 folke__dot.conf line 55: pymux: invalid command: run 'git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm && ~/.tmux/plugins/tpm/bin/install_plugins'
 folke__dot.conf line 57: pymux: unrecognized arguments: -b (pymux run [-w] [-d <directory>] [--env <key=value>] [--tag <key[=value]>] [--session <id>] [--timeout <seconds>] [--tail <lines>] [--pty] ...)
 gpakosz__.tmux.conf line 19: pymux: invalid command: %if
@@ -218,12 +217,6 @@ gpakosz__.tmux.conf line 104: pymux: unrecognized arguments: -r (pymux bind-key 
 gpakosz__.tmux.conf line 105: pymux: unrecognized arguments: -r (pymux bind-key [-n | -T <key-table>] <key> ...)
 gpakosz__.tmux.conf line 106: pymux: unrecognized arguments: -r (pymux bind-key [-n | -T <key-table>] <key> ...)
 gpakosz__.tmux.conf line 107: pymux: unrecognized arguments: -r (pymux bind-key [-n | -T <key-table>] <key> ...)
-gpakosz__.tmux.conf line 131: pymux: invalid command: if
-gpakosz__.tmux.conf line 132: pymux: invalid command: if
-gpakosz__.tmux.conf line 134: pymux: invalid command: if
-gpakosz__.tmux.conf line 136: pymux: invalid command: if
-gpakosz__.tmux.conf line 138: pymux: invalid command: if
-gpakosz__.tmux.conf line 139: pymux: invalid command: if
 gpakosz__.tmux.conf line 151: pymux: invalid command: %if
 gpakosz__.tmux.conf line 152: pymux: run failed: ValueError('Client state for app <prompt_toolkit.application.dummy.DummyApplication object> not found')
 gpakosz__.tmux.conf line 153: pymux: invalid command: %endif
@@ -335,7 +328,6 @@ joshmedeski__dotfiles.conf line 80: pymux: Invalid option: allow-passthrough
 joshmedeski__dotfiles.conf line 81: pymux: Invalid option: message-command-style
 joshmedeski__dotfiles.conf line 82: pymux: Invalid option: message-style
 joshmedeski__dotfiles.conf line 83: pymux: Invalid option: mode-style
-joshmedeski__dotfiles.conf line 90: pymux: invalid command: if
 joshmedeski__dotfiles.conf line 91: pymux: unrecognized arguments: -b (pymux run [-w] [-d <directory>] [--env <key=value>] [--tag <key[=value]>] [--session <id>] [--timeout <seconds>] [--tail <lines>] [--pty] ...)
 joshmedeski__dotfiles.conf line 92: pymux: invalid command: }
 joshmedeski__dotfiles.conf line 93: pymux: invalid command: }
@@ -762,7 +754,7 @@ tmux__tmux.conf line 17: pymux: unrecognized arguments: -a (pymux set-option [-g
 tmux__tmux.conf line 23: pymux: Invalid option: bell-action
 tmux__tmux.conf line 35: pymux: Invalid key: 'MouseDrag1Pane'
 tmux__tmux.conf line 36: pymux: Invalid key: 'MouseDrag1Pane'
-tmux__tmux.conf line 62: pymux: invalid command: new
+tmux__tmux.conf line 62: pymux: duplicate session: 0
 tmux__tmux.conf line 63: pymux: monitor-activity is a window option: use set-window-option
 tmux__tmux.conf line 64: pymux: Invalid option: aggressive-resize
 tmux__tmux.conf line 66: pymux: unrecognized arguments: -t0:1 (pymux set-window-option [-g] [-u] <option> [<value>])
