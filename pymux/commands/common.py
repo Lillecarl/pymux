@@ -429,11 +429,18 @@ def answer(pymux: Pymux, text: str) -> None:
     is what an answer says. A person typing at the prompt of a
     pane gets the message line, because there is no stdout to write
     to. Lillecarl/pyterm#291.
+
+    A configuration file has neither, and nobody is told: `run` there
+    still starts its job.
     """
     if pymux.answer is not None:
         pymux.print_command_line(text)
-    else:
-        pymux.get_client_state().message = text
+        return
+    try:
+        client_state = pymux.get_client_state()
+    except ValueError:
+        return
+    client_state.message = text
 
 
 def refuse_without_a_waiter(pymux: Pymux, what: str) -> Answer:

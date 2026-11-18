@@ -124,7 +124,6 @@ christoomey__dotfiles.conf line 177: pymux: Invalid option: @huckleberry-bind
 christoomey__dotfiles.conf line 179: pymux: Invalid option: @plugin
 christoomey__dotfiles.conf line 180: pymux: Invalid option: @resurrect-save
 christoomey__dotfiles.conf line 181: pymux: Invalid option: @resurrect-restore
-christoomey__dotfiles.conf line 183: pymux: run failed: ValueError('Client state for app <prompt_toolkit.application.dummy.DummyApplication object> not found')
 craftzdog__dotfiles-public.conf line 3: pymux: unrecognized arguments: -a (pymux set-option [-g] [-u] [-s] [-t <target-session>] <option> [<value>])
 craftzdog__dotfiles-public.conf line 7: pymux: Invalid option: repeat-time
 craftzdog__dotfiles-public.conf line 8: pymux: Invalid option: focus-events
@@ -141,7 +140,6 @@ craftzdog__dotfiles-public.conf line 33: pymux: Invalid option: set-titles-strin
 craftzdog__dotfiles-public.conf line 38: pymux: Invalid option: @plugin
 craftzdog__dotfiles-public.conf line 39: pymux: Invalid option: @plugin
 craftzdog__dotfiles-public.conf line 40: pymux: Invalid option: @plugin
-craftzdog__dotfiles-public.conf line 41: pymux: run failed: ValueError('Client state for app <prompt_toolkit.application.dummy.DummyApplication object> not found')
 craftzdog__dotfiles-public.conf line 43: pymux: IOError: [Errno 2] No such file or directory: '$HOME/.config/tmux/bindings.conf'
 craftzdog__dotfiles-public.conf line 44: pymux: IOError: [Errno 2] No such file or directory: '$HOME/.config/tmux/theme.conf'
 craftzdog__dotfiles-public.conf line 45: pymux: IOError: [Errno 2] No such file or directory: '$HOME/.config/tmux/statusline.conf'
@@ -155,7 +153,6 @@ dreamsofcode-io__tmux.conf line 37: pymux: Invalid option: @plugin
 dreamsofcode-io__tmux.conf line 38: pymux: Invalid option: @plugin
 dreamsofcode-io__tmux.conf line 39: pymux: Invalid option: @plugin
 dreamsofcode-io__tmux.conf line 40: pymux: Invalid option: @plugin
-dreamsofcode-io__tmux.conf line 42: pymux: run failed: ValueError('Client state for app <prompt_toolkit.application.dummy.DummyApplication object> not found')
 dreamsofcode-io__tmux.conf line 45: pymux: mode-keys is a session option: use set-option
 edouard-lopez__tmux-config.conf line 9: pymux: unrecognized arguments: # tmux 3.3a fix, see https://github.com/tinted-theming/base16-shell/issues/1 (pymux set-option [-g] [-u] [-s] [-t <target-session>] <option> [<value>])
 edouard-lopez__tmux-config.conf line 24: pymux: nobody is attached to show a message to.
@@ -218,19 +215,13 @@ gpakosz__.tmux.conf line 105: pymux: unrecognized arguments: -r (pymux bind-key 
 gpakosz__.tmux.conf line 106: pymux: unrecognized arguments: -r (pymux bind-key [-n | -T <key-table>] <key> ...)
 gpakosz__.tmux.conf line 107: pymux: unrecognized arguments: -r (pymux bind-key [-n | -T <key-table>] <key> ...)
 gpakosz__.tmux.conf line 151: pymux: invalid command: %if
-gpakosz__.tmux.conf line 152: pymux: run failed: ValueError('Client state for app <prompt_toolkit.application.dummy.DummyApplication object> not found')
 gpakosz__.tmux.conf line 153: pymux: invalid command: %endif
 gpakosz__.tmux.conf line 154: pymux: invalid command: %if
-gpakosz__.tmux.conf line 155: pymux: run failed: ValueError('Client state for app <prompt_toolkit.application.dummy.DummyApplication object> not found')
 gpakosz__.tmux.conf line 156: pymux: invalid command: %endif
 gpakosz__.tmux.conf line 157: pymux: invalid command: %if
-gpakosz__.tmux.conf line 158: pymux: run failed: ValueError('Client state for app <prompt_toolkit.application.dummy.DummyApplication object> not found')
 gpakosz__.tmux.conf line 159: pymux: invalid command: %endif
 gpakosz__.tmux.conf line 160: pymux: invalid command: %if
-gpakosz__.tmux.conf line 161: pymux: run failed: ValueError('Client state for app <prompt_toolkit.application.dummy.DummyApplication object> not found')
 gpakosz__.tmux.conf line 162: pymux: invalid command: %endif
-gpakosz__.tmux.conf line 164: pymux: run failed: ValueError('Client state for app <prompt_toolkit.application.dummy.DummyApplication object> not found')
-gpakosz__.tmux.conf line 165: pymux: run failed: ValueError('Client state for app <prompt_toolkit.application.dummy.DummyApplication object> not found')
 hamvocke__dotfiles.conf line 11: pymux: Invalid option: pane-base-index
 hamvocke__dotfiles.conf line 33: pymux: Invalid option: escape-time
 hamvocke__dotfiles.conf line 36: pymux: Invalid option: allow-rename
@@ -305,7 +296,6 @@ jmbuhr__tmux-kickstarter.conf line 21: pymux: Invalid option: pane-base-index
 jmbuhr__tmux-kickstarter.conf line 22: pymux: Invalid option: escape-time
 jmbuhr__tmux-kickstarter.conf line 25: pymux: unrecognized arguments: # or primary secondary or clipboard (pymux set-option [-g] [-u] [-s] [-t <target-session>] <option> [<value>])
 jmbuhr__tmux-kickstarter.conf line 26: pymux: unrecognized arguments: # or clipboard primary or secondary (pymux set-option [-g] [-u] [-s] [-t <target-session>] <option> [<value>])
-jmbuhr__tmux-kickstarter.conf line 58: pymux: run failed: ValueError('Client state for app <prompt_toolkit.application.dummy.DummyApplication object> not found')
 joshmedeski__dotfiles.conf line 19: pymux: Invalid option: focus-events
 joshmedeski__dotfiles.conf line 22: pymux: Invalid option: display-time
 joshmedeski__dotfiles.conf line 26: pymux: unrecognized arguments: -a (pymux set-option [-g] [-u] [-s] [-t <target-session>] <option> [<value>])
@@ -359,7 +349,6 @@ joshmedeski__dotfiles.conf line 167: pymux: Invalid option: @plugin
 joshmedeski__dotfiles.conf line 168: pymux: Invalid option: @plugin
 joshmedeski__dotfiles.conf line 170: pymux: Invalid option: @plugin
 joshmedeski__dotfiles.conf line 172: pymux: unrecognized arguments: # load tpm (pymux set-option [-g] [-u] [-s] [-t <target-session>] <option> [<value>])
-joshmedeski__dotfiles.conf line 173: pymux: run failed: ValueError('Client state for app <prompt_toolkit.application.dummy.DummyApplication object> not found')
 leslie255__magicTmux.conf line 25: pymux: unrecognized arguments: # foreground (pymux set-option [-g] [-u] [-s] [-t <target-session>] <option> [<value>])
 leslie255__magicTmux.conf line 29: pymux: unrecognized arguments: # foreground (pymux set-option [-g] [-u] [-s] [-t <target-session>] <option> [<value>])
 leslie255__magicTmux.conf line 51: pymux: unrecognized arguments: # background (pymux set-option [-g] [-u] [-s] [-t <target-session>] <option> [<value>])
@@ -464,7 +453,6 @@ nviennot__tmux-config.conf line 55: pymux: Invalid option: set-titles-string
 nviennot__tmux-config.conf line 56: pymux: Invalid option: automatic-rename
 nviennot__tmux-config.conf line 60: pymux: Invalid option: @plugin
 nviennot__tmux-config.conf line 61: pymux: Invalid option: @plugin
-nviennot__tmux-config.conf line 62: pymux: run failed: ValueError('Client state for app <prompt_toolkit.application.dummy.DummyApplication object> not found')
 nviennot__tmux-config.conf line 65: pymux: Invalid option: focus-events
 nviennot__tmux-config.conf line 66: pymux: Invalid option: extended-keys-format
 nviennot__tmux-config.conf line 67: pymux: Invalid option: visual-activity
@@ -525,7 +513,6 @@ omerxx__dotfiles.conf line 62: pymux: Invalid option: @catppuccin_status_right_s
 omerxx__dotfiles.conf line 63: pymux: Invalid option: @catppuccin_status_fill
 omerxx__dotfiles.conf line 64: pymux: Invalid option: @catppuccin_status_connect_separator
 omerxx__dotfiles.conf line 65: pymux: Invalid option: @catppuccin_directory_text
-omerxx__dotfiles.conf line 69: pymux: run failed: ValueError('Client state for app <prompt_toolkit.application.dummy.DummyApplication object> not found')
 samoshkin__tmux-config.conf line 7: pymux: Invalid option: buffer-limit
 samoshkin__tmux-config.conf line 8: pymux: Invalid option: escape-time
 samoshkin__tmux-config.conf line 9: pymux: Invalid option: display-time
@@ -575,9 +562,6 @@ samoshkin__tmux-config.conf line 167: pymux: Invalid key: 'WheelUpPane'
 samoshkin__tmux-config.conf line 168: pymux: Invalid key: 'WheelDownPane'
 samoshkin__tmux-config.conf line 174: pymux: invalid command: run 'tmux set -g default-command "exec $(tmux show -gv default-shell) 2>/dev/null & reattach-to-user-namespace -l $(tmux show -gv default-shell)"'
 samoshkin__tmux-config.conf line 176: pymux: invalid command: yank=~/.tmux/yank.sh
-samoshkin__tmux-config.conf line 182: pymux: run failed: ValueError('Client state for app <prompt_toolkit.application.dummy.DummyApplication object> not found')
-samoshkin__tmux-config.conf line 184: pymux: run failed: ValueError('Client state for app <prompt_toolkit.application.dummy.DummyApplication object> not found')
-samoshkin__tmux-config.conf line 187: pymux: run failed: ValueError('Client state for app <prompt_toolkit.application.dummy.DummyApplication object> not found')
 samoshkin__tmux-config.conf line 192: pymux: unknown command: copy-pipe
 samoshkin__tmux-config.conf line 194: pymux: unknown command: clear-selection
 samoshkin__tmux-config.conf line 206: pymux: invalid command: color_orange=colour166
@@ -654,7 +638,6 @@ samoshkin__tmux-config.conf line 345: pymux: Invalid option: @sidebar-tree-comma
 samoshkin__tmux-config.conf line 347: pymux: Invalid option: @open-S
 samoshkin__tmux-config.conf line 356: pymux: invalid command: source-file ~/.tmux/tmux.remote.conf
 samoshkin__tmux-config.conf line 381: pymux: unrecognized arguments: -S (pymux refresh-client)
-samoshkin__tmux-config.conf line 384: pymux: run failed: ValueError('Client state for app <prompt_toolkit.application.dummy.DummyApplication object> not found')
 shfshanyue__tmux-config.conf line 2: pymux: Invalid option: prefix2
 shfshanyue__tmux-config.conf line 5: pymux: Invalid option: escape-time
 shfshanyue__tmux-config.conf line 9: pymux: unrecognized arguments: -wg (pymux set-option [-g] [-u] [-s] [-t <target-session>] <option> [<value>])
@@ -704,7 +687,6 @@ statico__dotfiles.conf line 88: pymux: Invalid option: @plugin
 statico__dotfiles.conf line 89: pymux: Invalid option: @plugin
 statico__dotfiles.conf line 91: pymux: Invalid option: @plugin
 statico__dotfiles.conf line 93: pymux: Invalid option: @continuum-restore
-statico__dotfiles.conf line 101: pymux: run failed: ValueError('Client state for app <prompt_toolkit.application.dummy.DummyApplication object> not found')
 tedsluis__tmux.conf.conf line 41: pymux: Invalid option: pane-border-fg
 tedsluis__tmux.conf.conf line 42: pymux: Invalid option: pane-active-border-fg
 tedsluis__tmux.conf.conf line 48: pymux: Invalid option: status-bg

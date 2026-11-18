@@ -17,6 +17,8 @@ of one that fails. `test_window_defaults.py` says what it does.
 
 from __future__ import annotations
 
+import anyio
+
 from pymux.commands import call_command_handler
 from pymux.core.main import Pymux
 
@@ -164,6 +166,22 @@ def test_several_files_run_in_order_and_each_names_itself(tmp_path):
 
     assert pymux.session_defaults.status is False
     assert [error.split(": ")[0] for error in pymux.startup_errors] == ["%s line 1" % first, "%s line 2" % second]
+
+
+async def test_a_job_from_a_file_starts_with_nobody_to_tell(tmp_path):
+    "`run` answers with the job's id, and a file has no client to show it to."
+    path = tmp_path / "pymux.conf"
+    path.write_text("run true\n")
+
+    pymux = Pymux()
+    async with pymux.running():
+        with anyio.fail_after(10):
+            answer = call_command_handler("source-file", pymux, [str(path)])
+            if answer is not None:
+                await answer
+
+    assert pymux.startup_errors == []
+    assert len(pymux.jobs.listing()) == 1
 
 
 def test_quiet_passes_over_a_missing_file(tmp_path):
