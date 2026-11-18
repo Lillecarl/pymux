@@ -106,6 +106,9 @@ class WindowOptions(Options):
     window_status_separator: str = option(
         " ", doc="What the status line writes after this window when another follows it on the row: a format."
     )
+    display_panes_time: int = option(
+        1000, doc="Milliseconds `display-panes` shows the pane numbers, as tmux has it; 0 keeps them until a key."
+    )
     monitor_bell: bool = option(
         True,
         doc="Whether a bell nobody saw flags the window and the pane it rang in. Lillecarl/pyterm#503.",

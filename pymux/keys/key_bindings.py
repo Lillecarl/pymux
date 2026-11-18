@@ -154,6 +154,7 @@ class KeyTable:
 def _hold_pane_numbers_up(pymux: Pymux) -> None:
     "The numbers are how a person reads a mode that moves the focus."
     pymux.display_pane_numbers = True
+    pymux.display_pane_numbers_by = None
 
 
 def _put_pane_numbers_back(pymux: Pymux) -> None:

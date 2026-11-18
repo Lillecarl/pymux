@@ -24,7 +24,6 @@ ShawnPana__smux.conf line 79: pymux: Invalid option: window-status-current-style
 ThePrimeagen__.dotfiles.conf line 1: pymux: Invalid option: terminal-overrides
 ThePrimeagen__.dotfiles.conf line 8: pymux: Invalid option: status-style
 christoomey__dotfiles.conf line 6: pymux: Invalid option: default-command
-christoomey__dotfiles.conf line 11: pymux: Invalid option: display-panes-time
 christoomey__dotfiles.conf line 20: pymux: Invalid option: allow-passthrough
 christoomey__dotfiles.conf line 22: pymux: Invalid option: terminal-features
 christoomey__dotfiles.conf line 60: pymux: Invalid option: status-fg
@@ -63,7 +62,6 @@ folke__dot.conf line 35: pymux: IOError: [Errno 2] No such file or directory: '$
 folke__dot.conf line 39: pymux: Invalid option: terminal-overrides
 folke__dot.conf line 40: pymux: Invalid option: terminal-overrides
 gpakosz__.tmux.conf line 32: pymux: Invalid option: prefix2
-gpakosz__.tmux.conf line 55: pymux: Invalid option: display-panes-time
 hamvocke__dotfiles.conf line 36: pymux: Invalid option: allow-rename
 hamvocke__dotfiles.conf line 55: pymux: Invalid option: terminal-overrides
 hamvocke__dotfiles.conf line 72: pymux: Invalid option: clock-mode-colour
@@ -154,7 +152,6 @@ shfshanyue__tmux-config.conf line 50: pymux: Invalid option: window-status-curre
 shfshanyue__tmux-config.conf line 51: pymux: Invalid option: window-status-last-style
 shfshanyue__tmux-config.conf line 53: pymux: Invalid option: pane-active-border-style
 shfshanyue__tmux-config.conf line 54: pymux: Invalid option: pane-border-style
-statico__dotfiles.conf line 13: pymux: Invalid option: display-panes-time
 statico__dotfiles.conf line 68: pymux: Invalid option: status-fg
 statico__dotfiles.conf line 69: pymux: Invalid option: status-bg
 statico__dotfiles.conf line 78: pymux: Invalid option: display-panes-colour

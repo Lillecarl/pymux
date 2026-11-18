@@ -543,9 +543,10 @@ FIXTURES = {
         ),
         (3,),
     ),
-    # The pane numbers, which `display-panes` puts up for a moment.
+    # The pane numbers, which `display-panes` puts up for a moment:
+    # here until a key, so the screen settles with them on it.
     "pane-numbers": Fixture(
-        CHROME,
+        CHROME + "set-window-option -g display-panes-time 0\n",
         keys(
             (0.0, PREFIX),
             (0.4, b"%"),

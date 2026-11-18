@@ -263,6 +263,7 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     stacked.options.monitor_notification = False
     stacked.options.pane_base_index = 1
     stacked.options.window_status_separator = " | "
+    stacked.options.display_panes_time = 250
     stacked.activity = stacked.silence = stacked.notified = True
     stacked.tags = {"role": "logs"}
     strip.tags = {"role": "build", "bare": None}

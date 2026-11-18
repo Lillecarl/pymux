@@ -239,6 +239,7 @@ class Pymux:
         # `display-panes` showing, which a timer ends; the timer does
         # not survive, so neither does this.
         "display_pane_numbers": Keep.DROPPED,
+        "display_pane_numbers_by": Keep.DROPPED,
     }
 
     def __init__(
@@ -336,6 +337,9 @@ class Pymux:
         self.original_cwd = os.getcwd()
 
         self.display_pane_numbers = False
+        #: Which `display-panes` put the numbers up, so its timer takes
+        #: down only its own: a mode that holds them up clears it.
+        self.display_pane_numbers_by: object | None = None
 
         #: True when this server draws on the one terminal it runs in.
         #: `pymux integrated` is that: a socket may still be bound, for
