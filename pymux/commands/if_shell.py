@@ -9,7 +9,8 @@ if TYPE_CHECKING:
 
 import anyio
 
-from pymux.commands import CommandParser, add_command, handle_command
+from pymux.commands import CommandParser, Target, add_command, add_target, handle_command
+from pymux.commands.common import the_pane
 from pymux.format import Language, format_pymux_string
 from pymux.niceness import as_a_person_runs
 
@@ -34,12 +35,22 @@ def if_shell(pymux: Pymux, args: argparse.Namespace):
         # changes nothing. tmux answers this one on the spot as well.
         # `-F` asks a tmux format and `-J` the same question written as
         # a template. Lillecarl/pyterm#335.
+        pane = window = session = None
+        if args.target_pane is not None:
+            pane = the_pane(pymux, args.target_pane)
+            window = pymux._window_holding(pane)
+            session = pymux.session_holding(pane)
         answer = format_pymux_string(
             pymux,
             args.shell_command,
+            window=window,
+            pane=pane,
+            session=session,
             language=Language.JINJA if args.J else Language.TMUX,
         )
-        return _then_run(pymux, args, bool(answer))
+        # tmux's rule (cmd-if-shell.c): empty, or a first character
+        # `0`, is no. `#{mouse_any_flag}` answers "0".
+        return _then_run(pymux, args, not answer.startswith("0") and answer != "")
 
     if args.b:
         pymux.spawn_command(_ask_the_shell(pymux, args))
@@ -90,6 +101,7 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
         action="store_true",
         help="Run in the background: the command that asked does not wait for the shell. -F answers at once either way.",
     )
+    add_target(parser, "-t", kind=Target.PANE, dest="target_pane", help="The pane a format with -F or -J reads.")
     parser.add_argument(
         "shell_command", metavar="<shell-command>", help="The question, through the shell, or the format with -F."
     )

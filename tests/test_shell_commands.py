@@ -150,6 +150,27 @@ async def test_if_shell_takes_format_for_question():
         assert state.message == "format-said-yes"
 
 
+@pytest.mark.parametrize(("question", "said"), [("0", "no"), ("0x", "no"), ("", "no"), ("1", "yes"), ("x0", "yes")])
+async def test_if_shell_format_reads_true_as_tmux_does(question, said):
+    "cmd-if-shell.c: empty, or a first character 0, is no. `#{mouse_any_flag}` answers 0."
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            handle_command(pymux, "if-shell -F '%s' 'display yes' 'display no'" % question)
+
+        assert state.message == said
+
+
+async def test_if_shell_format_reads_the_target_pane():
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            first = pymux.arrangement.get_active_pane()
+        await run_as(pymux, state, "split-window")
+        with set_app(state.app):
+            handle_command(pymux, "if-shell -F -t %%%d '#{pane_active}' 'display yes' 'display no'" % first.pane_id)
+
+        assert state.message == "no"
+
+
 async def test_if_shell_keeps_the_question_output_off_the_terminal(capfd):
     """
     Only the status is read. The output used to go to the server's own
