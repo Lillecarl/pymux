@@ -91,7 +91,6 @@ jbnicolai__tmux.conf line 81: pymux: unrecognized arguments: -t
 jmbuhr__tmux-kickstarter.conf line 16: pymux: Invalid option: terminal-overrides
 joshmedeski__dotfiles.conf line 26: pymux: Invalid option: terminal-overrides
 joshmedeski__dotfiles.conf line 27: pymux: theme is a client option: use set-client-option
-joshmedeski__dotfiles.conf line 30: pymux: Invalid option: detach-on-destroy
 joshmedeski__dotfiles.conf line 67: pymux: Invalid option: status-style
 joshmedeski__dotfiles.conf line 68: pymux: Invalid option: popup-style
 joshmedeski__dotfiles.conf line 69: pymux: Invalid option: popup-border-style
@@ -133,7 +132,6 @@ nviennot__tmux-config.conf line 45: pymux: Invalid option: status-bg
 nviennot__tmux-config.conf line 46: pymux: Invalid option: status-fg
 omerxx__dotfiles.conf line 1: pymux: IOError: [Errno 2] No such file or directory: '$HOME/.config/tmux/tmux.reset.conf'
 omerxx__dotfiles.conf line 3: pymux: Invalid option: terminal-overrides
-omerxx__dotfiles.conf line 7: pymux: Invalid option: detach-on-destroy
 omerxx__dotfiles.conf line 15: pymux: Invalid option: pane-active-border-style
 omerxx__dotfiles.conf line 16: pymux: Invalid option: pane-border-style
 omerxx__dotfiles.conf line 18: pymux: unrecognized arguments: - 60%,30% --prompt=" " --border-label=" Open URL "

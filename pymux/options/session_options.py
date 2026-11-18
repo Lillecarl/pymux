@@ -14,7 +14,17 @@ from typing import TYPE_CHECKING
 
 from pyte.keys.events import KEY_PROFILES
 
-from ..enums import AlertAction, EditingKeys, Justify, OpenUrlMode, OpenUrlTarget, PaneBrowser, StatusPosition, Visual
+from ..enums import (
+    AlertAction,
+    DetachOnDestroy,
+    EditingKeys,
+    Justify,
+    OpenUrlMode,
+    OpenUrlTarget,
+    PaneBrowser,
+    StatusPosition,
+    Visual,
+)
 from ..utils import editor_keys, get_default_shell
 from .option_fields import Options, option, options
 
@@ -260,6 +270,10 @@ class SessionOptions(Options):
     silence_symbol: str = option("~", doc="What `#F` writes for silence. Lillecarl/pyterm#769.")
     notification_symbol: str = option("?", doc="What `#F` writes for a notification. Lillecarl/pyterm#769.")
     default_shell: str = option(factory=get_default_shell, doc="What a new pane runs when no command is given.")
+    detach_on_destroy: DetachOnDestroy = option(
+        DetachOnDestroy.OFF,
+        doc="Where a client goes when its session is destroyed. tmux detaches it (`on`); pymux moves it on.",
+    )
     default_command: str = option(
         "", doc="What a new pane runs, with `default-shell -c`, when no command is given; empty starts the shell alone."
     )

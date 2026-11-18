@@ -32,7 +32,7 @@ from ..audio import AudioServer
 from ..commands import call_command_handler, handle_command
 from ..connection.client_state import ClientState
 from ..connection.server import ServerConnection
-from ..enums import OpenUrlTarget, RenderMode, Woke
+from ..enums import DetachOnDestroy, OpenUrlTarget, RenderMode, Woke
 from ..graphics import kernels
 from ..graphics.graphics import OuterImageIds
 from ..ids import PaneId, SessionId
@@ -552,12 +552,33 @@ class Pymux:
                 self.stop()
             return
 
+        by_name = sorted(self.sessions, key=lambda each: each.name)
+        place = by_name.index(session)
         self.sessions.remove(session)
 
-        somewhere = self.last_used_session
-        for client_state in self._client_states.values():
-            if client_state.session is session:
-                client_state.session = somewhere
+        match session.options.detach_on_destroy:
+            case DetachOnDestroy.OFF:
+                goes_to: Session | None = self.last_used_session
+            case DetachOnDestroy.ON:
+                goes_to = None
+            case DetachOnDestroy.NO_DETACHED:
+                watched = {each.session for each in self._client_states.values()}
+                unwatched = [each for each in self.sessions if each not in watched]
+                goes_to = max(unwatched, key=lambda each: each.last_used) if unwatched else None
+            case DetachOnDestroy.PREVIOUS:
+                goes_to = by_name[place - 1]
+            case DetachOnDestroy.NEXT:
+                goes_to = by_name[(place + 1) % len(by_name)]
+
+        for client_state in list(self._client_states.values()):
+            if client_state.session is not session:
+                continue
+            # A client in this process has no connection to close.
+            if goes_to is None and client_state.client is not None:
+                client_state.session = self.last_used_session
+                client_state.client.connection.detach_and_close()
+            else:
+                client_state.session = goes_to or self.last_used_session
 
         self.invalidate(Woke.SESSION_CLOSED)
 

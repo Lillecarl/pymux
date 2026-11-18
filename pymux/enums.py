@@ -459,6 +459,20 @@ class StatusPosition(StrEnum):
     BOTTOM = "bottom"
 
 
+class DetachOnDestroy(StrEnum):
+    "Where a client goes when its session is destroyed: `detach-on-destroy`, tmux's five."
+
+    #: To the session used last of the rest.
+    OFF = "off"
+    #: Nowhere: the client detaches.
+    ON = "on"
+    #: To the session used last that no client watches; detach if none.
+    NO_DETACHED = "no-detached"
+    #: To the session before it, or after it, by name.
+    PREVIOUS = "previous"
+    NEXT = "next"
+
+
 class Justify(StrEnum):
     "Where the window list sits in the status line: `status-justify`."
 
