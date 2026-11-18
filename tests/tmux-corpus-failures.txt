@@ -627,8 +627,6 @@ shfshanyue__tmux-config.conf line 54: pymux: unrecognized arguments: # base01
 statico__dotfiles.conf line 11: pymux: Invalid option: bell-action
 statico__dotfiles.conf line 12: pymux: Invalid option: visual-bell
 statico__dotfiles.conf line 13: pymux: Invalid option: display-panes-time
-statico__dotfiles.conf line 21: pymux: unrecognized arguments: -a
-statico__dotfiles.conf line 22: pymux: unrecognized arguments: -a
 statico__dotfiles.conf line 24: pymux: Invalid option: set-titles
 statico__dotfiles.conf line 25: pymux: Invalid option: set-titles-string
 statico__dotfiles.conf line 31: pymux: Invalid key: 'MouseDown3Pane'

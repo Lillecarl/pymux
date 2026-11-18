@@ -45,11 +45,13 @@ async def test_u_forgets_hook():
         assert state.message is None
 
 
-async def test_hook_holds_its_commands_in_order():
+async def test_a_adds_to_a_hook_and_without_it_replaces():
+    "tmux's `set-hook` and `set-hook -a`. Lillecarl/pyterm#1031."
     async with create_session() as (pymux, state):
         with set_app(state.app):
+            await run_as(pymux, state, "set-hook after-select-pane 'display gone'")
             await run_as(pymux, state, "set-hook after-select-pane 'display first'")
-            await run_as(pymux, state, "set-hook after-select-pane 'display second'")
+            await run_as(pymux, state, "set-hook -ga after-select-pane 'display second'")
             await run_as(pymux, state, "select-pane -L")
 
         assert state.message == "second"

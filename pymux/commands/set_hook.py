@@ -22,8 +22,12 @@ def set_hook(pymux: Pymux, args: argparse.Namespace) -> None:
     `client-detached`, and `after-<name>` for every command, which
     is how the wake of a command that ran is spelled.
 
-    A hook holds the commands it was given, in order; -u forgets the
-    hook and everything it was given. -g is accepted for tmux and
+    A hook holds one command, which a later `set-hook` replaces; -a
+    adds the command after the ones the hook holds, so it runs them in
+    order. That is tmux's rule (`options_array_clear` in
+    cmd-set-option.c), and tmux configurations write `set-hook -ga`.
+    Lillecarl/pyterm#1031. -u forgets the hook and everything it was
+    given. -g is accepted for tmux and
     changes nothing: there is one session per server, so every scope
     is the global one. Lillecarl/pyterm#299.
     """
@@ -32,6 +36,8 @@ def set_hook(pymux: Pymux, args: argparse.Namespace) -> None:
     elif args.hook_command is None:
         raise CommandException("A hook runs a command; name one.")
     else:
+        if not args.a:
+            pymux.hooks.forget(args.hook)
         pymux.hooks.add(args.hook, args.hook_command)
     # A hook a person changed keeps their commands over an upgrade, and
     # the file the new server reads says every other. Lillecarl/pyterm#970.
@@ -50,6 +56,7 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
         action="store_true",
         help="Accepted for tmux and changes nothing: there is one session per server.",
     )
+    parser.add_argument("-a", dest="a", action="store_true", help="Add the command after the ones the hook holds.")
     parser.add_argument("-u", dest="u", action="store_true", help="Forget the hook, and everything it was given.")
     parser.add_argument("hook", metavar="<hook>", help="The event to run on.")
     parser.add_argument("hook_command", metavar="<command>", nargs="?")
