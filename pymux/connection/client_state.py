@@ -930,6 +930,7 @@ class ClientState:
         # outputs a lot of information, we don't give the highest priority to
         # rendering output. (Nobody reads that fast in real-time.)
         app.max_render_postpone_time = 0.1  # Second.
+        app.ttimeoutlen = pymux.options.escape_time / 1000
 
         # Hide message when a key has been pressed, and note that a
         # person is using this client: `window-size latest` follows

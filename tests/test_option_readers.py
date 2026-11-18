@@ -287,6 +287,16 @@ async def test_q_sets_quietly_past_an_option_pymux_does_not_have():
         assert state.message is None
 
 
+async def test_escape_time_is_how_long_a_bare_escape_waits():
+    "tmux's `escape-time`, which every client's key processor reads. Lillecarl/pyterm#1035."
+    async with create_session() as (pymux, state):
+        assert state.app.ttimeoutlen == 0.5
+        with set_app(state.app):
+            pymux.handle_command("set-option -sg escape-time 10")
+
+        assert state.app.ttimeoutlen == 0.01
+
+
 async def test_a_window_command_names_set_client_option_for_a_client_option():
     "tmux has no client options, so the command that takes one is still named."
     async with create_session() as (pymux, state):

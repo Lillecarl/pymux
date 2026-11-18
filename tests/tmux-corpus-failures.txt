@@ -1,6 +1,4 @@
 AdamWhittingham__tmux-config.conf line 40: pymux: invalid command: is_vim=echo "#{pane_current_command}" | grep -iqE "(^|\/)g?(view|n?vim?)(diff)?$"
-AdamWhittingham__tmux-config.conf line 68: pymux: Invalid option: escape-time
-AdamWhittingham__tmux-config.conf line 87: pymux: Invalid option: escape-time
 AdamWhittingham__tmux-config.conf line 91: pymux: Invalid option: pane-base-index
 AdamWhittingham__tmux-config.conf line 99: pymux: Invalid key: 'WheelUpPane'
 AdamWhittingham__tmux-config.conf line 100: pymux: Invalid key: 'WheelDownPane'
@@ -50,13 +48,11 @@ ShawnPana__smux.conf line 72: pymux: Expecting "on" or "off".
 ShawnPana__smux.conf line 76: pymux: Invalid option: status-style
 ShawnPana__smux.conf line 79: pymux: Invalid option: window-status-current-style
 ThePrimeagen__.dotfiles.conf line 1: pymux: Invalid option: terminal-overrides
-ThePrimeagen__.dotfiles.conf line 3: pymux: Invalid option: escape-time
 ThePrimeagen__.dotfiles.conf line 8: pymux: Invalid option: status-style
 christoomey__dotfiles.conf line 6: pymux: Invalid option: default-command
 christoomey__dotfiles.conf line 11: pymux: Invalid option: display-panes-time
 christoomey__dotfiles.conf line 20: pymux: Invalid option: allow-passthrough
 christoomey__dotfiles.conf line 22: pymux: Invalid option: terminal-features
-christoomey__dotfiles.conf line 31: pymux: Invalid option: escape-time
 christoomey__dotfiles.conf line 34: pymux: Invalid option: focus-events
 christoomey__dotfiles.conf line 60: pymux: Invalid option: status-fg
 christoomey__dotfiles.conf line 61: pymux: Invalid option: status-bg
@@ -86,7 +82,6 @@ craftzdog__dotfiles-public.conf line 20: pymux: Invalid option: pane-active-bord
 craftzdog__dotfiles-public.conf line 21: pymux: Invalid option: window-style
 craftzdog__dotfiles-public.conf line 22: pymux: Invalid option: window-active-style
 craftzdog__dotfiles-public.conf line 25: pymux: Invalid option: allow-passthrough
-craftzdog__dotfiles-public.conf line 28: pymux: Invalid option: escape-time
 craftzdog__dotfiles-public.conf line 32: pymux: Invalid option: set-titles
 craftzdog__dotfiles-public.conf line 33: pymux: Invalid option: set-titles-string
 craftzdog__dotfiles-public.conf line 43: pymux: IOError: [Errno 2] No such file or directory: '$HOME/.config/tmux/bindings.conf'
@@ -142,7 +137,6 @@ gpakosz__.tmux.conf line 159: pymux: invalid command: %endif
 gpakosz__.tmux.conf line 160: pymux: invalid command: %if
 gpakosz__.tmux.conf line 162: pymux: invalid command: %endif
 hamvocke__dotfiles.conf line 11: pymux: Invalid option: pane-base-index
-hamvocke__dotfiles.conf line 33: pymux: Invalid option: escape-time
 hamvocke__dotfiles.conf line 36: pymux: Invalid option: allow-rename
 hamvocke__dotfiles.conf line 55: pymux: Invalid option: terminal-overrides
 hamvocke__dotfiles.conf line 58: pymux: Invalid option: focus-events
@@ -162,7 +156,6 @@ hamvocke__dotfiles.conf line 94: pymux: Invalid option: window-status-style
 hamvocke__dotfiles.conf line 95: pymux: Invalid option: window-status-separator
 hamvocke__dotfiles.conf line 98: pymux: Invalid option: window-status-bell-style
 hamvocke__dotfiles.conf line 101: pymux: Invalid option: message-style
-jbnicolai__tmux.conf line 6: pymux: Invalid option: escape-time
 jbnicolai__tmux.conf line 19: pymux: Invalid option: visual-silence
 jbnicolai__tmux.conf line 20: pymux: Invalid option: visual-bell
 jbnicolai__tmux.conf line 21: pymux: Invalid option: bell-action
@@ -194,7 +187,6 @@ jbnicolai__tmux.conf line 119: pymux: invalid command: set -g default-command "r
 jbnicolai__tmux.conf line 125: pymux: invalid command: bind y run "tmux save-buffer - | reattach-to-user-namespace pbcopy"
 jmbuhr__tmux-kickstarter.conf line 16: pymux: Invalid option: terminal-overrides
 jmbuhr__tmux-kickstarter.conf line 21: pymux: Invalid option: pane-base-index
-jmbuhr__tmux-kickstarter.conf line 22: pymux: Invalid option: escape-time
 jmbuhr__tmux-kickstarter.conf line 25: pymux: unrecognized arguments: # or primary secondary or clipboard
 jmbuhr__tmux-kickstarter.conf line 26: pymux: unrecognized arguments: # or clipboard primary or secondary
 joshmedeski__dotfiles.conf line 19: pymux: Invalid option: focus-events
@@ -238,10 +230,8 @@ leslie255__magicTmux.conf line 73: pymux: Invalid option: message-style
 leslie255__magicTmux.conf line 88: pymux: Invalid option: window-status-separator
 leslie255__magicTmux.conf line 94: pymux: Invalid option: automatic-rename
 leslie255__magicTmux.conf line 115: pymux: Invalid option: terminal-overrides
-leslie255__magicTmux.conf line 118: pymux: Invalid option: escape-time
 leslie255__magicTmux.conf line 140: pymux: unrecognized arguments: # default is colour231
 leslie255__magicTmux.conf line 141: pymux: unrecognized arguments: # default is colour04
-mislav__dotfiles.conf line 39: pymux: Invalid option: escape-time
 mislav__dotfiles.conf line 46: pymux: Invalid option: terminal-overrides
 mislav__dotfiles.conf line 49: pymux: Invalid option: allow-rename
 mislav__dotfiles.conf line 52: pymux: Invalid option: status-fg
@@ -262,7 +252,6 @@ nicknisi__dotfiles.conf line 52: pymux: Invalid option: clear-on-attach
 nicknisi__dotfiles.conf line 55: pymux: Invalid option: pane-scrollbars
 nicknisi__dotfiles.conf line 58: pymux: Invalid option: copy-mode-line-numbers
 nicknisi__dotfiles.conf line 85: pymux: invalid command: select-pane -t = ; send-keys -M
-nicknisi__dotfiles.conf line 88: pymux: Invalid option: escape-time
 nicknisi__dotfiles.conf line 91: pymux: Invalid option: pane-base-index
 nicknisi__dotfiles.conf line 92: pymux: Invalid option: focus-events
 nicknisi__dotfiles.conf line 93: pymux: Invalid option: set-titles
@@ -293,7 +282,6 @@ nicknisi__dotfiles.conf line 258: pymux: invalid command: }
 nicknisi__dotfiles.conf line 261: pymux: Invalid key: 'MouseDown3Status'
 nicknisi__dotfiles.conf line 263: pymux: invalid command: }
 nicknisi__dotfiles.conf line 265: pymux: Invalid key: 'MouseDown1StatusLeft'
-nviennot__tmux-config.conf line 7: pymux: Invalid option: escape-time
 nviennot__tmux-config.conf line 40: pymux: Invalid option: allow-passthrough
 nviennot__tmux-config.conf line 41: pymux: Invalid option: terminal-features
 nviennot__tmux-config.conf line 45: pymux: Invalid option: status-bg
@@ -318,7 +306,6 @@ omerxx__dotfiles.conf line 15: pymux: Invalid option: pane-active-border-style
 omerxx__dotfiles.conf line 16: pymux: Invalid option: pane-border-style
 omerxx__dotfiles.conf line 18: pymux: unrecognized arguments: - 60%,30% --prompt=" " --border-label=" Open URL "
 samoshkin__tmux-config.conf line 7: pymux: Invalid option: buffer-limit
-samoshkin__tmux-config.conf line 8: pymux: Invalid option: escape-time
 samoshkin__tmux-config.conf line 9: pymux: Invalid option: display-time
 samoshkin__tmux-config.conf line 12: pymux: Invalid option: allow-rename
 samoshkin__tmux-config.conf line 13: pymux: Invalid option: automatic-rename
@@ -399,7 +386,6 @@ samoshkin__tmux-config.conf line 273: pymux: invalid command: wg_is_keys_off=#[f
 samoshkin__tmux-config.conf line 356: pymux: invalid command: source-file ~/.tmux/tmux.remote.conf
 samoshkin__tmux-config.conf line 381: pymux: unrecognized arguments: -S (pymux refresh-client)
 shfshanyue__tmux-config.conf line 2: pymux: Invalid option: prefix2
-shfshanyue__tmux-config.conf line 5: pymux: Invalid option: escape-time
 shfshanyue__tmux-config.conf line 9: pymux: Invalid option: pane-base-index
 shfshanyue__tmux-config.conf line 12: pymux: Invalid option: allow-rename
 shfshanyue__tmux-config.conf line 13: pymux: Invalid option: automatic-rename
@@ -490,7 +476,6 @@ tony__tmux-config.conf line 25: pymux: unrecognized arguments: #blue
 tony__tmux-config.conf line 26: pymux: unrecognized arguments: #orange
 tony__tmux-config.conf line 28: pymux: unrecognized arguments: #green
 tony__tmux-config.conf line 32: pymux: unrecognized arguments: # center align window list
-tony__tmux-config.conf line 46: pymux: Invalid option: escape-time
 tony__tmux-config.conf line 51: pymux: Invalid option: aggressive-resize
 tony__tmux-config.conf line 59: pymux: Invalid option: visual-activity
 tony__tmux-config.conf line 101: pymux: invalid command: Kill Window
@@ -519,6 +504,5 @@ vmware-archive__tmux-config.conf line 12: pymux: Invalid option: mode-mouse
 vmware-archive__tmux-config.conf line 13: pymux: Invalid option: mouse-select-pane
 vmware-archive__tmux-config.conf line 14: pymux: Invalid option: mouse-resize-pane
 vmware-archive__tmux-config.conf line 15: pymux: Invalid option: mouse-select-window
-vmware-archive__tmux-config.conf line 33: pymux: Invalid option: escape-time
 vmware-archive__tmux-config.conf line 36: pymux: Invalid option: window-status-current-bg
 vmware-archive__tmux-config.conf line 44: pymux: Invalid option: terminal-overrides

@@ -59,6 +59,11 @@ def _keyboard_changed(pymux: Pymux, owner: object) -> None:
     pymux.terminals.sync_keyboard()
 
 
+def _escape_time_changed(pymux: Pymux, owner: object) -> None:
+    for client_state in pymux.clients:
+        client_state.app.ttimeoutlen = pymux.options.escape_time / 1000
+
+
 def _render_mode_changed(pymux: Pymux, owner: object) -> None:
     pymux.waking.apply_render_mode()
 
@@ -182,6 +187,15 @@ class ServerOptions(Options):
             "does. Lillecarl/pyterm#175."
         ),
         on_set=_keyboard_changed,
+    )
+    escape_time: int = option(
+        500,
+        doc=(
+            "How long a bare Escape from a terminal waits for the rest of a sequence, in milliseconds: "
+            "prompt_toolkit's `ttimeoutlen`, and tmux 3.4's default. Lillecarl/pyterm#1035."
+        ),
+        choices=[0, 10, 50, 500],
+        on_set=_escape_time_changed,
     )
     render_mode: RenderMode = option(
         RenderMode.OPTIMIZED,
