@@ -35,8 +35,6 @@ def launch_browser(pymux: Pymux, args: argparse.Namespace):
         pymux.browsers.approve(args.c)
         return None
     arguments = list(args.arguments)
-    if arguments and arguments[0] == "--":
-        arguments = arguments[1:]
     pane = find_pane(pymux, None)
     return _launch(pymux, arguments, "pane %%%d" % (pane.pane_id,) if pane is not None else "a program")
 

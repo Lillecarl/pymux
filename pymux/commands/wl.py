@@ -27,8 +27,6 @@ def wl(pymux: Pymux, args: argparse.Namespace):
     with its code. Lillecarl/pyterm#632.
     """
     argv = args.program
-    if argv and argv[0] == "--":
-        argv = argv[1:]
     if not argv:
         raise CommandException("nothing to run")
     if pymux.wayland.display is None:

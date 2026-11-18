@@ -97,7 +97,6 @@ joshmedeski__dotfiles.conf line 80: pymux: Invalid option: allow-passthrough
 joshmedeski__dotfiles.conf line 81: pymux: Invalid option: message-command-style
 joshmedeski__dotfiles.conf line 82: pymux: Invalid option: message-style
 joshmedeski__dotfiles.conf line 83: pymux: Invalid option: mode-style
-joshmedeski__dotfiles.conf line 143: pymux: unrecognized arguments: - 60%,30% --prompt=" " --border-label=" Open URL "
 leslie255__magicTmux.conf line 25: pymux: Invalid option: pane-active-border-style
 leslie255__magicTmux.conf line 29: pymux: Invalid option: pane-border-style
 leslie255__magicTmux.conf line 51: pymux: Invalid option: status-bg
@@ -131,7 +130,6 @@ omerxx__dotfiles.conf line 1: pymux: IOError: [Errno 2] No such file or director
 omerxx__dotfiles.conf line 3: pymux: Invalid option: terminal-overrides
 omerxx__dotfiles.conf line 15: pymux: Invalid option: pane-active-border-style
 omerxx__dotfiles.conf line 16: pymux: Invalid option: pane-border-style
-omerxx__dotfiles.conf line 18: pymux: unrecognized arguments: - 60%,30% --prompt=" " --border-label=" Open URL "
 samoshkin__tmux-config.conf line 41: pymux: syntax error
 shfshanyue__tmux-config.conf line 12: pymux: Invalid option: allow-rename
 shfshanyue__tmux-config.conf line 36: pymux: Invalid option: message-style

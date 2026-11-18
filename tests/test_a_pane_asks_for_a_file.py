@@ -589,7 +589,7 @@ async def test_a_client_too_old_to_send_a_file_is_refused():
         with set_app(state.app):
             await session.pymux.panes.create_window(PANE_THAT_STAYS)
         pane = session.pymux.arrangement.get_active_window().panes[0]
-        _out, errors = await answer_to(session, "receive x -d /", pane_id=pane.pane_id)
+        _out, errors = await answer_to(session, "receive -d / x", pane_id=pane.pane_id)
         assert "too old to send a file" in errors
 
 
@@ -635,7 +635,7 @@ async def test_pymux_receive_gets_a_file_from_the_client(tmp_path, home, config)
                 await pymux.panes.create_window(
                     "/bin/sh -c %s"
                     % shlex.quote(
-                        "%s -m pymux receive '~/notes.txt' -d %s >%s 2>&1; %s"
+                        "%s -m pymux receive -d %s '~/notes.txt' >%s 2>&1; %s"
                         % (sys.executable, into, said, PANE_THAT_STAYS)
                     ),
                 )

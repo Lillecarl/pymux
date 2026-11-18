@@ -727,7 +727,7 @@ def tail_job(job_id: int, lines: int, timeout: float) -> Operation[Tail]:
     and 4 for no job, and a job may exit with 124 or 4 itself, so the
     code alone cannot say which happened.
     """
-    result = yield Ask(["tail", str(job_id), "--lines", str(lines), "--timeout", str(timeout)], check=False)
+    result = yield Ask(["tail", "--lines", str(lines), "--timeout", str(timeout), str(job_id)], check=False)
     record = yield from job(job_id)
     if record is None:
         raise LookupError("no job %d: %s" % (job_id, result.stderr.strip() or "the server forgot it"))

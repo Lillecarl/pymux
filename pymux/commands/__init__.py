@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import argparse
 import inspect
+from argparse import OPTIONAL
+from collections import deque
 from collections.abc import Awaitable, Callable, Iterator, Mapping, Sequence
 from enum import StrEnum
 from importlib import import_module
@@ -246,6 +248,25 @@ def not_past_this_client(pymux: Pymux, reaches_another: bool) -> None:
         raise CommandException("client is read-only")
 
 
+def _with_value(action: argparse.Action, option: str, words: deque[str], joint: str) -> Iterator[str]:
+    """
+    An option and the next word, which getopt takes as its value whatever
+    it starts with. argparse refuses a separate value that starts with a
+    dash, so that one goes joined: `-t-F`, `--name=-x`.
+
+    An optional value is never a word that starts with a dash: `-o --font x`.
+    """
+    if not words:
+        yield option
+    elif not words[0].startswith("-"):
+        yield option
+        yield words.popleft()
+    elif action.nargs == OPTIONAL:
+        yield option
+    else:
+        yield option + joint + words.popleft()
+
+
 class CommandParser(argparse.ArgumentParser):
     "An argparse parser that raises instead of exiting."
 
@@ -259,38 +280,70 @@ class CommandParser(argparse.ArgumentParser):
     ) -> tuple[argparse.Namespace | None, list[str]]:
         if args is not None:
             args = list(self._as_getopt_reads(args))
-        return super().parse_known_args(args, namespace)
+        parsed, extras = super().parse_known_args(args, namespace)
+        # argparse keeps the `--` that ends the options at the front of a REMAINDER.
+        for action in self._actions:
+            words = getattr(parsed, action.dest, None) if action.nargs == argparse.REMAINDER else None
+            if words and words[0] == "--":
+                setattr(parsed, action.dest, words[1:])
+        return parsed, extras
 
     def _as_getopt_reads(self, args: Sequence[str]) -> Iterator[str]:
         """
-        Split a word of short options at its `=`, the way getopt does.
+        Read the words the way tmux's getopt does, for argparse.
 
-        tmux reads `-t=` as -t with the value `=`, the pane under the
-        mouse. argparse splits an option at its `=` and reads `-t=` as
-        -t with an empty value, which is the current pane.
+        **The options end at the first operand.** `set -g @x '-p 60%'`
+        sets @x to `-p 60%`; argparse read the value as `-p` and more.
+
+        **A word of short options splits at its `=`.** tmux reads `-t=`
+        as -t with the value `=`, the pane under the mouse. argparse
+        splits an option at its `=` and reads `-t=` as -t with an empty
+        value, which is the current pane.
         """
-        words = iter(args)
-        for word in words:
+        words = deque(args)
+        while words:
+            word = words.popleft()
             if word == "--":
                 yield word
                 yield from words
                 return
-            if not word.startswith("-") or word.startswith("--") or "=" not in word:
-                yield word
-                continue
-            for i, letter in enumerate(word[1:], 1):
-                action = self._option_string_actions.get("-" + letter)
-                if action is None:
+            if word == "-" or not word.startswith("-"):
+                rest = [word, *words]
+                # The tree's root: its operand is the command, whose own parser reads the rest.
+                if self._subparsers is None and any(each.startswith("-") for each in rest):
+                    yield "--"
+                yield from rest
+                return
+            if word.startswith("--"):
+                action = self._option_string_actions.get(word)
+                if action is not None and action.nargs != 0:
+                    yield from _with_value(action, word, words, "=")
+                else:
                     yield word
-                    break
-                if action.nargs != 0:
-                    if i > 1:
-                        yield word[:i]
-                    yield "-" + letter
-                    yield word[i + 1 :]
-                    break
-            else:
+                continue
+            yield from self._short_options(word, words)
+
+    def _short_options(self, word: str, words: deque[str]) -> Iterator[str]:
+        "One word of short options, and the next word too when its last option takes it as a value."
+        for i, letter in enumerate(word[1:], 1):
+            action = self._option_string_actions.get("-" + letter)
+            if action is None:
                 yield word
+                return
+            if action.nargs != 0:
+                value = word[i + 1 :]
+                if not value:
+                    yield from _with_value(action, word, words, "")
+                    return
+                if "=" not in word:
+                    yield word
+                    return
+                if i > 1:
+                    yield word[:i]
+                yield "-" + letter
+                yield value
+                return
+        yield word
 
 
 class Target(StrEnum):

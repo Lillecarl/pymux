@@ -29,12 +29,8 @@ def bind_key(pymux: Pymux, args: argparse.Namespace) -> None:
     manager = pymux.key_bindings_manager
 
     # The bound command is the first word of the remainder, and its
-    # arguments are the rest. A leading `--` separated the two from
-    # the options of bind-key on the line; the bound command starts
-    # after it.
+    # arguments are the rest.
     arguments = list(args.arguments)
-    if arguments and arguments[0] == "--":
-        arguments = arguments[1:]
     if len(arguments) == 1:
         # One word is command text, as tmux reads it: `bind x "a ; b"`,
         # and the `{ }` block that arrives here written back as text.

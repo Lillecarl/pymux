@@ -117,7 +117,7 @@ async def test_notify_records_title_body_and_pane():
 async def test_notify_takes_urgency():
     async with create_session() as (pymux, state):
         with set_app(state.app):
-            pymux.handle_command("notify Fire Down -u critical")
+            pymux.handle_command("notify -u critical Fire Down")
 
         (record,) = pymux.notification_center.notifications()
         assert record.urgency == 2

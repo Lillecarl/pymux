@@ -630,7 +630,7 @@ async def test_a_job_that_exits_124_is_not_a_job_still_running(fake):
     assert await job.tail(timeout=1, lines=0) == "out\n"
     assert not job.running
     assert job.returncode == 124
-    assert server.asked[0] == "tail 5 --lines 0 --timeout 1"
+    assert server.asked[0] == "tail --lines 0 --timeout 1 5"
 
 
 async def test_a_tail_past_its_timeout_leaves_the_job_running(fake):
