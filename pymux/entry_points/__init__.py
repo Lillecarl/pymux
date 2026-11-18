@@ -8,5 +8,8 @@ import deferimport
 # themselves on import. Lillecarl/pyterm#698. olefile is optional to
 # Pillow, which loads a plugin in a `try` and drops it on ImportError:
 # lazy, the missing module failed later, outside that `try`, and
-# `Image.open` raised on a file that was no image.
-deferimport.install("deny=hypothesis,asyncssh,olefile")
+# `Image.open` raised on a file that was no image. truststore's
+# `__init__` imports `from ._api` and then runs `del _api`, a name only
+# an eager import binds: lazy, every HTTPS client that httpx2 made in
+# the server raised NameError (a pymux-ai plugin's).
+deferimport.install("deny=hypothesis,asyncssh,olefile,truststore")
