@@ -6,6 +6,7 @@ host that records what the plugin types.
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -66,7 +67,7 @@ def _observation(text: str = "> done") -> Observation:
 async def test_the_instructions_lead_and_the_prefix_never_changes(tmp_path):
     "Each request starts with the one before it, so the provider's cache covers it."
     model = ListModel([_verdict(Decision.CONTINUE, "Go on with the tests."), _verdict(Decision.STOP)])
-    conversation = HaikuConversation(model, AttachmentStore(tmp_path))
+    conversation = HaikuConversation("key", model, AttachmentStore(tmp_path))
 
     first = await conversation.judge(_observation("first"))
     second = await conversation.judge(_observation("second"))
@@ -82,7 +83,7 @@ async def test_the_instructions_lead_and_the_prefix_never_changes(tmp_path):
 async def test_past_half_the_window_the_conversation_starts_from_a_summary(tmp_path):
     model = ListModel([_verdict(Decision.STOP), "It kept stopping after the build.", _verdict(Decision.STOP)])
     model.input_tokens = COMPACT_AT + 1
-    conversation = HaikuConversation(model, AttachmentStore(tmp_path))
+    conversation = HaikuConversation("key", model, AttachmentStore(tmp_path))
 
     await conversation.judge(_observation())
     model.input_tokens = 1000
@@ -166,6 +167,31 @@ async def test_a_done_overtaken_before_it_settles_is_never_looked_at(quick):
     conversation = ListConversation([])
     await _heard(conversation, "state=done:app=claude-code", "state=working:app=claude-code")
     assert (conversation.seen, quick) == ([], [])
+
+
+async def test_without_a_key_nothing_is_looked_at(quick, tmp_path, monkeypatch):
+    "A missing key is said once, at the start, and not at every stop."
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    async with anyio.create_task_group() as tasks:
+        plugin = Encourager(Host(tasks))
+        await plugin.run()
+        await plugin.on_program_reported(ProgramReported(PaneId(1), DONE))
+    assert quick == []
+    assert plugin._watches == {}
+
+
+async def test_the_key_comes_from_its_file_and_never_the_environment(tmp_path, monkeypatch):
+    "Every pane inherits the server's environment, and a Claude Code that finds the key there bills the API."
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    (tmp_path / "pymux").mkdir()
+    (tmp_path / "pymux" / "anthropic-api-key").write_text("sk-test\n")
+    async with anyio.create_task_group() as tasks:
+        plugin = Encourager(Host(tasks))
+        await plugin.run()
+    conversation = plugin._conversation()
+    assert conversation._settings["api_key"] == "sk-test"
+    assert "ANTHROPIC_API_KEY" not in os.environ
 
 
 async def test_another_program_and_a_sub_record_are_left_alone(quick):

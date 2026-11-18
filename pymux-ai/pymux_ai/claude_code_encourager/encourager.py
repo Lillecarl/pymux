@@ -8,6 +8,7 @@ picture code and the model client import only when a pane is looked at.
 
 from __future__ import annotations
 
+import functools
 import random
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final, Protocol
@@ -70,16 +71,25 @@ class _Watch:
 class Encourager(Plugin):
     def __init__(self, host: Host, conversation: Callable[[], Conversation] | None = None) -> None:
         super().__init__(host)
-        if conversation is None:
-            from .haiku import HaikuConversation
-
-            conversation = HaikuConversation
+        #: None until `run` found the key: until then, and without one,
+        #: nothing is looked at.
         self._conversation = conversation
         self._watches: dict[PaneId, _Watch] = {}
 
+    async def run(self) -> None:
+        if self._conversation is not None:
+            return
+        from .haiku import HaikuConversation, key_path, read_key
+
+        key = await read_key()
+        if key is None:
+            self.host.log.warning("no Anthropic key at %s, so the encourager stays idle", key_path())
+            return
+        self._conversation = functools.partial(HaikuConversation, key)
+
     async def on_program_reported(self, event: ProgramReported) -> None:
         report = event.report
-        if report.app != APP or report.id:
+        if report.app != APP or report.id or self._conversation is None:
             return
         watch = self._watches.get(event.pane_id)
         if watch is None:

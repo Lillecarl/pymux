@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
+import anyio
 from aid_agent.attachments import AttachmentStore
 from aid_agent.loop import run
 from aid_agent.messages import ModelRequest, ModelResponse, SystemPromptPart, TextPart, UserPromptPart
@@ -56,9 +57,30 @@ def _store_root() -> Path:
     return Path(state) / "pymux" / "encourager"
 
 
+def key_path() -> Path:
+    """
+    The Anthropic API key, alone in a file. **Never the server's
+    environment**: every pane inherits that, and a Claude Code that finds
+    `ANTHROPIC_API_KEY` there bills the API instead of the person's
+    subscription.
+    """
+    config = os.environ.get("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config")
+    return Path(config) / "pymux" / "anthropic-api-key"
+
+
+async def read_key() -> str | None:
+    "The key at `key_path()`, or None when there is none."
+    try:
+        key = (await anyio.Path(key_path()).read_text()).strip()
+    except FileNotFoundError:
+        return None
+    return key or None
+
+
 class HaikuConversation:
-    def __init__(self, model: Model | None = None, store: AttachmentStore | None = None) -> None:
-        self._model = model if model is not None else model_for(MODEL, SETTINGS)
+    def __init__(self, api_key: str, model: Model | None = None, store: AttachmentStore | None = None) -> None:
+        self._settings = {**SETTINGS, "api_key": api_key}
+        self._model = model if model is not None else model_for(MODEL, self._settings)
         self._store = store if store is not None else AttachmentStore(_store_root())
         self.history: list[ModelMessage] = []
         self.last_input = 0
@@ -92,7 +114,7 @@ class HaikuConversation:
             self.history,
             prompt,
             instructions=INSTRUCTIONS,
-            settings=SETTINGS,
+            settings=self._settings,
             output_type=output,
             attachments=self._store,
             inline=True,

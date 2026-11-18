@@ -29,5 +29,9 @@ would.
 - After five nudges in a row the plugin leaves the pane alone, until
   Haiku answers `stop` or an hour passes.
 
-The key is `ANTHROPIC_API_KEY` in the pymux server's environment.
-Pictures go to `$XDG_STATE_HOME/pymux/encourager/attachments`.
+The Anthropic API key is read once, at the start, from
+`$XDG_CONFIG_HOME/pymux/anthropic-api-key`; without it the plugin stays
+idle. Never put it in the server's environment: every pane inherits
+that, and a Claude Code that finds `ANTHROPIC_API_KEY` bills the API
+instead of the person's subscription. Pictures go to
+`$XDG_STATE_HOME/pymux/encourager/attachments`.
