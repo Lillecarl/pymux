@@ -67,6 +67,11 @@ class StatusLine:
         #: `what_time_moves` reads them after: three formats a frame of
         #: what may be a template. Lillecarl/pyterm#826.
         self._frame_sides: dict[str, str] = {}
+        #: The widest each side has been since `_held_for`, the terminal
+        #: width and the options, last changed: what the room for the
+        #: window list leaves to it.
+        self._widest: dict[str, int] = {}
+        self._held_for: tuple[object, ...] = ()
 
     def frame_changed(self) -> None:
         "A render of this client starts or ends: the cached lines go."
@@ -175,13 +180,28 @@ class StatusLine:
         """
         The columns between `status-left` and `status-right`.
 
-        The same arithmetic the `VSplit` of the status line does: each
-        side is as wide as its text, up to its `-length` option.
+        Each side is as wide as its text, up to its `-length` option, as
+        the `VSplit` of the status line draws it. **But the room is
+        held at the widest each side has been**, for this terminal width
+        and these options. A side that holds a counter, such as a frame
+        rate or a byte rate, moves a cell or two on every redraw; near a
+        break the window list then wrapped and unwrapped with it, and
+        the panes changed size each time. Now only a resize, a changed
+        option or the window list itself moves the break.
         """
         columns = self.client_state.app.output.get_size().columns
-        left = min(get_cwidth(self.left()), self.client_state.session.options.status_left_length)
-        right = min(get_cwidth(self.right()), self.right_length())
+        options = self.client_state.session.options
+        held_for = (columns, options.status_left, options.status_right, options.status_left_length, self.right_length())
+        if held_for != self._held_for:
+            self._held_for = held_for
+            self._widest = {}
+        left = self._held("left", min(get_cwidth(self.left()), options.status_left_length))
+        right = self._held("right", min(get_cwidth(self.right()), self.right_length()))
         return max(1, columns - left - right)
+
+    def _held(self, side: str, width: int) -> int:
+        widest = self._widest[side] = max(width, self._widest.get(side, 0))
+        return widest
 
     def rows(self) -> int:
         """

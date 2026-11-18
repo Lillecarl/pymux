@@ -152,6 +152,31 @@ async def test_the_session_name_and_the_clock_keep_the_first_row():
         assert not any(row.startswith("[") for row in rest)
 
 
+async def test_a_side_that_shrinks_keeps_the_rows_it_took():
+    """
+    A frame rate or a byte rate in `status-right` moves a cell or two
+    each redraw. Near a break, the window list wrapped and unwrapped
+    with it, and every pane changed size each time. The room stays at
+    the widest the side was, until a changed option starts over.
+    """
+    async with in_this_process() as session:
+        state = await with_windows(session, DESK)
+        set_option(session.pymux, state, "status-right-length", str(DESK.columns))
+        status = state.layout_manager.status
+        right = ""
+        status.right = lambda: right
+        assert status.rows() == 1
+
+        while status.rows() == 1 and len(right) < DESK.columns:
+            right += "x"
+        assert status.rows() == 2
+        right = right[:-1]
+        assert status.rows() == 2, "one cell narrower is still the widest it was"
+
+        set_option(session.pymux, state, "status-right", "other")
+        assert status.rows() == 1
+
+
 async def test_status_max_rows_caps_it():
     async with in_this_process() as session:
         state = await with_windows(session, PHONE)
