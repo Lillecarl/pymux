@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING
 
 from pyte.environment import terminal_name
 from pyte.keep import Keep
+from pyte.modes import PrivateMode
+from pyte.sequences.csi import reset_mode, set_mode
 
 from .. import introspect, log
 from ..enums import AudioServerMode, Clipboard, ExtendedKeys, ForwardMode, RenderMode, WaylandPortal
@@ -62,6 +64,19 @@ def _keyboard_changed(pymux: Pymux, owner: object) -> None:
 def _escape_time_changed(pymux: Pymux, owner: object) -> None:
     for client_state in pymux.clients:
         client_state.app.ttimeoutlen = pymux.options.escape_time / 1000
+
+
+def _focus_events_changed(pymux: Pymux, owner: object) -> None:
+    # Off, every terminal counts as focused, as it does for a terminal
+    # that never reports.
+    on = pymux.options.focus_events
+    for client_state in pymux.clients:
+        output = client_state.app.output
+        output.write_raw(set_mode(PrivateMode.FOCUS_EVENTS) if on else reset_mode(PrivateMode.FOCUS_EVENTS))
+        output.flush()
+        if not on:
+            client_state.terminal_focused = True
+    pymux.focus.sync_panes()
 
 
 def _render_mode_changed(pymux: Pymux, owner: object) -> None:
@@ -196,6 +211,15 @@ class ServerOptions(Options):
         ),
         choices=[0, 10, 50, 500],
         on_set=_escape_time_changed,
+    )
+    focus_events: bool = option(
+        True,
+        doc=(
+            "Whether pymux asks each terminal to report its focus, and tells a pane that asked "
+            "(DEC 1004) when its window gains and loses it. On, unlike tmux: a program in a pane "
+            "that asks for the reports means to get them. Lillecarl/pyterm#1035."
+        ),
+        on_set=_focus_events_changed,
     )
     render_mode: RenderMode = option(
         RenderMode.OPTIMIZED,

@@ -40,6 +40,8 @@ PIXEL_MOUSE_OFF = reset_mode(PrivateMode.SGR_PIXEL_MOUSE)
 REPORTS = (PrivateMode.FOCUS_EVENTS, PrivateMode.COLOR_SCHEME_UPDATES, PrivateMode.INBAND_RESIZE)
 REPORTS_ON = "".join(set_mode(mode) for mode in REPORTS)
 REPORTS_OFF = "".join(reset_mode(mode) for mode in REPORTS)
+#: With `focus-events` off, as tmux's default has it.
+REPORTS_ON_BUT_FOCUS = "".join(set_mode(mode) for mode in REPORTS if mode is not PrivateMode.FOCUS_EVENTS)
 
 #: kitty's paste events, which the server sets while the focused pane
 #: has them set, and which a detach turns off: a shell does not read
@@ -148,6 +150,8 @@ class FrameOutput(Vt100_Output):
         #: How to fit each grapheme cluster to the width this terminal
         #: draws it: `TerminalReplies.cluster_fit`. Lillecarl/pyterm#800.
         self.cluster_fit: Callable[[], str | Drawn | None] = lambda: None
+        #: The server option `focus-events`. Lillecarl/pyterm#1035.
+        self.reports_focus: Callable[[], bool] = lambda: True
 
     @override
     def enable_mouse_support(self) -> None:
@@ -170,7 +174,7 @@ class FrameOutput(Vt100_Output):
     @override
     def enter_alternate_screen(self) -> None:
         super().enter_alternate_screen()
-        self.write_raw(REPORTS_ON)
+        self.write_raw(REPORTS_ON if self.reports_focus() else REPORTS_ON_BUT_FOCUS)
 
     @override
     def quit_alternate_screen(self) -> None:

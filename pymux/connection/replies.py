@@ -245,7 +245,7 @@ class TerminalReplies:
 
     def _focus_changed(self, focused: bool) -> None:
         logger.debug("The terminal %s the focus.", "took" if focused else "lost")
-        if self.client.state is None:
+        if self.client.state is None or not self.client.pymux.options.focus_events:
             return
         self.client.state.terminal_focused = focused
         self.client.pymux.focus.sync_panes()

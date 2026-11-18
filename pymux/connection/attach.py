@@ -260,6 +260,7 @@ def create_app(
     output.pixel_mouse = lambda: client.replies.pixel_mouse
     output.narrows_text_emoji = lambda: client.replies.widens_text_emoji
     output.cluster_fit = client.replies.cluster_fit
+    output.reports_focus = lambda: connection.pymux.options.focus_events
 
     client_state = connection.pymux.add_client(
         # A proxy: what it lacks of an `Input` it forwards to its pipe.

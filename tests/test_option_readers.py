@@ -297,6 +297,17 @@ async def test_escape_time_is_how_long_a_bare_escape_waits():
         assert state.app.ttimeoutlen == 0.01
 
 
+async def test_focus_events_off_counts_every_terminal_as_focused():
+    "tmux's `focus-events`; pymux's default is on. Lillecarl/pyterm#1035."
+    async with create_session() as (pymux, state):
+        assert pymux.options.focus_events is True
+        state.terminal_focused = False
+        with set_app(state.app):
+            pymux.handle_command("set-option -s focus-events off")
+
+        assert state.terminal_focused is True
+
+
 async def test_a_window_command_names_set_client_option_for_a_client_option():
     "tmux has no client options, so the command that takes one is still named."
     async with create_session() as (pymux, state):
