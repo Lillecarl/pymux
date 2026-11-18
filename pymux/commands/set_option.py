@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 from pymux.commands import CommandException, CommandParser, Target, add_command, add_target
 from pymux.commands.common import answer, option_as_written, session_of_target
-from pymux.options.options import Option, Scope, SetOptionError, a_file_speaks
+from pymux.options.options import FieldOption, Option, Scope, SetOptionError, a_file_speaks
 
 #: Which command sets an option of each scope.
 _COMMAND_FOR = {
@@ -114,6 +114,10 @@ def set_option(
         set follows the configuration file again from the next upgrade.
         Lillecarl/pyterm#969.
 
+    -a: put the value after what a string option holds, as tmux does,
+        so `set -ag status-right ' #H'` adds to the line. Any other
+        option takes the value as it is. Lillecarl/pyterm#1031.
+
     With no value, tmux prints what the option holds, and pymux does
     the same. Without it the command line was write-only: a person
     could change `mouse` and had no way to see what it was.
@@ -153,6 +157,8 @@ def set_option(
         return
 
     try:
+        if getattr(args, "a", False):
+            value = _appended(pymux, option, args, target, value)
         # `-g` says what every new window starts with, and changes
         # no window that is open, which is what it means in tmux.
         # It is the only way a configuration file can set a window
@@ -165,6 +171,26 @@ def set_option(
             _drop_every_own_value(pymux, option, args)
     except SetOptionError as e:
         raise CommandException(e.message)
+
+
+def _appended(pymux: Pymux, option: Option, args: argparse.Namespace, target: Holder | None, value: str) -> str:
+    """
+    `-a`: what a string option holds, with `value` after it.
+
+    tmux's `options_set_string`: a style option puts a comma between the
+    two, and an option that is not a string takes `value` as it is.
+    Lillecarl/pyterm#1031.
+    """
+    if not isinstance(option, FieldOption) or type(option.declared.default) is not str:
+        return value
+    if option.scope is Scope.WINDOW and args.g:
+        old = pymux.window_defaults.get(option.declared.attribute, option.declared.default)
+    else:
+        old = option.read(option.held_by(pymux, target))
+    if not old:
+        return value
+    separator = "," if option.declared.name.endswith("-style") else ""
+    return "%s%s%s" % (old, separator, value)
 
 
 def _drop_every_own_value(pymux: Pymux, option: Option, args: argparse.Namespace) -> None:
@@ -184,6 +210,16 @@ def add_unset_argument(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def add_append_argument(parser: argparse.ArgumentParser) -> None:
+    "The `-a` every command that sets an option takes."
+    parser.add_argument(
+        "-a",
+        dest="a",
+        action="store_true",
+        help="Append to what a string option holds; any other option takes the value as it is.",
+    )
+
+
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, set_option)
     parser.add_argument(
@@ -194,6 +230,7 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
         help="The default every session reads; -gg also drops each session's own value.",
     )
     add_unset_argument(parser)
+    add_append_argument(parser)
     parser.add_argument("-s", dest="s", action="store_true", help="A server option.")
     parser.add_argument(
         "-w", dest="w", action="store_true", help="A window option, as in tmux; the option's name says that too."

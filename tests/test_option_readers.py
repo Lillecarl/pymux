@@ -227,6 +227,22 @@ async def test_a_known_option_is_set_in_its_own_scope_whichever_command_names_it
             assert pymux.window_defaults["monitor_activity"] is True
 
 
+async def test_a_appends_to_a_string_option_and_sets_any_other():
+    "tmux's `set -a`, `options_set_string`. Lillecarl/pyterm#1031."
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("set-option -g status-right one")
+            pymux.handle_command("set-option -ag status-right ' two'")
+            assert pymux.session_defaults.status_right == "one two"
+
+            pymux.handle_command("set-window-option -g pane-title-format a")
+            pymux.handle_command("set-window-option -ga pane-title-format b")
+            assert pymux.window_defaults["pane_title_format"] == "ab"
+
+            pymux.handle_command("set-option -ag base-index 3")
+            assert pymux.session_defaults.base_index == 3
+
+
 async def test_a_window_command_names_set_client_option_for_a_client_option():
     "tmux has no client options, so the command that takes one is still named."
     async with create_session() as (pymux, state):
