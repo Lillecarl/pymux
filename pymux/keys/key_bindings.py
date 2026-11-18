@@ -4,6 +4,7 @@ Key bindings.
 
 from __future__ import annotations
 
+import contextlib
 import functools
 import logging
 import time
@@ -592,6 +593,8 @@ class PymuxKeyBindings:
             pane answers. Returning anything else asks for a redraw
             that has nothing in it. Lillecarl/pyterm#248.
             """
+            with contextlib.suppress(ValueError):
+                pymux.get_client_state().key_keeps_repeat = True
             pane = pymux.focus.focused_pane()
             if pane is None or not event.data:
                 return NotImplemented

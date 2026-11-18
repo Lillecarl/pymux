@@ -35,6 +35,16 @@ async def test_a_repeat_key_works_again_without_the_prefix():
         await until_hits(pymux, "xxx")
 
 
+async def test_a_key_release_keeps_the_repeat():
+    "A pane that asked for event types brings releases, which tmux never sees."
+    async with create_session() as (pymux, state):
+        run_as_client(pymux, state, "bind-key -r x set-option -ga @hits x")
+
+        press(state, Keys.ControlB, "x", Keys.KeyRelease, "x")
+
+        await until_hits(pymux, "xx")
+
+
 async def test_another_key_ends_the_repeat_and_reaches_the_pane():
     async with create_session() as (pymux, state):
         written = written_keys(pymux)

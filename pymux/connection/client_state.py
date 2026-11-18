@@ -159,6 +159,7 @@ class ClientState:
         # a question, a menu, a chooser.
         "has_prefix": Keep.SAVED,
         "repeat_until": Keep.DROPPED,  # half a second
+        "key_keeps_repeat": Keep.DROPPED,
         "url_mode": Keep.DROPPED,
         "border_drag": Keep.DROPPED,
         "pointer_left": Keep.DROPPED,
@@ -271,6 +272,9 @@ class ClientState:
         #: `bind-key -r` works without the prefix. tmux's
         #: `CLIENT_REPEAT`. Lillecarl/pyterm#1033.
         self.repeat_until = 0.0
+        #: Set by a key release, which does not end the repeat: tmux
+        #: never sees one.
+        self.key_keeps_repeat = False
 
         #: The labels `show-urls` put over a pane, while they are up.
         self.url_mode: UrlMode | None = None
@@ -950,7 +954,9 @@ class ClientState:
             repeat_before_key = self.repeat_until
 
         def end_repeat(_):
-            if self.repeat_until == repeat_before_key:
+            if self.key_keeps_repeat:
+                self.key_keeps_repeat = False
+            elif self.repeat_until == repeat_before_key:
                 self.repeat_until = 0.0
 
         app.key_processor.before_key_press += remember_repeat
