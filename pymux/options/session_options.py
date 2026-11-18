@@ -98,6 +98,10 @@ class SessionOptions(Options):
     visual_bell: Visual = option(Visual.OFF, doc="Whether a bell rings the terminal, shows a message, or both.")
     visual_activity: Visual = option(Visual.OFF, doc="The same for activity.")
     visual_silence: Visual = option(Visual.OFF, doc="The same for silence.")
+    set_titles: bool = option(False, doc="Give the terminal of each client `set-titles-string` as its title.")
+    set_titles_string: str = option(
+        '#S:#I:#W - "#T" #{session_alerts}', doc="What `set-titles` makes the title: tmux's default."
+    )
     open_url_target: OpenUrlTarget = option(
         OpenUrlTarget.LAST, doc="Which client's browser a URL opens in. `OpenUrlTarget` says."
     )

@@ -36,6 +36,7 @@ from ..core.pane import Pane
 from ..core.session import Session
 from ..core.window_tree import Window
 from ..enums import CHOOSE, COMMAND, PROMPT, Chooser, EditingKeys, Woke
+from ..format import format_pymux_string
 from ..grammar import template_replace
 from ..graphics.graphics import PaneView
 from ..ids import PaneId
@@ -198,6 +199,7 @@ class ClientState:
         "prompt_completer": Keep.REBUILT,
         "last_time_text": Keep.REBUILT,
         "input_tick": Keep.DROPPED,
+        "title_sent": Keep.DROPPED,
         "schedule_tick": Keep.DROPPED,
         "_waiting_for_drain": Keep.DROPPED,
         "_paced_while_behind": Keep.DROPPED,
@@ -329,6 +331,9 @@ class ClientState:
 
         #: Error/info message.
         self.message: str | None = None
+
+        #: The title `set-titles` wrote last, so a frame writes only a new one.
+        self.title_sent: str | None = None
 
         #: The questions waiting for a yes or a no, oldest first, each
         #: one a (text, command) pair.
@@ -490,6 +495,11 @@ class ClientState:
                 self._frame_waiters.set()
                 self._frame_waiters = None
 
+            try:
+                self.sync_title()
+            except Exception:
+                logger.exception("Setting the terminal's title failed.")
+
             # A client that runs in the process that started pymux has
             # no connection, and there is nothing to draw images on.
             if self.client is None:
@@ -554,6 +564,17 @@ class ClientState:
         self.app.after_render += after_render
         # Last, so the images above still read the frame's arrangement.
         self.app.after_render += self.layout_manager.frame_ended
+
+    def sync_title(self) -> None:
+        "While `set-titles` is on, give the terminal `set-titles-string` as its title: tmux's server_client_set_title."
+        options = self.session.options
+        if not options.set_titles or self.session.arrangement.get_active_window_for(self.app) is None:
+            return
+        title = format_pymux_string(self.pymux, options.set_titles_string, session=self.session, client=self)
+        if title != self.title_sent:
+            self.title_sent = title
+            self.app.output.set_title(title)
+            self.app.output.flush()
 
     def should_skip_render(self) -> bool:
         """
