@@ -97,9 +97,19 @@ body.keys #keys {
     display: none;
   }
 
-  body.session {
+  /* A pane view too: the key row stays on screen above the on-screen
+     keyboard, and the pane scrolls inside what is left. */
+  body {
+    display: flex;
+    flex-direction: column;
     padding: 4px;
     height: 100dvh;
+    box-sizing: border-box;
+  }
+
+  pymux-pane {
+    flex: 1;
+    min-height: 0;
   }
 }
 

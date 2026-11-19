@@ -105,6 +105,14 @@ export const ONLY_A_MODIFIER = new Set([
  */
 export type Modifier = "ctrl" | "alt";
 
+/**
+ * A character as a key name. The server splits `keys` on whitespace, so
+ * a space with Ctrl on it, written as one, arrived as the word `C-`.
+ */
+function spelled(key: string): string {
+  return key === " " ? "Space" : key;
+}
+
 /** pymux's spelling of each, in the order a key name carries them. */
 const MODIFIER_PREFIX: Record<Modifier, string> = { ctrl: "C", alt: "M" };
 
@@ -115,7 +123,7 @@ const MODIFIER_PREFIX: Record<Modifier, string> = { ctrl: "C", alt: "M" };
 export function withHeld(key: string, held: ReadonlySet<Modifier>): string {
   const parts = key.split("-");
   // The last part is the key itself, and `-` alone is a key too.
-  const named = key.endsWith("-") ? "-" : parts.pop()!;
+  const named = spelled(key.endsWith("-") ? "-" : parts.pop()!);
   const has = new Set(key.endsWith("-") ? parts.slice(0, -2) : parts);
   for (const modifier of ["ctrl", "alt"] as const) {
     if (held.has(modifier)) has.add(MODIFIER_PREFIX[modifier]);
@@ -168,6 +176,6 @@ export function keysFor(event: KeyPress): string | null {
   if (event.ctrlKey) parts.push("C");
   if (event.altKey) parts.push("M");
   if (event.shiftKey && named) parts.push("S");
-  parts.push(named || event.key);
+  parts.push(named || spelled(event.key));
   return parts.join("-");
 }

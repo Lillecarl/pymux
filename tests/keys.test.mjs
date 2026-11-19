@@ -107,6 +107,13 @@ test("a modifier the key already names is named once", () => {
   assert.equal(withHeld("C-M-x", new Set(["alt"])), "C-M-x");
 });
 
+test("a space with a modifier is named Space", () => {
+  // The server splits keys on whitespace: "C- " would be the word "C-".
+  assert.equal(withHeld(" ", new Set(["ctrl"])), "C-Space");
+  assert.deepEqual(heldText(" x", new Set(["ctrl"])), { keys: "C-Space", text: "x" });
+  assert.equal(keysFor(press(" ", { ctrlKey: true })), "C-Space");
+});
+
 test("the minus key keeps its minus", () => {
   assert.equal(withHeld("-", new Set(["ctrl"])), "C--");
   assert.equal(withHeld("M--", new Set(["ctrl"])), "C-M--");

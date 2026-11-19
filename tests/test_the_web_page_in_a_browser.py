@@ -355,6 +355,63 @@ async def test_the_key_row_holds_ctrl_for_a_typed_letter(server):
         assert await call(server, "browser.evaluate", name="page", expression=THE_KEYBOARD_HAS_THE_FOCUS)
 
 
+#: Gboard's events, as the keyboard textarea gets them: a composition
+#: that holds a word, and the letter that starts one.
+GBOARD = """
+(() => {
+  const keyboard = document.querySelector("pymux-pane").shadowRoot.querySelector(".keyboard");
+  const fire = (event) => keyboard.dispatchEvent(event);
+  return {
+    start: () => fire(new CompositionEvent("compositionstart", { data: "" })),
+    letter: (data) => fire(new InputEvent("beforeinput", {
+      inputType: "insertCompositionText", data, isComposing: true, bubbles: true, cancelable: false, composed: true,
+    })),
+    holding: (word) => { keyboard.value = word; },
+    end: (data) => fire(new CompositionEvent("compositionend", { data })),
+  };
+})()
+"""
+
+
+def on_gboard(step: str) -> str:
+    return "(%s).%s" % (GBOARD.strip(), step)
+
+
+async def test_a_word_half_composed_goes_before_a_key_of_the_row(server):
+    """
+    Gboard holds a word until a space. A key from the row sends the word
+    first, and the composition's own end sends it no second time. A held
+    Ctrl takes the next composed letter at once. Lillecarl/pyterm#1052.
+    """
+    async with a_page(server, "stty raw -echo; printf ready; cat -vT", writable=True, query="keys") as pane:
+        with anyio.fail_after(20):
+            while "ready" not in await call(server, "pane.capture", pane=pane):
+                await anyio.sleep(0.1)
+        with anyio.fail_after(20):
+            while not await call(
+                server, "browser.evaluate", name="page", expression="document.querySelector('pymux-pane').writable"
+            ):
+                await anyio.sleep(0.1)
+        await call(server, "browser.click", name="page", selector="pymux-pane")
+
+        await call(server, "browser.click", name="page", selector="#keys [data-hold=ctrl]")
+        await call(server, "browser.evaluate", name="page", expression=on_gboard("start()"))
+        await call(server, "browser.evaluate", name="page", expression=on_gboard("letter('x')"))
+        await call(server, "browser.evaluate", name="page", expression=on_gboard("end('x')"))
+
+        await call(server, "browser.evaluate", name="page", expression=on_gboard("start()"))
+        await call(server, "browser.evaluate", name="page", expression=on_gboard("holding('sta')"))
+        await call(server, "browser.click", name="page", selector="#keys [data-key=Tab]")
+        await call(server, "browser.evaluate", name="page", expression=on_gboard("end('sta')"))
+        await call(server, "browser.press", name="page", key="z")
+
+        shown = ""
+        with anyio.move_on_after(10):
+            while "z" not in (shown := await call(server, "pane.capture", pane=pane)):
+                await anyio.sleep(0.1)
+        assert "ready^Xsta^Iz" in shown
+
+
 #: An on-screen keyboard's Backspace, as it arrives when its keydown
 #: carries no key: only the `beforeinput`.
 DELETE_BACKWARD = """

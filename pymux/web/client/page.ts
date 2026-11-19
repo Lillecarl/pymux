@@ -39,7 +39,14 @@ const fullscreen = needed(document.getElementById("fullscreen"), "full screen bu
 
 // The click is the gesture full screen needs. Lillecarl/pyterm#953.
 fullscreen.addEventListener("click", () => {
-  void element.fullscreen().catch((error: unknown) => say(`Full screen was refused: ${String(error)}`));
+  const refused = (error: unknown) => say(`Full screen was refused: ${String(error)}`);
+  // With the key row shown, the whole page fills the screen: the pane
+  // alone would leave a phone without Esc and Ctrl.
+  if (getComputedStyle(row).display !== "none") {
+    void document.documentElement.requestFullscreen().catch(refused);
+  } else {
+    void element.fullscreen().catch(refused);
+  }
 });
 
 // **A browser with no Keyboard Lock keeps Escape in full screen**:

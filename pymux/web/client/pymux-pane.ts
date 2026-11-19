@@ -336,6 +336,9 @@ const PASTE = "paste";
 const DELETES: Record<string, string | undefined> = {
   deleteContentBackward: "BSpace",
   deleteContentForward: "DC",
+  // A swipe left on Gboard's Backspace, which a shell's line editor
+  // reads as Ctrl-W.
+  deleteWordBackward: "C-w",
 };
 
 /**
@@ -495,6 +498,8 @@ export class PymuxPane extends HTMLElement {
     this.#keyboard.setAttribute("autocapitalize", "off");
     this.#keyboard.setAttribute("autocomplete", "off");
     this.#keyboard.setAttribute("spellcheck", "false");
+    // Chromium on Android reads this, and Gboard then leaves `ls` alone.
+    this.#keyboard.setAttribute("autocorrect", "off");
 
     this.#cursor = document.createElement("div");
     this.#cursor.className = "cursor";
@@ -516,8 +521,8 @@ export class PymuxPane extends HTMLElement {
       // clicked, and a selection drag should not move the keyboard
       // either.
       event.preventDefault();
-      this.#keyboard.focus();
-      this.#sendMouse(event, "press", BUTTONS[event.button]);
+      this.#focusKeyboard();
+      if (BUTTONS[event.button]) this.#sendMouse(event, "press", BUTTONS[event.button]);
     });
     this.#screen.addEventListener("mousemove", (event) =>
       this.#sendMouse(event, "move", this.#pressed ? BUTTONS[this.#heldButton(event)] : "none"),
@@ -537,10 +542,48 @@ export class PymuxPane extends HTMLElement {
     this.#keyboard.addEventListener("beforeinput", (event) =>
       this.#onBeforeInput(event),
     );
+    this.#keyboard.addEventListener("compositionstart", () => {
+      this.#composing = true;
+    });
     this.#keyboard.addEventListener("compositionend", (event) => {
-      if (event.data) this.#sendText(event.data);
+      this.#composing = false;
+      // A composition `#commit` already sent ends here as well.
+      if (this.#committed) this.#committed = false;
+      else if (event.data) this.#sendText(event.data);
       this.#keyboard.value = "";
     });
+  }
+
+  /**
+   * Focus the keyboard, and show a phone's on-screen keyboard again: a
+   * person may have put it away while the textarea kept the focus, and
+   * Android shows it only when focus arrives.
+   */
+  #focusKeyboard(): void {
+    if (this.shadowRoot?.activeElement === this.#keyboard) this.#keyboard.blur();
+    this.#keyboard.focus();
+  }
+
+  /** Whether an IME holds a word it has not committed. */
+  #composing = false;
+  /** Whether `#commit` sent the composition that is still to end. */
+  #committed = false;
+
+  /**
+   * Send the word an on-screen keyboard is still composing, and end the
+   * composition. **Before a key from the key row**, or the key overtakes
+   * the word: Gboard holds `sta` of `git sta` until a space, and a Tab
+   * tapped then reached the shell first.
+   */
+  #commit(): void {
+    if (!this.#composing) return;
+    const word = this.#keyboard.value;
+    this.#committed = true;
+    this.#composing = false;
+    this.#keyboard.value = "";
+    if (word) this.send({ type: TEXT, text: word });
+    // Losing the focus is what makes an IME let go of its word.
+    this.#focusKeyboard();
   }
 
   // -- the socket ----------------------------------------------------
@@ -558,11 +601,15 @@ export class PymuxPane extends HTMLElement {
     if (src && !this.#socket) this.#open(src);
     this.#observer.observe(this);
     window.addEventListener("mouseup", this.#onMouseUp);
+    document.addEventListener("visibilitychange", this.#onWake);
+    window.addEventListener("online", this.#onWake);
   }
 
   disconnectedCallback(): void {
     this.#observer.disconnect();
     window.removeEventListener("mouseup", this.#onMouseUp);
+    document.removeEventListener("visibilitychange", this.#onWake);
+    window.removeEventListener("online", this.#onWake);
     this.close();
   }
 
@@ -771,6 +818,22 @@ export class PymuxPane extends HTMLElement {
       this.dispatchEvent(new CustomEvent("error")),
     );
   }
+
+  /**
+   * A phone that was locked or offline for longer than the retries last
+   * comes back to a stream that gave up. Showing the page again, or the
+   * network coming back, starts over at once.
+   */
+  #onWake = (): void => {
+    if (document.visibilityState !== "visible") return;
+    const socket = this.#socket;
+    if (!socket || !this.#ownsSocket || !this.#welcomed) return;
+    if (socket.readyState !== WebSocket.CLOSED && socket.readyState !== WebSocket.CLOSING) return;
+    const url = this.#withOptions(socket.url);
+    if (url === undefined) return;
+    this.#failures = 0;
+    this.#connect(url);
+  };
 
   #tryAgain(code: number): void {
     const url = this.#withOptions(this.#socket?.url);
@@ -1035,6 +1098,8 @@ export class PymuxPane extends HTMLElement {
    */
   hold(modifier: Modifier, on: boolean = !this.#held.has(modifier)): void {
     if (on === this.#held.has(modifier)) return;
+    // Ctrl held over a word half typed would land on the word's rest.
+    this.#commit();
     if (on) this.#held.add(modifier);
     else this.#held.delete(modifier);
     this.#tellHeld();
@@ -1047,6 +1112,7 @@ export class PymuxPane extends HTMLElement {
 
   /** Send one key, as pymux names it, with the held modifiers on it. */
   press(key: string): void {
+    this.#commit();
     this.send({ type: INPUT, keys: withHeld(key, this.#held) });
     this.#letGo();
   }
@@ -1084,8 +1150,24 @@ export class PymuxPane extends HTMLElement {
       event.preventDefault();
       const text = event.data ?? event.dataTransfer?.getData("text") ?? "";
       if (text) this.send({ type: PASTE, text });
+      // A hold is for a key, and a paste is none.
+      this.#letGo();
       return;
     }
+    // **A held modifier takes the first letter of a composition**, at
+    // once. Gboard composes even one letter and commits it only at a
+    // space, so Ctrl then c sent nothing until then, and a space after.
+    if (event.inputType === "insertCompositionText" && event.data && this.#held.size > 0) {
+      this.#sendText(event.data);
+      // The textarea does not hold this letter yet, and `hold` committed
+      // anything before it, so `#commit` sends nothing more and only ends
+      // the composition.
+      this.#composing = true;
+      this.#commit();
+      return;
+    }
+    // The composition's own end sends it; this one too would type it twice.
+    if (event.isComposing) return;
     if (event.inputType === "insertText" && event.data !== null) {
       event.preventDefault();
       this.#sendText(event.data);
