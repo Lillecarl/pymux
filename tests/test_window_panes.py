@@ -538,9 +538,11 @@ async def test_a_window_that_never_stops_drawing_costs_a_capture_its_timeout(tmp
     async with with_a_window(tmp_path, kitty=False, animate=True) as (pymux, _state, pane, _recorder, log, _probe):
         toplevel = pane.terminal.toplevel
         await once(lambda: pane.terminal.host.frame(toplevel), 10.0, "the window never drew")
+        # A capture lets a window nobody shows draw on, so the animation starts with the first one.
+        await pane.terminal.host.drawn_again([toplevel], 0.5)
+        await once(lambda: "frame" in logged(log), 10.0, "the window never animated")
         with fair_anyio.fail_after(5.0):
             await pane.terminal.host.drawn_again([toplevel], 0.5)
-        assert "frame" in logged(log)
 
 
 async def test_capture_pane_png_of_a_window_pane_is_the_windows_frame(tmp_path, monkeypatch):
