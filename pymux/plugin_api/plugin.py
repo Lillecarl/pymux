@@ -30,9 +30,11 @@ from libpymux import CommandResult, Server
 
 from ..log import logger
 from ..mirror.plugin_messages import PeerMessage, PeerUnanswered, reachable
+from ..wayland.window_pane import WindowScreen
 
 if TYPE_CHECKING:
     import anyio.abc
+    from pyte.program_status import Report
 
     from ..core.main import Pymux
     from ..core.pane import Pane
@@ -96,6 +98,22 @@ class Host:
 
     def pane(self, pane_id: PaneId) -> Pane | None:
         return self.pymux.panes_by_id.get(pane_id)
+
+    def program_reports(self) -> dict[PaneId, Report]:
+        """
+        What the program in each pane last reported of itself, in its
+        record with no id: what a plugin that starts late, as after an
+        upgrade, did not hear as a `ProgramReported`.
+        """
+        found = {}
+        for pane_id, pane in list(self.pymux.panes_by_id.items()):
+            screen = pane.screen
+            if isinstance(screen, WindowScreen):
+                continue
+            report = screen.program_status.records.get("")
+            if report is not None:
+                found[pane_id] = report
+        return found
 
     def in_front(self, pane_id: PaneId) -> bool:
         "A client attached here shows the pane as the active pane of the window it looks at."

@@ -10,6 +10,7 @@ from importlib import import_module
 import anyio
 import pytest
 from prompt_toolkit.application.current import set_app
+from pyte.program_status import parse_report
 from session import create_session
 from test_a_session_on_a_pyte_screen import attached, pymux, shows  # noqa: F401 -- a fixture
 
@@ -46,6 +47,18 @@ async def test_the_host_says_which_pane_a_person_has_in_front(pymux):
         host = Host(pymux, "test", tasks)
         (second,) = set(pymux.panes_by_id) - {first}
         assert (host.in_front(first), host.in_front(second)) == (False, True)
+        tasks.cancel_scope.cancel()
+
+
+async def test_the_host_lists_what_each_program_last_reported(pymux):
+    "Its own record, with no id, and none of the records it keeps under ids."
+    async with pymux.running(), attached(pymux) as session, anyio.create_task_group() as tasks:
+        await shows(session, "$")
+        ((pane_id, pane),) = pymux.panes_by_id.items()
+        question = parse_report("state=blocked:kind=question:app=claude-code")
+        pane.screen.program_status.take(question)
+        pane.screen.program_status.take(parse_report("state=working:id=job:app=claude-code"))
+        assert Host(pymux, "test", tasks).program_reports() == {pane_id: question}
         tasks.cancel_scope.cancel()
 
 
