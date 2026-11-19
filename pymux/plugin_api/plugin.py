@@ -97,6 +97,14 @@ class Host:
     def pane(self, pane_id: PaneId) -> Pane | None:
         return self.pymux.panes_by_id.get(pane_id)
 
+    def in_front(self, pane_id: PaneId) -> bool:
+        "A client attached here shows the pane as the active pane of the window it looks at."
+        for client_state in self.pymux.clients:
+            window = client_state.session.arrangement.get_active_window_for(client_state.app)
+            if window is not None and window.active_pane is not None and window.active_pane.pane_id == pane_id:
+                return True
+        return False
+
     def peers(self) -> list[str]:
         """
         The linked servers `ask_peer` reaches, by name: each server that

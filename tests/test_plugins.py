@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from importlib import import_module
 
+import anyio
 import pytest
 from prompt_toolkit.application.current import set_app
 from session import create_session
@@ -15,6 +16,7 @@ from test_a_session_on_a_pyte_screen import attached, pymux, shows  # noqa: F401
 from pymux import commands, plugins
 from pymux.answer import Answer
 from pymux.commands import CommandParser, add_command, add_commands_to, handle_command
+from pymux.plugin_api import Host
 from pymux.plugins.count_panes import count_panes
 
 
@@ -31,6 +33,20 @@ async def test_the_example_plugin_runs_as_a_command(pymux):
 
         counts = [line.rpartition(" ")[2] for line in "\n".join(pymux.answer.output).splitlines()]
         assert counts == ["2", "1"], pymux.answer.output
+
+
+async def test_the_host_says_which_pane_a_person_has_in_front(pymux):
+    "Only the active pane of the window a client looks at is in front, and not the pane the split left."
+    async with pymux.running(), attached(pymux) as session, anyio.create_task_group() as tasks:
+        await shows(session, "$")
+        with set_app(pymux.connections[-1].client.state.app):
+            (first,) = pymux.panes_by_id
+            if (rest := handle_command(pymux, "split-window")) is not None:
+                await rest
+        host = Host(pymux, "test", tasks)
+        (second,) = set(pymux.panes_by_id) - {first}
+        assert (host.in_front(first), host.in_front(second)) == (False, True)
+        tasks.cancel_scope.cancel()
 
 
 async def test_list_commands_names_the_plugin():
