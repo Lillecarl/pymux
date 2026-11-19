@@ -100,6 +100,47 @@ export const ONLY_A_MODIFIER = new Set([
 ]);
 
 /**
+ * A modifier the key row holds for the next key, because a phone's
+ * on-screen keyboard has none. Lillecarl/pyterm#1051.
+ */
+export type Modifier = "ctrl" | "alt";
+
+/** pymux's spelling of each, in the order a key name carries them. */
+const MODIFIER_PREFIX: Record<Modifier, string> = { ctrl: "C", alt: "M" };
+
+/**
+ * One key with the held modifiers in front, as pymux spells it:
+ * `C-M-Left`. A key that already names a modifier keeps it once.
+ */
+export function withHeld(key: string, held: ReadonlySet<Modifier>): string {
+  const parts = key.split("-");
+  // The last part is the key itself, and `-` alone is a key too.
+  const named = key.endsWith("-") ? "-" : parts.pop()!;
+  const has = new Set(key.endsWith("-") ? parts.slice(0, -2) : parts);
+  for (const modifier of ["ctrl", "alt"] as const) {
+    if (held.has(modifier)) has.add(MODIFIER_PREFIX[modifier]);
+  }
+  return [...["C", "M", "S"].filter((prefix) => has.has(prefix)), named].join("-");
+}
+
+/**
+ * Typed text while the key row holds a modifier: the first character
+ * becomes a key with the modifiers on it, and the rest stays text.
+ *
+ * **Only the first.** An on-screen keyboard commits a whole word at a
+ * time, and Ctrl held over a word means Ctrl on the letter that came
+ * first, the way a hardware keyboard would have pressed it.
+ */
+export function heldText(
+  text: string,
+  held: ReadonlySet<Modifier>,
+): { keys: string | null; text: string } {
+  const [first, ...rest] = Array.from(text);
+  if (first === undefined || held.size === 0) return { keys: null, text };
+  return { keys: withHeld(first, held), text: rest.join("") };
+}
+
+/**
  * The keys to send for one keydown, or `null` to send nothing.
  *
  * `null` means two different things and the caller treats them alike:

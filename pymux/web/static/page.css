@@ -73,6 +73,50 @@ body.session pymux-pane {
   overflow: hidden;
 }
 
+/* The key row, for a touch screen or ?keys. Lillecarl/pyterm#1051. */
+#keys {
+  display: none;
+  gap: 4px;
+  margin-top: 8px;
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+
+body.keys #keys {
+  display: flex;
+}
+
+@media (pointer: coarse) {
+  #keys {
+    display: flex;
+  }
+
+  /* The row has its own Esc. */
+  #escape,
+  #escape-hint {
+    display: none;
+  }
+
+  body.session {
+    padding: 4px;
+    height: 100dvh;
+  }
+}
+
+#keys button {
+  font: inherit;
+  font-size: 0.9rem;
+  min-width: 2.75rem;
+  min-height: 2.5rem;
+  flex-shrink: 0;
+  touch-action: manipulation;
+}
+
+#keys button[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--room);
+}
+
 pymux-pane {
   /* The pane draws its own background, and this is the edge around it. */
   border: 1px solid color-mix(in srgb, var(--ink) 20%, transparent);

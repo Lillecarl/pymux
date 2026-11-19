@@ -34,8 +34,10 @@
 
 // `.js` and not `.ts`: this line survives into the emitted
 // `pymux-pane.js`, where a browser resolves it.
-import { keysFor } from "./keys.js";
+import { heldText, keysFor, type Modifier, withHeld } from "./keys.js";
 import { retryAfter } from "./retry.js";
+
+export type { Modifier } from "./keys.js";
 
 // ----------------------------------------------------------------------
 // The protocol, as a consumer reads it.
@@ -365,6 +367,15 @@ export interface PymuxPane {
     options?: boolean | AddEventListenerOptions,
   ): void;
   /**
+   * The modifiers the element holds for the next key changed: `hold`
+   * set one, or a key used them up. Lillecarl/pyterm#1051.
+   */
+  addEventListener(
+    type: "held",
+    listener: (event: CustomEvent<Modifier[]>) => void,
+    options?: boolean | AddEventListenerOptions,
+  ): void;
+  /**
    * `connected` is the welcome and not the socket: `writable` and the
    * size are true by then.
    */
@@ -428,6 +439,8 @@ export class PymuxPane extends HTMLElement {
   #welcomed = false;
   #failures = 0;
   #retry: ReturnType<typeof setTimeout> | null = null;
+  /** Modifiers for the next key, from a key row on a phone. */
+  #held = new Set<Modifier>();
 
   constructor() {
     super();
@@ -519,7 +532,7 @@ export class PymuxPane extends HTMLElement {
       this.#onBeforeInput(event),
     );
     this.#keyboard.addEventListener("compositionend", (event) => {
-      if (event.data) this.send({ type: TEXT, text: event.data });
+      if (event.data) this.#sendText(event.data);
       this.#keyboard.value = "";
     });
   }
@@ -1008,13 +1021,56 @@ export class PymuxPane extends HTMLElement {
 
   // -- what a viewer types -------------------------------------------
 
+  /**
+   * Hold a modifier for the next key, or let go of it: what a key row
+   * does for a phone's on-screen keyboard, which has no Ctrl or Alt.
+   * `on` left out toggles it. The next key, typed or `press`ed, takes
+   * every held modifier and lets go of them. Lillecarl/pyterm#1051.
+   */
+  hold(modifier: Modifier, on: boolean = !this.#held.has(modifier)): void {
+    if (on === this.#held.has(modifier)) return;
+    if (on) this.#held.add(modifier);
+    else this.#held.delete(modifier);
+    this.#tellHeld();
+  }
+
+  /** The modifiers held for the next key. */
+  get held(): Modifier[] {
+    return [...this.#held];
+  }
+
+  /** Send one key, as pymux names it, with the held modifiers on it. */
+  press(key: string): void {
+    this.send({ type: INPUT, keys: withHeld(key, this.#held) });
+    this.#letGo();
+  }
+
+  #letGo(): void {
+    if (this.#held.size === 0) return;
+    this.#held.clear();
+    this.#tellHeld();
+  }
+
+  #tellHeld(): void {
+    this.dispatchEvent(new CustomEvent("held", { detail: this.held }));
+  }
+
+  #sendText(text: string): void {
+    const held = heldText(text, this.#held);
+    if (held.keys !== null) {
+      this.send({ type: INPUT, keys: held.keys });
+      this.#letGo();
+    }
+    if (held.text) this.send({ type: TEXT, text: held.text });
+  }
+
   #onKeyDown(event: KeyboardEvent): void {
     const keys = keysFor(event);
     // `null` is "leave this keydown alone", which is what lets a plain
     // character reach `beforeinput` and a composition finish.
     if (keys === null) return;
     event.preventDefault();
-    this.send({ type: INPUT, keys });
+    this.press(keys);
   }
 
   #onBeforeInput(event: InputEvent): void {
@@ -1026,12 +1082,12 @@ export class PymuxPane extends HTMLElement {
     }
     if (event.inputType === "insertText" && event.data !== null) {
       event.preventDefault();
-      this.send({ type: TEXT, text: event.data });
+      this.#sendText(event.data);
       return;
     }
     if (event.inputType === "insertLineBreak") {
       event.preventDefault();
-      this.send({ type: INPUT, keys: "Enter" });
+      this.press("Enter");
     }
   }
 }

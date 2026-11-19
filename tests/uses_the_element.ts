@@ -17,6 +17,7 @@ import type {
   Cursor,
   Frame,
   InputMessage,
+  Modifier,
   PasteMessage,
   Placement,
   PymuxPane,
@@ -60,6 +61,18 @@ element.addEventListener("reconnecting", (event) => {
   void after.attempt;
 });
 element.addEventListener("error", () => {});
+
+// A key row for a phone: hold a modifier, press a key by pymux's name.
+const ctrl: Modifier = "ctrl";
+element.hold(ctrl);
+element.hold("alt", false);
+const held: Modifier[] = element.held;
+void held;
+element.press("Escape");
+element.addEventListener("held", (event) => {
+  const now: Modifier[] = event.detail;
+  void now;
+});
 
 element.close();
 

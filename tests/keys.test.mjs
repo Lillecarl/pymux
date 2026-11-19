@@ -17,7 +17,7 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 
-import { keysFor } from "../pymux/web/static/keys.js";
+import { heldText, keysFor, withHeld } from "../pymux/web/static/keys.js";
 
 /** A keydown, with everything a viewer did not do left off. */
 function press(key, held = {}) {
@@ -91,4 +91,35 @@ test("a composition sends nothing, however it says so", () => {
   assert.equal(keysFor(press("Process", { keyCode: 229 })), null);
   // Even a named key, because the composition owns the keyboard.
   assert.equal(keysFor(press("Enter", { isComposing: true })), null);
+});
+
+// The key row's held modifiers. Lillecarl/pyterm#1051.
+
+test("a held modifier goes in front of the key, in pymux's order", () => {
+  assert.equal(withHeld("Left", new Set()), "Left");
+  assert.equal(withHeld("Left", new Set(["ctrl"])), "C-Left");
+  assert.equal(withHeld("x", new Set(["alt", "ctrl"])), "C-M-x");
+  assert.equal(withHeld("S-Tab", new Set(["ctrl"])), "C-S-Tab");
+});
+
+test("a modifier the key already names is named once", () => {
+  assert.equal(withHeld("C-b", new Set(["ctrl"])), "C-b");
+  assert.equal(withHeld("C-M-x", new Set(["alt"])), "C-M-x");
+});
+
+test("the minus key keeps its minus", () => {
+  assert.equal(withHeld("-", new Set(["ctrl"])), "C--");
+  assert.equal(withHeld("M--", new Set(["ctrl"])), "C-M--");
+});
+
+test("held over typed text, the modifiers take its first character", () => {
+  assert.deepEqual(heldText("b", new Set(["ctrl"])), { keys: "C-b", text: "" });
+  // An on-screen keyboard commits a word at a time.
+  assert.deepEqual(heldText("bat", new Set(["alt"])), { keys: "M-b", text: "at" });
+  // A character outside the basic plane is one character.
+  assert.deepEqual(heldText("😀x", new Set(["ctrl"])), { keys: "C-😀", text: "x" });
+});
+
+test("typed text with nothing held stays text", () => {
+  assert.deepEqual(heldText("bat", new Set()), { keys: null, text: "bat" });
 });

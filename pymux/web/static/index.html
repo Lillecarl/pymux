@@ -2,7 +2,9 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- resizes-content: an on-screen keyboard shrinks the page, so the
+         key row stays above it instead of behind it. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content" />
     <title>pymux</title>
     <link rel="stylesheet" href="/page.css" />
   </head>
@@ -23,6 +25,25 @@
     </header>
     <p id="about">Opening…</p>
     <pymux-pane id="pane"></pymux-pane>
+    <!--
+      The keys a phone's on-screen keyboard lacks. Shown on a touch
+      screen, or with ?keys. data-key is pymux's name for the key;
+      data-hold holds a modifier for the next key. Lillecarl/pyterm#1051.
+    -->
+    <nav id="keys" aria-label="Keys">
+      <button type="button" data-key="Escape">Esc</button>
+      <button type="button" data-key="Tab">Tab</button>
+      <button type="button" data-hold="ctrl" aria-pressed="false">Ctrl</button>
+      <button type="button" data-hold="alt" aria-pressed="false">Alt</button>
+      <button type="button" data-key="Left" aria-label="Left">←</button>
+      <button type="button" data-key="Down" aria-label="Down">↓</button>
+      <button type="button" data-key="Up" aria-label="Up">↑</button>
+      <button type="button" data-key="Right" aria-label="Right">→</button>
+      <button type="button" data-key="PageUp">PgUp</button>
+      <button type="button" data-key="PageDown">PgDn</button>
+      <button type="button" data-key="Home">Home</button>
+      <button type="button" data-key="End">End</button>
+    </nav>
     <script type="module" src="/page.js"></script>
   </body>
 </html>

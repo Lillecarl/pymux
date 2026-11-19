@@ -63,19 +63,20 @@ def a_free_port() -> int:
 
 
 @asynccontextmanager
-async def a_page(server, command: str, writable: bool = False, session: bool = False):
+async def a_page(server, command: str, writable: bool = False, session: bool = False, query: str = ""):
     """
     A new session running `command`, and the demo page showing its pane
     in Chromium as the browser named "page". Answers the pane's id.
-    `session` shows the session as a client draws it instead.
+    `session` shows the session as a client draws it instead. `query`
+    goes on the page's address, after an `&`.
     """
     with anyio.fail_after(PAGE_DEADLINE):
-        async with _a_page(server, command, writable, session) as pane:
+        async with _a_page(server, command, writable, session, query) as pane:
             yield pane
 
 
 @asynccontextmanager
-async def _a_page(server, command: str, writable: bool, session: bool):
+async def _a_page(server, command: str, writable: bool, session: bool, query: str):
     await server.cmd(["new-session", "-d", command])
     # The session this made is the one whose pane shows the row; a server
     # may start with one of its own.
@@ -90,6 +91,8 @@ async def _a_page(server, command: str, writable: bool, session: bool):
             url = "http://127.0.0.1:%d/?session&t=%s" % (port, token)
         else:
             url = "http://127.0.0.1:%d/?pane=%s&t=%s" % (port, pane.replace("%", "%25"), token)
+        if query:
+            url += "&" + query
         await call(server, "browser.open", name="page", kind="chromium", seat="headless", url=url, arguments=ARGUMENTS)
         try:
             yield pane
@@ -296,6 +299,56 @@ async def test_the_escape_button_aborts_and_leaves_the_keys_on_the_terminal(serv
                 await anyio.sleep(0.1)
 
         await call(server, "browser.click", name="page", selector="#escape")
+        with anyio.fail_after(10):
+            while await mode():
+                await anyio.sleep(0.1)
+        assert await call(server, "browser.evaluate", name="page", expression=THE_KEYBOARD_HAS_THE_FOCUS)
+
+
+#: Whether each modifier button of the key row shows itself held.
+HELD_BUTTONS = """
+Object.fromEntries([...document.querySelectorAll("#keys [data-hold]")]
+  .map((button) => [button.dataset.hold, button.getAttribute("aria-pressed")]))
+"""
+
+
+async def test_the_key_row_holds_ctrl_for_a_typed_letter(server):
+    """
+    A phone's on-screen keyboard has no Ctrl and no Esc. The row's Ctrl
+    holds for the next letter, which arrives as text the way an
+    on-screen keyboard sends it, and its Esc leaves copy mode with the
+    keyboard still on the terminal. Lillecarl/pyterm#1051.
+    """
+    async with a_page(server, "seq 100; sleep 60", writable=True, session=True, query="keys"):
+        with anyio.fail_after(20):
+            while not await call(
+                server, "browser.evaluate", name="page", expression="document.querySelector('pymux-pane').writable"
+            ):
+                await anyio.sleep(0.1)
+        await call(server, "browser.click", name="page", selector="pymux-pane")
+
+        async def mode() -> str:
+            tree = await call(server, "tree")
+            return "".join(each["mode"] for one in tree for window in one["windows"] for each in window["panes"])
+
+        await call(server, "browser.click", name="page", selector="#keys [data-hold=ctrl]")
+        assert await call(server, "browser.evaluate", name="page", expression=HELD_BUTTONS) == {
+            "ctrl": "true",
+            "alt": "false",
+        }
+        assert await call(server, "browser.evaluate", name="page", expression=THE_KEYBOARD_HAS_THE_FOCUS)
+        await call(server, "browser.press", name="page", key="b")
+        await call(server, "browser.press", name="page", key="[")
+        with anyio.fail_after(20):
+            while not await mode():
+                await anyio.sleep(0.1)
+        # The letter used the hold up.
+        assert await call(server, "browser.evaluate", name="page", expression=HELD_BUTTONS) == {
+            "ctrl": "false",
+            "alt": "false",
+        }
+
+        await call(server, "browser.click", name="page", selector="#keys [data-key=Escape]")
         with anyio.fail_after(10):
             while await mode():
                 await anyio.sleep(0.1)

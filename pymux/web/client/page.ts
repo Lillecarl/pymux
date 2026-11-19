@@ -14,6 +14,7 @@
 // `.js` and not `.ts`, because this line survives into the emitted
 // `page.js` and a browser resolves it. The compiler reads it as the
 // TypeScript beside this file.
+import type { Modifier } from "./pymux-pane.js";
 import "./pymux-pane.js";
 
 /** One element of this page's own markup, which ships beside it. */
@@ -52,6 +53,26 @@ escape.hidden = hint.hidden = "keyboard" in navigator;
 // would go nowhere.
 escape.addEventListener("mousedown", (event) => event.preventDefault());
 escape.addEventListener("click", () => element.send({ type: "input", keys: "Escape" }));
+
+// The key row. `?keys` shows it on a page with a mouse too.
+// Lillecarl/pyterm#1051.
+const row = needed(document.getElementById("keys"), "key row");
+if (asked.has("keys")) document.body.classList.add("keys");
+// A tap must leave the focus, and so the on-screen keyboard, where it is.
+row.addEventListener("pointerdown", (event) => event.preventDefault());
+row.addEventListener("mousedown", (event) => event.preventDefault());
+row.addEventListener("click", (event) => {
+  const button = (event.target as Element).closest("button");
+  if (!button) return;
+  const { key, hold } = button.dataset;
+  if (key) element.press(key);
+  if (hold === "ctrl" || hold === "alt") element.hold(hold);
+});
+element.addEventListener("held", (event) => {
+  for (const button of row.querySelectorAll<HTMLButtonElement>("[data-hold]")) {
+    button.setAttribute("aria-pressed", String(event.detail.includes(button.dataset.hold as Modifier)));
+  }
+});
 
 function say(text: string): void {
   about.textContent = text;
