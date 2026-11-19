@@ -18,6 +18,8 @@ dependencies = [
     "libpymux",
     "anyio>=4.7.0",
     "pydantic>=2.0.0",
+    # The pane's process tree, to find the Claude Code under it.
+    "psutil",
     # aid's model transports and messages, without aid. Lillecarl/aid#75.
     "aid-agent",
 ]

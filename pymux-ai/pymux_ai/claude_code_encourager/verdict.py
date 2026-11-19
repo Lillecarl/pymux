@@ -30,6 +30,8 @@ Each time it stops you get:
 - usually a picture of the pane's screen, for what text loses: colour,
   layout, a dialog, a highlighted choice;
 - the jobs that still run in the agent's directory, if any;
+- the agent's own background tasks (commands, monitors, agents) that
+  have not ended: each one wakes the agent when it does;
 - the time.
 
 Earlier turns of this conversation are earlier stops of the same agent,
@@ -100,6 +102,8 @@ def describe(observation: Observation) -> str:
             "Time: %s." % (time.strftime("%Y-%m-%d %H:%M %Z"),),
             "Directory: %s." % (observation.directory or "unknown",),
             "Jobs running there:\n%s" % (jobs,),
+            "Its own background tasks it has not heard the end of: %s."
+            % (", ".join(observation.waiting_on) or "none",),
             "The pane's text:",
             "```",
             observation.text.rstrip(),

@@ -16,9 +16,11 @@ from aid_agent.attachments import AttachmentStore
 from aid_agent.messages import AttachmentPart, SystemPromptPart, TextPart, UserPromptPart
 from aid_agent.model import RequestUsage, StreamDelta
 from pymux_ai.claude_code_encourager import encourager as module
+from pymux_ai.claude_code_encourager import transcript
 from pymux_ai.claude_code_encourager.encourager import Encourager
 from pymux_ai.claude_code_encourager.haiku import COMPACT_AT, HaikuConversation
-from pymux_ai.claude_code_encourager.verdict import INSTRUCTIONS, Decision, Verdict
+from pymux_ai.claude_code_encourager.transcript import Task, TaskKind
+from pymux_ai.claude_code_encourager.verdict import INSTRUCTIONS, Decision, Verdict, describe
 from pymux_ai.observe import Observation
 from pyte.program_status import parse_report
 
@@ -145,9 +147,26 @@ def quick(monkeypatch):
     async def type_(self, pane, text):
         typed.append((pane, text))
 
+    async def background_of(host, pane_id):
+        return ()
+
     monkeypatch.setattr("pymux_ai.observe.observe", observe)
+    monkeypatch.setattr(transcript, "background_of", background_of)
     monkeypatch.setattr(Encourager, "_type", type_)
     return typed
+
+
+@pytest.fixture
+def building(quick, monkeypatch):
+    "An agent with a background build open, and a short wait for it."
+    monkeypatch.setattr(module, "BACKGROUND_WAIT", 0.3)
+    build = Task("b1", TaskKind.COMMAND, "Run the gate", float("inf"))
+
+    async def background_of(host, pane_id):
+        return (build,)
+
+    monkeypatch.setattr(transcript, "background_of", background_of)
+    return quick
 
 
 async def _heard(conversation: ListConversation, *reports: str) -> Host:
@@ -208,6 +227,29 @@ async def test_another_program_and_a_sub_record_are_left_alone(quick):
     conversation = ListConversation([])
     await _heard(conversation, "state=done:app=codex", "state=done:id=job:app=claude-code")
     assert conversation.seen == []
+
+
+async def test_a_look_waits_on_background_work_and_names_it_to_the_model(building):
+    conversation = ListConversation([Verdict(decision=Decision.STOP, reason="it waits on the gate")])
+    async with anyio.create_task_group() as tasks:
+        plugin = Encourager(Host(tasks), lambda: conversation)  # type: ignore[arg-type]
+        await plugin.on_program_reported(ProgramReported(PaneId(1), DONE))
+        await anyio.sleep(0.15)
+        assert conversation.seen == []
+    (seen,) = conversation.seen
+    assert seen.waiting_on == ('command "Run the gate"',)
+    assert 'Its own background tasks it has not heard the end of: command "Run the gate".' in describe(seen)
+
+
+async def test_the_work_ending_wakes_the_agent_and_drops_the_look(building):
+    "The notification starts a turn, which Claude Code reports as `working`."
+    conversation = ListConversation([])
+    async with anyio.create_task_group() as tasks:
+        plugin = Encourager(Host(tasks), lambda: conversation)  # type: ignore[arg-type]
+        await plugin.on_program_reported(ProgramReported(PaneId(1), DONE))
+        await anyio.sleep(0.1)
+        await plugin.on_program_reported(ProgramReported(PaneId(1), parse_report("state=working:app=claude-code")))
+    assert (conversation.seen, building) == ([], [])
 
 
 async def test_after_the_most_nudges_the_pane_is_left_alone(quick, monkeypatch):

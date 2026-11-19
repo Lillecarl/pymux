@@ -49,6 +49,8 @@ class Observation:
     png: bytes | None
     #: Jobs that run under `directory`: work the agent may wait on.
     jobs: tuple[JobRecord, ...]
+    #: The program's own background work, as it would name each piece.
+    waiting_on: tuple[str, ...] = ()
 
 
 async def observe(host: Host, pane_id: PaneId, report: Report) -> Observation:

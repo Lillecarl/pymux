@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import functools
 import random
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Final, Protocol
 
 import anyio
@@ -37,6 +37,11 @@ APP: Final = "claude-code"
 #: How long a `done` must stand before the pane is looked at: an agent
 #: that goes on by itself, or a person who types, says `working` first.
 SETTLE: Final = 5.0
+
+#: How long a `done` waits while the agent has background work open: the
+#: work's end wakes the agent, which says `working` and so drops the look.
+#: Wrapty's Stop hook holds the same way.
+BACKGROUND_WAIT: Final = 600.0
 
 #: Nudges in a row before the encourager leaves a pane alone, whatever
 #: the model says, until a `stop` or an hour without a nudge.
@@ -107,6 +112,14 @@ class Encourager(Plugin):
             await anyio.sleep(SETTLE)
             if watch.generation != generation:
                 return
+            from .transcript import background_of
+
+            waiting = await background_of(self.host, event.pane_id)
+            if waiting:
+                self.host.log.info("%%%d: waits on %s, so the look waits", event.pane_id, ", ".join(map(str, waiting)))
+                await anyio.sleep(BACKGROUND_WAIT)
+                if watch.generation != generation:
+                    return
             async with watch.lock:
                 await self._look(event, watch, generation)
         except Exception:
@@ -121,8 +134,12 @@ class Encourager(Plugin):
             self.host.log.info("%s: %d nudges in a row, so it is left alone", pane, watch.nudges)
             return
         from ..observe import observe
+        from .transcript import background_of
 
-        verdict = await watch.conversation.judge(await observe(self.host, event.pane_id, event.report))
+        observation = await observe(self.host, event.pane_id, event.report)
+        waiting = await background_of(self.host, event.pane_id)
+        observation = replace(observation, waiting_on=tuple(map(str, waiting)))
+        verdict = await watch.conversation.judge(observation)
         self.host.log.info("%s: %s, %s", pane, verdict.decision, verdict.reason)
         if verdict.decision is Decision.STOP or not verdict.message.strip():
             watch.nudges = 0
