@@ -74,6 +74,30 @@ element.addEventListener("held", (event) => {
   }
 });
 
+// `?probe` lists every keyboard, input and composition event the
+// element's keyboard gets: what an on-screen keyboard really sends, read
+// on the phone. Each of these events crosses the shadow root.
+// Lillecarl/pyterm#1052.
+if (asked.has("probe")) {
+  const log = document.createElement("pre");
+  log.id = "probe";
+  document.body.append(log);
+  const kinds = ["keydown", "keyup", "beforeinput", "input", "compositionstart", "compositionupdate", "compositionend"];
+  for (const kind of kinds) {
+    element.addEventListener(kind, (event) => {
+      const seen: Record<string, unknown> = { type: event.type };
+      if (event instanceof KeyboardEvent) {
+        Object.assign(seen, { key: event.key, code: event.code, keyCode: event.keyCode, isComposing: event.isComposing });
+      } else if (event instanceof InputEvent) {
+        Object.assign(seen, { inputType: event.inputType, data: event.data, isComposing: event.isComposing });
+      } else if (event instanceof CompositionEvent) {
+        Object.assign(seen, { data: event.data });
+      }
+      log.textContent = `${JSON.stringify(seen)}\n${log.textContent ?? ""}`;
+    });
+  }
+}
+
 function say(text: string): void {
   about.textContent = text;
 }

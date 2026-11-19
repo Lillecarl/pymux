@@ -103,6 +103,13 @@ body.keys #keys {
   }
 }
 
+#probe {
+  flex-shrink: 0;
+  max-height: 30vh;
+  overflow: auto;
+  font-size: 0.75rem;
+}
+
 #keys button {
   font: inherit;
   font-size: 0.9rem;

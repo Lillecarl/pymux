@@ -355,6 +355,43 @@ async def test_the_key_row_holds_ctrl_for_a_typed_letter(server):
         assert await call(server, "browser.evaluate", name="page", expression=THE_KEYBOARD_HAS_THE_FOCUS)
 
 
+#: An on-screen keyboard's Backspace, as it arrives when its keydown
+#: carries no key: only the `beforeinput`.
+DELETE_BACKWARD = """
+document.querySelector("pymux-pane").shadowRoot.querySelector(".keyboard")
+  .dispatchEvent(new InputEvent("beforeinput", { inputType: "deleteContentBackward", bubbles: true, cancelable: true, composed: true }))
+"""
+
+
+async def test_a_backspace_with_no_key_still_deletes(server):
+    "Lillecarl/pyterm#1052."
+    async with a_page(server, "printf 'ready\\n'; cat", writable=True, query="probe") as pane:
+        with anyio.fail_after(20):
+            while "ready" not in await call(server, "pane.capture", pane=pane):
+                await anyio.sleep(0.1)
+        with anyio.fail_after(20):
+            while not await call(
+                server, "browser.evaluate", name="page", expression="document.querySelector('pymux-pane').writable"
+            ):
+                await anyio.sleep(0.1)
+        await call(server, "browser.click", name="page", selector="pymux-pane")
+        await call(server, "browser.press", name="page", key="a")
+        await call(server, "browser.press", name="page", key="b")
+        await call(server, "browser.evaluate", name="page", expression=DELETE_BACKWARD)
+        await call(server, "browser.press", name="page", key="Enter")
+        # The tty echoes "a", then cat writes back the line it read.
+        shown = ""
+        with anyio.move_on_after(10):
+            while (shown := (await call(server, "pane.capture", pane=pane)).rstrip()) != "ready\na\na":
+                await anyio.sleep(0.1)
+        assert shown == "ready\na\na"
+        # And the probe listed what the keyboard got.
+        probe = await call(
+            server, "browser.evaluate", name="page", expression="document.getElementById('probe').textContent"
+        )
+        assert '"inputType":"deleteContentBackward"' in probe, probe
+
+
 async def test_a_session_view_keeps_its_client_options_over_a_reload(server):
     "Each stream is a new client; the page names what was set on the last. Lillecarl/pyterm#959."
 

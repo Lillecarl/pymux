@@ -332,6 +332,12 @@ const INPUT = "input";
 /** Text that becomes a bracketed paste when the program asked for one. */
 const PASTE = "paste";
 
+/** The key for each `beforeinput` that deletes a character. */
+const DELETES: Record<string, string | undefined> = {
+  deleteContentBackward: "BSpace",
+  deleteContentForward: "DC",
+};
+
 /**
  * The three events this dispatches, typed.
  *
@@ -1088,6 +1094,15 @@ export class PymuxPane extends HTMLElement {
     if (event.inputType === "insertLineBreak") {
       event.preventDefault();
       this.press("Enter");
+      return;
+    }
+    // An on-screen keyboard's Backspace may come as a keydown with no
+    // key (keyCode 229), which `keysFor` leaves alone, and then as this.
+    // Lillecarl/pyterm#1052.
+    const deleting = DELETES[event.inputType];
+    if (deleting) {
+      event.preventDefault();
+      this.press(deleting);
     }
   }
 }
