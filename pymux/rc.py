@@ -61,6 +61,7 @@ bind-key p previous-window
 bind-key w choose-window
 bind-key N choose-notifications
 bind-key J choose-job
+bind-key D choose-client
 # tmux cycles the panes on o. Here it labels the links of the pane, as
 # foot's Ctrl+Shift+o does; pane-management keeps o for the cycle.
 bind-key o show-urls

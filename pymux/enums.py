@@ -54,6 +54,7 @@ class Chooser(StrEnum):
     OPTIONS = "choose_options"
     NOTIFICATIONS = "choose_notifications"
     JOB = "choose_job"
+    CLIENT = "choose_client"
 
 
 class WindowCodec(StrEnum):

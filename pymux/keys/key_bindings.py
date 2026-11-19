@@ -543,6 +543,17 @@ class PymuxKeyBindings:
             "Run the pointed job's command again, interactively."
             self.pymux.get_client_state().layout_manager.chooser.take_over_pointed_job()
 
+        @Condition
+        def client_chooser_displayed() -> bool:
+            "The client picker, with its rows under the keys."
+            return self.pymux.get_client_state().chooser is Chooser.CLIENT
+
+        @kb.add("d", filter=client_chooser_displayed & ~chooser_search_focused)
+        @_noted(self.pymux, "detach-chosen-client")
+        def _chooser_detach_client(event: E) -> None:
+            "Detach the pointed client, as tmux's choose-client does on d."
+            self.pymux.get_client_state().layout_manager.chooser.choose_pointed_client()
+
         @kb.add("q", filter=chooser_displayed & ~chooser_search_focused, eager=True)
         @kb.add("escape", filter=chooser_displayed & ~chooser_search_focused, eager=True)
         @kb.add("c-c", filter=chooser_displayed & ~chooser_search_focused, eager=True)

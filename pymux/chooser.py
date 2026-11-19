@@ -39,6 +39,7 @@ from .layout.boxes import BOX_BOTTOM, BOX_TOP, PALETTE_HEADER
 if TYPE_CHECKING:
     from prompt_toolkit.layout.controls import BufferControl, NotImplementedOrNone
 
+    from pymux.connection.client_state import ClientState
     from pymux.core.main import Pymux
     from pymux.core.session import Session
     from pymux.ids import PaneId
@@ -88,6 +89,7 @@ _BOX_TITLES = {
     Chooser.OPTIONS: "Customize",
     Chooser.NOTIFICATIONS: "Notifications",
     Chooser.JOB: "Jobs",
+    Chooser.CLIENT: "Choose a client to detach",
 }
 
 
@@ -415,6 +417,11 @@ class ChooserView:
             if not text:
                 return jobs
             return [job for job in jobs if text in describe(job).lower()]
+        if kind is Chooser.CLIENT:
+            clients = [client for client in self.pymux.clients if client.session is not None and not client.temporary]
+            if not text:
+                return clients
+            return [client for client in clients if text in self._client_line(client).lower()]
         if kind is Chooser.BUFFER:
             buffers = self.pymux.named_buffers
             if not text:
@@ -452,6 +459,8 @@ class ChooserView:
                     self.choose_pointed_notification()
                 case Chooser.JOB:
                     self.choose_pointed_job()
+                case Chooser.CLIENT:
+                    self.choose_pointed_client()
                 case _:
                     self.choose_pointed_window()
 
@@ -587,6 +596,62 @@ class ChooserView:
         if job is None:
             return
         self.pymux.spawn_command(self.pymux.overlays.take_over_job(job, self.client_state.session))
+
+    def choose_pointed_client(self) -> None:
+        """
+        Detach the pointed client, this one too when it is the one
+        pointed at. A read-only client detaches only itself.
+        """
+        from pymux.commands import CommandException, not_past_this_client
+        from pymux.commands.detach_client import detach
+
+        client = self.pointed() if self.client_state.chooser is Chooser.CLIENT else None
+        self.client_state.chooser = None
+        if client is None:
+            return
+        try:
+            not_past_this_client(self.pymux, client is not self.client_state)
+        except CommandException as error:
+            self.client_state.message = str(error)
+            return
+        detach(self.pymux, client)
+        self.pymux.invalidate(Woke.CLIENT_DETACHED)
+
+    def _client_line(self, client: ClientState) -> str:
+        "What `list-clients` says of a client."
+        from pymux.commands.list_clients import DEFAULT_FORMAT
+        from pymux.format import format_pymux_string
+
+        session = client.session
+        window = session.arrangement.get_active_window() if session is not None else None
+        return format_pymux_string(
+            self.pymux,
+            DEFAULT_FORMAT,
+            window=window,
+            pane=window.active_pane if window is not None else None,
+            session=session,
+            client=client,
+        )
+
+    def _choose_client_tokens(self) -> StyleAndTextTuples:
+        "The attached clients, one `list-clients` line each; this one says so."
+        matches = self.chooser_matches()
+        if not matches:
+            return [("class:chooser.hint", " No client matches. ")]
+
+        chosen = self._pointed_index(len(matches))
+        tokens: StyleAndTextTuples = []
+        for i, client in enumerate(matches):
+            style = "class:chooser.selected" if i == chosen else "class:commandpalette"
+            mine = " (this client)" if client is self.client_state else ""
+            tokens.append(
+                (
+                    style,
+                    "%s%s%s\n" % ("> " if i == chosen else "  ", self._client_line(client), mine),
+                    self._create_chooser_click_handler(i),
+                )
+            )
+        return tokens
 
     def _choose_job_tokens(self) -> StyleAndTextTuples:
         """
@@ -766,6 +831,8 @@ class ChooserView:
                 return self._choose_notification_tokens()
             case Chooser.JOB:
                 return self._choose_job_tokens()
+            case Chooser.CLIENT:
+                return self._choose_client_tokens()
             case _:
                 return self._choose_buffer_tokens()
 

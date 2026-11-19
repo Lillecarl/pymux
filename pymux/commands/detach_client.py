@@ -21,7 +21,7 @@ from pymux.commands.common import clients_named
 from pymux.enums import Woke
 
 
-def _detach(pymux: Pymux, client_state: ClientState, hang_up: bool = False) -> None:
+def detach(pymux: Pymux, client_state: ClientState, hang_up: bool = False) -> None:
     """
     Detach one client that is not necessarily this one.
 
@@ -63,7 +63,7 @@ def detach_client(pymux: Pymux, args: argparse.Namespace) -> None:
         targets = list(clients_named(pymux, args.target_client))
         not_past_this_client(pymux, any(one is not here for one in targets))
         for client_state in targets:
-            _detach(pymux, client_state, hang_up)
+            detach(pymux, client_state, hang_up)
         return
 
     if args.target_session is not None:
@@ -76,7 +76,7 @@ def detach_client(pymux: Pymux, args: argparse.Namespace) -> None:
             raise CommandException("can't find session: %s" % (args.target_session,))
         for client_state in pymux.clients:
             if client_state.session is session:
-                _detach(pymux, client_state, hang_up)
+                detach(pymux, client_state, hang_up)
         return
 
     if args.all_but_this_one:
@@ -93,7 +93,7 @@ def detach_client(pymux: Pymux, args: argparse.Namespace) -> None:
         # and leaves it alone: `loop->session != NULL`.
         for client_state in pymux.clients:
             if client_state is not here and client_state.session is not None:
-                _detach(pymux, client_state, hang_up)
+                detach(pymux, client_state, hang_up)
         return
 
     # A command from a pane or another shell runs under a temporary
@@ -103,7 +103,7 @@ def detach_client(pymux: Pymux, args: argparse.Namespace) -> None:
     here = pymux.the_client_to_tell()
     if here is None:
         raise CommandException("no client to detach")
-    _detach(pymux, here, hang_up)
+    detach(pymux, here, hang_up)
     pymux.invalidate(Woke.CLIENT_DETACHED)
 
 

@@ -120,6 +120,7 @@ MODULES = [
     "choose_buffer",
     "choose_notifications",
     "choose_job",
+    "choose_client",
     "display_message",
     "notify",
     "get",
