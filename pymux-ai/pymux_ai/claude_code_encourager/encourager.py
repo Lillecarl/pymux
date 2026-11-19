@@ -99,15 +99,19 @@ class Encourager(Plugin):
         self._watches: dict[PaneId, _Watch] = {}
 
     async def run(self) -> None:
-        if self._conversation is not None:
-            return
-        from .haiku import HaikuConversation, key_path, read_key
+        if self._conversation is None:
+            from .haiku import HaikuConversation, key_path, read_key
 
-        key = await read_key()
-        if key is None:
-            self.host.log.warning("no Anthropic key at %s, so the encourager stays idle", key_path())
-            return
-        self._conversation = functools.partial(HaikuConversation, key)
+            key = await read_key()
+            if key is None:
+                self.host.log.warning("no Anthropic key at %s, so the encourager stays idle", key_path())
+                return
+            self._conversation = functools.partial(HaikuConversation, key)
+        # A question put before this start, as before an upgrade, was
+        # never looked at. A `done` was, by the plugin before this one.
+        for pane_id, report in self.host.program_reports().items():
+            if report.state is ProgramState.BLOCKED:
+                await self.on_program_reported(ProgramReported(pane_id, report))
 
     async def on_program_reported(self, event: ProgramReported) -> None:
         report = event.report

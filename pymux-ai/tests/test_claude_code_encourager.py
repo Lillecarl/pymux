@@ -22,7 +22,7 @@ from pymux_ai.claude_code_encourager.haiku import COMPACT_AT, HaikuConversation
 from pymux_ai.claude_code_encourager.transcript import Task, TaskKind
 from pymux_ai.claude_code_encourager.verdict import INSTRUCTIONS, Decision, Verdict, describe
 from pymux_ai.observe import Observation
-from pyte.program_status import parse_report
+from pyte.program_status import Report, parse_report
 
 from pymux.ids import PaneId
 from pymux.plugin_api import ProgramReported
@@ -128,9 +128,13 @@ class Host:
         self.messages: list[str] = []
         self.pymux = self
         self.front = front
+        self.reports: dict[PaneId, Report] = {}
 
     def in_front(self, pane_id: PaneId) -> bool:
         return self.front
+
+    def program_reports(self) -> dict[PaneId, Report]:
+        return self.reports
 
     def start_soon(self, func, *args) -> None:
         self._tasks.start_soon(func, *args)
@@ -325,6 +329,17 @@ async def test_an_answered_question_drops_the_look(asked):
     conversation = ListConversation([])
     await _heard(conversation, QUESTION, "state=working:app=claude-code")
     assert (conversation.seen, asked) == ([], [])
+
+
+async def test_a_question_put_before_the_start_is_picked_up_and_a_done_is_not(asked):
+    "As after an upgrade: the plugin before this one looked at the `done` already."
+    conversation = ListConversation([Verdict(decision=Decision.CONTINUE, reason="r")])
+    async with anyio.create_task_group() as tasks:
+        host = Host(tasks)
+        host.reports = {PaneId(1): parse_report(QUESTION), PaneId(2): DONE}
+        await Encourager(host, lambda: conversation).run()  # type: ignore[arg-type]
+    assert [seen.pane for seen in conversation.seen] == ["%1"]
+    assert len(asked) == 1
 
 
 async def test_a_permission_prompt_is_never_answered(asked):
