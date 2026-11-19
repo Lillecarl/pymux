@@ -404,6 +404,10 @@ async def encode_unsent(view: PaneView, screen: Screen) -> None:
         done.extend(image.data for image in todo)
 
 
+#: The longest `keys` of one input message. A viewer names a key or a
+#: few at a time; a thousand is a script, not a person.
+LONGEST_KEYS = 1000
+
 #: What a client may say. Anything else is refused by name, so a typo in
 #: a client is an error and not silence.
 _INPUT = "input"
@@ -458,6 +462,10 @@ def typed_of(message: dict[str, Any]) -> Typed:
         keys = message.get("keys")
         if not isinstance(keys, str) or not keys:
             raise ValueError("an input message needs a keys string")
+        # The server spells each name on its event loop, every client
+        # waiting, and a message may be a megabyte.
+        if len(keys) > LONGEST_KEYS:
+            raise ValueError("an input message names at most %d characters of keys" % LONGEST_KEYS)
         return Typed(keys, named=True, bracketed=False)
     if kind == _TEXT:
         text = message.get("text")
@@ -505,7 +513,9 @@ def mouse_of(message: dict[str, Any]) -> MouseInput:
 
     Raises `ValueError` with the reason.
     """
-    action = _MOUSE_ACTIONS.get(message.get("action"))  # type: ignore[arg-type]
+    # `str()` of a list is a string no table holds, where the list itself
+    # is unhashable and would raise TypeError past every caller.
+    action = _MOUSE_ACTIONS.get(str(message.get("action")))
     if action is None:
         raise ValueError("a mouse message needs an action of %s" % ", ".join(_MOUSE_ACTIONS))
     column, row = message.get("column"), message.get("row")
@@ -516,11 +526,11 @@ def mouse_of(message: dict[str, Any]) -> MouseInput:
         or not 0 <= row < _FURTHEST_CELL
     ):
         raise ValueError("a mouse message needs a column and a row from 0 to %d" % (_FURTHEST_CELL - 1))
-    button = _MOUSE_BUTTONS.get(message.get("button", "left"))  # type: ignore[arg-type]
+    button = _MOUSE_BUTTONS.get(str(message.get("button", "left")))
     if button is None:
         raise ValueError("a mouse button is one of %s" % ", ".join(_MOUSE_BUTTONS))
     named = message.get("modifiers", [])
-    if not isinstance(named, list) or any(name not in _MOUSE_MODIFIERS for name in named):
+    if not isinstance(named, list) or any(not isinstance(name, str) or name not in _MOUSE_MODIFIERS for name in named):
         raise ValueError("mouse modifiers are a list of %s" % ", ".join(_MOUSE_MODIFIERS))
     modifiers = NO_MODIFIERS
     for name in named:

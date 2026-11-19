@@ -24,6 +24,7 @@ import secrets
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlsplit
 
 from libpymux import PaneStream, Server, StreamRefused
 
@@ -79,6 +80,35 @@ SERVED = {
     "/replay.d.ts": ("replay.d.ts", "text/plain; charset=utf-8"),
     "/replay-page.js": ("replay-page.js", "text/javascript; charset=utf-8"),
 }
+
+
+#: On every answer this gives over HTTP. The page loads the element and
+#: nothing else, and the element needs no `unsafe-inline` of any kind:
+#: its rules go through the CSSOM. No other site may frame the page, which
+#: would put a writable terminal under somebody else's clicks.
+GUARDS = {
+    "Content-Security-Policy": "default-src 'self'; frame-ancestors 'none'",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+    # The address carries the token, so nothing between keeps a copy.
+    "Cache-Control": "no-store",
+}
+
+
+def same_origin(origin: str | None, host: str | None) -> bool:
+    """
+    Whether a websocket upgrade came from this server's own page.
+
+    **A browser always sends `Origin` on an upgrade**, so a page on another
+    site that opens a socket here says so, and is refused even with the
+    token: the token stops being the only guard the moment a cookie can
+    stand in for it. A request with no `Origin` is no browser's, and the
+    token alone decides. The host compared is `Host`, which a reverse
+    proxy has to pass through unchanged.
+    """
+    if origin is None:
+        return True
+    return host is not None and urlsplit(origin).netloc.lower() == host.lower()
 
 
 def a_token() -> str:
@@ -141,29 +171,33 @@ async def serve(
             return Response(
                 200,
                 "OK",
-                Headers(
-                    {
-                        "Content-Type": kind,
-                        "Content-Length": str(len(body)),
-                        # The page loads the element and nothing else,
-                        # and the element needs no `unsafe-inline` of any
-                        # kind: its rules go through the CSSOM.
-                        "Content-Security-Policy": "default-src 'self'",
-                    }
-                ),
+                Headers({"Content-Type": kind, "Content-Length": str(len(body)), **GUARDS}),
                 body,
             )
 
         if not (path.startswith("/pane/") or path == SESSION):
-            return connection.respond(404, "no such thing here\n")
+            return guarded(connection.respond(404, "no such thing here\n"))
 
         asked = _one_of(query, "t")
         if not asked or not secrets.compare_digest(asked, token):
             # The same answer for a missing token and a wrong one.
-            logger.warning("A web connection arrived without the token.")
-            return connection.respond(403, "the token is wrong or missing\n")
+            logger.warning("A web connection from %s arrived without the token.", connection.remote_address)
+            return guarded(connection.respond(403, "the token is wrong or missing\n"))
+
+        if not same_origin(request.headers.get("Origin"), request.headers.get("Host")):
+            logger.warning(
+                "A web connection from %s came from another site's page: %s.",
+                connection.remote_address,
+                request.headers.get("Origin"),
+            )
+            return guarded(connection.respond(403, "this page is not the server's own\n"))
 
         return None
+
+    def guarded(response: Response) -> Response:
+        for name, value in GUARDS.items():
+            response.headers[name] = value
+        return response
 
     async def handle(connection: ServerConnection) -> None:
         # A handler runs after the handshake, which is what sets the request.
@@ -221,10 +255,17 @@ async def _relay(stream: PaneStream, connection: ServerConnection) -> None:
 
         async def to_the_pane() -> None:
             async for said in connection:
-                # Passed through without being read: the frames are the
+                # Passed on as the viewer said it: the frames are the
                 # protocol and this is a relay. The server answers about
-                # anything it will not do.
-                await stream.send(json.loads(said))
+                # anything it will not do. Text that is no JSON at all
+                # closes with the reason, so a viewer can tell it from a
+                # stream that ended.
+                try:
+                    message = json.loads(said)
+                except ValueError:
+                    await connection.close(1003, "that is not JSON")
+                    break
+                await stream.send(message)
             both.cancel_scope.cancel()
 
         both.start_soon(to_the_viewer)

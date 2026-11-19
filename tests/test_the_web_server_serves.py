@@ -27,7 +27,7 @@ from fairclock import anyio as fair_anyio
 from websockets.asyncio.client import connect
 
 from pymux.core.main import Pymux
-from pymux.web.server import a_token, serve
+from pymux.web.server import GUARDS, a_token, serve
 
 LINES = 6
 COLUMNS = 30
@@ -265,6 +265,56 @@ async def test_the_page_and_the_element_are_served(pymux):
             # And the policy the element is written to need nothing beyond.
             head, _body = await _http(web.port, "/")
             assert b"default-src 'self'" in head
+
+            # Every answer carries the guards, a refusal too.
+            for path in ["/", "/nothing-here", "/session?t=wrong"]:
+                head, _body = await _http(web.port, path)
+                for name, value in GUARDS.items():
+                    assert ("%s: %s" % (name, value)).encode() in head, (path, name)
+
+            tasks.cancel_scope.cancel()
+        pymux.stop()
+
+
+async def test_a_page_on_another_site_is_refused_even_with_the_token(pymux):
+    """
+    A browser sends `Origin` on every upgrade, so this is what stops a
+    page on another site the moment a cookie stands in for the token.
+    """
+    from websockets.exceptions import InvalidStatus
+
+    async with pymux.running():
+        async with anyio.create_task_group() as tasks:
+            web = await _serving(pymux, tasks, writable=True)
+
+            with pytest.raises(InvalidStatus) as refused:
+                async with connect(web.url(pane_id(pymux)), origin="https://elsewhere.example"):
+                    pass
+            assert refused.value.response.status_code == 403
+
+            # The server's own page is its own origin.
+            async with connect(web.url(pane_id(pymux)), origin="http://127.0.0.1:%d" % web.port) as socket:
+                assert json.loads(await socket.recv())["type"] == "welcome"
+
+            tasks.cancel_scope.cancel()
+        pymux.stop()
+
+
+async def test_text_that_is_not_json_closes_the_stream_with_the_reason(pymux):
+    from websockets.exceptions import ConnectionClosed
+
+    async with pymux.running():
+        async with anyio.create_task_group() as tasks:
+            web = await _serving(pymux, tasks, writable=True)
+
+            async with connect(web.url(pane_id(pymux))) as socket:
+                await socket.recv()
+                await socket.send("{not json")
+                with fair_anyio.fail_after(5), pytest.raises(ConnectionClosed) as closed:
+                    while True:
+                        await socket.recv()
+            assert closed.value.rcvd is not None
+            assert (closed.value.rcvd.code, closed.value.rcvd.reason) == (1003, "that is not JSON")
 
             tasks.cancel_scope.cancel()
         pymux.stop()

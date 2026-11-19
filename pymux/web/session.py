@@ -305,9 +305,15 @@ async def run_session(
     def send(packet: dict[str, Any]) -> None:
         outgoing.append(json.dumps(packet).encode("utf-8") + b"\0")
 
+    # Both directions flush, and two sends at once on one socket raise
+    # BusyResourceError: a long paste fills the socket while the other
+    # task answers a query.
+    sending = anyio.Lock()
+
     async def flush() -> None:
-        while outgoing:
-            await stream.send(outgoing.pop(0))
+        async with sending:
+            while outgoing:
+                await stream.send(outgoing.pop(0))
 
     session = SessionScreen(rows, columns, send, read_only=read_only, client_options=client_options)
     session.start()

@@ -24,6 +24,7 @@ from pyte.streams import Stream
 
 from pymux.web.protocol import (
     FRAME,
+    LONGEST_KEYS,
     PLAIN_STYLE,
     WELCOME,
     PaneView,
@@ -474,6 +475,13 @@ def test_keys_are_names_and_not_bytes():
     assert typed_of({"type": "input", "keys": "C-c"}) == ("C-c", True, False)
 
 
+def test_a_flood_of_key_names_is_refused():
+    "The server spells each name on its event loop, with every client waiting."
+    assert typed_of({"type": "input", "keys": "a" * LONGEST_KEYS}).named
+    with pytest.raises(ValueError, match="at most"):
+        typed_of({"type": "input", "keys": "a " * LONGEST_KEYS})
+
+
 def test_composed_text_goes_as_it_stands_and_is_not_a_paste():
     """
     What a viewer finished composing. Not bracketed: a program that asked
@@ -550,6 +558,10 @@ def test_a_mouse_message_is_what_the_mouse_did_at_a_cell():
         ({"action": "press", "column": "1", "row": 0}, "a column and a row"),
         ({"action": "press", "column": 0, "row": 0, "button": "fourth"}, "a mouse button"),
         ({"action": "press", "column": 0, "row": 0, "modifiers": ["meta"]}, "mouse modifiers"),
+        # Unhashable values, which a table lookup would raise TypeError on.
+        ({"action": [1], "column": 0, "row": 0}, "an action of"),
+        ({"action": "press", "column": 0, "row": 0, "button": {}}, "a mouse button"),
+        ({"action": "press", "column": 0, "row": 0, "modifiers": [[1]]}, "mouse modifiers"),
     ],
 )
 def test_a_mouse_message_a_viewer_got_wrong_is_refused_by_name(message, reason):
