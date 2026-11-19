@@ -122,11 +122,15 @@ class ListConversation:
 class Host:
     "What the plugin reaches: a task group, a log and a message line."
 
-    def __init__(self, tasks: anyio.abc.TaskGroup) -> None:
+    def __init__(self, tasks: anyio.abc.TaskGroup, front: bool = False) -> None:
         self._tasks = tasks
         self.log = logging.getLogger("test-encourager")
         self.messages: list[str] = []
         self.pymux = self
+        self.front = front
+
+    def in_front(self, pane_id: PaneId) -> bool:
+        return self.front
 
     def start_soon(self, func, *args) -> None:
         self._tasks.start_soon(func, *args)
@@ -144,8 +148,8 @@ def quick(monkeypatch):
     async def observe(host, pane_id, report):
         return _observation()
 
-    async def type_(self, pane, text):
-        typed.append((pane, text))
+    async def type_(self, pane, text, keys=()):
+        typed.append((pane, text, *keys))
 
     async def background_of(host, pane_id):
         return ()
@@ -250,6 +254,83 @@ async def test_the_work_ending_wakes_the_agent_and_drops_the_look(building):
         await anyio.sleep(0.1)
         await plugin.on_program_reported(ProgramReported(PaneId(1), parse_report("state=working:app=claude-code")))
     assert (conversation.seen, building) == ([], [])
+
+
+#: A Claude Code question, as vivarium's agent put one, cut short.
+QUESTION_SCREEN = """\
+ ☐ Before land
+
+│ Which runs before I land?
+
+❯ 1. Run all four, then land (Recommended)
+     dinix.checks, nixkube umlTest, easykubenix kubeapply and vivarium k8s.
+  2. Run dinix and k8s only
+  3. Land now
+  4. Type something.
+─────────────────────────────────────
+  5. Chat about this
+"""
+
+QUESTION = "state=blocked:kind=question:app=claude-code"
+
+
+def test_the_field_for_free_text_is_reached_from_the_first_option():
+    assert module.keys_to_free_text(QUESTION_SCREEN) == ["Down"] * 3
+    assert module.keys_to_free_text("> done") is None
+
+
+@pytest.fixture
+def asked(quick, monkeypatch):
+    "A question on the screen, and short waits for it."
+    monkeypatch.setattr(module, "QUESTION_WAIT", 0.1)
+    monkeypatch.setattr(module, "QUESTION_LONGEST", 0.35)
+
+    async def observe(host, pane_id, report):
+        return Observation("%1", report, "/work", QUESTION_SCREEN, PNG, ())
+
+    monkeypatch.setattr("pymux_ai.observe.observe", observe)
+    return quick
+
+
+async def test_a_question_left_unanswered_is_given_back_to_the_agent(asked):
+    "The fixed text, and never the model's words: the encourager picks no option."
+    defer = Verdict(decision=Decision.CONTINUE, reason="a test plan the agent owns", message="Take option 2.")
+    conversation = ListConversation([defer])
+    async with anyio.create_task_group() as tasks:
+        plugin = Encourager(Host(tasks), lambda: conversation)  # type: ignore[arg-type]
+        await plugin.on_program_reported(ProgramReported(PaneId(1), parse_report(QUESTION)))
+        await anyio.sleep(0.05)
+        assert conversation.seen == []
+    assert asked == [("%1", "[encourager] " + module.DEFER, "Down", "Down", "Down")]
+    assert conversation.seen[0].report.state == "blocked"
+
+
+async def test_a_question_the_model_keeps_for_the_person_types_nothing(asked):
+    conversation = ListConversation([Verdict(decision=Decision.STOP, reason="it asks about a push")])
+    await _heard(conversation, QUESTION)
+    assert asked == []
+
+
+async def test_a_question_waits_longer_while_a_person_has_the_pane_in_front(asked):
+    conversation = ListConversation([Verdict(decision=Decision.CONTINUE, reason="r")])
+    async with anyio.create_task_group() as tasks:
+        plugin = Encourager(Host(tasks, front=True), lambda: conversation)  # type: ignore[arg-type]
+        await plugin.on_program_reported(ProgramReported(PaneId(1), parse_report(QUESTION)))
+        await anyio.sleep(0.2)
+        assert conversation.seen == []
+    assert len(asked) == 1
+
+
+async def test_an_answered_question_drops_the_look(asked):
+    conversation = ListConversation([])
+    await _heard(conversation, QUESTION, "state=working:app=claude-code")
+    assert (conversation.seen, asked) == ([], [])
+
+
+async def test_a_permission_prompt_is_never_answered(asked):
+    conversation = ListConversation([])
+    await _heard(conversation, "state=blocked:kind=permission:app=claude-code")
+    assert conversation.seen == []
 
 
 async def test_after_the_most_nudges_the_pane_is_left_alone(quick, monkeypatch):

@@ -10,26 +10,27 @@ from __future__ import annotations
 
 import functools
 import random
+import re
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Final, Protocol
 
 import anyio
 from libpymux import Pane
-from pyte.program_status import ProgramState
+from pyte.program_status import BlockedKind, ProgramState
 
 from pymux.plugin_api import PaneEnded, Plugin, ProgramReported
 
 from .verdict import Decision, Verdict
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
 
     from pymux.ids import PaneId
     from pymux.plugin_api import Host
 
     from ..observe import Observation
 
-__all__ = ["APP", "Conversation", "Encourager"]
+__all__ = ["APP", "Conversation", "Encourager", "keys_to_free_text"]
 
 #: The `app` Claude Code reports under.
 APP: Final = "claude-code"
@@ -42,6 +43,22 @@ SETTLE: Final = 5.0
 #: work's end wakes the agent, which says `working` and so drops the look.
 #: Wrapty's Stop hook holds the same way.
 BACKGROUND_WAIT: Final = 600.0
+
+#: How long a question stands before the model is asked whether the
+#: agent may answer it itself; again while a person has the pane in
+#: front, up to the longest.
+QUESTION_WAIT: Final = 300.0
+QUESTION_LONGEST: Final = 1800.0
+
+#: What answers a question the model let the agent settle. It names no
+#: option: the encourager knows too little to pick one.
+DEFER: Final = (
+    "If you have done your research and found no better alternative, take the option you recommended"
+    " and say why in one line. If you cannot say that honestly, stop and wait for the person."
+)
+
+#: The last option of a Claude Code question: a field for free text.
+FREE_TEXT: Final = re.compile(r"^\W*(\d+)\.\s+Type something", re.MULTILINE)
 
 #: Nudges in a row before the encourager leaves a pane alone, whatever
 #: the model says, until a `stop` or an hour without a nudge.
@@ -102,6 +119,8 @@ class Encourager(Plugin):
         watch.generation += 1
         if report.state is ProgramState.DONE:
             self.host.start_soon(self._consider, event, watch, watch.generation)
+        elif report.state is ProgramState.BLOCKED and report.kind is BlockedKind.QUESTION:
+            self.host.start_soon(self._consider_question, event, watch, watch.generation)
 
     async def on_pane_ended(self, event: PaneEnded) -> None:
         self._watches.pop(event.pane_id, None)
@@ -125,6 +144,23 @@ class Encourager(Plugin):
         except Exception:
             self.host.log.exception("pane %%%d: the look failed", event.pane_id)
 
+    async def _consider_question(self, event: ProgramReported, watch: _Watch, generation: int) -> None:
+        "Never raises, as `_consider`."
+        try:
+            await anyio.sleep(QUESTION_WAIT)
+            waited = QUESTION_WAIT
+            # A plugin hears no event when a person looks at a pane, so
+            # whether one does is read again after each wait.
+            while watch.generation == generation and waited < QUESTION_LONGEST and self.host.in_front(event.pane_id):
+                await anyio.sleep(QUESTION_WAIT)
+                waited += QUESTION_WAIT
+            if watch.generation != generation:
+                return
+            async with watch.lock:
+                await self._look(event, watch, generation)
+        except Exception:
+            self.host.log.exception("pane %%%d: the look at a question failed", event.pane_id)
+
     async def _look(self, event: ProgramReported, watch: _Watch, generation: int) -> None:
         pane = "%%%d" % event.pane_id
         now = anyio.current_time()
@@ -141,19 +177,42 @@ class Encourager(Plugin):
         observation = replace(observation, waiting_on=tuple(map(str, waiting)))
         verdict = await watch.conversation.judge(observation)
         self.host.log.info("%s: %s, %s", pane, verdict.decision, verdict.reason)
-        if verdict.decision is Decision.STOP or not verdict.message.strip():
+        question = event.report.state is ProgramState.BLOCKED
+        if verdict.decision is Decision.STOP or not (question or verdict.message.strip()):
             watch.nudges = 0
             return
         if watch.generation != generation:
             self.host.log.info("%s: the agent moved while the model looked, so nothing is typed", pane)
             return
-        await self._type(pane, SIGNATURE + verdict.message.strip())
+        if question:
+            keys = keys_to_free_text(observation.text)
+            if keys is None:
+                self.host.log.info("%s: the question shows no field to type in, so nothing is typed", pane)
+                return
+            await self._type(pane, SIGNATURE + DEFER, keys)
+        else:
+            await self._type(pane, SIGNATURE + verdict.message.strip())
         watch.nudges += 1
         watch.last_nudge = now
         self.host.pymux.show_message("encourager, %s: %s" % (pane, verdict.reason))
 
-    async def _type(self, pane: str, text: str) -> None:
+    async def _type(self, pane: str, text: str, keys: Sequence[str] = ()) -> None:
+        "Press `keys`, then type `text` and its Return."
         target = Pane(self.host.server, {"pane_id": pane})
+        for key in keys:
+            await target.send_key(key)
         await target.send_keys(text, enter=False)
         await anyio.sleep(random.uniform(*NO_PASTE_DELAY))
         await target.send_key("Enter")
+
+
+def keys_to_free_text(screen: str) -> list[str] | None:
+    """
+    The keys that move a question's choice from its first option to its
+    field for free text, or None when the screen shows no such field.
+    The last one on the screen is the question still open.
+    """
+    found = FREE_TEXT.findall(screen)
+    if not found:
+        return None
+    return ["Down"] * (int(found[-1]) - 1)

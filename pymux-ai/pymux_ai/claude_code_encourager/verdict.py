@@ -72,6 +72,27 @@ agent's own words, and say to go on without asking. Do not invent
 work it did not name. With `stop`, `message` is empty.
 
 `reason` is one sentence a person reads in a log: why this answer.
+
+Sometimes the agent says `blocked` instead of `done`: it put a question
+with options to the person, and nobody answered it for some minutes.
+Then `continue` means the agent may answer itself with the option it
+recommended. You never pick an option: the encourager types a fixed
+text that tells the agent to take its own recommendation only if its
+research found nothing better, and your `message` is not used.
+
+Answer `continue` to a question only when all of these hold:
+- One option is marked recommended.
+- The question is about how to do work the agent owns: which tests or
+  checks to run, the order of steps, a name, a detail of the code.
+
+Answer `stop` to a question when it is about any of these:
+- a push, a deploy, a delete, a merge, or a message to a third party;
+- spending money, or a machine somebody else shares;
+- the shape of a design, an interface, or what to build;
+- a workaround against the correct fix, or a fix that is someone
+  else's to make, such as an upstream project's;
+- a credential, an access, or a permission;
+- anything the agent says it cannot judge alone.
 """
 
 
