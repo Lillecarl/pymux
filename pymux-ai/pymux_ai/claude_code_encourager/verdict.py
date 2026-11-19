@@ -12,6 +12,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
+from pyte.program_status import ProgramState
 
 if TYPE_CHECKING:
     from ..observe import Observation
@@ -20,9 +21,10 @@ __all__ = ["INSTRUCTIONS", "Decision", "Verdict", "describe"]
 
 INSTRUCTIONS = """\
 You watch one terminal pane in which an AI coding agent (Claude Code)
-works for a person. The agent just said its turn is done. You decide
-whether it stopped for a reason only the person can settle, or whether
-it could have gone on by itself.
+works for a person. The agent just said its turn is `done`, or it is
+`blocked` on a question nobody answered. You decide whether it stopped
+for a reason only the person can settle, or whether it could have gone
+on by itself. The two cases have rules of their own, below.
 
 Each time it stops you get:
 - the pane's text: its screen and the lines above it, so the agent's
@@ -36,6 +38,8 @@ Each time it stops you get:
 
 Earlier turns of this conversation are earlier stops of the same agent,
 and what you answered then.
+
+## The agent says `done`
 
 Answer `continue` only when all of these hold:
 - The agent named a next step it can take itself, or the work it was
@@ -73,9 +77,14 @@ work it did not name. With `stop`, `message` is empty.
 
 `reason` is one sentence a person reads in a log: why this answer.
 
-Sometimes the agent says `blocked` instead of `done`: it put a question
-with options to the person, and nobody answered it for some minutes.
-Then `continue` means the agent may answer itself with the option it
+## The agent says `blocked`
+
+It put a question with options to the person in a dialog, and nobody
+answered it for at least five minutes. The rules for `done` above do
+not apply here: that it asked the person is a given, not a reason to
+stop. The question is whether the agent may answer itself.
+
+`continue` means the agent may answer itself with the option it
 recommended. You never pick an option: the encourager types a fixed
 text that tells the agent to take its own recommendation only if its
 research found nothing better, and your `message` is not used.
@@ -120,6 +129,11 @@ def describe(observation: Observation) -> str:
     return "\n".join(
         [
             "The agent in pane %s says: %s%s." % (observation.pane, report.state, ", %r" % (said,) if said else ""),
+            *(
+                ["Nobody answered this question for at least five minutes: judge it by the rules for `blocked`."]
+                if report.state is ProgramState.BLOCKED
+                else []
+            ),
             "Time: %s." % (time.strftime("%Y-%m-%d %H:%M %Z"),),
             "Directory: %s." % (observation.directory or "unknown",),
             "Jobs running there:\n%s" % (jobs,),
