@@ -41,7 +41,7 @@ __all__ = ["recorder_of", "start_recorder"]
 TERM: Final = "xterm-256color"
 #: A pause in a demo is an agent thinking between two calls, and a
 #: player that showed it whole would show a person staring.
-IDLE_TIME_LIMIT: Final = 1.5
+PAUSE_CAP: Final = 1.5
 
 
 def recorder_of(pymux: Pymux, session: Session) -> ClientState | None:
@@ -57,7 +57,7 @@ def start_recorder(
     session: Session,
     name: str,
     size: Size | None = None,
-    idle_time_limit: float | None = None,
+    pause_cap: float | None = None,
     full_screen: bool = False,
 ) -> ClientState:
     """
@@ -107,7 +107,7 @@ def start_recorder(
         connection.size.rows,
         connection.size.columns,
         TERM,
-        IDLE_TIME_LIMIT if idle_time_limit is None else idle_time_limit,
+        pause_cap=PAUSE_CAP if pause_cap is None else pause_cap,
     )
     pymux.waking.redraw(state)
     pymux.invalidate()

@@ -50,9 +50,24 @@ class Recording:
     starts the screen at that size. `idle_time_limit` is the longest
     pause a player shows, kept for `record-export`. `stop` is what ends
     the listening, and whoever attached the recording sets it.
+
+    **A demo keeps a timeline of its own** when `pause_cap` is set: each
+    pause is cut to it as it happens, and `hold` sets the next one
+    exactly. An agent's pace is its tool calls, seconds apart or none,
+    and a timeline taken from its clock either drags or flashes past.
+    The times in the file are then the demo's, and no player trims them.
+    Lillecarl/pyterm#1064.
     """
 
-    def __init__(self, name: str, lines: int, columns: int, term: str, idle_time_limit: float | None = None) -> None:
+    def __init__(
+        self,
+        name: str,
+        lines: int,
+        columns: int,
+        term: str,
+        idle_time_limit: float | None = None,
+        pause_cap: float | None = None,
+    ) -> None:
         self.name = name
         self.lines = lines
         self.columns = columns
@@ -66,12 +81,31 @@ class Recording:
         self.forward: Callable[[list[Path]], str | None] | None = None
         self._timestamp = int(time.time())
         self._started = time.monotonic()
+        self.pause_cap = pause_cap
+        self._held: float | None = None
+        self._last_heard = self._started
+        self._last_at = 0.0
+
+    def hold(self, seconds: float) -> None:
+        "Make the pause before the next event `seconds` long, on a demo's timeline."
+        self._held = seconds
+
+    def _at(self) -> float:
+        now = time.monotonic()
+        if self.pause_cap is None:
+            return now - self._started
+        pause = now - self._last_heard
+        pause = self._held if self._held is not None else min(pause, self.pause_cap)
+        self._held = None
+        self._last_heard = now
+        self._last_at += pause
+        return self._last_at
 
     def hear(self, kind: str, text: str) -> None:
         'One event: "out" or "in" and text, or "size" and COLUMNSxLINES.'
         self.events.append(
             [
-                round(time.monotonic() - self._started, 6),
+                round(self._at(), 6),
                 kind,
                 text if kind == "size" else base64.b64encode(text.encode("utf-8", "surrogateescape")).decode("ascii"),
             ]

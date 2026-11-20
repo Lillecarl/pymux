@@ -30,14 +30,22 @@ def record_session(pymux: Pymux, args: argparse.Namespace) -> None:
     their size and shows what they see. `-F` records with no status
     line and no pane borders.
 
-    A pause longer than `-i` seconds plays as `-i` seconds, 1.5 unless
-    this says otherwise: an agent thinks between two keys, and a player
-    would show a person staring.
+    **The recording keeps the demo's time, not the agent's.** A pause
+    longer than `-i` seconds, 1.5 unless this says otherwise, is cut to
+    it as it happens: an agent thinks between two keys, and a player
+    would show a person staring. `--hold <seconds>` on a session being
+    recorded makes the next pause that long, so a screen stays up for a
+    viewer to read whatever the agent's pace.
     """
     session = pymux.current_session if args.target_session is None else pymux.get_session(args.target_session)
     if session is None:
         raise CommandException("can't find session: %s" % (args.target_session,))
     recorder = recorder_of(pymux, session)
+    if args.hold is not None:
+        if recorder is None or recorder.client.recording is None:
+            raise CommandException("record-session: session %s is not being recorded" % session.name)
+        recorder.client.recording.hold(args.hold)
+        return
     if recorder is not None:
         client = recorder.client
         recording, client.recording = client.recording, None
@@ -61,7 +69,7 @@ def record_session(pymux: Pymux, args: argparse.Namespace) -> None:
         session,
         name,
         size=size,
-        idle_time_limit=args.idle_time_limit,
+        pause_cap=args.idle_time_limit,
         full_screen=args.full_screen,
     )
     pymux.print_command_line(name)
@@ -84,6 +92,12 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser.add_argument("-y", dest="height", type=cells, metavar="<rows>", help="The height, with -x.")
     parser.add_argument(
         "-i", dest="idle_time_limit", type=seconds, metavar="<seconds>", help="The longest pause a player shows."
+    )
+    parser.add_argument(
+        "--hold",
+        type=seconds,
+        metavar="<seconds>",
+        help="On a session being recorded: the next pause lasts this long.",
     )
     parser.add_argument("-F", dest="full_screen", action="store_true", help="No status line and no pane borders.")
     parser.add_argument("name", nargs="?", metavar="<name>", help="What the files are called.")

@@ -42,9 +42,14 @@ person attached sees, popups included).
    with no terminal records the session; no pane a person watches moves.
 3. `pane.type` each line: a person's pace, a pause before each Return.
    `pane.wait_until` the output before the next line, never a sleep.
-   Pauses longer than 1.5 s play as 1.5 s (`-i` changes it).
+   The recording keeps the demo's time, not the agent's: a pause over
+   1.5 s plays as 1.5 s (`-i` changes it). To leave a screen up for the
+   viewer, `command`: `record-session -t <session> --hold 4`; the next
+   pause is then 4 s, however fast the next call comes.
 4. `command`: `record-session -t <session>` again stops; it prints the
-   `.bin`.
+   `.bin`. Review it: `record-export -F asciicast <name>` prints the
+   `.cast`; `asciinema convert -f txt <cast> -` prints its last screen.
+   Record more than one take and keep the best.
 5. Upload only when the person asked: `command`: `record-upload -T <title>
    <name>` prints the URL. It publishes. The keys typed stay out unless
    `--keys`.

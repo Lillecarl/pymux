@@ -8,6 +8,7 @@ on: a reader of ours would agree with our writer. Lillecarl/pyterm#1064.
 
 from __future__ import annotations
 
+import itertools
 import json
 import os
 import subprocess
@@ -15,6 +16,7 @@ import subprocess
 import pytest
 from prompt_toolkit.data_structures import Size
 from ptyhost.asciicast import asciicast
+from run_commands import over_socket
 from session import once, over_connection
 from test_record_client import replayed
 
@@ -22,6 +24,7 @@ from pymux.answer import Answer
 from pymux.commands import call_command_handler
 from pymux.commands.type_text import typed
 from pymux.connection.recorder import recorder_of
+from pymux.connection.recording import Recording
 from pymux.keys.typing_pace import Pace, delays
 
 #: What a cast must never hold. A player writes the cast to the viewer's
@@ -113,7 +116,10 @@ async def test_a_session_nobody_watches_records_to_a_cast(tmp_path, state_home):
     assert (recording["columns"], recording["lines"]) == (60, 12)
     cast = asciicast(recording)
     header = json.loads(cast.splitlines()[0])
-    assert header["idle_time_limit"] == 1.5
+    # The pauses are cut already: no player trims them again.
+    assert "idle_time_limit" not in header
+    times = [event[0] for event in recording["events"]]
+    assert all(later - earlier <= 1.5 for earlier, later in itertools.pairwise(times))
     for what, sequence in NEVER.items():
         assert sequence not in cast, "the cast holds %s" % what
     assert "typed-by-a-person" in plays_as(tmp_path, cast)
@@ -159,3 +165,29 @@ async def test_a_recorder_takes_the_size_of_the_person_watching(state_home):
         assert pane_size(pymux) == before
         await run(pymux, "record-session")
         await session.detach(person)
+
+
+def test_a_demo_keeps_its_own_time(monkeypatch):
+    "The agent's pace never shows: a long pause is cut, and a hold is exact."
+    clock = [100.0]
+    monkeypatch.setattr("pymux.connection.recording.time.monotonic", lambda: clock[0])
+    recording = Recording("demo", 24, 80, "xterm-256color", pause_cap=1.5)
+    for advance, held in ((0.5, None), (20.0, None), (0.2, 4.0), (0.3, None)):
+        clock[0] += advance
+        if held is not None:
+            recording.hold(held)
+        recording.hear("out", "x")
+    assert [event[0] for event in recording.events] == [0.5, 2.0, 6.0, 6.3]
+
+
+async def test_a_hold_needs_a_recording(state_home):
+    async with over_connection() as session:
+        pymux = session.pymux
+        await pymux.startup()
+        assert await over_socket(pymux, "record-session", "--hold", "3") == [
+            "pymux: record-session: session %s is not being recorded" % pymux.current_session.name
+        ]
+        await run(pymux, "record-session", "demo")
+        await run(pymux, "record-session", "--hold", "3")
+        assert recorder_of(pymux, pymux.current_session).client.recording._held == 3.0
+        await run(pymux, "record-session")

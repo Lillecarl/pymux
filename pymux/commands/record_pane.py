@@ -14,10 +14,10 @@ if TYPE_CHECKING:
 
 
 def seconds(text: str) -> float:
-    "An idle limit: a number of seconds above nothing."
+    "A time a recording holds: a number of seconds above nothing."
     value = float(text)
     if value <= 0:
-        raise argparse.ArgumentTypeError("an idle limit is a number of seconds above 0")
+        raise argparse.ArgumentTypeError("a time is a number of seconds above 0")
     return value
 
 
