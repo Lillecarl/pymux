@@ -2,8 +2,11 @@
 An agent's message, on a row under its pane's bar. Lillecarl/pyterm#933.
 
 Carl: "show the 'long status' on a new line in the pane titlebar".
-`pane-message-row` says where the row comes from: `take` makes the
-program one row shorter, `cover` draws over its first row.
+`pane-message-row` says where the row comes from: `cover`, the
+default, draws over the program's first row; `take` makes the program
+one row shorter. Carl wants the overlay: a row taken resizes the pane
+each time a message comes or goes, and pushes the bottom of the
+program out of view.
 
 **The pane's height is judged twice over two frames.** The plan and the
 drawing both tell the pty its size, and the row is taken in both or the
@@ -31,7 +34,7 @@ def _first_terminal_row(pymux, rows, above=0):
 
 
 async def test_take_gives_the_message_a_row_of_the_pane():
-    async with create_client(CHROME) as (pymux, draw):
+    async with create_client([*CHROME, "set-window-option pane-message-row take"]) as (pymux, draw):
         pane = _pane(pymux)
         draw()
         height = pane.process.sy
@@ -47,13 +50,18 @@ async def test_take_gives_the_message_a_row_of_the_pane():
 
 
 async def test_cover_draws_over_the_pane_and_keeps_its_size():
-    async with create_client([*CHROME, "set-window-option pane-message-row cover"]) as (pymux, draw):
+    "The default: a message comes and goes and the program keeps its size."
+    async with create_client(CHROME) as (pymux, draw):
         pane = _pane(pymux)
         draw()
         height = pane.process.sy
         pane.screen.osc("7501", "state=blocked:msg=%s" % APPROVE)
-        rows = draw()
-        assert SHOWN in _first_terminal_row(pymux, rows), dump(rows)
+        for _ in range(2):
+            rows = draw()
+            assert SHOWN in _first_terminal_row(pymux, rows), dump(rows)
+            assert pane.process.sy == height
+        pane.screen.osc("7501", "state=clear")
+        draw()
         assert pane.process.sy == height
 
 
@@ -64,7 +72,7 @@ async def test_the_message_sits_in_the_middle_like_the_title():
         draw()
         pane.screen.osc("7501", "state=blocked:msg=%s" % APPROVE)
         rows = draw()
-        row = _first_terminal_row(pymux, rows, above=1)
+        row = _first_terminal_row(pymux, rows)
         position = pymux.get_client_state().layout_manager.pane_write_positions[pane]
         mine = row[position.xpos : position.xpos + position.width]
         before, after = mine.index(SHOWN), len(mine) - mine.index(SHOWN) - len(SHOWN)

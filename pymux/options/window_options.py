@@ -90,11 +90,12 @@ class WindowOptions(Options):
         on_set=_redraw,
     )
     pane_message_row: MessageRow = option(
-        MessageRow.TAKE,
+        MessageRow.COVER,
         doc=(
             "Where the message of an agent in the pane shows, on a row under its bar (OSC 7501, such as "
-            '"blocked: Approve edit?"): "take" makes the program one row shorter while it shows, "cover" '
-            'draws it over the first row of the pane, "off" shows none. Lillecarl/pyterm#933.'
+            '"blocked: Approve edit?"): "cover" draws it over the first row of the pane, so the program '
+            'keeps its size; "take" makes the program one row shorter while it shows; "off" shows none. '
+            "Lillecarl/pyterm#933."
         ),
         on_set=_redraw,
     )
