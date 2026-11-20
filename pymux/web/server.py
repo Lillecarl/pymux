@@ -12,7 +12,7 @@ rather than claiming it.
 websocket upgrade, so on loopback an `Origin` check is the only thing
 between a page somebody happens to have open and their shell, and it is a
 weak one: a page may simply omit the header. So every upgrade carries a
-token that this prints once. `--bind` widens it and says what that costs.
+token that this prints, kept in a file between runs. `--bind` widens it and says what that costs.
 
 It needs `pymux[web]`. Lillecarl/pyterm#463.
 """
@@ -20,6 +20,7 @@ It needs `pymux[web]`. Lillecarl/pyterm#463.
 from __future__ import annotations
 
 import json
+import os
 import secrets
 from collections.abc import Callable
 from pathlib import Path
@@ -27,6 +28,7 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
 from libpymux import PaneStream, Server, StreamRefused
+from platformdirs import user_state_path
 
 from pymux.log import logger
 
@@ -34,7 +36,7 @@ if TYPE_CHECKING:
     from websockets.asyncio.server import ServerConnection
     from websockets.http11 import Request, Response
 
-__all__ = ["MISSING", "a_token", "serve"]
+__all__ = ["MISSING", "a_token", "kept_token", "serve", "token_file"]
 
 #: What to say when the extra is not installed. Named here so the command
 #: and this module cannot drift about it.
@@ -112,8 +114,39 @@ def same_origin(origin: str | None, host: str | None) -> bool:
 
 
 def a_token() -> str:
-    "A token for one run of the web server."
+    "A new token."
     return secrets.token_urlsafe(TOKEN_BYTES)
+
+
+def token_file() -> Path:
+    "Where the token is kept between runs: the state directory, on any platform."
+    return user_state_path("pymux") / "web-token"
+
+
+def kept_token(path: Path) -> str:
+    """
+    The token in `path`, or a new one written there.
+
+    **Kept, so a bookmark outlives a restart.** A token per run broke
+    every saved address each time the service started again. Delete the
+    file to make a new one.
+
+    **Written 0600 and exclusively.** The file is the key to the
+    terminal, and `O_EXCL` refuses a file somebody else put there first.
+    """
+    try:
+        kept = path.read_text().strip()
+    except FileNotFoundError:
+        kept = ""
+    if kept:
+        return kept
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    token = a_token()
+    path.unlink(missing_ok=True)
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(descriptor, "w") as written:
+        written.write(token + "\n")
+    return token
 
 
 def _served(path: str):

@@ -99,6 +99,21 @@ def test_a_token_is_not_guessable():
     assert len(first) >= 40
 
 
+def test_a_token_outlives_a_restart(tmp_path):
+    path = tmp_path / "state" / "web-token"
+    first = web.kept_token(path)
+    assert web.kept_token(path) == first
+    assert path.stat().st_mode & 0o777 == 0o600
+
+
+def test_an_empty_token_file_gets_a_new_token(tmp_path):
+    path = tmp_path / "web-token"
+    path.write_text("\n")
+    token = web.kept_token(path)
+    assert len(token) >= 40
+    assert path.read_text().strip() == token
+
+
 def test_a_query_is_read_without_a_url_parser():
     assert web._one_of("t=abc", "t") == "abc"
     assert web._one_of("pane=%1&t=abc", "t") == "abc"

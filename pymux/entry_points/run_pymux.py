@@ -472,16 +472,17 @@ def _web(socket_name: str | None, a: argparse.Namespace) -> int:
     """
     import anyio
 
-    from pymux.web.server import MISSING, a_token, serve, the_server
+    from pymux.web.server import MISSING, kept_token, serve, the_server, token_file
 
+    kept_in = token_file()
     try:
         server = anyio.run(the_server, socket_name)
         pane_ids = [pane.id for pane in anyio.run(server.panes)]
+        token = kept_token(kept_in)
     except OSError as none:
         sys.stderr.write("pymux: %s\n" % (none,))
         return 1
 
-    token = a_token()
     host = a.web_bind or "127.0.0.1"
     port = int(a.web_port or 8080)
 
@@ -508,9 +509,9 @@ def _web(socket_name: str | None, a: argparse.Namespace) -> int:
         with an address and a token for a server that is not there, and
         the only sign an EADDRINUSE after them.
         """
-        say("pymux web on http://%s:%d/?pane=<pane>&t=%s" % (host, port, token))
-        say("  panes: %s" % (" ".join(pane_ids) or "none",))
-        say("  the session, as a client sees it: http://%s:%d/?session&t=%s" % (host, port, token))
+        say("pymux web on http://%s:%d/?t=%s" % (host, port, token))
+        say("  one pane: add &pane=<pane>; panes: %s" % (" ".join(pane_ids) or "none",))
+        say("  the token is kept in %s; delete it for a new one" % (kept_in,))
         if not a.web_allow_input:
             say("  showing only; --allow-input takes keys")
 
