@@ -28,6 +28,13 @@ number that goes up fails a build. Carl:
   Nothing counted the diff or the writing before this, and they are
   the part a keystroke pays that a recording does not.
 
+## Two heavy frames, in a session of their own
+
+A keystroke changes one cell. **scroll** writes one more line to a
+full pane, so the frame moves every row up one; **repaint** changes
+every cell of the pane. Each counts the parse and the render, and
+these are the frames the renderer's scroll and span work is for.
+
 ## Two terminals, because a keystroke costs what the screen costs
 
 Every stage is measured twice: on a terminal of 80x24, and on one of
@@ -163,7 +170,15 @@ SIZES = {
 #: The order a keystroke happens in, which is the order everything
 #: here measures in. A press, the program's answer, and the frame that
 #: shows it.
-ORDER = ("key", "parse", "render")
+KEYSTROKE = ("key", "parse", "render")
+
+#: The two heavy frames, each a parse and a render, and each in a
+#: session of its own. A pane they filled would change what the
+#: keystroke's frame diffs against, and a scroll after a repaint moves
+#: rows that are all one letter, which changes nothing.
+HEAVY = (("scroll",), ("repaint",))
+
+ORDER = KEYSTROKE + tuple(name for group in HEAVY for name in group)
 
 
 def on(stage, size_name):
@@ -181,6 +196,11 @@ def every_measurement():
 #: frame where one thing changed.
 ANSWER = "~"
 KEY = "a"
+
+#: The text of a line that `scroll` writes, after its number. A build
+#: log's line: the frame after it moves every row of the pane up one.
+#: `repaint` is the other heavy frame: every cell of the pane changes.
+FILLER = "building /nix/store/0123456789abcdfghijklmnpqrsvwxyz-python3.14-prompt-toolkit-3.0.53.drv"
 
 
 @asynccontextmanager
@@ -222,9 +242,10 @@ async def create_client(size):
             pymux.stop()
 
 
-def stages(pymux, state):
+def stages(pymux, state, group):
     """
-    The three pieces of a keystroke, each as a callable.
+    The three pieces of a keystroke, or the two heavy frames, each as a
+    callable.
 
     They are separate because they answer different questions. A parse
     that grew and a diff that grew are not the same fault and do not
@@ -250,7 +271,39 @@ def stages(pymux, state):
         state.app.renderer.render(state.app, state.app.layout)
         state.layout_manager.frame_ended(state.app)
 
-    return {"key": key, "parse": parse, "render": render}
+    if group == KEYSTROKE:
+        return {"key": key, "parse": parse, "render": render}
+
+    screen = pane.terminal.terminal_control.screen
+    width = min(screen.columns - 1, len(FILLER))
+    lines = iter(range(1_000_000))
+
+    def a_line():
+        # Rotated by the line's number, so two neighbours differ in
+        # every column: a diff that repaints a shifted row cannot get
+        # away with the one digit that changed.
+        number = next(lines)
+        turn = number % len(FILLER)
+        return "\r\n%06d %s" % (number, (FILLER[turn:] + FILLER[:turn])[: width - 7])
+
+    # A pane full of distinct lines, so a scroll moves something.
+    stream.feed("".join(a_line() for _ in range(screen.lines)))
+
+    def scroll():
+        stream.feed(a_line())
+        render()
+
+    screens = iter(range(1_000_000))
+
+    def repaint():
+        letter = "xo"[next(screens) % 2]
+        stream.feed(
+            "\x1b[H" + "".join("\x1b[%d;1H%s" % (row + 1, letter * screen.columns) for row in range(screen.lines))
+        )
+        render()
+
+    heavy = {"scroll": scroll, "repaint": repaint}
+    return {name: heavy[name] for name in group}
 
 
 def settle(state, stages):
@@ -409,6 +462,22 @@ def counted(state, stages):
     return found
 
 
+def written(state, stages):
+    """
+    The bytes each stage sends the terminal. Nothing judges them: a scroll
+    sequence and a repaint can cost the same instructions and very
+    different bytes, and over ssh the bytes are what a person waits on.
+    """
+    stdout = state.app.output.stdout
+    found = {}
+    with set_app(state.app):
+        for name, work in stages.items():
+            before = len(stdout.getvalue())
+            work()
+            found[name] = len(stdout.getvalue()) - before
+    return found
+
+
 def timed(state, stages, rounds):
     """
     The same stages on a clock, with the monitoring off.
@@ -500,50 +569,58 @@ async def main() -> int:
     include = os.environ.get("PYMUX_KEYSTROKE_INCLUDE", "")
     tolerance = float(os.environ.get("PYMUX_KEYSTROKE_TOLERANCE") or DEFAULT_TOLERANCE)
 
-    counts, microseconds, where, callers = {}, {}, {}, {}
+    counts, microseconds, wrote, where, callers = {}, {}, {}, {}, {}
     census = None
 
-    # One client per terminal. A client's size is fixed when it
-    # attaches, and a resize is a different measurement from a
+    # One client per terminal and group. A client's size is fixed when
+    # it attaches, and a resize is a different measurement from a
     # keystroke, so each size gets a session of its own.
+    groups = [group for group in (KEYSTROKE, *HEAVY) if not include or any(re.search(include, n) for n in group)]
+    if not groups:
+        print("Nothing matched %r." % (include,))
+        return 1
+
     for size_name, size in SIZES.items():
-        async with create_client(size) as (pymux, state):
-            picked = stages(pymux, state)
-            if include:
-                picked = {n: w for n, w in picked.items() if re.search(include, n)}
-            if not picked:
-                print("Nothing matched %r." % (include,))
-                return 1
+        for group in groups:
+            async with create_client(size) as (pymux, state):
+                picked = stages(pymux, state, group)
+                if include:
+                    picked = {n: w for n, w in picked.items() if re.search(include, n)}
 
-            settle(state, picked)
-            for stage, count in counted(state, picked).items():
-                counts[on(stage, size_name)] = count
-            for stage, each in timed(state, picked, TIMED).items():
-                microseconds[on(stage, size_name)] = each
+                settle(state, picked)
+                for stage, count in counted(state, picked).items():
+                    counts[on(stage, size_name)] = count
+                for stage, length in written(state, picked).items():
+                    wrote[on(stage, size_name)] = length
+                for stage, each in timed(state, picked, TIMED).items():
+                    microseconds[on(stage, size_name)] = each
 
-            if WHERE:
-                with set_app(state.app):
-                    for stage, work in picked.items():
-                        where[on(stage, size_name)] = where_instructions_are(work)
+                if WHERE:
+                    with set_app(state.app):
+                        for stage, work in picked.items():
+                            where[on(stage, size_name)] = where_instructions_are(work)
 
-            if CALLERS:
-                with set_app(state.app):
-                    for stage, work in picked.items():
-                        callers[on(stage, size_name)] = who_calls(work, CALLERS)
+                if CALLERS:
+                    with set_app(state.app):
+                        for stage, work in picked.items():
+                            callers[on(stage, size_name)] = who_calls(work, CALLERS)
 
-            # The tree is the same shape on every terminal, so it is
-            # asked once.
-            if CENSUS and census is None:
-                with set_app(state.app):
-                    census = the_tree_a_key_press_walks(state.app.layout)
+                # The tree is the same shape on every terminal, so it is
+                # asked once.
+                if CENSUS and census is None:
+                    with set_app(state.app):
+                        census = the_tree_a_key_press_walks(state.app.layout)
 
     print("\n--- what one keystroke costs ---")
-    print("%-18s %14s %12s" % ("", "instructions", "in-process"))
+    print("%-18s %14s %12s %10s" % ("", "instructions", "in-process", "bytes"))
     for name in every_measurement():
         if name in counts:
-            print("%-18s %14d %10.1f us" % (name, counts[name], microseconds[name]))
+            print("%-18s %14d %10.1f us %10d" % (name, counts[name], microseconds[name], wrote[name]))
 
-    print("%-18s %14d %10.1f us" % ("all of it", sum(counts.values()), sum(microseconds.values())))
+    print(
+        "%-18s %14d %10.1f us %10d"
+        % ("all of it", sum(counts.values()), sum(microseconds.values()), sum(wrote.values()))
+    )
 
     for name in every_measurement():
         if name in where:
