@@ -80,6 +80,8 @@ MODULES = [
     "record_pane",
     "record_client",
     "record_export",
+    "record_upload",
+    "record_auth",
     "show_urls",
     "rename_session",
     "resize_pane",

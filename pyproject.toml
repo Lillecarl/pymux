@@ -105,6 +105,9 @@ dependencies = [
     # vestigial; it stays until somebody rewrites the imports that
     # name it, which is its own change. Lillecarl/pyterm#512.
     "typing-extensions",
+    # `record-upload` posts a recording to asciinema.org, async on the
+    # server's loop. Lillecarl/pyterm#1064.
+    "httpx",
 ]
 
 [project.optional-dependencies]
