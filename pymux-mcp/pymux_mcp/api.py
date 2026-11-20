@@ -180,7 +180,8 @@ async def sql(server: Server, query: str, params: dict[str, str | int | float] |
     `live.session_tags`, `live.window_tags` and `live.pane_tags`. `:name` in the
     query reads `params`. A question that writes is refused. Ids there
     are bare numbers: `window_id = 1` is the window other operations
-    call `@1`, and `pane_id = 5` the pane `%5`.
+    call `@1`, and `pane_id = 5` the pane `%5`. A table's columns:
+    `SELECT name FROM pragma_table_info('panes', 'live')`.
     """
     return await server.sql(query, params)
 
