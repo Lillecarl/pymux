@@ -97,6 +97,7 @@ MODULES = [
     "bind_key",
     "unbind_key",
     "send_keys",
+    "type_text",
     "copy_mode",
     "paste_buffer",
     "source_file",
