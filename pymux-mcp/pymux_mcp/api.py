@@ -438,6 +438,26 @@ async def send(
     return None
 
 
+@operation("pane.type")
+async def type_text(
+    server: Server,
+    pane: Annotated[str, Field(description="The pane's id: `%5`.")],
+    text: Annotated[str, Field(description='Typed as it stands; a "\\n" goes as Return.')],
+    words_per_minute: Annotated[float, Field(description="The speed.", ge=1, le=1000)] = 70,
+    seed: Annotated[int | None, Field(description="The same seed types the same rhythm; left out, a new one.")] = None,
+) -> None:
+    """
+    Type into a pane at a person's pace, a key at a time, for a recording
+    (`record-session`). Quick inside a word, slower at a space and after a
+    full stop, a pause before each Return. Answers when the last key is
+    out, so a long text takes as long as a person would.
+    """
+    argv = ["type-text", "-t", pane, "-w", "%g" % words_per_minute]
+    if seed is not None:
+        argv += ["-S", str(seed)]
+    await server.cmd([*argv, "--", text])
+
+
 @operation("pane.sendline")
 async def sendline(
     server: Server,

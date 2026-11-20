@@ -35,6 +35,24 @@ Wait on what the screen shows, never on a fixed delay. Read a TUI with
 `window.capture` (the layout with borders) or `client.capture` (what a
 person attached sees, popups included).
 
+## A demo to upload to asciinema
+
+1. `session.new`; `window.split` it as the demo needs.
+2. `command`: `record-session -t <session> -x 100 -y 30 <name>`. A client
+   with no terminal records the session; no pane a person watches moves.
+3. `pane.type` each line: a person's pace, a pause before each Return.
+   `pane.wait_until` the output before the next line, never a sleep.
+   Pauses longer than 1.5 s play as 1.5 s (`-i` changes it).
+4. `command`: `record-session -t <session>` again stops; it prints the
+   `.bin`.
+5. Upload only when the person asked: `command`: `record-upload -T <title>
+   <name>` prints the URL. It publishes. The keys typed stay out unless
+   `--keys`.
+
+Never run `record-auth` through `command`: the link it prints is the
+upload credential. Ask the person to run `pymux record-auth` in their own
+shell and open the link once.
+
 ## Jobs
 
 `job.run` runs a shell command with no pane. `job.tail` follows it until it

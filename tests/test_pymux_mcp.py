@@ -184,6 +184,13 @@ async def test_sendline_pauses_before_the_return(monkeypatch):
     assert events == ["send-keys -t %5 -l hi", "pause", "send-keys -t %5 Enter"]
 
 
+async def test_type_sends_the_text_as_one_argument_after_a_dash_dash():
+    "So a text that starts with a dash is text, and a newline stays in it."
+    server = CommandRecorder()
+    await OPERATIONS.call(server, "pane.type", {"pane": "%5", "text": "-la\n", "seed": 3})
+    assert server.asked == [(["type-text", "-t", "%5", "-w", "70", "-S", "3", "--", "-la\n"], None)]
+
+
 async def test_a_send_with_a_wait_arms_it_on_the_last_key():
     "Earlier words go out plainly; the last carries the wait, so its output is not lost."
     events = []
