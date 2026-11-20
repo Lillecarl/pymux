@@ -27,13 +27,13 @@ def the_session_file(name: str) -> Path:
     return recordings_directory() / ("%s.session.json" % name)
 
 
-def export(session_file: Path, form: str, idle_time_limit: float | None, cast_version: int) -> Path:
+def export(session_file: Path, form: str, idle_time_limit: float | None, cast_version: int, keys: bool) -> Path:
     "Read one recording and write it in `form`. Gives back what it wrote."
     recording = json.loads(session_file.read_text())
     if form == "web":
         text = json.dumps(replay_of(recording, idle_time_limit), separators=(",", ":"))
     else:
-        text = asciicast(recording, cast_version, idle_time_limit)
+        text = asciicast(recording, cast_version, idle_time_limit, keys)
     output = session_file.with_name(session_file.name.removesuffix(".session.json") + SUFFIXES[form])
     output.write_text(text)
     return output
@@ -47,7 +47,8 @@ async def record_export(pymux: Pymux, args: argparse.Namespace) -> None:
     each at the time it came, for a web player. `-F asciicast` writes
     `<name>.cast`, which asciinema plays and asciinema.org takes; it is
     version 3 unless `--cast-version 2` says otherwise. An asciicast
-    player knows nothing of images or of pymux's other extensions.
+    player knows nothing of images or of pymux's other extensions. It
+    leaves out the keys that were typed, unless `--keys` asks for them.
 
     `-i` is the longest pause a player shows, and replaces the one the
     recording was made with. Lillecarl/pyterm#612.
@@ -59,7 +60,7 @@ async def record_export(pymux: Pymux, args: argparse.Namespace) -> None:
         # A long recording takes a while to draw, and the server goes on
         # drawing for everybody meanwhile.
         written = await anyio.to_thread.run_sync(
-            export, session_file, args.format, args.idle_time_limit, args.cast_version
+            export, session_file, args.format, args.idle_time_limit, args.cast_version, args.keys
         )
     except (OSError, ValueError, KeyError) as e:
         raise CommandException("record-export: %s" % e)
@@ -81,4 +82,5 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser.add_argument(
         "--cast-version", type=int, choices=(2, 3), default=3, help="The asciicast version, 3 unless this says 2."
     )
+    parser.add_argument("--keys", action="store_true", help="Keep the keys that were typed, in an asciicast.")
     parser.add_argument("name", metavar="<name>", help="The recording, by name or by its .session.json.")
