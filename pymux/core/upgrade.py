@@ -106,6 +106,10 @@ async def upgrade(pymux: Pymux, command: list[str], close_windows: bool = False)
     _refuse(pymux)
     # A recording holds Python objects of this build, so it ends here.
     pymux.finish_recordings()
+    # And a recorder, which has no terminal to come back to.
+    for connection in list(pymux.connections):
+        if connection.client is not None and connection.client.state.headless:
+            connection.detach_and_close()
     if pymux.wayland.adopting():
         # Its windows are in no pane table yet, and would be lost.
         raise CommandException("the Wayland compositor is still being adopted; try again")
@@ -134,7 +138,7 @@ async def upgrade(pymux: Pymux, command: list[str], close_windows: bool = False)
             for connection in list(pymux.connections):
                 client = connection.client
                 # A peer's mirrors say it in each pane, as a client says it on its terminal.
-                if connection.peer is not None or (client is not None and not client.state.temporary):
+                if connection.peer is not None or (client is not None and not client.state.nobody_there):
                     await connection.say_restarting(RESTART_WAIT, UPGRADING)
             step("clients told")
             # From the sweep on, a command that ends a pane would leave a

@@ -80,6 +80,7 @@ MODULES = [
     "record_pane",
     "record_client",
     "record_export",
+    "record_session",
     "record_upload",
     "record_auth",
     "show_urls",
@@ -225,7 +226,7 @@ def this_client(pymux: Pymux) -> ClientState | None:
     except ValueError:
         return None
 
-    return None if client_state.temporary else client_state
+    return None if client_state.nobody_there else client_state
 
 
 def not_past_this_client(pymux: Pymux, reaches_another: bool) -> None:

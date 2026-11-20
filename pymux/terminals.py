@@ -259,7 +259,7 @@ class Terminals:
         masks = [
             client.replies.kitty_source_flags
             for client, client_state in self.pymux._client_states.items()
-            if not client_state.temporary
+            if not client_state.nobody_there
         ]
         masks += [terminal.keyboard_source_flags for _link, terminal in self.viewing_peers()]
         if not masks:
@@ -358,7 +358,7 @@ class Terminals:
                 client_state.session is session,
             )
             for client, client_state in self.pymux._client_states.items()
-            if not client_state.temporary and client.graphics.cell_size_known
+            if not client_state.nobody_there and client.graphics.cell_size_known
         ]
         for link, terminal in self.viewing_peers():
             if terminal.cell_size is not None:

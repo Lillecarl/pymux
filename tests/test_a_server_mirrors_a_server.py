@@ -1952,7 +1952,9 @@ async def test_open_url_from_a_pane_opens_at_the_peer_when_nobody_is_here(two_se
 
     url = "https://example.com/"
     # A socket command typed in `there`, as `pymux open-url` sends it.
-    asking = SimpleNamespace(temporary=True, caller_pane_id=there.pane_id, session=owner.current_session)
+    asking = SimpleNamespace(
+        temporary=True, nobody_there=True, caller_pane_id=there.pane_id, session=owner.current_session
+    )
     monkeypatch.setattr(owner, "get_client_state", lambda: asking)
     owner.handle_command("open-url %s" % (url,))
     await until(lambda: opened == [url], "the peer opens the URL")

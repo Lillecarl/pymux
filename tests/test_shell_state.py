@@ -106,6 +106,7 @@ def make_pymux(clipboard=Clipboard.ON):
         connection: SimpleNamespace(
             terminal_focused=False,
             temporary=False,
+            nobody_there=False,
             chooser=None,
             popups=(),
             options=SimpleNamespace(notification_popups=NotificationPopups.OFF),

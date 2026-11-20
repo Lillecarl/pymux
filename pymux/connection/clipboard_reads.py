@@ -85,7 +85,7 @@ class ClipboardReader:
         None when the terminal does not answer in time, has been seen not
         to, or answered with nothing. Lillecarl/pyterm#385.
         """
-        if self.answers is False or self.client.state is None or self.client.state.temporary:
+        if self.answers is False or self.client.state is None or self.client.state.nobody_there:
             return None
         done = anyio.Event()
         answer: list[str] = []

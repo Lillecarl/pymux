@@ -209,6 +209,9 @@ class ClientState:
         # A command's client lives for one command, and no command
         # spans an upgrade.
         "temporary": Keep.DROPPED,
+        # `upgrade-server` closes a recorder before the snapshot.
+        "headless": Keep.DROPPED,
+        "holds_size": Keep.DROPPED,
         "caller_pane_id": Keep.DROPPED,
     }
 
@@ -433,6 +436,15 @@ class ClientState:
         #: a connection that closes before it can ask a browser to do
         #: anything.
         self.temporary = False
+
+        #: True for the client of `record-session`: it draws, into a
+        #: recording, and no terminal and no person is behind it.
+        #: Lillecarl/pyterm#1064.
+        self.headless = False
+        #: A recorder that started on windows nobody watched keeps
+        #: their size, so a person who attaches later moves no pane of
+        #: the recording, and a recorder never moves theirs.
+        self.holds_size = False
 
         #: The pane a socket command arrived from, by id, or None.
         #: `$PYMUX` names it ("socket,pane-id"), and the run-command
@@ -662,6 +674,11 @@ class ClientState:
         if self._paced_while_behind:
             interval = max(interval or 0.0, BEHIND_INTERVAL)
         self.app.min_redraw_interval = interval
+
+    @property
+    def nobody_there(self) -> bool:
+        "No person's terminal behind this client: a socket command's, or a recorder's."
+        return self.temporary or self.headless
 
     @property
     def active_key_table(self) -> str:

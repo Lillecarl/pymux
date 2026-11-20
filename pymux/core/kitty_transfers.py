@@ -145,7 +145,7 @@ class KittyTransfers:
 
     def route_for(self, client: ClientState) -> Route | None:
         "Who answers a session that goes to this client, or `None` for nobody."
-        if client.temporary:
+        if client.nobody_there:
             return None
         chosen = client.options.file_transfer
         if chosen is FileTransfer.PASSTHROUGH or (

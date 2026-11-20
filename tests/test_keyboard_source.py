@@ -47,6 +47,10 @@ class FakeClientState:
     #: reports nothing. Lillecarl/pyterm#422.
     temporary = False
 
+    @property
+    def nobody_there(self) -> bool:
+        return self.temporary
+
     terminal_focused = True
     chooser = None
     popups: tuple = ()

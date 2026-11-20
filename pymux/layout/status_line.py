@@ -180,7 +180,8 @@ class StatusLine:
         result: list[Entry] = []
 
         recording = self.client_state.client.recording
-        if recording is not None:
+        # A recorder's recording is the demo, and the mark would be in it.
+        if recording is not None and not self.client_state.headless:
             result.append(Entry(("class:recording", " ● REC %s " % recording.name), " "))
 
         for w in self.client_state.session.arrangement.windows:

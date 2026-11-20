@@ -137,6 +137,7 @@ class FakeClientState:
     app = None
     session = FakeSession()
     temporary = False
+    nobody_there = False
     border_drag = None
     # Out of sight, so a notification goes out. Lillecarl/pyterm#801.
     terminal_focused = False

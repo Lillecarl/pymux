@@ -35,7 +35,7 @@ def calling_as(pymux, session, temporary=True, caller_pane_id=None):
     """
     real = pymux.get_client_state
     pymux.get_client_state = lambda: SimpleNamespace(
-        temporary=temporary, caller_pane_id=caller_pane_id, session=session
+        temporary=temporary, nobody_there=temporary, caller_pane_id=caller_pane_id, session=session
     )
     try:
         yield

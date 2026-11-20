@@ -277,7 +277,7 @@ class DragAndDrop:
     def _send(self, client: ClientRole, packet: DndPacket) -> None:
         "Write one packet to a terminal now: a drag waits for no frame."
         client_state = client.state
-        if client_state is None or client_state.temporary:
+        if client_state is None or client_state.nobody_there:
             return
         client.write_output_raw(str(packet))
         client.flush_output()
@@ -307,7 +307,7 @@ class DragAndDrop:
         offers them. Never inside a pane's chain going up.
         """
         client = client_state.client
-        if client is None or client_state.temporary:
+        if client is None or client_state.nobody_there:
             return
         state = self._terminals.get(client)
         if state is None or not state.speaks or state.chain_up:

@@ -27,7 +27,7 @@ def calling_as(pymux, session, caller_pane_id=None):
     go to the stdout of a real socket caller.
     """
     real = pymux.get_client_state
-    fake = SimpleNamespace(temporary=True, caller_pane_id=caller_pane_id, session=session)
+    fake = SimpleNamespace(temporary=True, nobody_there=True, caller_pane_id=caller_pane_id, session=session)
     pymux.get_client_state = lambda: fake
     try:
         yield fake

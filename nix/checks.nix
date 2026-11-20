@@ -54,6 +54,9 @@
   # The oracle of the command grammar: `source-file -nv` prints what
   # tmux parsed. Lillecarl/pyterm#1029.
   tmux,
+  # The player whose own terminal judges a recorded cast.
+  # Lillecarl/pyterm#1064.
+  asciinema,
   mesa,
   vttest,
   # What the scenario check drives, and the model API claude-code talks to.
@@ -706,6 +709,7 @@ in
           # client. Lillecarl/pyterm#914.
           PYMUX_KITTEN = "${kitty}/bin/kitten";
           PYMUX_TMUX = lib.getExe tmux;
+          PYMUX_ASCIINEMA = lib.getExe asciinema;
         };
       }
       # `--durations` names what the suite spends its time on, and

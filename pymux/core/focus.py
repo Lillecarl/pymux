@@ -61,7 +61,7 @@ class Focus:
             return
         focused = set()
         for client_state in self.pymux._client_states.values():
-            if client_state.terminal_focused and not client_state.temporary:
+            if client_state.terminal_focused and not client_state.nobody_there:
                 pane = client_state.session.arrangement.get_active_pane_for(client_state.app)
                 if pane is not None:
                     focused.add(pane.pane_id)

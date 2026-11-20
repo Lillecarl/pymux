@@ -543,7 +543,7 @@ class Outward:
                 return False
             session = self.pymux.session_holding(pane)
             for client_state in list(self.pymux._client_states.values()):
-                if client_state.session is session and not client_state.temporary:
+                if client_state.session is session and not client_state.nobody_there:
                     self.pymux.show_pane(client_state, pane)
             # And the terminal of the user raises its own window.
             return True

@@ -841,7 +841,7 @@ class Pymux:
         except ValueError:
             asking = None
 
-        if asking is not None and not asking.temporary:
+        if asking is not None and not asking.nobody_there:
             return asking
 
         return self.latest_client()
@@ -856,7 +856,7 @@ class Pymux:
         answered. Nobody is at one of those, so it is not a client to
         count, to list or to tell anything.
         """
-        return [client for client in self._client_states.values() if not client.temporary]
+        return [client for client in self._client_states.values() if not client.nobody_there]
 
     def clients_on(self, session: Session, except_for: ClientState | None = None) -> list[ClientState]:
         """
@@ -1382,6 +1382,7 @@ class Pymux:
         client: ClientRole,
         temporary: bool = False,
         session: Session | None = None,
+        headless: bool = False,
     ) -> ClientState:
         # A client that names no session lands on the one a person
         # looked at last, which is what `attach-session` with no `-t`
@@ -1403,6 +1404,7 @@ class Pymux:
         # record through its role.
         client.state = client_state
         client_state.temporary = temporary
+        client_state.headless = headless
         client_state.app.renderer.reference = self.options.render_mode is RenderMode.REFERENCE
 
         self._client_states[client] = client_state
@@ -1411,8 +1413,8 @@ class Pymux:
         # answer before anybody has pressed a key. tmux stamps a client
         # on attach for the same reason. The temporary client of a command does
         # not: nobody is using that terminal, and it is gone before the
-        # answer comes back.
-        if not temporary:
+        # answer comes back. Nor does a recorder: nobody uses it either.
+        if not temporary and not headless:
             self.client_was_used(client_state)
 
         # The configuration file was read while this client was being

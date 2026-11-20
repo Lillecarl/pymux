@@ -226,6 +226,7 @@ def create_app(
     term: str = "xterm",
     start: bool = True,
     session: Session | None = None,
+    headless: bool = False,
 ) -> ClientState:
     """
     Make this client's state and application, and make it its
@@ -237,6 +238,7 @@ def create_app(
         after the command handler ran.)
     :param session: The session this client is on. Without one it is
         the session a person looked at last.
+    :param headless: A recorder's client: it draws, and nobody uses it.
     """
     connection = client.connection
     stdout = (
@@ -273,6 +275,7 @@ def create_app(
         # and what a command shows must go to a real one.
         temporary=not start,
         session=session,
+        headless=headless,
     )
     connection.client = client
     connection.role = client

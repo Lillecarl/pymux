@@ -75,8 +75,12 @@ def _plane_of_clients(clients: Sequence[ClientState], rule: WindowSize) -> Size:
     one decides: a phone whose window list wraps to three rows takes
     three off everybody's plane, and the others draw background there.
     Lillecarl/pyterm#725.
+
+    **A recorder that holds the size decides it alone**, so a person who
+    attaches mid-recording resizes no pane of it. Lillecarl/pyterm#1064.
     """
-    sizing = [one for one in clients if not one.ignore_size] or list(clients)
+    holding = [one for one in clients if one.holds_size]
+    sizing = holding or [one for one in clients if not one.ignore_size] or list(clients)
     if rule is WindowSize.LATEST:
         size = max(sizing, key=lambda client: client.last_used).app.output.get_size()
     else:
@@ -267,6 +271,11 @@ class Planes:
         numbers tmux answers.
         """
         clients = self.pymux.clients
+        if session is not None:
+            # A window made during a recording takes the recording's size.
+            clients = [
+                one for one in self.pymux._client_states.values() if one.holds_size and one.session is session
+            ] or clients
         if not clients:
             return DEFAULT_SIZE
         defaults = session.arrangement.window_defaults if session is not None else {}

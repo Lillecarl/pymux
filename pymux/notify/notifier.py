@@ -68,7 +68,7 @@ class Notifier:
             return
         shown = False
         for client, client_state in self.pymux._client_states.items():
-            if client_state.temporary:
+            if client_state.nobody_there:
                 continue
             wanted = client_state.options.notification_popups
             if wanted is NotificationPopups.OFF or (
@@ -119,7 +119,7 @@ class Notifier:
             return
         spelled: dict[Osc, list[str]] = {}
         for client, client_state in self.pymux._client_states.items():
-            if client_state.temporary:
+            if client_state.nobody_there:
                 continue
             osc = client.replies.notification_osc
             if osc is None or (osc, record.source) in _WENT_AS_IT_CAME:
@@ -153,7 +153,7 @@ class Notifier:
         for client_state in self.pymux._client_states.values():
             if (
                 client_state.terminal_focused
-                and not client_state.temporary
+                and not client_state.nobody_there
                 and client_state.chooser is not Chooser.WINDOW
             ):
                 window = client_state.session.arrangement.get_active_window_for(client_state.app)
