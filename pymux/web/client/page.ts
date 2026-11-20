@@ -24,10 +24,10 @@ function needed<T>(found: T | null, what: string): T {
 }
 
 const asked = new URLSearchParams(location.search);
-// `?session` shows the whole session as one client draws it, with the
-// status line and whatever pymux draws over the panes; `?pane=%1` shows
-// one pane's own screen. Lillecarl/pyterm#483.
-const session = asked.has("session");
+// The whole session as one client draws it, with the status line and
+// whatever pymux draws over the panes, unless `?pane=%1` asks for one
+// pane's own screen. Lillecarl/pyterm#483.
+const session = asked.has("session") || !asked.has("pane");
 const pane = session ? "the session" : asked.get("pane");
 const token = asked.get("t");
 // `querySelector` and not `getElementById`, because the tag map makes
@@ -131,7 +131,7 @@ function keepOptions(options: string): void {
 
 if (!pane || !token) {
   say(
-    "Open the address that `pymux web` printed, with ?pane=%1001 or ?session on it.",
+    "Open the address that `pymux web` printed: it carries the token.",
   );
 } else {
   const where = new URL(location.href);
