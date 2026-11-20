@@ -64,6 +64,7 @@ async def record_export(pymux: Pymux, args: argparse.Namespace) -> None:
         )
     except (OSError, ValueError, KeyError) as e:
         raise CommandException("record-export: %s" % e)
+    pymux.print_command_line(str(written))
     pymux.show_message("Exported %s" % written)
 
 
