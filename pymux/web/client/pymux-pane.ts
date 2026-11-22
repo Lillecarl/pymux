@@ -263,7 +263,9 @@ const CELLS_CLASS = "pyte-c";
 const OWN_RULES = `
 :host {
   display: block;
-  font-family: monospace;
+  /* \`fonts.css\` sets the list, for a page that serves fonts; the
+     screen's rule from the server reads the same property. */
+  font-family: var(--pyte-font, monospace);
   line-height: 1.2;
   --pymux-cursor-row: -1;
   --pymux-cursor-column: -1;
@@ -430,6 +432,8 @@ export class PymuxPane extends HTMLElement {
    * `/session` stream sizes its client by. A pane stream ignores it.
    */
   #observer = new ResizeObserver(() => this.#tellTheSize());
+  /** A served font that arrives changes the cell, and the box holds other counts. */
+  #fontsLoaded = (): void => this.#tellTheSize();
   #toldSize = "";
 
   #screen: HTMLPreElement;
@@ -651,10 +655,12 @@ export class PymuxPane extends HTMLElement {
     window.addEventListener("mouseup", this.#onMouseUp);
     document.addEventListener("visibilitychange", this.#onWake);
     window.addEventListener("online", this.#onWake);
+    document.fonts.addEventListener("loadingdone", this.#fontsLoaded);
   }
 
   disconnectedCallback(): void {
     this.#observer.disconnect();
+    document.fonts.removeEventListener("loadingdone", this.#fontsLoaded);
     window.removeEventListener("mouseup", this.#onMouseUp);
     document.removeEventListener("visibilitychange", this.#onWake);
     window.removeEventListener("online", this.#onWake);

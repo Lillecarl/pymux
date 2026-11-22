@@ -22,6 +22,7 @@ from __future__ import annotations
 import functools
 import json
 import os
+import re
 import secrets
 from collections.abc import Callable
 from pathlib import Path
@@ -89,7 +90,16 @@ SERVED = {
     # would open a page with no way in.
     "/manifest.webmanifest": ("manifest.webmanifest", "application/manifest+json"),
     "/icon.svg": ("icon.svg", "image/svg+xml"),
+    # The fonts a package built with them serves, `nix/web-fonts.nix`;
+    # without them it is empty, and the page draws with the device's.
+    "/fonts.css": ("fonts.css", "text/css; charset=utf-8"),
 }
+
+#: The font files `fonts.css` names. Each name carries a hash of its
+#: content, so the browser may keep one: it holds no token, and a phone
+#: should not fetch a megabyte of font on every load. Lillecarl/pyterm#1070.
+FONT = re.compile(r"/fonts/([A-Za-z0-9-]+\.[0-9a-f]+\.woff2)")
+KEPT = {"Cache-Control": "public, max-age=31536000, immutable"}
 
 #: The icon at the sizes a launcher asks for, rendered from `icon.svg`:
 #: Chrome on Android installs an app only with a 192 and a 512 pixel PNG.
@@ -171,6 +181,12 @@ def _served(path: str):
     size = ICON_SIZES.get(path)
     if size is not None:
         return _icon(size), "image/png"
+    font = FONT.fullmatch(path)
+    if font is not None:
+        try:
+            return (STATIC / "fonts" / font.group(1)).read_bytes(), "font/woff2"
+        except OSError:
+            return None
     held = SERVED.get(path)
     if held is None:
         return None
@@ -178,7 +194,8 @@ def _served(path: str):
     try:
         return (STATIC / name).read_bytes(), kind
     except OSError:
-        return None
+        # A package built without fonts serves an empty sheet, not a 404.
+        return (b"", kind) if name == "fonts.css" else None
 
 
 async def serve(
@@ -224,7 +241,14 @@ async def serve(
             return Response(
                 200,
                 "OK",
-                Headers({"Content-Type": kind, "Content-Length": str(len(body)), **GUARDS}),
+                Headers(
+                    {
+                        "Content-Type": kind,
+                        "Content-Length": str(len(body)),
+                        **GUARDS,
+                        **(KEPT if FONT.fullmatch(path) else {}),
+                    }
+                ),
                 body,
             )
 

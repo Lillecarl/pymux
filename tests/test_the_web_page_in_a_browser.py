@@ -145,6 +145,31 @@ TWO_STREAMS = """
 """
 
 
+#: The served families that finished loading.
+LOADED_FAMILIES = """
+[...document.fonts].filter((face) => face.status === "loaded").map((face) => face.family.replace(/"/g, ""))
+"""
+
+
+async def test_a_symbol_the_text_font_lacks_loads_a_served_fallback(server):
+    """
+    Claude Code's ⏵⏵ drew as boxes on Android: the page shipped no font,
+    and the phone's monospace lacks the glyph. The text face lacks it too,
+    so a fallback the server sends draws it. Lillecarl/pyterm#1070.
+    """
+    async with a_page(server, "printf '\\342\\217\\265\\342\\217\\265 accept edits'; sleep 60") as pane:
+        with anyio.fail_after(20):
+            while "accept edits" not in await call(server, "pane.capture", pane=pane):
+                await anyio.sleep(0.1)
+        loaded: list = []
+        with anyio.move_on_after(10):
+            while not any(family != "pymux-0" for family in loaded):
+                loaded = await call(server, "browser.evaluate", name="page", expression=LOADED_FAMILIES)
+                await anyio.sleep(0.1)
+        assert "pymux-0" in loaded, loaded
+        assert any(family.startswith("pymux-") and family != "pymux-0" for family in loaded), loaded
+
+
 async def test_a_new_stream_draws_with_its_own_style_table(server):
     """
     A reconnect, after an upgrade or a dropped network, numbers the

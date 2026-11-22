@@ -19,6 +19,7 @@ Lillecarl/pyterm#463.
 from __future__ import annotations
 
 import json
+import re
 import socket
 import sys
 
@@ -28,7 +29,7 @@ from fairclock import anyio as fair_anyio
 from websockets.asyncio.client import connect
 
 from pymux.core.main import Pymux
-from pymux.web.server import GUARDS, a_token, serve
+from pymux.web.server import GUARDS, STATIC, a_token, serve
 
 LINES = 6
 COLUMNS = 30
@@ -299,6 +300,34 @@ async def test_the_page_and_the_element_are_served(pymux):
                 head, _body = await _http(web.port, path)
                 for name, value in GUARDS.items():
                     assert ("%s: %s" % (name, value)).encode() in head, (path, name)
+
+            tasks.cancel_scope.cancel()
+        pymux.stop()
+
+
+async def test_the_fonts_the_sheet_names_are_served_and_kept(pymux):
+    """
+    The page draws with the fonts a picture of a pane does, from this
+    server: a phone has none of them. The files carry their hash in the
+    name, so a browser keeps them. Lillecarl/pyterm#1070.
+    """
+    async with pymux.running():
+        async with anyio.create_task_group() as tasks:
+            web = await _serving(pymux, tasks, writable=False)
+
+            head, sheet = await _http(web.port, "/fonts.css")
+            assert b"200" in head, head
+            named = re.findall(rb'url\("(fonts/[^"]+)"\)', sheet)
+            if (STATIC / "fonts").is_dir():
+                assert named and b"--pyte-font:" in sheet
+            for path in named:
+                head, body = await _http(web.port, "/" + path.decode())
+                assert b"200" in head and b"Content-Type: font/woff2" in head, (path, head)
+                assert b"immutable" in head and body[:4] == b"wOF2", path
+
+            for path in ["/fonts/../index.html", "/fonts/x.woff2", "/fonts/fonts.css"]:
+                head, _body = await _http(web.port, path)
+                assert b"404" in head, (path, head)
 
             tasks.cancel_scope.cancel()
         pymux.stop()

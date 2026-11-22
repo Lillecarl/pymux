@@ -56,6 +56,9 @@
   # shares the PipeWire it finds. Lillecarl/pyterm#659.
   pipewire ? null,
   wireplumber ? null,
+  # The fonts `pymux web` serves (`nix/web-fonts.nix`). Null serves none,
+  # and a page draws with the viewer's own monospace. Lillecarl/pyterm#1070.
+  webFonts ? null,
 }:
 let
   # pymux's own version. The element is published as an npm package as
@@ -90,7 +93,11 @@ let
     into:
     lib.concatMapStrings (name: ''
       install -Dm644 ${element}/${name} "${into}/${name}"
-    '') served;
+    '') served
+    + lib.optionalString (webFonts != null) ''
+      install -Dm644 ${webFonts}/fonts.css "${into}/fonts.css"
+      install -Dm644 -t "${into}/fonts" ${webFonts}/fonts/*
+    '';
 
   # The schemes of the base16 spec, converted to one JSON object while
   # the package is built: `set-option theme base16:<name>` reads it,
