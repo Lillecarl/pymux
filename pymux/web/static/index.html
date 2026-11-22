@@ -7,12 +7,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content" />
     <title>pymux</title>
     <link rel="stylesheet" href="/page.css" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#17181c" />
   </head>
   <body>
     <!--
-      The demo page. It picks a pane from the query string, because this
-      server has no session list yet: `?pane=%1001&t=TOKEN`, which is
-      what `pymux web` prints.
+      The demo page. `?t=TOKEN`, which `pymux web` prints, shows the
+      session; `&pane=%1001` shows one pane.
 
       Everything about a cell comes from the server, so this page styles
       only the room around it.

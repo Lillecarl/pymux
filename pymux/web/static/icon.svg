@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Full bleed, so a launcher's mask may cut any shape out of it. -->
+  <rect width="512" height="512" fill="#17181c"/>
+  <!-- Two panes side by side, a prompt in the left one. -->
+  <rect x="96" y="128" width="320" height="256" rx="20" fill="none" stroke="#e8e8e8" stroke-width="16"/>
+  <line x1="300" y1="128" x2="300" y2="384" stroke="#e8e8e8" stroke-width="16"/>
+  <polyline points="136,208 184,248 136,288" fill="none" stroke="#5fd75f" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="200" y1="300" x2="256" y2="300" stroke="#5fd75f" stroke-width="18" stroke-linecap="round"/>
+</svg>

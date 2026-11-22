@@ -19,6 +19,7 @@ It needs `pymux[web]`. Lillecarl/pyterm#463.
 
 from __future__ import annotations
 
+import functools
 import json
 import os
 import secrets
@@ -27,6 +28,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
+import resvg_py
 from libpymux import PaneStream, Server, StreamRefused
 from platformdirs import user_state_path
 
@@ -81,7 +83,17 @@ SERVED = {
     "/replay.js": ("replay.js", "text/javascript; charset=utf-8"),
     "/replay.d.ts": ("replay.d.ts", "text/plain; charset=utf-8"),
     "/replay-page.js": ("replay-page.js", "text/javascript; charset=utf-8"),
+    # What a phone needs to put the page on its home screen and open it
+    # without the address bar. **The manifest names no `start_url`**, so
+    # the address added is the one open, token and all: a fixed one
+    # would open a page with no way in.
+    "/manifest.webmanifest": ("manifest.webmanifest", "application/manifest+json"),
+    "/icon.svg": ("icon.svg", "image/svg+xml"),
 }
+
+#: The icon at the sizes a launcher asks for, rendered from `icon.svg`:
+#: Chrome on Android installs an app only with a 192 and a 512 pixel PNG.
+ICON_SIZES = {"/icon-192.png": 192, "/icon-512.png": 512}
 
 
 #: On every answer this gives over HTTP. The page loads the element and
@@ -149,8 +161,16 @@ def kept_token(path: Path) -> str:
     return token
 
 
+@functools.cache
+def _icon(size: int) -> bytes:
+    return resvg_py.svg_to_bytes(svg_path=str(STATIC / "icon.svg"), width=size, height=size)
+
+
 def _served(path: str):
     "The file and its type for one request path, or None."
+    size = ICON_SIZES.get(path)
+    if size is not None:
+        return _icon(size), "image/png"
     held = SERVED.get(path)
     if held is None:
         return None

@@ -18,6 +18,9 @@ Lillecarl/pyterm#463.
 
 from __future__ import annotations
 
+import json
+import struct
+
 import pytest
 
 from pymux.web import server as web
@@ -104,6 +107,23 @@ def test_a_token_outlives_a_restart(tmp_path):
     first = web.kept_token(path)
     assert web.kept_token(path) == first
     assert path.stat().st_mode & 0o777 == 0o600
+
+
+@pytest.mark.parametrize(("path", "size"), sorted(web.ICON_SIZES.items()))
+def test_the_icon_is_a_png_of_the_size_a_launcher_asks_for(path, size):
+    body, kind = web._served(path)
+    assert kind == "image/png"
+    width, height = struct.unpack(">II", body[16:24])
+    assert (width, height) == (size, size)
+
+
+def test_the_manifest_opens_the_address_that_was_added():
+    "A `start_url` would open a page without the token."
+    manifest = json.loads((web.STATIC / "manifest.webmanifest").read_text())
+    assert "start_url" not in manifest
+    assert manifest["display"] == "standalone"
+    named = {icon["src"] for icon in manifest["icons"]}
+    assert named <= set(web.SERVED) | set(web.ICON_SIZES)
 
 
 def test_an_empty_token_file_gets_a_new_token(tmp_path):
