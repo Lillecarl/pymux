@@ -149,6 +149,10 @@ BASELINE = HERE / "vterm-failures.txt"
 #: ends.
 FILE_TIMEOUT = int(os.environ.get("PYMUX_VTERM_FILE_TIMEOUT") or 900)
 
+#: How long before `FILE_TIMEOUT` the middle man dumps its stacks, so the
+#: dump is in what the run said when the wait ends.
+DUMP_MARGIN = 10
+
 #: The test files that cannot run with pymux in the middle, and the
 #: reason for each.
 #:
@@ -235,6 +239,10 @@ def run_one(directory: Path, name: str, wires: Path | None = None):
         str(directory / name),
     ]
     env = dict(os.environ)
+    # The middle man's stacks, written before the wait ends: a hang that
+    # said nothing cost a 900 s gate run and left no clue.
+    # Lillecarl/pyterm#1083.
+    env["PYMUX_VTERM_DUMP_AFTER"] = str(max(1, FILE_TIMEOUT - DUMP_MARGIN))
     if wires is not None:
         env["PYMUX_VTERM_WIRE"] = str(wires / (name + ".bin"))
     try:

@@ -43,6 +43,7 @@ without it. `PYMUX_VTERM_TMP` is a directory to work in.
 
 from __future__ import annotations
 
+import faulthandler
 import os
 import subprocess
 import sys
@@ -232,6 +233,10 @@ def main() -> int:
 
     tmp = Path(os.environ.get("PYMUX_VTERM_TMP", ".")) / ("run-%d" % os.getpid())
     tmp.mkdir(parents=True, exist_ok=True)
+
+    dump_after = os.environ.get("PYMUX_VTERM_DUMP_AFTER")
+    if dump_after:
+        faulthandler.dump_traceback_later(float(dump_after))
 
     middle = MiddleMan(tmp, program)
     try:
