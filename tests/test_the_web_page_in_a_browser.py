@@ -528,22 +528,18 @@ async def test_a_word_the_keyboard_corrects_goes_out_once(server):
             ):
                 await anyio.sleep(0.1)
         await call(server, "browser.click", name="page", selector="pymux-pane")
-        for letter in "Cant":
-            await call(
-                server,
-                "browser.evaluate",
-                name="page",
-                expression=on_the_keyboard("edit('insertText', %s)" % json.dumps(letter)),
-            )
-        await call(server, "browser.evaluate", name="page", expression=on_the_keyboard("edit('deleteContentBackward')"))
-        await call(server, "browser.evaluate", name="page", expression=on_the_keyboard("recompose('Can')"))
-        for letter in "'t we":
-            await call(
-                server,
-                "browser.evaluate",
-                name="page",
-                expression=on_the_keyboard("edit('insertText', %s)" % json.dumps(letter)),
-            )
+        # One call, as the keyboard sends them: a call each took a dozen
+        # round trips, past the page's deadline on a loaded machine.
+        steps = (
+            ["edit('insertText', %s)" % json.dumps(letter) for letter in "Cant"]
+            + ["edit('deleteContentBackward')", "recompose('Can')"]
+            + ["edit('insertText', %s)" % json.dumps(letter) for letter in "'t we"]
+        )
+        replay = "(() => { const keyboard = %s; %s; })()" % (
+            KEYBOARD.strip(),
+            "; ".join("keyboard.%s" % step for step in steps),
+        )
+        await call(server, "browser.evaluate", name="page", expression=replay)
         await call(server, "browser.press", name="page", key="Enter")
         # The tty echoes the line, then cat writes it back.
         shown = ""
