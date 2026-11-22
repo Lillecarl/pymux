@@ -23,6 +23,7 @@ is asked to `optimize`.
 
 from __future__ import annotations
 
+import collections
 import contextlib
 import contextvars
 import json
@@ -282,7 +283,11 @@ class ActionLog:
 
     def __init__(self, path: Path | None = None) -> None:
         self.path = path or default_path()
-        self._send, self._receive = anyio.create_memory_object_stream[Action](MAX_WAITING)
+        # Not a memory object stream: a server whose bind fails never
+        # starts `keep`, nothing closes the stream, and its `__del__` runs
+        # a lazy import at interpreter exit. Lillecarl/pyterm#1065.
+        self._queue: collections.deque[Action] = collections.deque()
+        self._arrived = anyio.Event()
         #: Since start: actions recorded, turned away by a full stream,
         #: written, and lost to a write that failed.
         self.recorded = 0
@@ -293,10 +298,11 @@ class ActionLog:
 
     def record(self, action: Action) -> None:
         self.recorded += 1
-        try:
-            self._send.send_nowait(action)
-        except anyio.WouldBlock:
+        if len(self._queue) >= MAX_WAITING:
             self.dropped += 1
+            return
+        self._queue.append(action)
+        self._arrived.set()
 
     async def settled(self) -> None:
         "Wait until every action recorded so far is written or lost."
@@ -319,8 +325,10 @@ class ActionLog:
         upkept = 0.0
         try:
             while True:
-                batch = [await self._receive.receive()]
-                batch.extend(self._waiting())
+                while not self._queue:
+                    await self._arrived.wait()
+                    self._arrived = anyio.Event()
+                batch = self._waiting()
                 try:
                     if db is None:
                         db = await _open(self.path)
@@ -353,12 +361,9 @@ class ActionLog:
                     await _close(db)
 
     def _waiting(self) -> list[Action]:
-        taken = []
-        while True:
-            try:
-                taken.append(self._receive.receive_nowait())
-            except anyio.WouldBlock:
-                return taken
+        taken = list(self._queue)
+        self._queue.clear()
+        return taken
 
 
 async def _open(path: Path) -> apsw.AsyncConnection:
