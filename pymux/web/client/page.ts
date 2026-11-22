@@ -68,6 +68,8 @@ if (asked.has("keys")) document.body.classList.add("keys");
 // A tap must leave the focus, and so the on-screen keyboard, where it is.
 row.addEventListener("pointerdown", (event) => event.preventDefault());
 row.addEventListener("mousedown", (event) => event.preventDefault());
+// A long press opens no menu over a key. Lillecarl/pyterm#1079.
+row.addEventListener("contextmenu", (event) => event.preventDefault());
 row.addEventListener("click", (event) => {
   const button = (event.target as Element).closest("button");
   if (!button) return;

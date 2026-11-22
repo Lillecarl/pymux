@@ -140,6 +140,11 @@ body.keys #keys {
   min-height: 2.5rem;
   flex-shrink: 0;
   touch-action: manipulation;
+  /* A key is held, not selected: a long press selected its label and
+     opened the text menu. Lillecarl/pyterm#1079. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 #keys button[aria-pressed="true"] {
