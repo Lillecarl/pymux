@@ -262,6 +262,17 @@ function keyboardLock(): KeyboardLock | undefined {
     : undefined;
 }
 
+/** The two calls of the VirtualKeyboard API, which TypeScript's DOM types lack. */
+interface VirtualKeyboard {
+  show(): void;
+  hide(): void;
+}
+
+/** Chromium's VirtualKeyboard, which opens a phone's keyboard on request, or undefined. */
+function virtualKeyboard(): VirtualKeyboard | undefined {
+  return (navigator as Navigator & { virtualKeyboard?: VirtualKeyboard }).virtualKeyboard;
+}
+
 /** A browser's `MouseEvent.button`, as the mouse message names it. */
 const BUTTONS: MouseMessage["button"][] = ["left", "middle", "right"];
 
@@ -562,8 +573,8 @@ export class PymuxPane extends HTMLElement {
     // land on it.
 
     // A textarea and not the `pre`, because a composition draws its
-    // preedit in a focused editable element. It holds nothing: every
-    // `beforeinput` is cancelled once its text is on the wire.
+    // preedit in a focused editable element. It holds what the keyboard
+    // typed, and the element sends the change (`#sendChange`).
     this.#keyboard = document.createElement("textarea");
     this.#keyboard.className = "keyboard";
     this.#keyboard.setAttribute("autocapitalize", "off");
@@ -571,6 +582,13 @@ export class PymuxPane extends HTMLElement {
     this.#keyboard.setAttribute("spellcheck", "false");
     // Chromium on Android reads this, and Gboard then leaves `ls` alone.
     this.#keyboard.setAttribute("autocorrect", "off");
+    // A tap on the terminal is a click, not a request for the phone's
+    // keyboard, which `showKeyboard` opens. Chromium takes the policy;
+    // a browser without the VirtualKeyboard API is kept quiet by
+    // `inputmode`. Either way a hardware keyboard still types, because
+    // the textarea keeps the focus. Lillecarl/pyterm#1077.
+    this.#keyboard.setAttribute("virtualkeyboardpolicy", "manual");
+    if (!virtualKeyboard()) this.#keyboard.inputMode = "none";
 
     this.#cursor = document.createElement("div");
     this.#cursor.className = "cursor";
@@ -627,13 +645,25 @@ export class PymuxPane extends HTMLElement {
     });
   }
 
-  /**
-   * Focus the keyboard, and show a phone's on-screen keyboard again: a
-   * person may have put it away while the textarea kept the focus, and
-   * Android shows it only when focus arrives.
-   */
+  /** Give the keyboard textarea the focus, leaving a phone's on-screen keyboard as it is. */
   #focusKeyboard(): void {
-    if (this.shadowRoot?.activeElement === this.#keyboard) this.#keyboard.blur();
+    if (this.shadowRoot?.activeElement !== this.#keyboard) this.#keyboard.focus();
+  }
+
+  /**
+   * Show a phone's on-screen keyboard: the ⌨ of the key row. The
+   * keyboard's own button puts it away. Lillecarl/pyterm#1077.
+   */
+  showKeyboard(): void {
+    const keyboard = virtualKeyboard();
+    if (keyboard) {
+      this.#focusKeyboard();
+      keyboard.show();
+      return;
+    }
+    // Without the API, a keyboard shows only when the focus arrives.
+    this.#keyboard.inputMode = "text";
+    this.#keyboard.blur();
     this.#keyboard.focus();
   }
 
@@ -696,8 +726,11 @@ export class PymuxPane extends HTMLElement {
     this.#forget();
     if (!this.#composing) return;
     this.#composing = false;
-    // Losing the focus is what makes an IME let go of its word.
-    this.#focusKeyboard();
+    // Losing the focus is what makes an IME let go of its word. A word
+    // was being typed, so the keyboard was up, and it comes back.
+    this.#keyboard.blur();
+    this.#keyboard.focus();
+    virtualKeyboard()?.show();
   }
 
   // -- the socket ----------------------------------------------------

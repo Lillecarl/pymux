@@ -294,6 +294,48 @@ document.activeElement === document.querySelector("pymux-pane")
 """
 
 
+#: Counts what the page asks of the VirtualKeyboard API, where a headless
+#: browser has no keyboard to show.
+COUNT_KEYBOARD_SHOWS = """
+(() => {
+  window.keyboardShows = 0;
+  Object.defineProperty(navigator, "virtualKeyboard", {
+    value: { show: () => { window.keyboardShows += 1; }, hide: () => {} },
+    configurable: true,
+  });
+})()
+"""
+
+
+async def test_a_tap_on_the_terminal_leaves_the_phone_keyboard_closed(server):
+    """
+    A tap is a click: it gives the textarea the focus, for a hardware
+    keyboard, and asks for no on-screen keyboard. The ⌨ of the key row
+    does. Lillecarl/pyterm#1077.
+    """
+    async with a_page(server, "printf ready; sleep 60", writable=True, session=True, query="keys") as pane:
+        with anyio.fail_after(20):
+            while "ready" not in await call(server, "pane.capture", pane=pane):
+                await anyio.sleep(0.1)
+        await call(server, "browser.evaluate", name="page", expression=COUNT_KEYBOARD_SHOWS)
+        policy = await call(
+            server,
+            "browser.evaluate",
+            name="page",
+            expression="document.querySelector('pymux-pane').shadowRoot.querySelector('.keyboard')"
+            ".getAttribute('virtualkeyboardpolicy')",
+        )
+        assert policy == "manual"
+
+        await call(server, "browser.click", name="page", selector="pymux-pane")
+        assert await call(server, "browser.evaluate", name="page", expression=THE_KEYBOARD_HAS_THE_FOCUS)
+        assert await call(server, "browser.evaluate", name="page", expression="window.keyboardShows") == 0
+
+        await call(server, "browser.click", name="page", selector="#show-keyboard")
+        assert await call(server, "browser.evaluate", name="page", expression="window.keyboardShows") == 1
+        assert await call(server, "browser.evaluate", name="page", expression=THE_KEYBOARD_HAS_THE_FOCUS)
+
+
 async def test_the_escape_button_aborts_and_leaves_the_keys_on_the_terminal(server):
     """
     For a browser that keeps Escape in full screen. Chromium has the

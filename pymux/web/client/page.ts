@@ -71,6 +71,7 @@ row.addEventListener("mousedown", (event) => event.preventDefault());
 row.addEventListener("click", (event) => {
   const button = (event.target as Element).closest("button");
   if (!button) return;
+  if (button.id === "show-keyboard") element.showKeyboard();
   const { key, hold } = button.dataset;
   if (key) element.press(key);
   if (hold === "ctrl" || hold === "alt") element.hold(hold);

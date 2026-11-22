@@ -39,6 +39,10 @@
       <!-- Shown while the notification permission is undecided: Chrome
            asks only on a person's tap. Lillecarl/pyterm#1075. -->
       <button type="button" id="notify" aria-label="Allow notifications" hidden>🔔</button>
+      <!-- A tap on the terminal does not open the phone's keyboard; this
+           does, and the keyboard's own button puts it away.
+           Lillecarl/pyterm#1077. -->
+      <button type="button" id="show-keyboard" aria-label="Show the keyboard">⌨</button>
       <button type="button" data-key="Escape">Esc</button>
       <button type="button" data-key="Tab">Tab</button>
       <button type="button" data-hold="ctrl" aria-pressed="false">Ctrl</button>
