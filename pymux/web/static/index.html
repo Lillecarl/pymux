@@ -36,6 +36,9 @@
       data-hold holds a modifier for the next key. Lillecarl/pyterm#1051.
     -->
     <nav id="keys" aria-label="Keys">
+      <!-- Shown while the notification permission is undecided: Chrome
+           asks only on a person's tap. Lillecarl/pyterm#1075. -->
+      <button type="button" id="notify" aria-label="Allow notifications" hidden>🔔</button>
       <button type="button" data-key="Escape">Esc</button>
       <button type="button" data-key="Tab">Tab</button>
       <button type="button" data-hold="ctrl" aria-pressed="false">Ctrl</button>

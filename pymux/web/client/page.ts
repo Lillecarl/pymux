@@ -126,16 +126,21 @@ function say(text: string, trouble = false): void {
  * click on one shows its pane. Through a service worker, because Android
  * shows no `new Notification`. Lillecarl/pyterm#1073.
  *
- * **Permission is asked at the first tap**: Chrome shows the question
- * only for a person's gesture, and drops a request made at load.
+ * **Permission is asked by the 🔔 of the key row**, shown while it is
+ * undecided: Chrome shows the question only for a person's tap, and a
+ * touch counts as one only when it ends. Lillecarl/pyterm#1075.
  */
 function showNotifications(): void {
   if (!("serviceWorker" in navigator) || !("Notification" in window)) return;
   const worker = navigator.serviceWorker.register("/sw.js").catch(() => null);
 
-  if (Notification.permission === "default") {
-    document.addEventListener("pointerdown", () => void Notification.requestPermission(), { once: true });
-  }
+  const ask = document.getElementById("notify") as HTMLButtonElement;
+  ask.hidden = Notification.permission !== "default";
+  ask.addEventListener("click", () => {
+    void Notification.requestPermission().then((answer) => {
+      ask.hidden = answer !== "default";
+    });
+  });
 
   element.addEventListener("notification", (event) => {
     if (Notification.permission !== "granted") return;

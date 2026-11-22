@@ -356,6 +356,16 @@ async def test_the_key_row_holds_ctrl_for_a_typed_letter(server):
             tree = await call(server, "tree")
             return "".join(each["mode"] for one in tree for window in one["windows"] for each in window["panes"])
 
+        # The row asks for notifications while nobody has answered:
+        # Chrome asks only on a tap. Lillecarl/pyterm#1075.
+        permission, hidden = await call(
+            server,
+            "browser.evaluate",
+            name="page",
+            expression="[Notification.permission, document.getElementById('notify').hidden]",
+        )
+        assert hidden == (permission != "default"), permission
+
         await call(server, "browser.click", name="page", selector="#keys [data-hold=ctrl]")
         assert await call(server, "browser.evaluate", name="page", expression=HELD_BUTTONS) == {
             "ctrl": "true",
