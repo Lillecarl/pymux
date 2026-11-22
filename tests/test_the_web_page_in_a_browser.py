@@ -412,12 +412,48 @@ async def test_a_word_half_composed_goes_before_a_key_of_the_row(server):
         assert "ready^Xsta^Iz" in shown
 
 
+#: What a browser does with an on-screen keyboard's edits, which a
+#: dispatched event does not: `beforeinput`, then, unless the element
+#: cancelled it, the change to the textarea and `input`.
+KEYBOARD = """
+(() => {
+  const keyboard = document.querySelector("pymux-pane").shadowRoot.querySelector(".keyboard");
+  const input = (inputType, data, isComposing) => keyboard.dispatchEvent(
+    new InputEvent("input", { inputType, data, isComposing, bubbles: true, composed: true }));
+  return {
+    edit: (inputType, data = null) => {
+      const go = keyboard.dispatchEvent(new InputEvent("beforeinput", {
+        inputType, data, isComposing: false, bubbles: true, cancelable: true, composed: true,
+      }));
+      if (!go) return;
+      if (inputType === "insertText") keyboard.value += data;
+      else if (inputType === "deleteContentBackward") keyboard.value = [...keyboard.value].slice(0, -1).join("");
+      input(inputType, data, false);
+    },
+    // A correction: the keyboard composes `word` over the last word of
+    // the field, from its own copy of it.
+    recompose: (word) => {
+      keyboard.dispatchEvent(new CompositionEvent("compositionstart", { data: "" }));
+      keyboard.dispatchEvent(new InputEvent("beforeinput", {
+        inputType: "insertCompositionText", data: word, isComposing: true, bubbles: true, composed: true,
+      }));
+      keyboard.value = keyboard.value.replace(/\\S*$/, word);
+      input("insertCompositionText", word, true);
+      keyboard.dispatchEvent(new CompositionEvent("compositionend", { data: word }));
+      input("insertCompositionText", word, false);
+    },
+  };
+})()
+"""
+
+
+def on_the_keyboard(step: str) -> str:
+    return "(%s).%s" % (KEYBOARD.strip(), step)
+
+
 #: An on-screen keyboard's Backspace, as it arrives when its keydown
 #: carries no key: only the `beforeinput`.
-DELETE_BACKWARD = """
-document.querySelector("pymux-pane").shadowRoot.querySelector(".keyboard")
-  .dispatchEvent(new InputEvent("beforeinput", { inputType: "deleteContentBackward", bubbles: true, cancelable: true, composed: true }))
-"""
+DELETE_BACKWARD = on_the_keyboard("edit('deleteContentBackward')")
 
 
 async def test_a_backspace_with_no_key_still_deletes(server):
@@ -447,6 +483,49 @@ async def test_a_backspace_with_no_key_still_deletes(server):
             server, "browser.evaluate", name="page", expression="document.getElementById('probe').textContent"
         )
         assert '"inputType":"deleteContentBackward"' in probe, probe
+
+
+async def test_a_word_the_keyboard_corrects_goes_out_once(server):
+    """
+    SwiftKey on Android, typing "Can't we": it typed C, a, n and t as
+    plain inserts, deleted the t, and composed "Can" again from its own
+    copy of the word before the apostrophe. The element had cancelled each
+    letter, so the field was empty and "Can" went out twice. The probe's
+    log of it is in Lillecarl/pyterm#1069.
+    """
+    async with a_page(server, "printf 'ready\\n'; cat", writable=True) as pane:
+        with anyio.fail_after(20):
+            while "ready" not in await call(server, "pane.capture", pane=pane):
+                await anyio.sleep(0.1)
+        with anyio.fail_after(20):
+            while not await call(
+                server, "browser.evaluate", name="page", expression="document.querySelector('pymux-pane').writable"
+            ):
+                await anyio.sleep(0.1)
+        await call(server, "browser.click", name="page", selector="pymux-pane")
+        for letter in "Cant":
+            await call(
+                server,
+                "browser.evaluate",
+                name="page",
+                expression=on_the_keyboard("edit('insertText', %s)" % json.dumps(letter)),
+            )
+        await call(server, "browser.evaluate", name="page", expression=on_the_keyboard("edit('deleteContentBackward')"))
+        await call(server, "browser.evaluate", name="page", expression=on_the_keyboard("recompose('Can')"))
+        for letter in "'t we":
+            await call(
+                server,
+                "browser.evaluate",
+                name="page",
+                expression=on_the_keyboard("edit('insertText', %s)" % json.dumps(letter)),
+            )
+        await call(server, "browser.press", name="page", key="Enter")
+        # The tty echoes the line, then cat writes it back.
+        shown = ""
+        with anyio.move_on_after(10):
+            while (shown := (await call(server, "pane.capture", pane=pane)).rstrip()) != "ready\nCan't we\nCan't we":
+                await anyio.sleep(0.1)
+        assert shown == "ready\nCan't we\nCan't we"
 
 
 async def test_a_session_view_keeps_its_client_options_over_a_reload(server):
