@@ -100,6 +100,10 @@ if (asked.has("probe")) {
       } else if (event instanceof CompositionEvent) {
         Object.assign(seen, { data: event.data });
       }
+      // What the hidden textarea holds: an IME reads it back, and a
+      // value it did not expect is where it repeats a word.
+      const target = event.composedPath()[0];
+      if (target instanceof HTMLTextAreaElement) seen.value = target.value;
       log.textContent = `${JSON.stringify(seen)}\n${log.textContent ?? ""}`;
     });
   }
