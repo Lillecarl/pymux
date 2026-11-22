@@ -101,6 +101,37 @@ export interface ClientOptions {
   options: [name: string, value: string][];
 }
 
+/**
+ * A notification of a pane, for a session view: `id` names it for a
+ * click and a close. The element hands it on as an event of the same
+ * name; showing it is the page's. Lillecarl/pyterm#1073.
+ */
+export interface Notice {
+  type: "notification";
+  id: string;
+  title: string;
+  body: string;
+  urgency: number;
+}
+
+/** The notification `id` is to come down: its pane was seen. */
+export interface NoticeClose {
+  type: "notification-close";
+  id: string;
+}
+
+/** Whether the page has the focus, for a session view's client. */
+export interface FocusMessage {
+  type: "focus";
+  focused: boolean;
+}
+
+/** A person clicked the notification `id`: the server shows its pane. */
+export interface NoticeClickMessage {
+  type: "notification-click";
+  id: string;
+}
+
 /** The rows that changed, and nothing else. */
 export interface Frame {
   type: "frame";
@@ -199,7 +230,9 @@ export type ViewerMessage =
   | PasteMessage
   | SizeMessage
   | MouseMessage
-  | ProbeMessage;
+  | ProbeMessage
+  | FocusMessage
+  | NoticeClickMessage;
 
 /** One keyboard event `?probe` saw, for `pymux web` to print. Lillecarl/pyterm#1069. */
 export interface ProbeMessage {
@@ -391,6 +424,18 @@ export interface PymuxPane {
   addEventListener(
     type: "held",
     listener: (event: CustomEvent<Modifier[]>) => void,
+    options?: boolean | AddEventListenerOptions,
+  ): void;
+  /** A pane of a session view notified; showing it is the page's. Lillecarl/pyterm#1073. */
+  addEventListener(
+    type: "notification",
+    listener: (event: CustomEvent<Notice>) => void,
+    options?: boolean | AddEventListenerOptions,
+  ): void;
+  /** The notification `detail.id` is to come down: its pane was seen. */
+  addEventListener(
+    type: "notification-close",
+    listener: (event: CustomEvent<NoticeClose>) => void,
     options?: boolean | AddEventListenerOptions,
   ): void;
   /**
@@ -658,11 +703,17 @@ export class PymuxPane extends HTMLElement {
     document.addEventListener("visibilitychange", this.#onWake);
     window.addEventListener("online", this.#onWake);
     document.fonts.addEventListener("loadingdone", this.#fontsLoaded);
+    document.addEventListener("visibilitychange", this.#tellTheFocus);
+    window.addEventListener("focus", this.#tellTheFocus);
+    window.addEventListener("blur", this.#tellTheFocus);
   }
 
   disconnectedCallback(): void {
     this.#observer.disconnect();
     document.fonts.removeEventListener("loadingdone", this.#fontsLoaded);
+    document.removeEventListener("visibilitychange", this.#tellTheFocus);
+    window.removeEventListener("focus", this.#tellTheFocus);
+    window.removeEventListener("blur", this.#tellTheFocus);
     window.removeEventListener("mouseup", this.#onMouseUp);
     document.removeEventListener("visibilitychange", this.#onWake);
     window.removeEventListener("online", this.#onWake);
@@ -908,6 +959,20 @@ export class PymuxPane extends HTMLElement {
    * comes back to a stream that gave up. Showing the page again, or the
    * network coming back, starts over at once.
    */
+  /**
+   * Tell the server whether a person can see the page. A client with the
+   * focus keeps back the notifications of the window it shows, and a
+   * phone in a pocket shows nobody anything. Lillecarl/pyterm#1073.
+   */
+  #tellTheFocus = (): void => {
+    this.send({ type: "focus", focused: document.visibilityState === "visible" && document.hasFocus() });
+  };
+
+  /** A person clicked the notification `id`: the server shows its pane to this client. */
+  clickNotification(id: string): void {
+    this.send({ type: "notification-click", id });
+  }
+
   #onWake = (): void => {
     if (document.visibilityState !== "visible") return;
     const socket = this.#socket;
@@ -961,9 +1026,9 @@ export class PymuxPane extends HTMLElement {
   // -- what arrives --------------------------------------------------
 
   #onMessage(event: MessageEvent): void {
-    let frame: Welcome | Frame | ClientOptions;
+    let frame: Welcome | Frame | ClientOptions | Notice | NoticeClose;
     try {
-      frame = JSON.parse(String(event.data)) as Welcome | Frame | ClientOptions;
+      frame = JSON.parse(String(event.data)) as Welcome | Frame | ClientOptions | Notice | NoticeClose;
     } catch {
       this.dispatchEvent(new CustomEvent("error", { detail: "bad frame" }));
       return;
@@ -971,6 +1036,10 @@ export class PymuxPane extends HTMLElement {
     if (frame.type === "client-options") {
       this.#clientOptions = frame.options;
       this.dispatchEvent(new CustomEvent("client-options", { detail: frame.options }));
+      return;
+    }
+    if (frame.type === "notification" || frame.type === "notification-close") {
+      this.dispatchEvent(new CustomEvent(frame.type, { detail: frame }));
       return;
     }
     this.receive(frame);
@@ -1003,6 +1072,7 @@ export class PymuxPane extends HTMLElement {
       // Now, and not when the socket opened: this is the first moment a
       // listener can read `writable` and the size and be told the truth.
       this.dispatchEvent(new CustomEvent("connected"));
+      this.#tellTheFocus();
       return;
     }
     if (frame.type !== "frame") return;

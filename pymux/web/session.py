@@ -35,13 +35,26 @@ import anyio
 from libpymux.protocol import Field, Packet
 from pyte.keys.unhearable import Unhearable
 from pyte.mouse import mouse_report
+from pyte.osc import Osc
 from pyte.screen import Screen
+from pyte.sequences.reports import FocusReport
 from pyte.streams import GroundTimer, Stream
 
 from pymux.client.terminal import DETECTION_QUERIES
 from pymux.keys.key_spelling import event_however_it_is_written
 from pymux.log import logger
-from pymux.web.protocol import MOUSE, PROBE, PaneView, Typed, encode_unsent, mouse_of, probe_line, typed_of
+from pymux.web.notices import NOTIFICATION_CLICK, Notices, click_report
+from pymux.web.protocol import (
+    FOCUS,
+    MOUSE,
+    PROBE,
+    PaneView,
+    Typed,
+    encode_unsent,
+    mouse_of,
+    probe_line,
+    typed_of,
+)
 
 __all__ = ["CLIENT_OPTIONS", "SessionScreen", "client_options_of", "run_session"]
 
@@ -114,10 +127,13 @@ class SessionScreen:
         #: said them, and whether the viewer has heard them since.
         self.client_options: list[list[str]] = list(client_options or [])
         self.client_options_told = True
-        self.screen = Screen(rows, columns, write_process_input=self._answer)
+        self.screen = Screen(rows, columns, write_process_input=self._answer, osc_func=self._osc)
         self._stream = Stream(self.screen)
         self._ground_timer = GroundTimer(self._stream, _GROUND_TIMEOUT, time.monotonic)
         self._view = PaneView()
+        self._notices = Notices()
+        #: Messages for the viewer that are not frames, oldest first.
+        self.told: list[dict[str, Any]] = []
 
     # -- the client side of the wire -----------------------------------
 
@@ -178,10 +194,26 @@ class SessionScreen:
         "What the terminal says back to a query goes in as input."
         self._send({Field.CMD: Packet.IN, Field.DATA: data})
 
+    def _osc(self, code: str, param: str) -> None:
+        "An OSC the server wrote for this terminal: a notification goes to the viewer (`notices.py`)."
+        if code != Osc.NOTIFICATION:
+            return
+        taken = self._notices.take(param)
+        if taken.answer is not None:
+            self._answer(taken.answer)
+        if taken.message is not None:
+            self.told.append(taken.message)
+
     # -- the viewer side -----------------------------------------------
 
     def welcome(self) -> dict[str, Any]:
         return self._view.welcome(self.screen, self.screen.writes, not self.read_only)
+
+    def take_told(self) -> list[dict[str, Any]]:
+        "The messages for the viewer that are not frames, which are then sent."
+        told = self.told.copy()
+        self.told.clear()
+        return told
 
     def options_untold(self) -> dict[str, Any] | None:
         "The client options, when they changed since the viewer heard them."
@@ -226,6 +258,20 @@ class SessionScreen:
 
         if message.get("type") == PROBE:
             print(probe_line(message), file=sys.stderr, flush=True)
+            return None
+
+        if message.get("type") == FOCUS:
+            # A focused client keeps back the notifications of the window
+            # it shows, so a page in a pocket says it lost the focus.
+            if self.screen.reports_focus:
+                self._answer(str(FocusReport(bool(message.get("focused")))))
+            return None
+
+        if message.get("type") == NOTIFICATION_CLICK:
+            report = click_report(message.get("id"))
+            if report is None:
+                return "a notification-click message needs the id of a notification"
+            self._answer(report)
             return None
 
         if message.get("type") == MOUSE:
@@ -344,6 +390,8 @@ async def run_session(
                 options = session.options_untold()
                 if options is not None:
                     await to_viewer(options)
+                for message in session.take_told():
+                    await to_viewer(message)
                 frame = await session.frame()
                 if frame is not None:
                     await to_viewer(frame)

@@ -121,6 +121,57 @@ function say(text: string, trouble = false): void {
   about.toggleAttribute("data-trouble", trouble);
 }
 
+/**
+ * The notifications of a session view's panes, as the phone's own, and a
+ * click on one shows its pane. Through a service worker, because Android
+ * shows no `new Notification`. Lillecarl/pyterm#1073.
+ *
+ * **Permission is asked at the first tap**: Chrome shows the question
+ * only for a person's gesture, and drops a request made at load.
+ */
+function showNotifications(): void {
+  if (!("serviceWorker" in navigator) || !("Notification" in window)) return;
+  const worker = navigator.serviceWorker.register("/sw.js").catch(() => null);
+
+  if (Notification.permission === "default") {
+    document.addEventListener("pointerdown", () => void Notification.requestPermission(), { once: true });
+  }
+
+  element.addEventListener("notification", (event) => {
+    if (Notification.permission !== "granted") return;
+    const notice = event.detail;
+    void worker.then((registration) =>
+      registration?.showNotification(notice.title || "pymux", {
+        body: notice.body,
+        tag: notice.id || undefined,
+        icon: "/icon-192.png",
+        requireInteraction: notice.urgency === 2,
+        data: { id: notice.id, url: location.href },
+      }),
+    );
+  });
+  element.addEventListener("notification-close", (event) => {
+    void worker.then(async (registration) => {
+      for (const shown of (await registration?.getNotifications({ tag: event.detail.id })) ?? []) shown.close();
+    });
+  });
+
+  navigator.serviceWorker.addEventListener("message", (event: MessageEvent) => {
+    if (event.data?.type === "notification-click" && typeof event.data.id === "string") {
+      element.clickNotification(event.data.id);
+    }
+  });
+
+  // A click that opened the page: the worker named the notification.
+  const clicked = asked.get("notification");
+  if (clicked) {
+    element.addEventListener("connected", () => element.clickNotification(clicked), { once: true });
+    const here = new URL(location.href);
+    here.searchParams.delete("notification");
+    history.replaceState(null, "", here);
+  }
+}
+
 /** Where the page keeps the client options of a session view. */
 const KEPT_OPTIONS = "pymux-client-options";
 
@@ -158,6 +209,7 @@ if (!pane || !token) {
     const kept = keptOptions();
     if (kept !== null) where.searchParams.set("options", kept);
     element.addEventListener("client-options", (event) => keepOptions(JSON.stringify(event.detail)));
+    showNotifications();
   }
 
   element.addEventListener("connected", () =>

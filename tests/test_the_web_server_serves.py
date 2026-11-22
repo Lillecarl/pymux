@@ -179,6 +179,55 @@ async def test_a_viewer_of_the_session_is_a_client_of_it(pymux):
         pymux.stop()
 
 
+async def test_a_notification_reaches_the_session_view_and_its_click_shows_the_pane(pymux):
+    """
+    The session view's terminal answers OSC 99's query as kitty does, so
+    the server sends it a pane's notification, and the page's click
+    shows that pane to the view's client. Lillecarl/pyterm#1073.
+    """
+    there = pymux.arrangement.get_active_window().active_pane
+    async with pymux.running():
+        await pymux.panes.create_window(STAYS)
+        async with anyio.create_task_group() as tasks:
+            web = await _serving(pymux, tasks, writable=True)
+            url = "ws://127.0.0.1:%d/session?t=%s&rows=10&columns=40" % (web.port, web.token)
+
+            async with connect(url) as socket:
+                assert json.loads(await socket.recv())["type"] == "welcome"
+                await socket.send(json.dumps({"type": "focus", "focused": False}))
+
+                def the_view():
+                    "The view's client and its state, once it attached."
+                    return next(
+                        ((client, state) for client, state in pymux._client_states.items() if not state.temporary),
+                        (None, None),
+                    )
+
+                def shown(state):
+                    return state.session.arrangement.get_active_window_for(state.app).panes
+
+                # The answer to the query arrives with the detection.
+                with fair_anyio.fail_after(10):
+                    while (view := the_view())[0] is None or not view[0].replies.notification_osc:
+                        await socket.recv()
+                _client, state = view
+                assert there not in shown(state)
+
+                pymux.notification_center.add("Build done", "all green", pane_id=there.pane_id)
+                with fair_anyio.fail_after(10):
+                    while (message := json.loads(await socket.recv()))["type"] != "notification":
+                        pass
+                assert (message["title"], message["body"]) == ("Build done", "all green")
+
+                await socket.send(json.dumps({"type": "notification-click", "id": message["id"]}))
+                with fair_anyio.fail_after(10):
+                    while there not in shown(state):
+                        await socket.recv()
+
+            tasks.cancel_scope.cancel()
+        pymux.stop()
+
+
 async def test_a_viewer_of_the_session_without_the_token_is_refused(pymux):
     from websockets.exceptions import InvalidStatus
 
@@ -286,6 +335,8 @@ async def test_the_page_and_the_element_are_served(pymux):
                 ("/retry.js", b"retryAfter"),
                 ("/page.js", b"pymux-pane.js"),
                 ("/page.css", b"pymux-pane"),
+                # What shows a notification on a phone. Lillecarl/pyterm#1073.
+                ("/sw.js", b"notificationclick"),
             ]:
                 head, body = await _http(web.port, path)
                 assert b"200" in head, (path, head)

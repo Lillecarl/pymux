@@ -90,6 +90,9 @@ SERVED = {
     # would open a page with no way in.
     "/manifest.webmanifest": ("manifest.webmanifest", "application/manifest+json"),
     "/icon.svg": ("icon.svg", "image/svg+xml"),
+    # At the root, so its scope is the whole page: it shows the
+    # notifications of a session view. Lillecarl/pyterm#1073.
+    "/sw.js": ("sw.js", "text/javascript; charset=utf-8"),
     # The fonts a package built with them serves, `nix/web-fonts.nix`;
     # without them it is empty, and the page draws with the device's.
     "/fonts.css": ("fonts.css", "text/css; charset=utf-8"),

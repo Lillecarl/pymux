@@ -714,7 +714,9 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                 # A look after the upgrade still closes what is on the
                 # terminals. Lillecarl/pyterm#801.
                 assert fresh.notifications._shown == pymux.notifications._shown
-                assert len(pymux.notifications._shown) == 2
+                # "one" and "two", and the id pymux gave "built" for the
+                # web view, whose terminal shows OSC 99. Lillecarl/pyterm#1073.
+                assert len(pymux.notifications._shown) == 3
                 assert {name: (c.woken, c.locked) for name, c in fresh.wait_channels.items()} == {
                     "done": (True, False),
                     "turn": (False, True),

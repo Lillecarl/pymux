@@ -57,6 +57,7 @@ if TYPE_CHECKING:
     from pyte.screen import Screen
 
 __all__ = [
+    "FOCUS",
     "FRAME",
     "MOUSE",
     "PLAIN_STYLE",
@@ -482,6 +483,11 @@ def typed_of(message: dict[str, Any]) -> Typed:
         return Typed(text, named=False, bracketed=True)
     raise ValueError("%r is not something a client may say" % (kind,))
 
+
+#: Whether the page has the focus, under `focused`: hidden or in the
+#: background, it does not. A session view says so as a terminal does
+#: (DEC 1004); a pane stream has no client to tell. Lillecarl/pyterm#1073.
+FOCUS = "focus"
 
 #: One keyboard event the page's `?probe` saw, under `event`. `pymux web`
 #: prints it, so the events of a phone's keyboard reach whoever reads the

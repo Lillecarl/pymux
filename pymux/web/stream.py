@@ -25,7 +25,8 @@ from pymux.commands import CommandException
 from pymux.commands.common import send_key
 from pymux.keys.key_spelling import event_however_it_is_written
 from pymux.log import logger
-from pymux.web.protocol import MOUSE, PROBE, PaneView, Typed, encode_unsent, mouse_of, probe_line, typed_of
+from pymux.web.notices import NOTIFICATION_CLICK
+from pymux.web.protocol import FOCUS, MOUSE, PROBE, PaneView, Typed, encode_unsent, mouse_of, probe_line, typed_of
 
 if TYPE_CHECKING:
     from ptterm import Terminal
@@ -143,6 +144,11 @@ class PaneStream:
 
         if message.get("type") == PROBE:
             logger.info("%s", probe_line(message))
+            return None
+
+        # A page says these to a session view; a pane stream has no client
+        # whose focus or notifications they would be.
+        if message.get("type") in (FOCUS, NOTIFICATION_CLICK):
             return None
 
         if message.get("type") == MOUSE:
