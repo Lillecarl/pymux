@@ -39,7 +39,7 @@ const fullscreen = needed(document.getElementById("fullscreen"), "full screen bu
 
 // The click is the gesture full screen needs. Lillecarl/pyterm#953.
 fullscreen.addEventListener("click", () => {
-  const refused = (error: unknown) => say(`Full screen was refused: ${String(error)}`);
+  const refused = (error: unknown) => say(`Full screen was refused: ${String(error)}`, true);
   // With the key row shown, the whole page fills the screen: the pane
   // alone would leave a phone without Esc and Ctrl.
   if (getComputedStyle(row).display !== "none") {
@@ -112,8 +112,13 @@ if (asked.has("probe")) {
   }
 }
 
-function say(text: string): void {
+/**
+ * Put `text` in the line under the header. `trouble` keeps it on screen
+ * in the installed app, which shows the line only then.
+ */
+function say(text: string, trouble = false): void {
   about.textContent = text;
+  about.toggleAttribute("data-trouble", trouble);
 }
 
 /** Where the page keeps the client options of a session view. */
@@ -137,9 +142,7 @@ function keepOptions(options: string): void {
 }
 
 if (!pane || !token) {
-  say(
-    "Open the address that `pymux web` printed: it carries the token.",
-  );
+  say("Open the address that `pymux web` printed: it carries the token.", true);
 } else {
   const where = new URL(location.href);
   where.protocol = where.protocol === "https:" ? "wss:" : "ws:";
@@ -165,14 +168,15 @@ if (!pane || !token) {
     ),
   );
   element.addEventListener("closed", (event) =>
-    say(`${pane}: the stream ended (${event.detail.code}).`),
+    say(`${pane}: the stream ended (${event.detail.code}).`, true),
   );
   element.addEventListener("reconnecting", (event) =>
     say(
       `${pane}: the stream ended; trying again in ${Math.ceil(event.detail.delay / 1000)} s.`,
+      true,
     ),
   );
-  element.addEventListener("error", () => say(`${pane}: the stream failed.`));
+  element.addEventListener("error", () => say(`${pane}: the stream failed.`, true));
 
   element.setAttribute("src", where.toString());
 }

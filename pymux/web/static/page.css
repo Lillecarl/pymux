@@ -73,6 +73,19 @@ body.session pymux-pane {
   overflow: hidden;
 }
 
+/* The installed app is full screen already, and its window shows the
+   name: the header is room the terminal needs. The line under it shows
+   only trouble. */
+@media (display-mode: standalone) {
+  header {
+    display: none;
+  }
+
+  #about:not([data-trouble]) {
+    display: none;
+  }
+}
+
 /* The key row, for a touch screen or ?keys. Lillecarl/pyterm#1051. */
 #keys {
   display: none;
