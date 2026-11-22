@@ -687,6 +687,26 @@ export class PymuxPane extends HTMLElement {
     const keyboard = virtualKeyboard();
     if (keyboard) {
       if (TRIAL === "restart") this.#keyboard.blur();
+      if (TRIAL === "later") {
+        // A task between the blur and the focus, so Chrome ends the input
+        // connection and SwiftKey reads the field anew.
+        this.#keyboard.blur();
+        setTimeout(() => {
+          this.#keyboard.focus();
+          keyboard.show();
+        }, 150);
+        return;
+      }
+      if (TRIAL === "fresh") {
+        // A textarea SwiftKey has never seen, focused and shown in one
+        // tap, as the `?lab` fields were.
+        const next = this.#keyboard.cloneNode() as HTMLTextAreaElement;
+        next.value = DELETABLE;
+        this.#keyboard.replaceWith(next);
+        this.#keyboard = next;
+        this.#sent = "";
+        this.#listenToTheKeyboard();
+      }
       this.#focusKeyboard();
       keyboard.show();
       return;
