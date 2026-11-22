@@ -650,6 +650,12 @@ export class PymuxPane extends HTMLElement {
     this.#screen.addEventListener("contextmenu", (event) => {
       if (this.#writable) event.preventDefault();
     });
+    // `?kbd=bare`: no handler of the element's on the textarea, so the
+    // probe sees what SwiftKey does with a field nothing listens to.
+    if (TRIAL !== "bare") this.#listenToTheKeyboard();
+  }
+
+  #listenToTheKeyboard(): void {
     this.#keyboard.addEventListener("keydown", (event) =>
       this.#onKeyDown(event),
     );
