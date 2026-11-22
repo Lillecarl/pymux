@@ -63,7 +63,9 @@ were measured in the bundled one alone, to keep the calls few.
 protocol: `headless` as a job, `pane` in a window pane that anybody
 attached can watch, or `desktop` as a job in a window of its own on the
 desktop of the server's machine. `pane` needs `wl`, so it is Linux only;
-on macOS, `desktop` is the seat a person can watch. `browser.snapshot` answers the page as its
+on macOS, `desktop` is the seat a person can watch. `client` is the
+person's own Chromium, on the machine they attach from, after they say
+yes: for a site that refuses a browser on the server. `browser.snapshot` answers the page as its
 accessibility tree, with a ref on each element that `browser.click` and
 `browser.type` take. `browser.goto`, `browser.press`, `browser.evaluate`,
 `browser.screenshot`, `browser.console`, `browser.tabs`, `browser.list`

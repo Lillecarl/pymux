@@ -11,7 +11,40 @@ import anyio
 from fairclock import anyio as fair_anyio
 from websockets.asyncio.server import serve
 
+from pymux.wayland import browser_shim
 from pymux.wayland.browser_shim import bridge
+
+
+def _a_server(monkeypatch, remote: str) -> list[str]:
+    "A server that answers a launch with `remote`; the commands it got."
+    ran: list[str] = []
+
+    def run(socket_name: str, command: str, pane_id: str | None) -> tuple[int, str]:
+        ran.append(command)
+        if command.startswith("launch-browser "):
+            return 0, "4711 /devtools/browser/abc 0123 %s\n" % (remote,)
+        return 0, ""
+
+    monkeypatch.setenv("PYMUX", "/run/pymux.sock")
+    monkeypatch.setattr(browser_shim, "_run", run)
+    return ran
+
+
+def test_the_port_file_flag_names_the_file_and_never_reaches_the_browser(monkeypatch, tmp_path):
+    "Lillecarl/pyterm#1060."
+    ran = _a_server(monkeypatch, "cdp")
+    port_file = tmp_path / "profile" / "DevToolsActivePort"
+    assert browser_shim.main(["--pymux-port-file=%s" % (port_file,), "about:blank"]) == 0
+    assert ran == ["launch-browser -- about:blank", "hold-browser 0123"]
+    assert port_file.read_text() == "4711\n/devtools/browser/abc\n"
+
+
+def test_the_port_file_flag_refuses_a_firefox(monkeypatch, tmp_path):
+    ran = _a_server(monkeypatch, "bidi")
+    port_file = tmp_path / "DevToolsActivePort"
+    assert browser_shim.main(["--pymux-port-file=%s" % (port_file,)]) == 1
+    assert ran == ["launch-browser -- ", "hold-browser -s 0123"]
+    assert not port_file.exists()
 
 
 async def _read_messages(fd: int, count: int) -> list[bytes]:

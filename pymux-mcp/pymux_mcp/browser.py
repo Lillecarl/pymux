@@ -5,7 +5,7 @@ person can watch it. Lillecarl/pyterm#824.
 Two kinds speak that protocol: Chromium, and qutebrowser through its
 QtWebEngine.
 
-A browser runs in one of three seats:
+A browser runs in one of four seats:
 
 - `headless`: a job of the server, with nothing to see.
 - `pane`: a window pane of the server, through `wl`. Anybody attached
@@ -13,6 +13,10 @@ A browser runs in one of three seats:
   split of a window somebody works in. Linux only, as `wl` is.
 - `desktop`: a job of the server, in a window of its own on the desktop
   of the server's machine.
+- `client`: the person's own Chromium, on the machine of the client or
+  the peer they used last, after they say yes. A job of the server runs
+  `pymux-browser`, which holds it and writes the forwarded port to
+  `DevToolsActivePort` in the profile here. Lillecarl/pyterm#1060.
 
 **pymux holds the browser, and this process holds nothing.** Each
 operation finds the browser by its tag, reads its port out of
@@ -92,6 +96,9 @@ SWEEP_SECONDS: Final = 30.0
 
 #: How long Chromium may take to listen.
 LISTEN_TIMEOUT: Final = 30.0
+#: A `client` browser waits on the person's yes as well: the server asks
+#: for 120 s, then gives the start 30 s (`pymux.wayland.browsers`).
+CLIENT_LISTEN_TIMEOUT: Final = 160.0
 #: What a browser starts on; the address asked for loads after, through
 #: `goto`. Chromium listens before a page from its command line has even
 #: begun to load, so a look as soon as it listens finds a blank page.
@@ -143,6 +150,7 @@ class Seat(StrEnum):
     HEADLESS = "headless"
     PANE = "pane"
     DESKTOP = "desktop"
+    CLIENT = "client"
 
 
 class Kind(StrEnum):
@@ -417,6 +425,8 @@ async def open_browser(
     loaded, and through the SOCKS5 `proxy` (`host:port`) when one is
     named.
     """
+    if seat is Seat.CLIENT:
+        _a_client_browser(kind, executable, profile_name, extensions, proxy)
     if extensions and kind is not Kind.CHROMIUM:
         raise ValueError("only Chromium loads extensions at the start")
     for directory in extensions:
@@ -451,7 +461,9 @@ async def open_browser(
     port = _free_port() if kind is Kind.QUTEBROWSER else None
     holder: Job | Window | Pane
     try:
-        if kind is Kind.CHROMIUM:
+        if seat is Seat.CLIENT:
+            command = _through_the_client(server, profile, arguments)
+        elif kind is Kind.CHROMIUM:
             command = _chromium(program(kind, executable), seat, profile, extensions, arguments, proxy)
         elif kind is Kind.QUTEBROWSER:
             command = _qutebrowser(program(kind, executable), seat, profile, port or 0, arguments, proxy)
@@ -493,6 +505,37 @@ def _chromium(
         *EXTENSIBLE,
         *(["--load-extension=%s" % (",".join(extensions),)] if extensions else []),
         *_proxy_switches(proxy),
+        *arguments,
+        BLANK,
+    ]
+
+
+def _a_client_browser(
+    kind: Kind, executable: str | None, profile_name: str | None, extensions: Sequence[str], proxy: str | None
+) -> None:
+    "Refuse what the person's machine decides: its `browser-program`, its `browser-profile`, its network."
+    if kind is not Kind.CHROMIUM:
+        raise ValueError("a `client` browser is the person's Chromium; their `browser-program` picks it")
+    if executable is not None:
+        raise ValueError("a `client` browser runs the person's `browser-program`, not `executable`")
+    if profile_name is not None:
+        raise ValueError("a `client` browser keeps the person's `browser-profile`, not `profile`")
+    if extensions:
+        raise ValueError("a `client` browser loads no extensions from this machine")
+    if proxy is not None:
+        raise ValueError("a `client` browser goes out from the person's machine already; leave `via` out")
+
+
+def _through_the_client(server: Server, profile: Path, arguments: Sequence[str]) -> list[str]:
+    "`pymux-browser`, as if in a pane of `server`: it asks, starts and holds the person's browser."
+    shim = shutil.which("pymux-browser")
+    if shim is None:
+        raise LookupError("no pymux-browser on the PATH of pymux-mcp, which a `client` browser needs")
+    return [
+        "env",
+        "PYMUX=%s" % (server.socket_path,),
+        shim,
+        "--pymux-port-file=%s" % (profile / PORT_FILE,),
         *arguments,
         BLANK,
     ]
@@ -731,8 +774,9 @@ async def _wl(server: Server, pane: Pane, command: Sequence[str], holder: Window
 
 async def _listening(browser: Browser, port: int | None) -> None:
     "Wait until the browser listens; on `port`, for one that writes no `DevToolsActivePort` of its own."
+    timeout = CLIENT_LISTEN_TIMEOUT if browser.seat is Seat.CLIENT else LISTEN_TIMEOUT
     try:
-        with anyio.fail_after(LISTEN_TIMEOUT):
+        with anyio.fail_after(timeout):
             while browser.endpoint() is None:
                 if port is not None:
                     await anyio.to_thread.run_sync(_announce, browser.profile, port)
@@ -743,8 +787,8 @@ async def _listening(browser: Browser, port: int | None) -> None:
                 await anyio.sleep(0.1)
     except TimeoutError:
         last = await said(browser)
-        await close(browser, "it did not listen in %gs" % (LISTEN_TIMEOUT,))
-        raise CDPError("the browser did not listen in %gs: %s" % (LISTEN_TIMEOUT, last)) from None
+        await close(browser, "it did not listen in %gs" % (timeout,))
+        raise CDPError("the browser did not listen in %gs: %s" % (timeout, last)) from None
 
 
 async def said(browser: Browser) -> str:

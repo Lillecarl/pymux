@@ -12,7 +12,8 @@ does once it listens:
   or "WebDriver BiDi listening on ws://..." when the browser is a
   Firefox;
 - for a Chromium, `DevToolsActivePort` in the `--user-data-dir` it was
-  given, which chromedriver reads.
+  given, which chromedriver reads, and at `--pymux-port-file=<path>`,
+  which pymux-mcp reads and the browser never sees.
 
 The address is this machine's: the port is forwarded from here to the
 browser, and it is the same number at both ends. Then it holds the
@@ -44,6 +45,10 @@ __all__ = ["bridge", "main"]
 PIPE_IN = 3
 PIPE_OUT = 4
 END = b"\0"
+
+#: Where Chromium names the port it listens on, in its profile.
+PORT_FILE = "DevToolsActivePort"
+PORT_FILE_FLAG = "--pymux-port-file"
 
 
 def _value_of(argument: str, name: str) -> str | None:
@@ -109,11 +114,22 @@ def main(argv: list[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
     piped = "--remote-debugging-pipe" in arguments
     arguments = [one for one in arguments if one != "--remote-debugging-pipe"]
-    profile = None
+    port_files: list[Path] = []
+    kept: list[str] = []
+    flagged = False
     for argument in arguments:
-        found = _value_of(argument, "--user-data-dir")
-        if found is not None:
-            profile = Path(found)
+        profile = _value_of(argument, "--user-data-dir")
+        if profile is not None:
+            port_files.append(Path(profile) / PORT_FILE)
+        # Ours, not the browser's: where pymux-mcp reads the port of a
+        # browser it opened on the person's machine. Lillecarl/pyterm#1060.
+        named = _value_of(argument, PORT_FILE_FLAG)
+        if named is None:
+            kept.append(argument)
+        else:
+            port_files.append(Path(named))
+            flagged = True
+    arguments = kept
 
     address = os.environ.get("PYMUX", "")
     if not address:
@@ -128,11 +144,12 @@ def main(argv: list[str] | None = None) -> int:
     port, path, launch, remote = printed.split()
 
     endpoint = "ws://127.0.0.1:%s%s" % (port, path)
+    needs_cdp = "--remote-debugging-pipe" if piped else PORT_FILE_FLAG if flagged else None
+    if needs_cdp is not None and remote != "cdp":
+        sys.stderr.write("pymux-browser: %s needs a Chromium; set browser-program to one\n" % (needs_cdp,))
+        _run(socket_name, "hold-browser -s %s" % (launch,), pane_id or None)
+        return 1
     if piped:
-        if remote != "cdp":
-            sys.stderr.write("pymux-browser: --remote-debugging-pipe needs a Chromium; set browser-program to one\n")
-            _run(socket_name, "hold-browser -s %s" % (launch,), pane_id or None)
-            return 1
         # The hold ends the browser when this process goes, so it only
         # has to stay open beside the bridge.
         threading.Thread(
@@ -144,9 +161,9 @@ def main(argv: list[str] | None = None) -> int:
         # Firefox names its port alone, and Puppeteer adds the path.
         sys.stderr.write("\nWebDriver BiDi listening on ws://127.0.0.1:%s\n" % (port,))
     else:
-        if profile is not None:
-            profile.mkdir(parents=True, exist_ok=True)
-            (profile / "DevToolsActivePort").write_text("%s\n%s\n" % (port, path))
+        for port_file in port_files:
+            port_file.parent.mkdir(parents=True, exist_ok=True)
+            port_file.write_text("%s\n%s\n" % (port, path))
         sys.stderr.write("\nDevTools listening on %s\n" % (endpoint,))
     sys.stderr.flush()
     if sys.stdout.isatty():

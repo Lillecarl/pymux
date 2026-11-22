@@ -245,6 +245,19 @@ async def test_a_pane_browser_nobody_watches_still_animates(server):
         await call(server, "browser.close", name="probe")
 
 
+async def test_a_client_browser_with_nobody_attached_says_so(server):
+    "Lillecarl/pyterm#1060: the job, its `$PYMUX`, `pymux-browser` and `launch-browser`, end to end."
+    assert shutil.which("pymux-browser"), "the check puts pymux-browser on the PATH"
+    with pytest.raises(browser.CDPError, match="nobody is attached to open a browser for"):
+        await call(server, "browser.open", name="probe", seat="client")
+
+
+async def test_a_client_browser_refuses_what_the_persons_machine_decides(server):
+    for named in ({"kind": "firefox"}, {"executable": "/bin/chromium"}, {"profile": "work"}, {"via": "client"}):
+        with pytest.raises(ValueError, match="a `client` browser"):
+            await call(server, "browser.open", name="probe", seat="client", **named)
+
+
 async def test_a_browser_that_went_says_why(server, tmp_path, monkeypatch):
     "Lillecarl/pyterm#1014: which rule closed it, read where an agent finds it gone."
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))

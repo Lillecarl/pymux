@@ -741,6 +741,9 @@ async def open_browser(
                 "`pane`: a window of this server that a person attached can watch; Linux only."
                 " `desktop`: a window of its own on the desktop of the server's machine."
                 " `headless`: nothing to watch."
+                " `client`: the person's own Chromium, on the machine they attach from, directly or through"
+                " a peer; they say yes first, and it goes out from their address. Chromium only, and"
+                " their `browser-program` and `browser-profile` pick it."
             )
         ),
     ] = browser.Seat.PANE,
@@ -812,6 +815,8 @@ async def open_browser(
     then takes its panes away and leaves the window. With `session`, or
     from outside any pane, it opens in a window that is not in front.
     """
+    if seat is browser.Seat.CLIENT and via is not None:
+        raise ValueError("a `client` browser goes out from the person's machine already; leave `via` out")
     beside: Window | Pane | None = None
     if window is not None:
         beside = Window(server, {"window_id": window})
