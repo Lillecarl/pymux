@@ -10,6 +10,11 @@ ends when the browser does, and stops the browser when its connection
 closes, which is what killing `pymux-browser` does. `client/browser.py`
 is the client's half.
 
+A person who reaches this server through a pymux server of their own
+(`connect ssh://...`) is no client here. Then the launch goes along that
+peer link, and the peer asks them, starts the browser on its client and
+forwards the port back on the link's SSH connection. Lillecarl/pyterm#1068.
+
 **Every launch is asked.** A browser that a script drives can read what
 its profile holds and go wherever it is sent, and the person whose
 screen it opens on says yes to that, each time. As with `open-url -c`,
@@ -24,11 +29,12 @@ import socket
 from typing import TYPE_CHECKING
 
 import anyio
-from libpymux.protocol import Field, Message, Packet
+from libpymux.protocol import Capability, Field, Message, Packet
 
 if TYPE_CHECKING:
     from pymux.connection.client_state import ClientState
     from pymux.core.main import Pymux
+    from pymux.mirror.link import PeerLink
 
 __all__ = ["ANSWER_SECONDS", "START_SECONDS", "BrowserRefused", "Browsers", "Launch"]
 
@@ -45,11 +51,19 @@ class BrowserRefused(Exception):
 
 
 class Launch:
-    "One browser a program asked for."
+    "One browser a program asked for, on a client here or through a peer link."
 
-    def __init__(self, launch_id: str, client_state: ClientState, arguments: list[str], pane_label: str) -> None:
+    def __init__(
+        self,
+        launch_id: str,
+        arguments: list[str],
+        pane_label: str,
+        client_state: ClientState | None = None,
+        link: PeerLink | None = None,
+    ) -> None:
         self.launch_id = launch_id
         self.client_state = client_state
+        self.link = link
         self.arguments = arguments
         self.pane_label = pane_label
         self.port = 0
@@ -67,7 +81,16 @@ class Launch:
 
     def asked(self) -> bool:
         "Whether its question still waits on the client."
+        if self.client_state is None:
+            return False
         return any(command == self.question_command for _text, command in self.client_state.confirmations)
+
+    def send(self, packet: Message) -> None:
+        "To the client or the peer that starts the browser."
+        if self.link is not None:
+            self.link.queue(packet)
+        elif self.client_state is not None:
+            self.client_state.client.connection.send_packet(packet)
 
 
 def free_port() -> int:
@@ -84,19 +107,25 @@ class Browsers:
         self.pymux = pymux
         self.launches: dict[str, Launch] = {}
 
-    async def launch(self, arguments: list[str], pane_label: str) -> Launch:
+    async def launch(self, arguments: list[str], pane_label: str, port: int = 0) -> Launch:
         """
-        Ask the client a person used last, start the browser there, and
-        answer the launch once it listens. Raises `BrowserRefused`.
+        Ask the person used last, start the browser on their machine,
+        and answer the launch once it listens. Raises `BrowserRefused`.
+
+        `port` is the one the browser listens on, which a peer passes
+        on from its owner; 0 picks a free one here.
         """
         client_state = self.pymux.latest_client()
+        link = self._link_used_last(client_state)
+        if link is not None:
+            return await self._through(link, arguments, pane_label, port)
         if client_state is None:
             raise BrowserRefused("nobody is attached to open a browser for")
         client = client_state.client
         if not client.starts_browsers:
             raise BrowserRefused("the client in use cannot start a browser; update pymux there")
 
-        launch = Launch(secrets.token_hex(8), client_state, arguments, pane_label)
+        launch = Launch(secrets.token_hex(8), arguments, pane_label, client_state=client_state)
         self.launches[launch.launch_id] = launch
         try:
             client_state.ask(self._question(launch), launch.question_command)
@@ -112,8 +141,8 @@ class Browsers:
                     raise BrowserRefused("nobody answered the question in %d seconds" % ANSWER_SECONDS)
                 raise BrowserRefused("the person said no")
 
-            launch.port = free_port()
-            client.connection.send_packet(
+            launch.port = port or free_port()
+            launch.send(
                 {
                     Field.CMD: Packet.BROWSER,
                     Field.BROWSER: launch.launch_id,
@@ -123,16 +152,61 @@ class Browsers:
                     Field.ARGUMENTS: arguments,
                 }
             )
-            with anyio.move_on_after(START_SECONDS):
-                await launch.started.wait()
-            if launch.error is not None:
-                raise BrowserRefused(launch.error)
-            if launch.path is None:
-                raise BrowserRefused("the client did not start the browser in %d seconds" % START_SECONDS)
-            return launch
+            return await self._listening(launch, START_SECONDS, "the client")
         except BaseException:
             self.stop(launch.launch_id)
             raise
+
+    def _link_used_last(self, client_state: ClientState | None) -> PeerLink | None:
+        """
+        The peer link to launch through: one that carries browsers, when
+        a person there used this server after every client here that
+        starts browsers.
+        """
+        links = [link for link in self.pymux.peer_links() if link.can(Capability.BROWSERS)]
+        link = max(links, key=lambda one: one.last_used, default=None)
+        if link is None:
+            return None
+        if (
+            client_state is not None
+            and client_state.client.starts_browsers
+            and client_state.last_used >= link.last_used
+        ):
+            return None
+        return link
+
+    async def _through(self, link: PeerLink, arguments: list[str], pane_label: str, port: int) -> Launch:
+        "Ask the peer, which asks its person: the question and the start both wait there."
+        launch = Launch(secrets.token_hex(8), arguments, pane_label, link=link)
+        self.launches[launch.launch_id] = launch
+        try:
+            # Free here, because the peer forwards the browser's port to
+            # this machine under the same number.
+            launch.port = port or free_port()
+            launch.send(
+                {
+                    Field.CMD: Packet.BROWSER,
+                    Field.BROWSER: launch.launch_id,
+                    Field.PORT: launch.port,
+                    Field.ARGUMENTS: arguments,
+                    Field.NAME: pane_label,
+                }
+            )
+            return await self._listening(
+                launch, ANSWER_SECONDS + START_SECONDS, "the server on %s" % (link.host or "the peer",)
+            )
+        except BaseException:
+            self.stop(launch.launch_id)
+            raise
+
+    async def _listening(self, launch: Launch, seconds: float, starter: str) -> Launch:
+        with anyio.move_on_after(seconds):
+            await launch.started.wait()
+        if launch.error is not None:
+            raise BrowserRefused(launch.error)
+        if launch.path is None:
+            raise BrowserRefused("%s did not start the browser in %d seconds" % (starter, seconds))
+        return launch
 
     def _question(self, launch: Launch) -> str:
         # What it opens, and none of the flags: Playwright passes forty,
@@ -149,10 +223,10 @@ class Browsers:
         if launch is not None:
             launch.approved = True
 
-    def started(self, packet: Message) -> None:
-        "The client says the browser listens, or why it does not."
+    def started(self, packet: Message, link: PeerLink | None = None) -> None:
+        "The client, or the peer of `link`, says the browser listens, or why it does not."
         launch = self.launches.get(packet.get(Field.BROWSER, ""))
-        if launch is None:
+        if launch is None or launch.link is not link:
             return
         launch.path = packet.get(Field.PATH)
         launch.remote = packet.get(Field.REMOTE) or "cdp"
@@ -169,18 +243,22 @@ class Browsers:
             launch.ended.set()
 
     def stop(self, launch_id: str) -> None:
-        "Ask the client to end the browser, and forget it."
+        "Ask the client or the peer to end the browser, and forget it."
         launch = self.launches.get(launch_id)
         if launch is None:
             return
         if launch.port:
-            launch.client_state.client.connection.send_packet(
-                {Field.CMD: Packet.BROWSER_STOP, Field.BROWSER: launch_id}
-            )
+            launch.send({Field.CMD: Packet.BROWSER_STOP, Field.BROWSER: launch_id})
         self.ended(launch_id)
 
     def client_gone(self, client_state: ClientState) -> None:
         "A client that left took its browsers with it."
         for launch in list(self.launches.values()):
             if launch.client_state is client_state:
+                self.ended(launch.launch_id)
+
+    def link_gone(self, link: PeerLink) -> None:
+        "A peer link that closed took its browsers with it: the peer ends them with the link."
+        for launch in list(self.launches.values()):
+            if launch.link is link:
                 self.ended(launch.launch_id)

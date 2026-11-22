@@ -420,6 +420,7 @@ class PeerLink:
         self.plugin_asks.gone()
         self.clipboard_asks.gone()
         self.files.gone()
+        self.connection.pymux.browsers.link_gone(self)
         self.connection.pymux.drag_and_drop.link_gone(self)
         if viewed:
             self.connection.pymux.terminals.sync_viewers()
@@ -512,6 +513,17 @@ class PeerLink:
         if said:
             logger.info("The peer on %s: %s", self.host or "a machine", said)
         self.connection.pymux.invalidate(Woke.FORWARDS_CHANGED)
+
+    @_PACKETS.handles(Packet.BROWSER_STARTED)
+    def _on_browser_started(self, packet: Message) -> None:
+        "The peer's answer to a launch this side sent it (`Capability.BROWSERS`). Lillecarl/pyterm#1068."
+        self.connection.pymux.browsers.started(packet, link=self)
+
+    @_PACKETS.handles(Packet.BROWSER_ENDED)
+    def _on_browser_ended(self, packet: Message) -> None:
+        launch = self.connection.pymux.browsers.launches.get(str(packet.get(Field.BROWSER, "")))
+        if launch is not None and launch.link is self:
+            self.connection.pymux.browsers.ended(launch.launch_id)
 
     @_PACKETS.handles(Packet.RECORDING)
     def _on_recording(self, packet: Message) -> None:

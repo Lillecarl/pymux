@@ -142,6 +142,12 @@ class Capability(StrEnum):
     #: peer answers with the text or nothing (`clipboard-answer`).
     #: Lillecarl/pyterm#992.
     CLIPBOARD_READS = "clipboard-reads"
+    #: The owner asks a peer for a browser a program on the owner drives
+    #: (`browser`), when nobody attached to the owner starts one. The
+    #: peer asks its person, starts it, forwards its port on the link's
+    #: SSH connection, and answers `browser-started`, later
+    #: `browser-ended`. Only over SSH, as `FORWARDS`. Lillecarl/pyterm#1068.
+    BROWSERS = "browsers"
 
 
 #: The version each capability came with, while each was a version. A
@@ -322,7 +328,9 @@ class Packet(StrEnum):
     REPORT_FORWARDS = "report-forwards"
     PING = "ping"
     # Start a browser a program on the server drives, or stop it.
-    # Lillecarl/pyterm#655.
+    # Lillecarl/pyterm#655. An owner sends both on a peer link too, with
+    # `name` saying who asks, and the peer answers as a client does.
+    # Lillecarl/pyterm#1068.
     BROWSER = "browser"
     BROWSER_STOP = "browser-stop"
     # Save a file that a pane sent, on the machine the person sits at:

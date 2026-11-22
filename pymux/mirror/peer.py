@@ -47,11 +47,12 @@ from ..client.relink import Relink, Restarting, Wait
 from ..client.ssh_requests import added, forward_in, forwards_packet, removed
 from ..commands import CommandException
 from ..connection.log_asks import LogAsks, log_answer
-from ..core.forwarding import question
+from ..core.forwarding import Direction, Forward, question
 from ..enums import Clipboard, Woke
 from ..graphics.kitty_frames import decoders
 from ..log import logger
 from ..options.tables import PeerCopyRow, PeerPlaceRow
+from ..wayland.browsers import BrowserRefused
 from ..wayland.window_pane import WindowWidget
 from .clipboard_asks import clipboard_answer
 from .copying import place_of
@@ -71,7 +72,6 @@ if TYPE_CHECKING:
     from pyte.mouse import MouseInput
 
     from ..connection.client_state import ClientState
-    from ..core.forwarding import Forward
     from ..core.main import Pymux
     from ..core.pane import Pane
     from ..core.session import Session
@@ -403,6 +403,7 @@ class Peer:
         "_tasks": Keep.DROPPED,
         # The listeners end with this process; `browser.open` asks again.
         "forwards": Keep.REBUILT,
+        "browsers": Keep.DROPPED,
     }
 
     def __init__(self, pymux: Pymux, address: str, **connect_with: Any) -> None:
@@ -452,6 +453,9 @@ class Peer:
         #: connection of the link, as an SSH client holds its own.
         #: Lillecarl/pyterm#976.
         self.forwards = Forwards()
+        #: The launch here of each browser the owner asked for, by the
+        #: owner's id. Lillecarl/pyterm#1068.
+        self.browsers: dict[str, str] = {}
         #: The scope of the link while it is up.
         self._tasks: anyio.abc.TaskGroup | None = None
         #: The link while it is gone, as an SSH client's (`relink`). A
@@ -565,11 +569,11 @@ class Peer:
         self.told.replay()
 
     def _named(self) -> list[str]:
-        "What this side names under `capabilities`: a unix socket carries no forward."
+        "What this side names under `capabilities`: a unix socket carries no forward, so no browser either."
         named = capabilities_named()
         if is_ssh_url(self.address):
             return named
-        return [name for name in named if name != Capability.FORWARDS]
+        return [name for name in named if name not in (Capability.FORWARDS, Capability.BROWSERS)]
 
     # -- what a mirror asks --------------------------------------------
 
@@ -905,6 +909,15 @@ class Peer:
         if packet.get(Field.CMD) == Packet.FORWARD:
             self._forward_asked(packet)
             return
+        if packet.get(Field.CMD) == Packet.BROWSER:
+            if self._tasks is not None:
+                self._tasks.start_soon(self._browse, packet)
+            return
+        if packet.get(Field.CMD) == Packet.BROWSER_STOP:
+            launch_id = self.browsers.get(str(packet.get(Field.BROWSER, "")))
+            if launch_id is not None:
+                self.tree.pymux.browsers.stop(launch_id)
+            return
         if packet.get(Field.CMD) == Packet.MIRROR_OSC:
             pane = self.tree.panes.get(pane_id) if isinstance(pane_id, int) else None
             if pane is not None:
@@ -1067,6 +1080,53 @@ class Peer:
             confirm_through(self, forward),
         )
         pymux.invalidate(Woke.FORWARDS_CHANGED)
+
+    async def _browse(self, packet: Message) -> None:
+        """
+        The owner asks for a browser a program there drives
+        (`Capability.BROWSERS`). This server's own launch asks the person
+        here and starts it on their client, at the owner's port; then
+        `-R` makes that port the same number on the owner's machine,
+        which Chrome's `/json/version` needs. The browser and the forward
+        go together: when the browser ends, when the owner stops it, and
+        when the link goes. Lillecarl/pyterm#1068.
+        """
+        owners_id = str(packet.get(Field.BROWSER, ""))
+        port = packet.get(Field.PORT)
+        arguments = packet.get(Field.ARGUMENTS)
+
+        def answer(fields: Message) -> None:
+            self.send({Field.CMD: Packet.BROWSER_STARTED, Field.BROWSER: owners_id, **fields})
+
+        if not isinstance(port, int) or port <= 0 or not isinstance(arguments, list):
+            answer({Field.ERROR: "the peer could not read the launch"})
+            return
+        pymux = self.tree.pymux
+        label = "%s: %s" % (self.server or self.address, packet.get(Field.NAME) or "a program")
+        try:
+            launch = await pymux.browsers.launch([str(one) for one in arguments], label, port=port)
+        except BrowserRefused as refused:
+            answer({Field.ERROR: str(refused)})
+            return
+        self.browsers[owners_id] = launch.launch_id
+        where = (Direction.REMOTE, "127.0.0.1", port)
+        try:
+            try:
+                connection = self._ssh_connection()
+            except CommandException as error:
+                answer({Field.ERROR: str(error)})
+                return
+            opened = await self.forwards.add(connection, Forward(*where, "127.0.0.1", port))
+            if opened.error:
+                answer({Field.ERROR: "cannot forward port %d to %s: %s" % (port, self.address, opened.error)})
+                return
+            answer({Field.PATH: launch.path, Field.REMOTE: launch.remote})
+            await launch.ended.wait()
+            self.send({Field.CMD: Packet.BROWSER_ENDED, Field.BROWSER: owners_id})
+        finally:
+            del self.browsers[owners_id]
+            self.forwards.remove(where)
+            pymux.browsers.stop(launch.launch_id)
 
     def _lender_used_last(self, pane: Pane) -> PeerLink | None:
         "The server that mirrors `pane` from here, when a person there used it after every client here."

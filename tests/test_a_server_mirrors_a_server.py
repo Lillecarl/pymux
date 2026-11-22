@@ -185,8 +185,8 @@ async def test_both_sides_of_a_link_hold_the_capabilities_both_named(two_servers
     await shown_here(owner, peer, client)
     (here,) = peer.peers.by_address.values()
     (there,) = owner.peer_links()
-    # A unix socket carries no forward. Lillecarl/pyterm#976.
-    assert here.capabilities == there.capabilities == frozenset(Capability) - {Capability.FORWARDS}
+    # A unix socket carries no forward, so no browser. Lillecarl/pyterm#976, Lillecarl/pyterm#1068.
+    assert here.capabilities == there.capabilities == frozenset(Capability) - {Capability.FORWARDS, Capability.BROWSERS}
 
 
 async def test_a_capability_the_peer_does_not_name_is_not_used(two_servers, monkeypatch):
@@ -203,11 +203,12 @@ def test_a_side_that_names_nothing_has_what_its_version_reached():
     "A build from before names, which has every capability its version had. Lillecarl/pyterm#961."
     assert capabilities_in_common(4, None) == {Capability.IMAGES_BY_HASH, Capability.PINGS, Capability.WINDOWS}
     assert capabilities_in_common(1, None) == frozenset()
-    # These came after names, so no version implies them. Lillecarl/pyterm#976, #988, #992.
+    # These came after names, so no version implies them. Lillecarl/pyterm#976, #988, #992, #1068.
     assert capabilities_in_common(13, None) == frozenset(Capability) - {
         Capability.FORWARDS,
         Capability.PLUGIN_MESSAGES,
         Capability.CLIPBOARD_READS,
+        Capability.BROWSERS,
     }
     assert capabilities_in_common(13, ["files", "a-name-nobody-knows"]) == {Capability.FILES}
 
