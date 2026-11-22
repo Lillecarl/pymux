@@ -489,6 +489,56 @@ async def test_a_word_half_composed_goes_before_a_key_of_the_row(server):
         assert "ready^Xsta^Iz" in shown
 
 
+#: SwiftKey in Firefox with Ctrl held from the key row: the letter comes
+#: as an `insertText` the element cancels, then the keyboard composes it
+#: again from its own copy. From a probe, Lillecarl/pyterm#1078.
+FIREFOX_HELD_LETTER = """
+((letter) => {
+  const keyboard = document.querySelector("pymux-pane").shadowRoot.querySelector(".keyboard");
+  const fire = (event) => keyboard.dispatchEvent(event);
+  const code = letter.toUpperCase().charCodeAt(0);
+  fire(new KeyboardEvent("keydown", { key: letter, keyCode: code, bubbles: true, composed: true }));
+  const go = fire(new InputEvent("beforeinput", {
+    inputType: "insertText", data: letter, isComposing: false, bubbles: true, cancelable: true, composed: true,
+  }));
+  if (go) keyboard.value += letter;
+  fire(new KeyboardEvent("keydown", { key: "Process", keyCode: 229, bubbles: true, composed: true }));
+  fire(new CompositionEvent("compositionstart", { data: "" }));
+  fire(new InputEvent("beforeinput", {
+    inputType: "insertCompositionText", data: letter, isComposing: true, bubbles: true, composed: true,
+  }));
+  keyboard.value += letter;
+  fire(new InputEvent("input", { inputType: "insertCompositionText", data: letter, isComposing: true, bubbles: true, composed: true }));
+  fire(new CompositionEvent("compositionend", { data: letter }));
+  fire(new InputEvent("input", { inputType: "insertCompositionText", data: letter, isComposing: false, bubbles: true, composed: true }));
+})
+"""
+
+
+async def test_a_held_letter_the_keyboard_composes_again_goes_out_once(server):
+    "Ctrl-b went out with a b after it, which is send-prefix. Lillecarl/pyterm#1078."
+    async with a_page(server, "stty raw -echo; printf ready; cat -vT", writable=True, query="keys") as pane:
+        with anyio.fail_after(20):
+            while "ready" not in await call(server, "pane.capture", pane=pane):
+                await anyio.sleep(0.1)
+        with anyio.fail_after(20):
+            while not await call(
+                server, "browser.evaluate", name="page", expression="document.querySelector('pymux-pane').writable"
+            ):
+                await anyio.sleep(0.1)
+        await call(server, "browser.click", name="page", selector="pymux-pane")
+        await call(server, "browser.click", name="page", selector="#keys [data-hold=ctrl]")
+        await call(server, "browser.evaluate", name="page", expression="(%s)('x')" % FIREFOX_HELD_LETTER.strip())
+        # A letter typed on purpose after it still goes out.
+        await call(server, "browser.press", name="page", key="x")
+        await call(server, "browser.press", name="page", key="z")
+        shown = ""
+        with anyio.move_on_after(10):
+            while "z" not in (shown := await call(server, "pane.capture", pane=pane)):
+                await anyio.sleep(0.1)
+        assert "ready^Xxz" in shown
+
+
 #: What a browser does with an on-screen keyboard's edits, which a
 #: dispatched event does not: `beforeinput`, then, unless the element
 #: cancelled it, the change to the textarea and `input`.

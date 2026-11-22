@@ -1363,6 +1363,9 @@ export class PymuxPane extends HTMLElement {
   }
 
   #onKeyDown(event: KeyboardEvent): void {
+    // A key of its own, not the keyboard composing a letter it already
+    // sent (keyCode 229): a letter typed now is meant.
+    if (event.keyCode !== 229) this.#heldLetter = null;
     const keys = keysFor(event);
     // `null` is "leave this keydown alone", which is what lets a plain
     // character reach `beforeinput` and a composition finish.
@@ -1404,6 +1407,10 @@ export class PymuxPane extends HTMLElement {
       if (this.#held.size > 0) {
         event.preventDefault();
         this.#sendText(event.data);
+        // SwiftKey in Firefox composes the cancelled letter again from
+        // its own copy, and Ctrl-b went out with a b after it: send-prefix.
+        // Lillecarl/pyterm#1078.
+        this.#heldLetter = event.data;
       }
       return;
     }
