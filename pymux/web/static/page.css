@@ -59,11 +59,13 @@ h1 {
 }
 
 /* A session is sized by the room it gets, so it gets the rest of the
-   window: the element counts the cells in its box and tells the server. */
+   window: the element counts the cells in its box and tells the server.
+   Not vh: in Firefox on Android 100vh is the height without the address
+   bar, which put the key row under it. Lillecarl/pyterm#1082. */
 body.session {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100dvh;
   box-sizing: border-box;
 }
 
