@@ -374,7 +374,9 @@ class SendWait(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     timeout: Annotated[float, Field(gt=0, description="How long to wait, in seconds.")]
-    quiet: Annotated[float | None, Field(gt=0, description="Until nothing changed for this many seconds.")] = None
+    quiet: Annotated[
+        float | None, Field(gt=0, description="Until the visible text did not change for this many seconds.")
+    ] = None
     text: Annotated[str | None, Field(description="Until a visible line matches this regular expression.")] = None
     next_text: Annotated[
         str | None,
@@ -508,7 +510,7 @@ async def wait_until(
     pane: Annotated[str, Field(description="The pane's id: `%5`.")],
     timeout: Annotated[float, Field(gt=0, description="How long to wait, in seconds.")],
     quiet: Annotated[
-        float | None, Field(gt=0, description="Until nothing changed in the pane for this many seconds.")
+        float | None, Field(gt=0, description="Until the pane's visible text did not change for this many seconds.")
     ] = None,
     text: Annotated[str | None, Field(description="Until a visible line matches this regular expression.")] = None,
     next_text: Annotated[

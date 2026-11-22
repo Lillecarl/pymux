@@ -8,8 +8,11 @@ screen it ran out on, so the failure carries its own diagnosis.
 
 One condition per wait:
 
-- `--quiet SECONDS`: nothing changed in the pane for that long. The wait
-  that works when the final text is unknown -- a build, a test run.
+- `--quiet SECONDS`: the visible text did not change for that long. The
+  wait that works when the final text is unknown -- a build, a test run.
+  A write that leaves the text as it was is no change: Textual blinks
+  its cursor by drawing the cursor cell again twice a second, and a wait
+  on writes never held there. Lillecarl/pyterm#1066.
 - `--text REGEX`: a line of the visible screen matches.
 - `--next-text REGEX`: a line that changed after the wait began matches.
   What the screen held before -- the result of the last run -- does not.
@@ -117,10 +120,13 @@ async def _until(changes: _Changes, met: Callable[[], str | None]) -> str:
     return found
 
 
-async def _until_quiet(changes: _Changes, seconds: float) -> str:
+async def _until_quiet(changes: _Changes, screen: Screen, seconds: float) -> str:
+    shown = _screen_text(screen)
     while True:
         with anyio.move_on_after(seconds) as still:
-            await changes.next()
+            while (now := _screen_text(screen)) == shown:
+                await changes.next()
+            shown = now
         if still.cancelled_caught:
             return ""
 
@@ -149,7 +155,7 @@ def _condition(
 ) -> Callable[[], Awaitable[str]]:
     "What the wait awaits: it answers the line to print once the condition holds."
     if args.quiet is not None:
-        return partial(_until_quiet, changes, _quiet(args.quiet, timeout))
+        return partial(_until_quiet, changes, screen, _quiet(args.quiet, timeout))
 
     if args.text is not None:
         on_screen = _pattern(args.text)
@@ -232,7 +238,7 @@ def add_condition_arguments(parser: argparse.ArgumentParser, prefix: str, requir
         "--%squiet" % prefix,
         dest="quiet",
         metavar="<seconds>",
-        help="Until nothing changed in the pane for this long.",
+        help="Until the visible text did not change for this long.",
     )
     condition.add_argument(
         "--%stext" % prefix,

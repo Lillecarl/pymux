@@ -186,6 +186,32 @@ async def test_quiet_waits_until_output_stops(pymux):
     assert times["answered"] - times["last"] >= 0.15
 
 
+async def test_quiet_holds_while_a_cursor_blinks(pymux):
+    "A blink draws the cursor cell again and changes no text. Lillecarl/pyterm#1066."
+    pane = the_pane(pymux)
+    arrives(pane, "ready")
+    waiting, answer = started(pymux, pane, "--quiet", "0.15", "--timeout", "2")
+    pymux.answer = answer
+    try:
+        with fair_anyio.fail_after(3):
+            async with anyio.create_task_group() as group:
+
+                async def blink() -> None:
+                    shown = True
+                    while True:
+                        arrives(pane, "\x1b[1;6H" + ("\x1b[7m \x1b[27m\x1b[?25h" if shown else " \x1b[?25l"))
+                        shown = not shown
+                        await anyio.sleep(0.05)
+
+                group.start_soon(blink)
+                await waiting
+                group.cancel_scope.cancel()
+    finally:
+        pymux.answer = None
+
+    assert answer.exit_code in (None, 0), answer.output
+
+
 async def test_a_quiet_longer_than_the_timeout_is_refused(pymux):
     pane = the_pane(pymux)
     errors = []
