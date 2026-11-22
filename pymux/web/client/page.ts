@@ -113,6 +113,7 @@ if (asked.has("probe")) {
         seen.value = target.value;
         seen.caret = [target.selectionStart, target.selectionEnd];
       }
+      seen.t = Math.round(performance.now());
       log.push(JSON.stringify(seen));
       element.send({ type: "probe", event: seen });
     });
@@ -143,6 +144,48 @@ if (asked.has("probe")) {
     log.push(JSON.stringify(seen));
     element.send({ type: "probe", event: seen });
   };
+  // What a keyboard event does not show: the field between events, the
+  // focus, and the on-screen keyboard's box. A SwiftKey Backspace tap
+  // vibrates and sends no event, so only a change here can show it.
+  // Every line carries `t`, the page's clock in ms. Lillecarl/pyterm#1080.
+  const note = (seen: Record<string, unknown>) => {
+    seen.t = Math.round(performance.now());
+    log.push(JSON.stringify(seen));
+    element.send({ type: "probe", event: seen });
+  };
+  const field = () => element.shadowRoot?.querySelector("textarea") ?? null;
+  const stateOf = () => {
+    const textarea = field();
+    return JSON.stringify({
+      value: textarea?.value,
+      caret: textarea ? [textarea.selectionStart, textarea.selectionEnd, textarea.selectionDirection] : null,
+      focused: element.shadowRoot?.activeElement === textarea,
+      page: document.activeElement?.tagName,
+      visible: document.visibilityState,
+      hasFocus: document.hasFocus(),
+    });
+  };
+  let last = "";
+  setInterval(() => {
+    const now = stateOf();
+    if (now !== last) note({ type: "state", ...JSON.parse(now) });
+    last = now;
+  }, 250);
+  for (const kind of ["focusin", "focusout", "selectionchange", "select", "pointerdown", "touchstart", "contextmenu"]) {
+    element.addEventListener(kind, (event) => {
+      const target = event.composedPath()[0];
+      note({ type: kind, on: target instanceof Element ? target.tagName : String(target), state: JSON.parse(stateOf()) });
+    }, { capture: true });
+  }
+  document.addEventListener("selectionchange", () => note({ type: "document selectionchange", state: JSON.parse(stateOf()) }));
+  document.addEventListener("visibilitychange", () => note({ type: "visibilitychange", state: document.visibilityState }));
+  const keyboardBox = (navigator as Navigator & { virtualKeyboard?: EventTarget & { boundingRect: DOMRect } }).virtualKeyboard;
+  keyboardBox?.addEventListener("geometrychange", () => {
+    const box = keyboardBox.boundingRect;
+    note({ type: "keyboard geometry", x: box.x, y: box.y, width: box.width, height: box.height });
+  });
+  note({ type: "agent", userAgent: navigator.userAgent, trial: asked.get("kbd") });
+
   window.addEventListener("resize", () => measure("resize"));
   window.visualViewport?.addEventListener("resize", () => measure("visual resize"));
   element.addEventListener("connected", () => measure("connected"), { once: true });
