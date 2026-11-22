@@ -404,6 +404,13 @@ const DELETES: Record<string, string | undefined> = {
 };
 
 /**
+ * What the keyboard textarea holds before anything typed. Chrome on
+ * Android fires no event at all for a Backspace over an empty field, so
+ * the field is never empty. Lillecarl/pyterm#1080.
+ */
+const DELETABLE = " ";
+
+/**
  * The three events this dispatches, typed.
  *
  * An interface beside the class and not methods in it: overloads in a
@@ -589,6 +596,7 @@ export class PymuxPane extends HTMLElement {
     // the textarea keeps the focus. Lillecarl/pyterm#1077.
     this.#keyboard.setAttribute("virtualkeyboardpolicy", "manual");
     if (!virtualKeyboard()) this.#keyboard.inputMode = "none";
+    this.#keyboard.value = DELETABLE;
 
     this.#cursor = document.createElement("div");
     this.#cursor.className = "cursor";
@@ -685,7 +693,14 @@ export class PymuxPane extends HTMLElement {
   /** A letter a held modifier took, which the textarea gets after. */
   #heldLetter: string | null = null;
 
-  /** Send what the textarea gained since `#sent`, after a Backspace for each character it lost. */
+  /** The key of the last delete the keyboard sent, for one that takes `DELETABLE`. */
+  #deleting = "BSpace";
+
+  /**
+   * Send what the textarea gained since `#sent`, after a Backspace for
+   * each character it lost. A delete of `DELETABLE` alone is the
+   * program's, and `DELETABLE` goes back.
+   */
   #sendChange(): void {
     let value = this.#keyboard.value;
     if (this.#heldLetter !== null) {
@@ -695,15 +710,19 @@ export class PymuxPane extends HTMLElement {
       }
       this.#heldLetter = null;
     }
+    const kept = value.startsWith(DELETABLE);
+    const typed = kept ? value.slice(DELETABLE.length) : value;
     const was = [...this.#sent];
-    const now = [...value];
+    const now = [...typed];
     let same = 0;
     while (same < was.length && same < now.length && was[same] === now[same]) same++;
-    this.#sent = value;
+    this.#sent = typed;
     const lost = was.length - same;
     if (lost > 0) this.send({ type: INPUT, keys: Array(lost).fill("BSpace").join(" ") });
+    else if (!kept) this.send({ type: INPUT, keys: this.#deleting });
     const gained = now.slice(same).join("");
     if (gained) this.#sendText(gained);
+    if (!kept) this.#keyboard.value = DELETABLE + typed;
   }
 
   /**
@@ -711,7 +730,7 @@ export class PymuxPane extends HTMLElement {
    * a key that moves the cursor or ends the line.
    */
   #forget(): void {
-    this.#keyboard.value = "";
+    this.#keyboard.value = DELETABLE;
     this.#sent = "";
   }
 
@@ -1350,7 +1369,7 @@ export class PymuxPane extends HTMLElement {
     if (keys === null) return;
     // A Backspace over what the textarea holds deletes there, as the
     // `beforeinput` of one does (`#onBeforeInput`).
-    if (keys === "BSpace" && this.#keyboard.value && this.#held.size === 0) return;
+    if (keys === "BSpace" && this.#held.size === 0) return;
     event.preventDefault();
     this.press(keys);
   }
@@ -1398,10 +1417,11 @@ export class PymuxPane extends HTMLElement {
     // Lillecarl/pyterm#1052.
     const deleting = DELETES[event.inputType];
     if (deleting) {
-      // What the textarea holds it deletes itself, so the keyboard's copy
-      // of the word stays right, and `input` sends the Backspace. Past
-      // that, the program's own text is the program's to delete.
-      if (this.#keyboard.value && this.#held.size === 0) return;
+      // The textarea deletes itself, so the keyboard's copy of the word
+      // stays right, and `input` sends the Backspace: of a typed letter,
+      // or `#deleting` for `DELETABLE`.
+      this.#deleting = deleting;
+      if (this.#held.size === 0) return;
       event.preventDefault();
       this.press(deleting);
     }

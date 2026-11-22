@@ -443,7 +443,7 @@ GBOARD = """
     letter: (data) => fire(new InputEvent("beforeinput", {
       inputType: "insertCompositionText", data, isComposing: true, bubbles: true, cancelable: false, composed: true,
     })),
-    holding: (word) => { keyboard.value = word; },
+    holding: (word) => { keyboard.value += word; },
     end: (data) => fire(new CompositionEvent("compositionend", { data })),
   };
 })()
@@ -499,12 +499,15 @@ KEYBOARD = """
     new InputEvent("input", { inputType, data, isComposing, bubbles: true, composed: true }));
   return {
     edit: (inputType, data = null) => {
+      // Chrome on Android fires nothing for a delete over an empty field.
+      if (inputType.startsWith("delete") && !keyboard.value) return;
       const go = keyboard.dispatchEvent(new InputEvent("beforeinput", {
         inputType, data, isComposing: false, bubbles: true, cancelable: true, composed: true,
       }));
       if (!go) return;
       if (inputType === "insertText") keyboard.value += data;
       else if (inputType === "deleteContentBackward") keyboard.value = [...keyboard.value].slice(0, -1).join("");
+      else if (inputType === "deleteWordBackward") keyboard.value = keyboard.value.replace(/(\\S+|\\s+)$/, "");
       input(inputType, data, false);
     },
     // A correction: the keyboard composes `word` over the last word of
@@ -560,6 +563,39 @@ async def test_a_backspace_with_no_key_still_deletes(server):
             server, "browser.evaluate", name="page", expression="document.getElementById('probe').textContent"
         )
         assert '"inputType":"deleteContentBackward"' in probe, probe
+
+
+async def test_a_backspace_with_nothing_typed_reaches_the_program(server):
+    "Chrome on Android sends no event for a delete over an empty field. Lillecarl/pyterm#1080."
+    async with a_page(server, "stty raw -echo; printf ready; cat -vT", writable=True) as pane:
+        with anyio.fail_after(20):
+            while "ready" not in await call(server, "pane.capture", pane=pane):
+                await anyio.sleep(0.1)
+        with anyio.fail_after(20):
+            while not await call(
+                server, "browser.evaluate", name="page", expression="document.querySelector('pymux-pane').writable"
+            ):
+                await anyio.sleep(0.1)
+        await call(server, "browser.click", name="page", selector="pymux-pane")
+        replay = "(() => { const keyboard = %s; %s; })()" % (
+            KEYBOARD.strip(),
+            "; ".join(
+                "keyboard.%s" % step
+                for step in [
+                    "edit('deleteContentBackward')",
+                    "edit('deleteContentBackward')",
+                    "edit('insertText', 'a')",
+                    "edit('deleteContentBackward')",
+                    "edit('deleteWordBackward')",
+                ]
+            ),
+        )
+        await call(server, "browser.evaluate", name="page", expression=replay)
+        shown = ""
+        with anyio.move_on_after(10):
+            while "^W" not in (shown := await call(server, "pane.capture", pane=pane)):
+                await anyio.sleep(0.1)
+        assert "ready^?^?a^?^W" in shown
 
 
 async def test_a_word_the_keyboard_corrects_goes_out_once(server):
