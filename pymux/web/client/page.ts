@@ -185,6 +185,21 @@ if (asked.has("probe")) {
     note({ type: "keyboard geometry", x: box.x, y: box.y, width: box.width, height: box.height });
   });
   note({ type: "agent", userAgent: navigator.userAgent, trial: asked.get("kbd") });
+  // `?kbd=plain`: an ordinary textarea above the pane, to tell whether
+  // SwiftKey sends raw keys to any field on this page. Temporary.
+  if (asked.get("kbd") === "plain") {
+    const plain = document.createElement("textarea");
+    plain.style.cssText = "width: 100%; height: 2.5em; flex-shrink: 0";
+    document.body.prepend(plain);
+    for (const kind of ["keydown", "beforeinput", "input"]) {
+      plain.addEventListener(kind, (event) => {
+        const seen: Record<string, unknown> = { type: `plain ${kind}`, value: plain.value };
+        if (event instanceof KeyboardEvent) Object.assign(seen, { key: event.key, keyCode: event.keyCode });
+        if (event instanceof InputEvent) Object.assign(seen, { inputType: event.inputType, data: event.data });
+        note(seen);
+      });
+    }
+  }
 
   window.addEventListener("resize", () => measure("resize"));
   window.visualViewport?.addEventListener("resize", () => measure("visual resize"));
