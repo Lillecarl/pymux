@@ -43,6 +43,7 @@ __all__ = [
     "Message",
     "Mode",
     "Packet",
+    "PageAction",
     "capabilities_in_common",
     "capabilities_named",
     "peer_upgrade",
@@ -327,6 +328,9 @@ class Packet(StrEnum):
     # `list-forwards` asks. Lillecarl/pyterm#489.
     REPORT_FORWARDS = "report-forwards"
     PING = "ping"
+    # To a client that said `web-page` in `start-gui`: make the page act,
+    # as `data` names it (`PageAction`). Lillecarl/pyterm#1076.
+    PAGE = "page"
     # Start a browser a program on the server drives, or stop it.
     # Lillecarl/pyterm#655. An owner sends both on a peer link too, with
     # `name` saying who asks, and the peer answers as a client does.
@@ -649,6 +653,9 @@ class Field(StrEnum):
     BROWSER = "browser"
     #: In `start-gui`: this client starts browsers.
     BROWSERS = "browsers"
+    #: In `start-gui`: this client is a `pymux web` page, which takes
+    #: `page` packets. Lillecarl/pyterm#1076.
+    WEB_PAGE = "web-page"
     #: In `start-gui`: this client saves the files `file` packets carry.
     #: An older one drops them unread. Lillecarl/pyterm#747.
     SAVES_FILES = "saves-files"
@@ -736,6 +743,16 @@ class Field(StrEnum):
     TARGETS = "targets"
     #: In `run-command`: a peer forwarded it, for a person at the peer.
     FORWARDED = "forwarded"
+
+
+class PageAction(StrEnum):
+    "What a `page` packet asks a `pymux web` page to do (`web-page`)."
+
+    #: Load the page again: what a person does after a deploy.
+    RELOAD = "reload"
+    #: Ask the person to allow notifications. A browser asks only after a
+    #: person's tap, so the page shows its 🔔 and says to tap it.
+    NOTIFICATIONS = "notifications"
 
 
 class Codec(StrEnum):

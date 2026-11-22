@@ -94,6 +94,7 @@ class ClientRole:
         "answers_socks": Keep.REBUILT,
         "_next_forwards": Keep.DROPPED,
         "starts_browsers": Keep.REBUILT,
+        "web_page": Keep.REBUILT,
         "saves_files": Keep.REBUILT,
         "sends_files": Keep.REBUILT,
         "answers_transfers": Keep.REBUILT,
@@ -192,6 +193,9 @@ class ClientRole:
         self._next_forwards: anyio.Event | None = None
         #: Whether this client starts browsers. Lillecarl/pyterm#655.
         self.starts_browsers = False
+        #: Whether this client is a `pymux web` page, which `web-page`
+        #: tells to act. Lillecarl/pyterm#1076.
+        self.web_page = False
         #: Whether this client saves a download. Lillecarl/pyterm#747.
         self.saves_files = False
         #: Whether this client sends files for `pymux receive`, and the

@@ -80,6 +80,10 @@ _GROUND_TIMEOUT = 5
 #: change, so the page keeps them for its next connection.
 CLIENT_OPTIONS = "client-options"
 
+#: What a viewer is told to do, under `action` (`PageAction`), by
+#: `web-page`. Lillecarl/pyterm#1076.
+PAGE = "page"
+
 #: The most client options a page may name. ClientOptions holds about
 #: thirty; this only stops a query from growing without bound.
 _MOST_OPTIONS = 200
@@ -150,6 +154,7 @@ class SessionScreen:
                 Field.COLORTERM: COLORTERM,
                 Field.CLIENT_OPTIONS: self.client_options,
                 Field.KEEPS_OPTIONS: True,
+                Field.WEB_PAGE: True,
             }
         )
         # The server reads the answers only after this packet, and this
@@ -178,6 +183,9 @@ class SessionScreen:
             if isinstance(told, list) and told != self.client_options:
                 self.client_options = told
                 self.client_options_told = False
+        elif kind == Packet.PAGE:
+            # `web-page`: the page acts. Lillecarl/pyterm#1076.
+            self.told.append({"type": PAGE, "action": str(packet.get(Field.DATA, ""))})
         elif kind in (Packet.EXIT, Packet.ERR):
             return True
         return False

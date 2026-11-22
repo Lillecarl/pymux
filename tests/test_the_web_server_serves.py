@@ -228,6 +228,34 @@ async def test_a_notification_reaches_the_session_view_and_its_click_shows_the_p
         pymux.stop()
 
 
+async def test_web_page_tells_the_page_of_a_session_view_to_act(pymux):
+    "Only a web page hears it; with none attached the command says so. Lillecarl/pyterm#1076."
+    from libpymux.connection import CommandError
+    from libpymux.objects import Server
+
+    async with pymux.running():
+        with pytest.raises(CommandError, match="no web page is attached"):
+            await Server(pymux.socket_name).cmd(["web-page", "reload"])
+
+        async with anyio.create_task_group() as tasks:
+            web = await _serving(pymux, tasks, writable=True)
+            url = "ws://127.0.0.1:%d/session?t=%s&rows=10&columns=40" % (web.port, web.token)
+            async with connect(url) as socket:
+                assert json.loads(await socket.recv())["type"] == "welcome"
+                with fair_anyio.fail_after(10):
+                    while not any(state.client.web_page for state in pymux.clients):
+                        await anyio.sleep(0.02)
+                said = await Server(pymux.socket_name).cmd(["web-page", "notifications"])
+                assert said.exit_code == 0, said
+                with fair_anyio.fail_after(10):
+                    while (message := json.loads(await socket.recv()))["type"] != "page":
+                        pass
+                assert message == {"type": "page", "action": "notifications"}
+
+            tasks.cancel_scope.cancel()
+        pymux.stop()
+
+
 async def test_a_viewer_of_the_session_without_the_token_is_refused(pymux):
     from websockets.exceptions import InvalidStatus
 

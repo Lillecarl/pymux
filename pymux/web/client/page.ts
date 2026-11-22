@@ -139,7 +139,23 @@ function showNotifications(): void {
   ask.addEventListener("click", () => {
     void Notification.requestPermission().then((answer) => {
       ask.hidden = answer !== "default";
+      say(`Notifications: ${answer}.`);
     });
+  });
+  // `web-page notifications`: pymux cannot ask, only the person's tap
+  // can, so the page says where to tap. Lillecarl/pyterm#1076.
+  element.addEventListener("page", (event) => {
+    if (event.detail.action !== "notifications") return;
+    const answer = Notification.permission;
+    ask.hidden = answer !== "default";
+    say(
+      answer === "default"
+        ? "pymux asks to show notifications here: tap 🔔 in the key row."
+        : answer === "granted"
+          ? "Notifications are on."
+          : "Notifications are blocked: allow them in this app's settings.",
+      true,
+    );
   });
 
   element.addEventListener("notification", (event) => {
@@ -214,6 +230,10 @@ if (!pane || !token) {
     const kept = keptOptions();
     if (kept !== null) where.searchParams.set("options", kept);
     element.addEventListener("client-options", (event) => keepOptions(JSON.stringify(event.detail)));
+    // `web-page reload`, after a deploy. Lillecarl/pyterm#1076.
+    element.addEventListener("page", (event) => {
+      if (event.detail.action === "reload") location.reload();
+    });
     showNotifications();
   }
 

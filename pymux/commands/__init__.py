@@ -196,6 +196,7 @@ MODULES = [
     "sql",
     "wl",
     "launch_browser",
+    "web_page",
 ]
 
 

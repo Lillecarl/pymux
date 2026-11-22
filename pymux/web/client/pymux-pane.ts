@@ -120,6 +120,15 @@ export interface NoticeClose {
   id: string;
 }
 
+/**
+ * `web-page`: what the page is to do. The element hands it on as an
+ * event of the same name. Lillecarl/pyterm#1076.
+ */
+export interface PageMessage {
+  type: "page";
+  action: "reload" | "notifications" | string;
+}
+
 /** Whether the page has the focus, for a session view's client. */
 export interface FocusMessage {
   type: "focus";
@@ -430,6 +439,12 @@ export interface PymuxPane {
   addEventListener(
     type: "notification",
     listener: (event: CustomEvent<Notice>) => void,
+    options?: boolean | AddEventListenerOptions,
+  ): void;
+  /** `web-page` asked the page to act. Lillecarl/pyterm#1076. */
+  addEventListener(
+    type: "page",
+    listener: (event: CustomEvent<PageMessage>) => void,
     options?: boolean | AddEventListenerOptions,
   ): void;
   /** The notification `detail.id` is to come down: its pane was seen. */
@@ -1026,9 +1041,9 @@ export class PymuxPane extends HTMLElement {
   // -- what arrives --------------------------------------------------
 
   #onMessage(event: MessageEvent): void {
-    let frame: Welcome | Frame | ClientOptions | Notice | NoticeClose;
+    let frame: Welcome | Frame | ClientOptions | Notice | NoticeClose | PageMessage;
     try {
-      frame = JSON.parse(String(event.data)) as Welcome | Frame | ClientOptions | Notice | NoticeClose;
+      frame = JSON.parse(String(event.data)) as Welcome | Frame | ClientOptions | Notice | NoticeClose | PageMessage;
     } catch {
       this.dispatchEvent(new CustomEvent("error", { detail: "bad frame" }));
       return;
@@ -1038,7 +1053,7 @@ export class PymuxPane extends HTMLElement {
       this.dispatchEvent(new CustomEvent("client-options", { detail: frame.options }));
       return;
     }
-    if (frame.type === "notification" || frame.type === "notification-close") {
+    if (frame.type === "notification" || frame.type === "notification-close" || frame.type === "page") {
       this.dispatchEvent(new CustomEvent(frame.type, { detail: frame }));
       return;
     }
