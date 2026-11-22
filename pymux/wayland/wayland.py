@@ -583,8 +583,8 @@ class CompositorChild:
                 tasks.start_soon(self.server.take_selection, self, target, mime_types)
             case ("send", str(target), str(mime_type), int(pipe)):
                 tasks.start_soon(self.server.answer_paste, target, mime_type, pipe)
-            case ("toplevel", int(toplevel), int(tag)):
-                self._opened(compositor, toplevel, self._launches.get(tag), tasks)
+            case ("toplevel", int(toplevel), int(tag), int(pid)):
+                self._opened(compositor, toplevel, self._launches.get(tag), pid, tasks)
             case ("title", int(toplevel), str(title)) if toplevel in self.widgets:
                 self.widgets[toplevel].screen.titles.window = title
                 self.pymux.invalidate(Woke.WINDOW_PANE_CHANGED)
@@ -610,7 +610,7 @@ class CompositorChild:
     # Windows in panes. Lillecarl/pyterm#622.
 
     def _opened(
-        self, compositor: RemoteCompositor, toplevel: int, launch: Launch | None, tasks: anyio.abc.TaskGroup
+        self, compositor: RemoteCompositor, toplevel: int, launch: Launch | None, pid: int, tasks: anyio.abc.TaskGroup
     ) -> None:
         widget = WindowWidget(self, toplevel, self.pymux)
         pane = None
@@ -618,8 +618,10 @@ class CompositorChild:
             pane = launch.adopted = self.pymux.panes.adopt_window_pane(launch.pane, widget)
             launch.opened.set()
         if pane is None:
-            # A later window of a `pymux wl` program goes beside its first.
-            pane = self.pymux.panes.open_window_pane(widget, beside=launch.adopted if launch is not None else None)
+            # A later window of a `pymux wl` program goes beside its first;
+            # one that found the socket itself, beside the pane it runs in.
+            beside = launch.adopted if launch is not None else self.pymux.panes.pane_running(pid)
+            pane = self.pymux.panes.open_window_pane(widget, beside=beside)
         if pane is None:
             # Nowhere to show it: no session has a window.
             self.close(toplevel)
@@ -671,7 +673,8 @@ class CompositorChild:
             open_now.add(toplevel)
             pane = panes.get(toplevel)
             if pane is None:
-                self._opened(compositor, toplevel, self._launches.get(tag), tasks)
+                # A window that opened during the pause: the list names no pid.
+                self._opened(compositor, toplevel, self._launches.get(tag), 0, tasks)
             elif toplevel not in self.panes:
                 assert isinstance(pane.terminal, WindowWidget)
                 self._shown(compositor, toplevel, pane, pane.terminal, tasks)

@@ -20,6 +20,7 @@ import anyio
 import pytest
 from fairclock import anyio as fair_anyio
 from PIL import Image
+from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from session import once, over_connection
 
@@ -148,6 +149,35 @@ async def test_a_window_opens_a_pane_beside_the_active_one(tmp_path):
         assert is_window_pane(pane)
         await once(lambda: pane.screen.titles.window == "probe", 10.0, "no title")
         assert pane.name == "pymux.probe"
+
+
+async def test_a_window_a_panes_program_opens_goes_beside_that_pane(tmp_path, monkeypatch):
+    """
+    Not beside the session a person used last: a program in a pane's
+    shell finds the compositor in `WAYLAND_DISPLAY`, with no `pymux wl`
+    to say where it runs. Lillecarl/pyterm#1062.
+    """
+    monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
+    pymux = Pymux()
+    pymux.socket_name = str(tmp_path / "pymux.sock.test")
+    log = tmp_path / "probe.log"
+    log.touch()
+    runtime = tmp_path / "run"
+    runtime.mkdir(mode=0o700)
+    async with over_connection(pymux=pymux) as session:
+        state, _size = await session.attach("one", SIZE)
+        await once(lambda: pymux.wayland.display, 10.0, "the compositor never started")
+        program = shlex.join(["env", "XDG_RUNTIME_DIR=%s" % (runtime,), sys.executable, str(PROBE), str(log)])
+        with set_app(state.app):
+            pymux.handle_command("new-session -d -s two %s" % (shlex.quote(program),))
+        # The person goes on in their own session, before the program can open anything.
+        state.session.last_used = max(one.last_used for one in pymux.sessions) + 1
+        await once(lambda: pymux.wayland.window_panes(), 10.0, "the window never opened a pane")
+        (pane,) = pymux.wayland.window_panes()
+        place = pymux.place_of_pane_id(pane.pane_id)
+        assert place is not None
+        assert pymux.last_used_session is state.session
+        assert place[0].name == "two"
 
 
 async def test_a_kitty_client_gets_the_frame_then_only_the_damage(tmp_path):

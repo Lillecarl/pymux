@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, ClassVar
 
 import anyio
 import anyio.abc
+import psutil
 from prompt_toolkit.application.current import get_app
 from ptterm import Terminal
 from ptyhost.backends import Backend
@@ -463,6 +464,23 @@ class PaneMaker:
         "A session with no panes left is over. The last one to go stops the server."
         if session in self.pymux.sessions and not session.arrangement.has_panes:
             self.pymux.remove_session(session)
+
+    def pane_running(self, pid: int) -> Pane | None:
+        """
+        The pane whose program is `pid` or an ancestor of it; None for
+        pid 0, or a process no pane started. Lillecarl/pyterm#1062.
+        """
+        if not pid:
+            return None
+        by_pid = {
+            pane.process.backend.pid: pane for pane in self.pymux.panes_by_id.values() if pane.process.backend.pid
+        }
+        try:
+            process = psutil.Process(pid)
+            lineage = [process, *process.parents()]
+        except psutil.Error:
+            return None
+        return next((by_pid[one.pid] for one in lineage if one.pid in by_pid), None)
 
     def open_window_pane(self, widget: WindowWidget, beside: Pane | None = None) -> Pane | None:
         """
