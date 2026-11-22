@@ -613,6 +613,8 @@ async def test_a_backspace_with_no_key_still_deletes(server):
             server, "browser.evaluate", name="page", expression="document.getElementById('probe').textContent"
         )
         assert '"inputType":"deleteContentBackward"' in probe, probe
+        # And the sizes the page got. Lillecarl/pyterm#1082.
+        assert '"type":"viewport","cause":"connected"' in probe, probe
 
 
 async def test_a_backspace_with_nothing_typed_reaches_the_program(server):

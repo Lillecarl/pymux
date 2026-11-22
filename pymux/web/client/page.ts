@@ -113,6 +113,34 @@ if (asked.has("probe")) {
       element.send({ type: "probe", event: seen });
     });
   }
+  // The sizes the browser gives the page, at each resize: where its own
+  // toolbars and the on-screen keyboard leave the page. Lillecarl/pyterm#1082.
+  const ruler = (unit: string): HTMLElement => {
+    const box = document.createElement("div");
+    box.style.cssText = `position: fixed; visibility: hidden; height: 100${unit}; width: 0`;
+    document.body.append(box);
+    return box;
+  };
+  const rulers = { dvh: ruler("dvh"), svh: ruler("svh"), lvh: ruler("lvh") };
+  const measure = (cause: string) => {
+    const seen = {
+      type: "viewport",
+      cause,
+      innerHeight: window.innerHeight,
+      visualHeight: window.visualViewport?.height,
+      visualTop: window.visualViewport?.offsetTop,
+      clientHeight: document.documentElement.clientHeight,
+      dvh: rulers.dvh.offsetHeight,
+      svh: rulers.svh.offsetHeight,
+      lvh: rulers.lvh.offsetHeight,
+      keysBottom: row.getBoundingClientRect().bottom,
+    };
+    log.textContent = `${JSON.stringify(seen)}\n${log.textContent ?? ""}`;
+    element.send({ type: "probe", event: seen });
+  };
+  window.addEventListener("resize", () => measure("resize"));
+  window.visualViewport?.addEventListener("resize", () => measure("visual resize"));
+  element.addEventListener("connected", () => measure("connected"), { once: true });
 }
 
 /**
