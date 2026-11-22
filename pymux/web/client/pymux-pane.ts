@@ -552,12 +552,12 @@ export class PymuxPane extends HTMLElement {
     this.#keyboard.addEventListener("compositionstart", () => {
       this.#composing = true;
     });
-    this.#keyboard.addEventListener("compositionend", (event) => {
+    this.#keyboard.addEventListener("compositionend", () => {
       this.#composing = false;
-      // A composition `#commit` already sent ends here as well.
-      if (this.#committed) this.#committed = false;
-      else if (event.data) this.#sendText(event.data);
-      this.#keyboard.value = "";
+      this.#sendChange();
+    });
+    this.#keyboard.addEventListener("input", (event) => {
+      if (!(event as InputEvent).isComposing && !this.#composing) this.#sendChange();
     });
   }
 
@@ -573,8 +573,51 @@ export class PymuxPane extends HTMLElement {
 
   /** Whether an IME holds a word it has not committed. */
   #composing = false;
-  /** Whether `#commit` sent the composition that is still to end. */
-  #committed = false;
+
+  /**
+   * What of the keyboard textarea's value the program was sent.
+   *
+   * **The textarea keeps what the keyboard typed**, and the element sends
+   * the difference. An on-screen keyboard keeps its own copy of the word
+   * and rewrites the field from it: SwiftKey, correcting "Cant", deleted
+   * the "t" and composed "Can" again, because the element had cancelled
+   * each letter and the field was empty, and "Can" went out twice.
+   * Lillecarl/pyterm#1069.
+   */
+  #sent = "";
+
+  /** A letter a held modifier took, which the textarea gets after. */
+  #heldLetter: string | null = null;
+
+  /** Send what the textarea gained since `#sent`, after a Backspace for each character it lost. */
+  #sendChange(): void {
+    let value = this.#keyboard.value;
+    if (this.#heldLetter !== null) {
+      if (value.endsWith(this.#heldLetter)) {
+        value = value.slice(0, -this.#heldLetter.length);
+        this.#keyboard.value = value;
+      }
+      this.#heldLetter = null;
+    }
+    const was = [...this.#sent];
+    const now = [...value];
+    let same = 0;
+    while (same < was.length && same < now.length && was[same] === now[same]) same++;
+    this.#sent = value;
+    const lost = was.length - same;
+    if (lost > 0) this.send({ type: INPUT, keys: Array(lost).fill("BSpace").join(" ") });
+    const gained = now.slice(same).join("");
+    if (gained) this.#sendText(gained);
+  }
+
+  /**
+   * Empty the textarea, where the keyboard starts a new word anyway: at
+   * a key that moves the cursor or ends the line.
+   */
+  #forget(): void {
+    this.#keyboard.value = "";
+    this.#sent = "";
+  }
 
   /**
    * Send the word an on-screen keyboard is still composing, and end the
@@ -583,12 +626,10 @@ export class PymuxPane extends HTMLElement {
    * tapped then reached the shell first.
    */
   #commit(): void {
+    this.#sendChange();
+    this.#forget();
     if (!this.#composing) return;
-    const word = this.#keyboard.value;
-    this.#committed = true;
     this.#composing = false;
-    this.#keyboard.value = "";
-    if (word) this.send({ type: TEXT, text: word });
     // Losing the focus is what makes an IME let go of its word.
     this.#focusKeyboard();
   }
@@ -1148,6 +1189,9 @@ export class PymuxPane extends HTMLElement {
     // `null` is "leave this keydown alone", which is what lets a plain
     // character reach `beforeinput` and a composition finish.
     if (keys === null) return;
+    // A Backspace over what the textarea holds deletes there, as the
+    // `beforeinput` of one does (`#onBeforeInput`).
+    if (keys === "BSpace" && this.#keyboard.value && this.#held.size === 0) return;
     event.preventDefault();
     this.press(keys);
   }
@@ -1166,18 +1210,23 @@ export class PymuxPane extends HTMLElement {
     // space, so Ctrl then c sent nothing until then, and a space after.
     if (event.inputType === "insertCompositionText" && event.data && this.#held.size > 0) {
       this.#sendText(event.data);
-      // The textarea does not hold this letter yet, and `hold` committed
-      // anything before it, so `#commit` sends nothing more and only ends
-      // the composition.
+      // `hold` committed anything before it, so `#commit` only ends the
+      // composition. The letter lands in the textarea after this event,
+      // which cannot be cancelled, and `#sendChange` takes it out again.
       this.#composing = true;
       this.#commit();
+      this.#heldLetter = event.data;
       return;
     }
-    // The composition's own end sends it; this one too would type it twice.
+    // The composition's own end sends it.
     if (event.isComposing) return;
     if (event.inputType === "insertText" && event.data !== null) {
-      event.preventDefault();
-      this.#sendText(event.data);
+      // A held modifier makes it a key, which the textarea does not hold.
+      // Anything else lands there, and `input` sends it.
+      if (this.#held.size > 0) {
+        event.preventDefault();
+        this.#sendText(event.data);
+      }
       return;
     }
     if (event.inputType === "insertLineBreak") {
@@ -1190,6 +1239,10 @@ export class PymuxPane extends HTMLElement {
     // Lillecarl/pyterm#1052.
     const deleting = DELETES[event.inputType];
     if (deleting) {
+      // What the textarea holds it deletes itself, so the keyboard's copy
+      // of the word stays right, and `input` sends the Backspace. Past
+      // that, the program's own text is the program's to delete.
+      if (this.#keyboard.value && this.#held.size === 0) return;
       event.preventDefault();
       this.press(deleting);
     }
