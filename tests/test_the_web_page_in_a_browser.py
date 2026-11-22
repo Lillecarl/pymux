@@ -609,9 +609,7 @@ async def test_a_backspace_with_no_key_still_deletes(server):
                 await anyio.sleep(0.1)
         assert shown == "ready\na\na"
         # And the probe listed what the keyboard got.
-        probe = await call(
-            server, "browser.evaluate", name="page", expression="document.getElementById('probe').textContent"
-        )
+        probe = await call(server, "browser.evaluate", name="page", expression="window.pymuxProbe.join('\\n')")
         assert '"inputType":"deleteContentBackward"' in probe, probe
         # And the sizes the page got. Lillecarl/pyterm#1082.
         assert '"type":"viewport","cause":"connected"' in probe, probe

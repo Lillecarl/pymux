@@ -84,14 +84,17 @@ element.addEventListener("held", (event) => {
   }
 });
 
-// `?probe` lists every keyboard, input and composition event the
-// element's keyboard gets: what an on-screen keyboard really sends, read
-// on the phone. Each of these events crosses the shadow root.
-// Lillecarl/pyterm#1052.
+// `?probe` sends every keyboard, input and composition event the
+// element's keyboard gets to `pymux web`, which prints it: what an
+// on-screen keyboard really sends, read from the phone. Each of these
+// events crosses the shadow root. Lillecarl/pyterm#1052.
+//
+// **Nothing of it shows on the page**: a log there took the room the
+// terminal measures, and so changed the very page under test. A test
+// reads `window.pymuxProbe`. Lillecarl/pyterm#1080.
 if (asked.has("probe")) {
-  const log = document.createElement("pre");
-  log.id = "probe";
-  document.body.append(log);
+  const log: string[] = [];
+  (window as Window & { pymuxProbe?: string[] }).pymuxProbe = log;
   const kinds = ["keydown", "keyup", "beforeinput", "input", "compositionstart", "compositionupdate", "compositionend"];
   for (const kind of kinds) {
     element.addEventListener(kind, (event) => {
@@ -107,9 +110,7 @@ if (asked.has("probe")) {
       // value it did not expect is where it repeats a word.
       const target = event.composedPath()[0];
       if (target instanceof HTMLTextAreaElement) seen.value = target.value;
-      log.textContent = `${JSON.stringify(seen)}\n${log.textContent ?? ""}`;
-      // And to `pymux web`, which prints it: a phone's screen is hard to
-      // read from anywhere else. Lillecarl/pyterm#1069.
+      log.push(JSON.stringify(seen));
       element.send({ type: "probe", event: seen });
     });
   }
@@ -135,74 +136,12 @@ if (asked.has("probe")) {
       lvh: rulers.lvh.offsetHeight,
       keysBottom: row.getBoundingClientRect().bottom,
     };
-    log.textContent = `${JSON.stringify(seen)}\n${log.textContent ?? ""}`;
+    log.push(JSON.stringify(seen));
     element.send({ type: "probe", event: seen });
   };
   window.addEventListener("resize", () => measure("resize"));
   window.visualViewport?.addEventListener("resize", () => measure("visual resize"));
   element.addEventListener("connected", () => measure("connected"), { once: true });
-}
-
-// `?lab`: fields that differ from the element's textarea one setting at
-// a time, for which one keeps SwiftKey's Backspace in Chrome from the
-// page. Every event goes to `pymux web` as a probe line with `lab`.
-// Throwaway. Lillecarl/pyterm#1080.
-if (asked.has("lab")) {
-  const off = { autocapitalize: "off", autocomplete: "off", spellcheck: "false", autocorrect: "off" };
-  const manual = { ...off, virtualkeyboardpolicy: "manual" };
-  const cases: { name: string; attrs: Record<string, string>; hidden?: boolean; space?: boolean; shadow?: boolean }[] = [
-    { name: "1 plain", attrs: {} },
-    { name: "2 autocorrect off", attrs: { autocorrect: "off" } },
-    { name: "3 autocapitalize, autocomplete, spellcheck off", attrs: { autocapitalize: "off", autocomplete: "off", spellcheck: "false" } },
-    { name: "4 all four off", attrs: off },
-    { name: "5 all four off, policy manual", attrs: manual },
-    { name: "6 as 5, a leading space, off screen", attrs: manual, hidden: true, space: true },
-    { name: "7 as 6, in a shadow root", attrs: manual, hidden: true, space: true, shadow: true },
-  ];
-  const lab = document.createElement("div");
-  lab.style.cssText = "display: grid; gap: 6px; padding: 6px; font-size: 14px";
-  document.body.prepend(lab);
-  cases.forEach((one, index) => {
-    const number = index + 1;
-    const box = document.createElement("div");
-    const title = document.createElement("div");
-    title.textContent = one.name;
-    const field = document.createElement("textarea");
-    for (const [name, value] of Object.entries(one.attrs)) field.setAttribute(name, value);
-    field.style.cssText = one.hidden ? "position: fixed; left: -1000px; top: 0; width: 10px; height: 10px" : "width: 100%; height: 2.2em";
-    if (one.space) field.value = " ";
-    let holder: HTMLElement = box;
-    if (one.shadow) {
-      holder = document.createElement("div");
-      holder.attachShadow({ mode: "open" }).append(field);
-      box.append(title, holder);
-    } else {
-      box.append(title, field);
-    }
-    if (one.hidden || one.attrs.virtualkeyboardpolicy) {
-      const button = document.createElement("button");
-      button.textContent = `Type into field ${number}`;
-      button.addEventListener("mousedown", (event) => event.preventDefault());
-      button.addEventListener("click", () => {
-        field.focus();
-        (navigator as Navigator & { virtualKeyboard?: { show(): void } }).virtualKeyboard?.show();
-      });
-      box.append(button);
-    }
-    const seen = document.createElement("div");
-    seen.textContent = "nothing yet";
-    box.append(seen);
-    lab.append(box);
-    for (const kind of ["keydown", "beforeinput", "input"]) {
-      field.addEventListener(kind, (event) => {
-        const line: Record<string, unknown> = { lab: number, type: event.type, value: field.value };
-        if (event instanceof KeyboardEvent) Object.assign(line, { key: event.key, keyCode: event.keyCode });
-        if (event instanceof InputEvent) Object.assign(line, { inputType: event.inputType, data: event.data });
-        seen.textContent = JSON.stringify(line);
-        element.send({ type: "probe", event: line });
-      });
-    }
-  });
 }
 
 /**
