@@ -24,7 +24,8 @@ import anyio
 from pymux.commands import CommandException
 from pymux.commands.common import send_key
 from pymux.keys.key_spelling import event_however_it_is_written
-from pymux.web.protocol import MOUSE, PaneView, Typed, encode_unsent, mouse_of, typed_of
+from pymux.log import logger
+from pymux.web.protocol import MOUSE, PROBE, PaneView, Typed, encode_unsent, mouse_of, probe_line, typed_of
 
 if TYPE_CHECKING:
     from ptterm import Terminal
@@ -139,6 +140,10 @@ class PaneStream:
             return "that is not JSON"
         if not isinstance(message, dict):
             return "a message is an object"
+
+        if message.get("type") == PROBE:
+            logger.info("%s", probe_line(message))
+            return None
 
         if message.get("type") == MOUSE:
             try:

@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import base64
 import functools
+import json
 from typing import TYPE_CHECKING, Any, NamedTuple
 
 import anyio
@@ -59,12 +60,14 @@ __all__ = [
     "FRAME",
     "MOUSE",
     "PLAIN_STYLE",
+    "PROBE",
     "WELCOME",
     "PaneView",
     "Typed",
     "base64_png",
     "encode_unsent",
     "mouse_of",
+    "probe_line",
     "typed_of",
 ]
 
@@ -478,6 +481,20 @@ def typed_of(message: dict[str, Any]) -> Typed:
             raise ValueError("a paste message needs a text string")
         return Typed(text, named=False, bracketed=True)
     raise ValueError("%r is not something a client may say" % (kind,))
+
+
+#: One keyboard event the page's `?probe` saw, under `event`. `pymux web`
+#: prints it, so the events of a phone's keyboard reach whoever reads the
+#: output, not only the phone's screen. Lillecarl/pyterm#1069.
+PROBE = "probe"
+
+#: The most of one probe event that is printed.
+LONGEST_PROBE = 2000
+
+
+def probe_line(message: dict[str, Any]) -> str:
+    "What `pymux web` prints for a probe message."
+    return "probe: %s" % (json.dumps(message.get("event"), ensure_ascii=False)[:LONGEST_PROBE],)
 
 
 #: What a viewer says the mouse did. Lillecarl/pyterm#952.

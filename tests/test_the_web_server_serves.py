@@ -219,6 +219,31 @@ async def test_a_writable_viewer_types_into_the_pane(pymux):
         pymux.stop()
 
 
+async def test_a_probe_event_types_nothing_and_keeps_the_stream(pymux):
+    "`?probe` sends each keyboard event for the output to show. Lillecarl/pyterm#1069."
+    pane = pymux.arrangement.get_active_window().active_pane
+    written = []
+    pane.process.write_input = written.append
+
+    async with pymux.running():
+        async with anyio.create_task_group() as tasks:
+            web = await _serving(pymux, tasks, writable=True)
+
+            async with connect(web.url(pane_id(pymux))) as socket:
+                await socket.recv()
+                await socket.recv()
+                await socket.send(json.dumps({"type": "probe", "event": {"type": "compositionend", "data": "Can"}}))
+                await socket.send(json.dumps({"type": "text", "text": "hi"}))
+                with fair_anyio.fail_after(5):
+                    while not written:
+                        await anyio.sleep(0.02)
+
+            assert written == ["hi"]
+
+            tasks.cancel_scope.cancel()
+        pymux.stop()
+
+
 async def test_a_showing_viewer_cannot_type(pymux):
     "`--allow-input` is off by default, and the server is what enforces it."
     pane = pymux.arrangement.get_active_window().active_pane

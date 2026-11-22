@@ -105,6 +105,9 @@ if (asked.has("probe")) {
       const target = event.composedPath()[0];
       if (target instanceof HTMLTextAreaElement) seen.value = target.value;
       log.textContent = `${JSON.stringify(seen)}\n${log.textContent ?? ""}`;
+      // And to `pymux web`, which prints it: a phone's screen is hard to
+      // read from anywhere else. Lillecarl/pyterm#1069.
+      element.send({ type: "probe", event: seen });
     });
   }
 }

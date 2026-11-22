@@ -25,6 +25,7 @@ callers of one thing.
 from __future__ import annotations
 
 import json
+import sys
 import time
 from collections.abc import AsyncIterable, Awaitable, Callable
 from typing import Any
@@ -40,7 +41,7 @@ from pyte.streams import GroundTimer, Stream
 from pymux.client.terminal import DETECTION_QUERIES
 from pymux.keys.key_spelling import event_however_it_is_written
 from pymux.log import logger
-from pymux.web.protocol import MOUSE, PaneView, Typed, encode_unsent, mouse_of, typed_of
+from pymux.web.protocol import MOUSE, PROBE, PaneView, Typed, encode_unsent, mouse_of, probe_line, typed_of
 
 __all__ = ["CLIENT_OPTIONS", "SessionScreen", "client_options_of", "run_session"]
 
@@ -221,6 +222,10 @@ class SessionScreen:
             ):
                 return "a size message needs rows and columns from 1 to %d" % LARGEST
             self.resize(rows, columns)
+            return None
+
+        if message.get("type") == PROBE:
+            print(probe_line(message), file=sys.stderr, flush=True)
             return None
 
         if message.get("type") == MOUSE:

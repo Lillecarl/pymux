@@ -198,7 +198,14 @@ export type ViewerMessage =
   | TextMessage
   | PasteMessage
   | SizeMessage
-  | MouseMessage;
+  | MouseMessage
+  | ProbeMessage;
+
+/** One keyboard event `?probe` saw, for `pymux web` to print. Lillecarl/pyterm#1069. */
+export interface ProbeMessage {
+  type: "probe";
+  event: Record<string, unknown>;
+}
 
 /** The two calls of the Keyboard Lock API, which TypeScript's DOM types lack. */
 interface KeyboardLock {
