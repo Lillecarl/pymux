@@ -109,7 +109,10 @@ if (asked.has("probe")) {
       // What the hidden textarea holds: an IME reads it back, and a
       // value it did not expect is where it repeats a word.
       const target = event.composedPath()[0];
-      if (target instanceof HTMLTextAreaElement) seen.value = target.value;
+      if (target instanceof HTMLTextAreaElement) {
+        seen.value = target.value;
+        seen.caret = [target.selectionStart, target.selectionEnd];
+      }
       log.push(JSON.stringify(seen));
       element.send({ type: "probe", event: seen });
     });
@@ -127,6 +130,7 @@ if (asked.has("probe")) {
     const seen = {
       type: "viewport",
       cause,
+      trial: asked.get("kbd"),
       innerHeight: window.innerHeight,
       visualHeight: window.visualViewport?.height,
       visualTop: window.visualViewport?.offsetTop,

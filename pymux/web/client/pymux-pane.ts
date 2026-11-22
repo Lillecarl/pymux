@@ -411,6 +411,14 @@ const DELETES: Record<string, string | undefined> = {
 const DELETABLE = " ";
 
 /**
+ * A trial of the keyboard textarea, from `?kbd=` on the page's address:
+ * SwiftKey in Chrome on Android sends nothing for a Backspace tap here,
+ * and each value changes one thing about the field. Temporary.
+ * Lillecarl/pyterm#1080.
+ */
+const TRIAL = new URLSearchParams(location.search).get("kbd") ?? "";
+
+/**
  * The three events this dispatches, typed.
  *
  * An interface beside the class and not methods in it: overloads in a
@@ -545,7 +553,7 @@ export class PymuxPane extends HTMLElement {
     // `delegatesFocus`, so that focus arriving at the host -- a click, a
     // tab, a `focus()` from a page -- lands on the first focusable thing
     // in here, which is the textarea a composition needs.
-    const root = this.attachShadow({ mode: "open", delegatesFocus: true });
+    const root = this.attachShadow({ mode: "open", delegatesFocus: TRIAL !== "nodelegate" });
 
     this.#ownSheet = new CSSStyleSheet();
     this.#ownSheet.replaceSync(OWN_RULES);
@@ -597,6 +605,13 @@ export class PymuxPane extends HTMLElement {
     this.#keyboard.setAttribute("virtualkeyboardpolicy", "manual");
     if (!virtualKeyboard()) this.#keyboard.inputMode = "none";
     this.#keyboard.value = DELETABLE;
+    if (TRIAL === "onscreen" || TRIAL === "visible") {
+      this.#keyboard.style.left = "0";
+      this.#keyboard.style.top = "0";
+    }
+    if (TRIAL === "visible") {
+      Object.assign(this.#keyboard.style, { width: "6em", height: "2em", opacity: "1", zIndex: "10" });
+    }
 
     this.#cursor = document.createElement("div");
     this.#cursor.className = "cursor";
@@ -665,6 +680,7 @@ export class PymuxPane extends HTMLElement {
   showKeyboard(): void {
     const keyboard = virtualKeyboard();
     if (keyboard) {
+      if (TRIAL === "restart") this.#keyboard.blur();
       this.#focusKeyboard();
       keyboard.show();
       return;
