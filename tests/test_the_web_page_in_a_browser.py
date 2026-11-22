@@ -648,6 +648,18 @@ async def test_a_swipe_scrolls_as_a_wheel_does(server):
             ):
                 await anyio.sleep(0.1)
 
+        # The browser pans nothing over a screen that takes input: a pan it
+        # started stopped the moves after a few lines. Lillecarl/pyterm#1074.
+        assert (
+            await call(
+                server,
+                "browser.evaluate",
+                name="page",
+                expression="getComputedStyle(document.querySelector('pymux-pane').shadowRoot"
+                ".querySelector('.pyte-screen')).touchAction",
+            )
+            == "none"
+        )
         await call(server, "browser.evaluate", name="page", expression=SWIPE_UP)
 
         # Three rows up shows what is below: three wheel-down reports.

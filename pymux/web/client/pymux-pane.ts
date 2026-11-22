@@ -1055,6 +1055,11 @@ export class PymuxPane extends HTMLElement {
   receive(frame: Welcome | Frame): void {
     if (frame.type === "welcome") {
       this.#writable = Boolean(frame.writable);
+      // A swipe is the program's wheel, not the page's pan: a pan the
+      // browser starts stops the touch moves, and Claude Code scrolled a
+      // few lines and stopped. A view that only shows scrolls its box.
+      // Lillecarl/pyterm#1074.
+      this.#screen.style.touchAction = this.#writable ? "none" : "";
       this.#welcomed = true;
       this.#failures = 0;
       // **A new stream numbers its styles from one again.** A table kept
