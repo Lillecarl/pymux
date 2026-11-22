@@ -624,13 +624,16 @@ async def test_a_click_on_the_page_reaches_a_program_that_asked_for_the_mouse(se
                 await anyio.sleep(0.1)
 
 
-#: A finger on the screen that moves up three and a half rows.
+#: A finger on the screen that moves up three and a half rows. After the
+#: served fonts, which change the row: measured before them, three and a
+#: half rows were two of the element's.
 SWIPE_UP = """
-(() => {
+(async () => {
+  await document.fonts.ready;
   const screen = document.querySelector("pymux-pane").shadowRoot.querySelector(".pyte-screen");
   const box = screen.getBoundingClientRect();
   const probe = document.createElement("span");
-  probe.textContent = "0";
+  probe.textContent = "0".repeat(10);
   screen.append(probe);
   const row = probe.getBoundingClientRect().height;
   probe.remove();
