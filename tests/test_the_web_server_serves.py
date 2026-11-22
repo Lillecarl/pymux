@@ -19,6 +19,7 @@ Lillecarl/pyterm#463.
 from __future__ import annotations
 
 import json
+import socket
 import sys
 
 import anyio
@@ -75,10 +76,12 @@ class _Serving:
 async def _serving(mux, tasks, writable: bool) -> _Serving:
     "Start the adapter beside that server and wait for the port."
     token = a_token()
-    # Port 0 would be the tidy answer, and `websockets` does not report
-    # back which one it took through `serve`. So a port is chosen and the
-    # wait below is what says it came up.
-    port = 18100 + (hash(mux.socket_name) % 400)
+    # `serve` does not report the port it took, so the kernel picks a free
+    # one here and the wait below says it came up. A port hashed from the
+    # socket name, one of 400, collided between tests run in parallel.
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
 
     tasks.start_soon(lambda: serve(mux.socket_name, "127.0.0.1", port, token, writable))
 
