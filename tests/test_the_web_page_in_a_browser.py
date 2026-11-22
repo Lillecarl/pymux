@@ -612,3 +612,48 @@ async def test_a_click_on_the_page_reaches_a_program_that_asked_for_the_mouse(se
                 r"\[<0;\d+;\d+M.*\[<0;\d+;\d+m", await call(server, "pane.capture", pane=pane), re.DOTALL
             ):
                 await anyio.sleep(0.1)
+
+
+#: A finger on the screen that moves up three and a half rows.
+SWIPE_UP = """
+(() => {
+  const screen = document.querySelector("pymux-pane").shadowRoot.querySelector(".pyte-screen");
+  const box = screen.getBoundingClientRect();
+  const probe = document.createElement("span");
+  probe.textContent = "0";
+  screen.append(probe);
+  const row = probe.getBoundingClientRect().height;
+  probe.remove();
+  const x = box.left + 20;
+  const y = box.top + row * 8;
+  const at = (clientY) => new Touch({ identifier: 1, target: screen, clientX: x, clientY });
+  const fire = (kind, touch) => screen.dispatchEvent(new TouchEvent(kind, {
+    touches: [touch], targetTouches: [touch], changedTouches: [touch], bubbles: true, cancelable: true, composed: true,
+  }));
+  fire("touchstart", at(y));
+  fire("touchmove", at(y - row * 3.5));
+})()
+"""
+
+
+async def test_a_swipe_scrolls_as_a_wheel_does(server):
+    "A phone sends no wheel events, and Claude Code scrolled only with one. Lillecarl/pyterm#1072."
+    async with a_page(server, "printf '\\033[?1000h\\033[?1006hready'; cat", writable=True) as pane:
+        with anyio.fail_after(20):
+            while "ready" not in await call(server, "pane.capture", pane=pane):
+                await anyio.sleep(0.1)
+        with anyio.fail_after(20):
+            while not await call(
+                server, "browser.evaluate", name="page", expression="document.querySelector('pymux-pane').writable"
+            ):
+                await anyio.sleep(0.1)
+
+        await call(server, "browser.evaluate", name="page", expression=SWIPE_UP)
+
+        # Three rows up shows what is below: three wheel-down reports.
+        shown = ""
+        with anyio.move_on_after(10):
+            while len(re.findall(r"\[<65;\d+;\d+M", shown := await call(server, "pane.capture", pane=pane))) < 3:
+                await anyio.sleep(0.1)
+        assert len(re.findall(r"\[<65;\d+;\d+M", shown)) == 3, shown
+        assert "[<64;" not in shown, shown

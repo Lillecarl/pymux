@@ -539,6 +539,8 @@ export class PymuxPane extends HTMLElement {
       this.#sendMouse(event, "move", this.#pressed ? BUTTONS[this.#heldButton(event)] : "none"),
     );
     this.#screen.addEventListener("wheel", (event) => this.#onWheel(event), { passive: false });
+    this.#screen.addEventListener("touchstart", (event) => this.#onTouchStart(event), { passive: true });
+    this.#screen.addEventListener("touchmove", (event) => this.#onTouchMove(event), { passive: false });
     // Left by Escape or by the browser: the keys go back with it.
     this.addEventListener("fullscreenchange", () => {
       if (!this.isFullscreen) keyboardLock()?.unlock();
@@ -690,7 +692,7 @@ export class PymuxPane extends HTMLElement {
   }
 
   #sendMouse(
-    event: MouseEvent,
+    event: Pick<MouseEvent, "clientX" | "clientY" | "shiftKey" | "altKey" | "ctrlKey">,
     action: MouseMessage["action"],
     button: MouseMessage["button"] | undefined,
   ): void {
@@ -729,8 +731,36 @@ export class PymuxPane extends HTMLElement {
     }
   }
 
+  /** Where the finger of a swipe was at the last step it sent, or null. */
+  #swipedFrom: number | null = null;
+
+  /**
+   * A one-finger swipe scrolls as a wheel does: a wheel step at the
+   * finger's cell for each row it travels, so the page follows the
+   * finger. A phone sends no wheel events, and Claude Code scrolled only
+   * with a wheel. Lillecarl/pyterm#1072.
+   */
+  #onTouchStart(event: TouchEvent): void {
+    this.#swipedFrom = event.touches.length === 1 ? event.touches[0].clientY : null;
+  }
+
+  #onTouchMove(event: TouchEvent): void {
+    if (this.#swipedFrom === null || event.touches.length !== 1 || !this.#writable) return;
+    event.preventDefault();
+    const touch = event.touches[0];
+    const size = this.#cellSize();
+    if (!size) return;
+    const at = { clientX: touch.clientX, clientY: touch.clientY, shiftKey: false, altKey: false, ctrlKey: false };
+    // A finger moving up shows what is below, as a wheel turned down.
+    while (Math.abs(this.#swipedFrom - touch.clientY) >= size.height) {
+      const down = this.#swipedFrom > touch.clientY;
+      this.#swipedFrom += down ? -size.height : size.height;
+      this.#sendMouse(at, down ? "wheel-down" : "wheel-up", "none");
+    }
+  }
+
   /** The cell under the pointer, or null off the screen. */
-  #cellAt(event: MouseEvent): { column: number; row: number } | null {
+  #cellAt(event: Pick<MouseEvent, "clientX" | "clientY">): { column: number; row: number } | null {
     const size = this.#cellSize();
     if (!size) return null;
     const box = this.#screen.getBoundingClientRect();
