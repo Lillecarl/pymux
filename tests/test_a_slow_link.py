@@ -187,14 +187,20 @@ ROUND_TRIP = 0.05
 
 
 class Delay(NamedTuple):
-    "A key's wait for its frame: in fair time, on the wall, and how much of it the collector paused."
+    """
+    A key's wait for its frame: in fair time, on the wall, how much of it
+    the collector paused, and the CPU this process spent. CPU near the
+    wall is pymux working; far under it, with no fair stall, is a wait
+    the run queue does not see, such as memory reclaim.
+    """
 
     fair: float
     wall: float
     collected: float
+    cpu: float
 
     def __repr__(self) -> str:
-        return "%.3f fair, %.3f wall, %.3f collecting" % self
+        return "%.3f fair, %.3f wall, %.3f collecting, %.3f cpu" % self
 
 
 #: F5 and F6, and the word each shows.
@@ -215,13 +221,14 @@ async def test_a_key_draws_within_a_round_trip_while_a_pane_animates(request):
     # process, so on a loaded machine a key waits for a CPU as well as
     # for its frame, and only the second is pymux's. Lillecarl/pyterm#981.
     fair = Stopwatch()
-    # Each frame: its fair time, its wall time, and what it drew.
-    arrived: list[tuple[float, float, str]] = []
+    # Each frame: its fair time, its wall time, this process's CPU time,
+    # and what it drew.
+    arrived: list[tuple[float, float, float, str]] = []
 
     def read(packet) -> None:
         packets.append(packet)
         if packet.get("cmd") == "out" and packet.get("data"):
-            arrived.append((fair.elapsed(), time.monotonic(), packet["data"]))
+            arrived.append((fair.elapsed(), time.monotonic(), time.process_time(), packet["data"]))
 
     # The collector's pauses, as (began, ended): one in a key's window
     # is time this process ran, so the fair stopwatch keeps it in.
@@ -286,7 +293,7 @@ async def test_a_key_draws_within_a_round_trip_while_a_pane_animates(request):
             for key in range(12):
                 await anyio.sleep(0.037 * (key % 5) + 0.1)
                 before = len(arrived)
-                pressed, pressed_wall = fair.elapsed(), time.monotonic()
+                pressed, pressed_wall, pressed_cpu = fair.elapsed(), time.monotonic(), time.process_time()
                 key_sequence, word = KEYS[key % 2]
                 session.typed(state, key_sequence)
                 await once(
@@ -297,9 +304,9 @@ async def test_a_key_draws_within_a_round_trip_while_a_pane_animates(request):
                         % (len(delays), [data for *_, data in arrived[before:]][-3:], state.message)
                     ),
                 )
-                at, at_wall = next((at, wall) for at, wall, data in arrived[before:] if word in data)
+                at, at_wall, at_cpu = next((at, wall, cpu) for at, wall, cpu, data in arrived[before:] if word in data)
                 paused = sum(max(0.0, min(ended, at_wall) - max(began, pressed_wall)) for began, ended in collected)
-                delays.append(Delay(at - pressed, at_wall - pressed_wall, paused))
+                delays.append(Delay(at - pressed, at_wall - pressed_wall, paused, at_cpu - pressed_cpu))
                 windows.append((pressed_wall, at_wall))
             tasks.cancel_scope.cancel()
 
@@ -310,7 +317,7 @@ async def test_a_key_draws_within_a_round_trip_while_a_pane_animates(request):
             word = KEYS[worst % 2][1]
             events = [
                 (wall, "frame%s%s" % (" report" if STATUS_REPORT in data else "", " key" if word in data else ""))
-                for _, wall, data in arrived
+                for _, wall, _cpu, data in arrived
                 if pressed_wall - 2 * ROUND_TRIP <= wall <= at_wall
             ]
             events += [(wall, "answer") for wall in answers if pressed_wall - 2 * ROUND_TRIP <= wall <= at_wall]
