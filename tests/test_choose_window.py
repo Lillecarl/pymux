@@ -19,6 +19,9 @@ The rules this judges, Lillecarl/pyterm#297 and Lillecarl/pyterm#329:
 - With a command as its argument, the chooser runs the command on the
   chosen window instead of moving, and puts the client back first: the
   command is what the person asked for and being moved is not.
+- Space picks up the pointed window. h and l then carry it along the
+  bar, trading places, and across into the next session; j and k carry
+  it to the session before or after. Space or Enter puts it down.
 """
 
 from __future__ import annotations
@@ -670,3 +673,138 @@ async def test_the_window_draws_under_the_bar():
         showing = [i for i, text in enumerate(rows) if "a line of output" in text]
         assert showing, "the window did not draw under the bar:\n" + "\n".join("|" + r for r in rows)
         assert min(showing) > 1
+
+
+# ----------------------------------------------------------------------
+# Space picks up a window, and the walking keys carry it.
+
+
+async def _two_sessions(pymux, state):
+    "This session with two windows or more, and `work` after it with two."
+    with set_app(state.app):
+        await run_as(pymux, state, "new-window")
+        await run_as(pymux, state, "new-session -d -s work")
+        await run_as(pymux, state, "new-window -t work:")
+    return state.session, pymux.get_session("work")
+
+
+async def test_space_then_l_trades_places_with_the_next_window():
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            await run_as(pymux, state, "new-window")
+            await run_as(pymux, state, "choose-window")
+        first, second, *rest = pymux.arrangement.windows
+        state.layout_manager.chooser.point_at(0)
+
+        fire(state, " ")
+        fire(state, "l")
+
+        assert pymux.arrangement.windows == [second, first, *rest]
+        assert here(pymux, state) is first
+        assert state.choose_window_index == 1
+        assert "class:chooser.carried" in str(state.layout_manager.chooser._choose_window_tokens())
+
+
+async def test_a_carried_window_stops_at_the_ends():
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            await run_as(pymux, state, "new-window")
+            await run_as(pymux, state, "choose-window")
+        order = list(pymux.arrangement.windows)
+        last = len(order) - 1
+
+        fire(state, " ")
+        fire(state, "l")
+
+        assert pymux.arrangement.windows == order
+        assert state.choose_window_index == last
+
+
+async def test_space_again_puts_the_window_down():
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            await run_as(pymux, state, "new-window")
+            await run_as(pymux, state, "choose-window")
+        order = list(pymux.arrangement.windows)
+
+        fire(state, " ")
+        fire(state, " ")
+        fire(state, "h")
+
+        assert pymux.arrangement.windows == order
+        assert here(pymux, state) is order[-2]
+
+
+async def test_enter_puts_the_window_down_and_keeps_it():
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            await run_as(pymux, state, "new-window")
+            await run_as(pymux, state, "choose-window")
+        *rest, before, moving = pymux.arrangement.windows
+
+        fire(state, " ")
+        fire(state, "h")
+        fire(state, "enter")
+
+        assert state.chooser is None and not state.chooser_carrying
+        assert pymux.arrangement.windows == [*rest, moving, before]
+        assert here(pymux, state) is moving
+
+
+async def test_l_past_the_end_of_a_session_enters_the_next_at_its_front():
+    async with create_session() as (pymux, state):
+        home, work = await _two_sessions(pymux, state)
+        with set_app(state.app):
+            await run_as(pymux, state, "choose-window")
+        moving = home.arrangement.windows[-1]
+        state.layout_manager.chooser.point_at(len(home.arrangement.windows) - 1)
+        front = work.arrangement.windows[0]
+
+        fire(state, " ")
+        fire(state, "l")
+
+        assert moving not in home.arrangement.windows
+        assert work.arrangement.windows[0] is moving
+        assert moving.index < front.index
+        assert state.session is work
+        assert state.layout_manager.chooser.pointed() is moving
+
+        fire(state, "h")
+
+        assert home.arrangement.windows[-1] is moving
+
+
+async def test_j_carries_the_window_to_the_end_of_the_next_session():
+    async with create_session() as (pymux, state):
+        home, work = await _two_sessions(pymux, state)
+        with set_app(state.app):
+            await run_as(pymux, state, "choose-window")
+        state.layout_manager.chooser.point_at(0)
+        moving = home.arrangement.windows[0]
+
+        fire(state, " ")
+        fire(state, "j")
+
+        assert work.arrangement.windows[-1] is moving
+        assert state.session is work
+
+        fire(state, "k")
+
+        assert home.arrangement.windows[-1] is moving
+
+
+async def test_the_last_window_of_a_session_stays_in_it():
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            await run_as(pymux, state, "new-session -d -s work")
+            await run_as(pymux, state, "choose-window")
+        work = pymux.get_session("work")
+        alone = work.arrangement.windows[0]
+        state.layout_manager.chooser.point_at(len(state.layout_manager.chooser.chooser_matches()) - 1)
+        assert state.layout_manager.chooser.pointed() is alone
+
+        fire(state, " ")
+        fire(state, "k")
+
+        assert work.arrangement.windows == [alone]
+        assert state.message and "last window" in state.message

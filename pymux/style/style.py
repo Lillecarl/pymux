@@ -229,6 +229,8 @@ def derive(r: dict[str, str]) -> dict[str, str]:
         # bar's colours, so the selection reads the way a title does.
         # Lillecarl/pyterm#297.
         "chooser.selected": "bg:%s %s" % (r["accent"], r["text-bright"]),
+        # The window Space picked up, which the walking keys move.
+        "chooser.carried": "bold underline",
         # The search row of the chooser, and its empty answer.
         # Lillecarl/pyterm#297.
         "chooser.hint": "%s" % (r["text"],),

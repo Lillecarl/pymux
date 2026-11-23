@@ -154,6 +154,7 @@ class ChooserView:
         state.choose_window_filter.reset()
         state.choose_window_index = windows.index(active) if active in windows else 0
         state.choose_window_along = None
+        state.chooser_carrying = False
         self._window_bar()
         assert self._bar_rows is not None
         get_app().layout.focus(self._bar_rows)
@@ -329,6 +330,77 @@ class ChooserView:
 
         self.show_window(matches[state.choose_window_index])
 
+    def toggle_carry(self) -> None:
+        "Space: pick up the window the point is on, or put it down."
+        state = self.client_state
+        state.chooser_carrying = not state.chooser_carrying and self.pointed() is not None
+
+    def carry_along(self, step: int) -> None:
+        """
+        Move the carried window one entry along the bar.
+
+        Inside its session it trades indexes with the entry it passes,
+        as `swap-window` does. Past the end of its session it crosses
+        into the next one: to the front of it going right, to the end
+        going left. The ends do not roll over, because a window that
+        jumps from last to first moves further than one step.
+        """
+        window = self.pointed()
+        matches = self.chooser_matches()
+        if window is None:
+            return
+        there = matches.index(window) + step
+        if not 0 <= there < len(matches):
+            return
+        neighbour = matches[there]
+        src = self.pymux.session_of_window(window)
+        dst = self.pymux.session_of_window(neighbour)
+        if src is None or dst is None:
+            return
+        if src is dst:
+            src.arrangement.swap_window(window, neighbour)
+        elif self._may_leave(src):
+            index = None
+            if step > 0:
+                index = neighbour.index
+                dst.arrangement.make_room_at(index)
+            src.arrangement.move_window_to(window, dst.arrangement, index)
+        self._point_at_carried(window)
+
+    def carry_to_session(self, step: int) -> None:
+        "Move the carried window to the end of the session before or after its own."
+        window = self.pointed()
+        if window is None:
+            return
+        src = self.pymux.session_of_window(window)
+        sessions = self.pymux.sessions
+        if src is None or not 0 <= sessions.index(src) + step < len(sessions):
+            return
+        if self._may_leave(src):
+            src.arrangement.move_window_to(window, sessions[sessions.index(src) + step].arrangement)
+        self._point_at_carried(window)
+
+    def _may_leave(self, session: Session) -> bool:
+        """
+        Whether a carried window may leave its session. The last one
+        may not: the session would end in the middle of the walk.
+        """
+        if len(session.arrangement.windows) > 1:
+            return True
+        self.client_state.message = "The last window of a session stays in it; move-window moves it."
+        return False
+
+    def _point_at_carried(self, window: window_tree.Window) -> None:
+        "Keep the point, and this client, on the carried window."
+        matches = self.chooser_matches()
+        if window not in matches:
+            # A search on the session name the window just left.
+            self.client_state.chooser_carrying = False
+            return
+        self.client_state.choose_window_index = matches.index(window)
+        self.client_state.choose_window_along = None
+        self.show_window(window)
+
     def show_window(self, window: window_tree.Window) -> None:
         "Move this client onto a window, wherever that window is."
         session = self.pymux.session_of_window(window)
@@ -349,6 +421,7 @@ class ChooserView:
 
         state.chooser = None
         state.chooser_return_to = None
+        state.chooser_carrying = False
 
         if restore and going_back is not None:
             session, window = going_back
@@ -982,6 +1055,9 @@ class ChooserView:
             return [("class:chooser.hint", " No window matches. ")]
 
         chosen = self._pointed_index(len(entries))
+        selected = "class:chooser.selected"
+        if self.client_state.chooser_carrying:
+            selected += " class:chooser.carried"
 
         tokens: StyleAndTextTuples = []
         lines = self.chooser_lines(self._bar_width())
@@ -995,7 +1071,7 @@ class ChooserView:
                     tokens.append(("class:commandpalette", " "))
                 tokens.append(
                     (
-                        "class:chooser.selected" if index == chosen else "class:commandpalette",
+                        selected if index == chosen else "class:commandpalette",
                         entries[index],
                         self._create_chooser_click_handler(index),
                     )

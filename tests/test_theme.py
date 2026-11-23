@@ -278,6 +278,7 @@ RULES = {
     "notification-popup.border": "#5f5f87",
     "notification-popup.title": "bold #ffffff",
     "chooser.selected": "bg:#5f5f87 #ffffff",
+    "chooser.carried": "bold underline",
     "chooser.hint": "#d0d0d0",
     "chooser.session": "bold #ffffff",
     "overlay": "",

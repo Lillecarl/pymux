@@ -183,6 +183,7 @@ class ClientState:
         "chooser": Keep.SAVED,
         "choose_window_index": Keep.SAVED,
         "choose_window_along": Keep.DROPPED,
+        "chooser_carrying": Keep.DROPPED,
         "choose_window_filter": Keep.SAVED,
         "choose_window_command": Keep.SAVED,
         "popups": Keep.DROPPED,  # a few seconds each
@@ -396,6 +397,10 @@ class ClientState:
         #: clamps the point but not the aim, so walking back over it
         #: lands where the walk began. Any other move forgets it.
         self.choose_window_along: int | None = None
+        #: Space in the window chooser picks up the window the point is
+        #: on; while it is held, the walking keys move the window and
+        #: the point goes with it.
+        self.chooser_carrying = False
 
         #: Where Escape puts this client back, as (session, window).
         #: The window chooser has no preview of its own: it switches

@@ -521,6 +521,49 @@ class PymuxKeyBindings:
             "The line below, keeping the place along it."
             self.pymux.get_client_state().layout_manager.chooser.step_line(1)
 
+        # Space picks up the window the point is on. While it is held,
+        # h and l move it along the bar and j and k to the session
+        # before or after; Space or Enter puts it down. Added after the
+        # walking keys, so these win while a window is carried.
+        @Condition
+        def carrying() -> bool:
+            state = self.pymux.get_client_state()
+            return state.chooser is Chooser.WINDOW and state.chooser_carrying
+
+        @kb.add("space", filter=window_bar & ~chooser_search_focused)
+        @_noted(self.pymux, "chooser-carry")
+        def _chooser_carry(event: E) -> None:
+            "Pick up the pointed window, or put it down."
+            self.pymux.get_client_state().layout_manager.chooser.toggle_carry()
+
+        @kb.add("left", filter=carrying & ~chooser_search_focused)
+        @kb.add("h", filter=carrying & ~chooser_search_focused)
+        @_noted(self.pymux, "chooser-carry-back")
+        def _carry_back(event: E) -> None:
+            "Move the carried window one entry back."
+            self.pymux.get_client_state().layout_manager.chooser.carry_along(-1)
+
+        @kb.add("right", filter=carrying & ~chooser_search_focused)
+        @kb.add("l", filter=carrying & ~chooser_search_focused)
+        @_noted(self.pymux, "chooser-carry-on")
+        def _carry_on(event: E) -> None:
+            "Move the carried window one entry on."
+            self.pymux.get_client_state().layout_manager.chooser.carry_along(1)
+
+        @kb.add("up", filter=carrying & ~chooser_search_focused)
+        @kb.add("k", filter=carrying & ~chooser_search_focused)
+        @_noted(self.pymux, "chooser-carry-up")
+        def _carry_up(event: E) -> None:
+            "Move the carried window to the session before."
+            self.pymux.get_client_state().layout_manager.chooser.carry_to_session(-1)
+
+        @kb.add("down", filter=carrying & ~chooser_search_focused)
+        @kb.add("j", filter=carrying & ~chooser_search_focused)
+        @_noted(self.pymux, "chooser-carry-down")
+        def _carry_down(event: E) -> None:
+            "Move the carried window to the session after."
+            self.pymux.get_client_state().layout_manager.chooser.carry_to_session(1)
+
         @kb.add("enter", filter=chooser_displayed & ~chooser_search_focused)
         def _chooser_choose(event: E) -> None:
             "Take the row the chooser points at."
