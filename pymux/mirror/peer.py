@@ -241,6 +241,17 @@ class Peers:
                 for pane in window.panes:
                     seen.setdefault(id(pane), []).append(client_state)
                 windows.append(window)
+        # A server that mirrors this one's mirror looks at it as a client
+        # does. Without this a chain shows nothing while nobody is
+        # attached in the middle.
+        for session in self.pymux.sessions:
+            if session.remote is None:
+                continue
+            for window in session.arrangement.windows:
+                if window.peer_watched and not any(window is one for one in windows):
+                    for pane in window.panes:
+                        seen.setdefault(id(pane), [])
+                    windows.append(window)
         for peer in self.by_address.values():
             for pane in peer.tree.panes.values():
                 if isinstance(pane.terminal, WindowWidget):

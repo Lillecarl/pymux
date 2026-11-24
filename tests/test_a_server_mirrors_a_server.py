@@ -1648,6 +1648,50 @@ async def test_a_chain_of_three_encodes_input_once_on_the_owner(two_servers):
             third.stop()
 
 
+async def test_a_chain_of_three_shows_with_nobody_attached_in_the_middle(two_servers):
+    """
+    C watches B's mirror of A's pane, and B's one client is on a session
+    of its own. B counts C as a viewer: A streams to B, so C reads what
+    A writes, and A lays the window out at the size C gives it.
+    """
+    owner, peer, client = two_servers
+    there, middle = await shown_here(owner, peer, client)
+    (a_to_b,) = links_of(owner)
+    await until(lambda: there.pane_id in a_to_b.peer.sources, "the seen pane streams")
+    own = next(session for session in peer.sessions if session.remote is None)
+    peer.attach_client_to(client, own)
+    peer.invalidate()
+    await until(lambda: a_to_b.peer.sources[there.pane_id].paused, "nobody at B: A pauses")
+
+    third = Pymux()
+    third.options.test_mode = True
+    watching = contextlib.ExitStack()
+    async with third.running():
+        try:
+            third.handle_command("connect %s" % (peer.socket_name,))
+            (link,) = third.peers.by_address.values()
+            await until(lambda: middle.pane_id in link.tree.panes, "B's mirror of A's pane reaches C")
+            last = link.tree.panes[middle.pane_id]
+            watching.enter_context(a_client_watching(third, last))
+
+            await until(lambda: not a_to_b.peer.sources[there.pane_id].paused, "C watching B resumes A")
+            there.terminal.terminal_control.feed_output("written at A")
+            await until(
+                lambda: "written at A" in "".join(rows_of(last.terminal.terminal_control)),
+                "A's output reaches C",
+                seen=lambda: rows_of(last.terminal.terminal_control),
+            )
+            window = owner.arrangement.get_active_window()
+            await until(
+                lambda: window.window_id in owner.planes.peer_rooms.get(a_to_b.peer, {}),
+                "B tells A the room C gives the window",
+                seen=lambda: owner.planes.peer_rooms,
+            )
+        finally:
+            watching.close()
+            third.stop()
+
+
 async def test_a_chain_of_three_passes_on_a_copy_place_that_moves_no_cell(two_servers):
     """
     A's frame can carry where copy mode stands and change no cell of B's
